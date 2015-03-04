@@ -1,0 +1,182 @@
+
+# #ifdef COMMENT
+ * List a range of tools and techniques
+ * Tim Baker has on the mailing a list a demo of mesh.snap_boundary
+   which should be explained
+ * transformation of the domain: transfinite mappings, Mikael stretching
+ * my prepro2D program can generate any of the standard geoms from Diffpack?
+ * solids intersections
+# #endif
+
+
+
+======= Creating More Complex Domains =======
+label{tut:prepro}
+
+Up to now we have been very fond of the unit square as domain,
+which is an appropriate choice for initial versions of a
+PDE solver. The strength of the finite element method, however, is its
+ease of handling domains with complex shapes. This section
+shows some methods that can be used to create different types of
+domains and meshes.
+
+Domains of complex shape must normally be constructed in separate
+preprocessor programs. Two relevant preprocessors are Triangle for
+2D domains and NETGEN for 3D domains.
+
+===== Built-In Mesh Generation Tools =====
+label{tut:prepro:builtin}
+
+DOLFIN has a few tools for creating various types of meshes over
+domains with simple
+shape:
+`UnitIntervalMesh`,
+`UnitSquareMesh`,
+`UnitCubeMesh`,
+`IntervalMesh`,
+`RectangleMesh`,
+`BoxMesh`,
+`UnitCircleMesh`,
+and
+`UnitSphere`.
+idx{`UnitIntervalMesh`}
+idx{`UnitSphere`}
+idx{`UnitSquareMesh`}
+idx{`IntervalMesh`}
+idx{`RectangleMesh`}
+idx{`BoxMesh`}
+idx{`UnitCircleMesh`}
+idx{`UnitCubeMesh`}
+Some of these names have been briefly met in previous sections.
+The hopefully self-explanatory code snippet below summarizes
+typical constructions of meshes with the aid of these tools:
+
+!bc pycod
+# 1D domains
+mesh = UnitIntervalMesh(20)     # 20 cells, 21 vertices
+mesh = IntervalMesh(20, -1, 1)  # domain [-1,1]
+
+# 2D domains (6x10 divisions, 120 cells, 77 vertices)
+mesh = UnitSquareMesh(6, 10)  # 'right' diagonal is default
+# The diagonals can be right, left or crossed
+mesh = UnitSquareMesh(6, 10, 'left')
+mesh = UnitSquareMesh(6, 10, 'crossed')
+
+# Domain [0,3]x[0,2] with 6x10 divisions and left diagonals
+mesh = RectangleMesh(0, 0, 3, 2, 6, 10, 'left')
+
+# 6x10x5 boxes in the unit cube, each box gets 6 tetrahedra:
+mesh = UnitCubeMesh(6, 10, 5)
+
+# Domain [-1,1]x[-1,0]x[-1,2] with 6x10x5 divisions
+mesh = BoxMesh(-1, -1, -1, 1, 0, 2, 6, 10, 5)
+
+# 10 divisions in radial directions
+mesh = UnitCircleMesh(10)
+mesh = UnitSphere(10)
+!ec
+
+===== Transforming Mesh Coordinates =====
+label{tut:mesh:transform:cyl}
+idx{mesh transformations}
+idx{coordinate stretching}
+idx{coordinate transformations}
+
+A mesh that is denser toward a boundary is often desired to increase
+accuracy in that region. Given a mesh with uniformly spaced
+coordinates $x_0,\ldots,x_{M-1}$ in $[a,b]$, the coordinate transformation
+$\xi = (x-a)/(b-a)$ maps $x$ onto $\xi\in [0,1]$. A new mapping
+$\eta = \xi^s$, for some $s>1$, stretches the mesh toward $\xi=0$ ($x=a$),
+while $\eta = \xi^{1/s}$ makes a stretching toward $\xi=1$ ($x=b$).
+Mapping the $\eta\in[0,1]$ coordinates back to $[a,b]$ gives new,
+stretched $x$ coordinates,
+
+!bt
+\begin{equation}
+\bar x = a + (b-a)\left({x-a\over b-a}\right)^s
+\end{equation}
+!et
+toward $x=a$, or
+
+!bt
+\begin{equation}
+\bar x = a + (b-a)\left({x-a\over b-a}\right)^{1/s}
+\end{equation}
+!et
+toward $x=b$
+
+One way of creating more complex geometries is to transform the
+vertex coordinates in a rectangular mesh according to some formula.
+Say we want to create a part of a hollow cylinder of $\Theta$ degrees,
+with inner radius $a$ and outer radius $b$. A standard mapping from polar
+coordinates to Cartesian coordinates can be used to generate the
+hollow cylinder. Given a rectangle in $(\bar x, \bar y)$ space such that
+$a\leq \bar x\leq b$ and $0\leq \bar y\leq 1$, the mapping
+
+!bt
+\begin{equation*}
+\hat x = \bar x\cos (\Theta \bar y),\quad \hat y = \bar x\sin (\Theta \bar y),
+\end{equation*}
+!et
+takes a point in the rectangular $(\bar x,\bar y)$
+geometry and maps it to a point
+$(\hat x, \hat y)$ in a hollow cylinder.
+
+The corresponding Python code for first stretching the mesh and
+then mapping it onto a hollow cylinder looks as follows:
+
+!bc pycod
+Theta = pi/2
+a, b = 1, 5.0
+nr = 10  # divisions in r direction
+nt = 20  # divisions in theta direction
+mesh = RectangleMesh(a, 0, b, 1, nr, nt, 'crossed')
+
+# First make a denser mesh towards r=a
+x = mesh.coordinates()[:,0]
+y = mesh.coordinates()[:,1]
+s = 1.3
+
+def denser(x, y):
+    return [a + (b-a)*((x-a)/(b-a))**s, y]
+
+x_bar, y_bar = denser(x, y)
+xy_bar_coor = numpy.array([x_bar, y_bar]).transpose()
+mesh.coordinates()[:] = xy_bar_coor
+plot(mesh, title='stretched mesh')
+
+def cylinder(r, s):
+    return [r*numpy.cos(Theta*s), r*numpy.sin(Theta*s)]
+
+x_hat, y_hat = cylinder(x_bar, y_bar)
+xy_hat_coor = numpy.array([x_hat, y_hat]).transpose()
+mesh.coordinates()[:] = xy_hat_coor
+plot(mesh, title='hollow cylinder')
+interactive()
+!ec
+The result of calling `denser` and `cylinder` above is a list of two
+vectors, with the $x$ and $y$ coordinates, respectively.
+Turning this list into a `numpy` array object results in a $2\times M$
+array, $M$ being the number of vertices in the mesh. However,
+`mesh.coordinates()` is by a convention an $M\times 2$ array so we
+need to take the transpose. The resulting mesh is displayed
+in Figure ref{tut:mesh:transform:cyl:fig1}.
+
+FIGURE:[fig/hollow_cylinder.eps, width=480] Hollow cylinder generated by mapping a rectangular mesh, stretched toward the left side. label{tut:mesh:transform:cyl:fig1}
+
+Setting boundary conditions in meshes created from mappings like the one
+illustrated above is most conveniently done by using a mesh function
+to mark parts of the boundary. The marking is easiest to perform
+before the mesh is mapped since one can then conceptually work with
+the sides in a pure rectangle.
+# Stretch coordinates according to Mikael.
+# Use refine uniformly and adaptively (adaptive poisson demo, use just
+# grad u for example)
+# Check ../../dielectric/python/demo.py og MeshEditor!
+# Use refine og move.
+#
+# CHeck Netgen examples in the source, 2D.
+
+# Transfinite mappings? Laplace?
+
+# ===== Separate Preprocessor Applications =====
