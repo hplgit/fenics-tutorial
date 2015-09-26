@@ -1,980 +1,952 @@
 .. !split
 
-.. _tut:timedep:
+.. _tut:poisson:nonlinear:
 
-Time-dependent problems
-=======================
+Nonlinear problems
+==================
 
-The examples in the section :ref:`tut:fundamentals` illustrate that solving
-linear, stationary PDE problems with the aid of FEniCS is easy and
-requires little programming.  That is, FEniCS automates the spatial
-discretization by the finite element method.  The solution of
-nonlinear problems, as we showed in the section :ref:`tut:poisson:nonlinear`, can also be automated (cf. The section :ref:`tut:nonlinear:Newton:auto`), but many scientists will prefer to
-code the solution strategy of the nonlinear problem themselves and
-experiment with various combinations of strategies in difficult
-problems. Time-dependent problems are somewhat similar in this
-respect: we have to add a time discretization scheme, which is often
-quite simple, making it natural to explicitly code the details of the
-scheme so that the programmer has full control.  We shall explain how
-easily this is accomplished through examples.
+Now we shall address how to solve nonlinear PDEs in FEniCS. Our
+sample PDE for implementation is taken as a nonlinear Poisson equation:
 
-.. _tut:timedep:diffusion1:
-
-A diffusion problem and its discretization
-------------------------------------------
-
-.. index:: time-dependent PDEs
-
-Our time-dependent
-model problem for teaching purposes is naturally the simplest
-extension of the Poisson problem into the time domain, i.e.,
-the diffusion problem
-
-.. _Eq:tut:diffusion:pde1:
+.. _Eq:_auto24:
 
 .. math::
-   :label: tut:diffusion:pde1
+   :label: _auto24
         
-        {\partial u\over\partial t} = \nabla^2 u + f \mbox{ in } \Omega, \hbox{ for } t>0,
+        -\nabla\cdot\left( q(u)\nabla u\right) = f{\thinspace .}
         
         
 
-.. _Eq:tut:diffusion:pde1:bc:
+The coefficient :math:`q(u)` makes the equation nonlinear (unless :math:`q(u)`
+is constant in :math:`u`).
+
+To be able to easily verify our implementation,
+we choose the domain, :math:`q(u)`, :math:`f`, and the boundary
+conditions such that we have
+a simple, exact solution :math:`u`. Let
+:math:`\Omega` be the unit hypercube :math:`[0, 1]^d`
+in :math:`d` dimensions, :math:`q(u)=(1+u)^m`, :math:`f=0`, :math:`u=0` for :math:`x_0=0`, :math:`u=1`
+for :math:`x_0=1`, and :math:`\partial u/\partial n=0` at all other boundaries
+:math:`x_i=0` and :math:`x_i=1`, :math:`i=1,\ldots,d-1`. The coordinates are now represented by
+the symbols :math:`x_0,\ldots,x_{d-1}`. The exact solution is then
+
+.. _Eq:_auto25:
 
 .. math::
-   :label: tut:diffusion:pde1:bc
-          
-            u = u_0 \mbox{ on } \partial \Omega,\hbox{ for } t>0,
+   :label: _auto25
+        
+        u(x_0,\ldots,x_d) = \left((2^{m+1}-1)x_0 + 1\right)^{1/(m+1)} - 1{\thinspace .}
         
         
 
-.. _Eq:tut:diffusion:pde1:ic:
+We refer to the section :ref:`tut:poisson:nD` for details on formulating a PDE
+problem in :math:`d` space dimensions.
+
+The variational formulation of our model problem reads:
+Find :math:`u \in V` such that
+
+.. _Eq:tut:poisson:nonlinear1:
 
 .. math::
-   :label: tut:diffusion:pde1:ic
-          
-            u = I   \mbox{ at } t=0{\thinspace .}
+   :label: tut:poisson:nonlinear1
+         
+          F(u; v) = 0 \quad \forall v \in \hat{V},
         
-        
 
-Here, :math:`u` varies with space and time, e.g., :math:`u=u(x,y,t)` if the spatial
-domain :math:`\Omega` is two-dimensional. The source function :math:`f` and the
-boundary values :math:`u_0` may also vary with space and time.
-The initial condition :math:`I` is a function of space only.
+where
 
-A straightforward approach to solving time-dependent
-PDEs by the finite element method is to first discretize the
-time derivative by a finite difference approximation, which yields
-a recursive set of stationary problems, and then turn each stationary
-problem into a variational formulation.
-
-Let superscript :math:`k` denote
-a quantity at time :math:`t_k`,
-where :math:`k` is an integer counting time levels. For example, :math:`u^k` means
-:math:`u` at time level :math:`k`.
-A finite difference discretization in time first consists in
-sampling the PDE at some time level, say :math:`k`:
-
-.. _Eq:tut:diffusion:pde1:tk:
+.. _Eq:tut:poisson:nonlinear2:
 
 .. math::
-   :label: tut:diffusion:pde1:tk
-         {\partial \over\partial t}u^k = \nabla^2 u^k + f^k{\thinspace .}
+   :label: tut:poisson:nonlinear2
         
         
-
-The time-derivative can be approximated by a finite difference.
-For simplicity and stability reasons we choose a
-simple backward difference:
-
-.. _Eq:tut:diffusion:BE:
-
-.. math::
-   :label: tut:diffusion:BE
-         {\partial \over\partial t}u^k\approx {u^k - u^{k-1}\over{{\Delta t}}},
-        
-        
-
-where :math:`{\Delta t}` is the time discretization parameter.
-Inserting this approximation in the PDE yields
-
-.. _Eq:tut:diffusion:pde1:BE:
-
-.. math::
-   :label: tut:diffusion:pde1:BE
-        
-        {u^k - u^{k-1}\over{{\Delta t}}} = \nabla^2 u^k + f^k{\thinspace .}
-        
-        
-
-This is our time-discrete version of the diffusion PDE
-problem. Reordering the last equation
-so that :math:`u^k` appears
-on the left-hand side only,
-yields
-a recursive set of
-spatial (stationary) problems for :math:`u^k` (assuming :math:`u^{k-1}` is known from
-computations at the previous time level):
-
-.. _Eq:tut:diffusion:pde1:u0:
-
-.. math::
-   :label: tut:diffusion:pde1:u0
-        
-        u^0 = I, 
-        
-
-.. _Eq:tut:diffusion:pde1:uk:
-
-.. math::
-   :label: tut:diffusion:pde1:uk
-          
-        u^k - {{\Delta t}}\nabla^2 u^k =  u^{k-1} + {{\Delta t}} f^k,\quad k=1,2,\ldots
-        
-        
-
-Given :math:`I`, we can solve for :math:`u^0`, :math:`u^1`, :math:`u^2`, and so on.
-
-We use a finite element method
-to solve the
-time-discrete equations which still have spatial differential operators.
-This requires turning the equations into weak forms.
-As usual, we multiply by a test function :math:`v\in \hat V` and integrate
-second-derivatives by parts. Introducing the symbol :math:`u` for :math:`u^k`
-(which is natural in the program too), the resulting weak
-form can be conveniently written in the standard notation:
-:math:`a_0(u,v)=L_0(v)` for the initial step
-and :math:`a(u,v)=L(v)` for a general step, where
-
-.. _Eq:tut:diffusion:pde1:a0:
-
-.. math::
-   :label: tut:diffusion:pde1:a0
-        
-        a_0(u,v) = \int_\Omega uv {\, \mathrm{d}x}, 
-        
-
-.. _Eq:tut:diffusion:pde1:L0:
-
-.. math::
-   :label: tut:diffusion:pde1:L0
-          
-        L_0(v) = \int_\Omega Iv {\, \mathrm{d}x}, 
-        
-
-.. _Eq:tut:diffusion:pde1:a:
-
-.. math::
-   :label: tut:diffusion:pde1:a
-          
-        a(u,v) = \int_\Omega\left( uv + {{\Delta t}}
-        \nabla u\cdot \nabla v\right) {\, \mathrm{d}x}, 
-        
-
-.. _Eq:tut:diffusion:pde1:L:
-
-.. math::
-   :label: tut:diffusion:pde1:L
-          
-        L(v) = \int_\Omega \left(u^{k-1} + {{\Delta t}}  f^k\right)v {\, \mathrm{d}x}{\thinspace .}
-        
-        
-
-The continuous variational problem is to find
-:math:`u^0\in V` such that :math:`a_0(u^0,v)=L_0(v)` holds for all :math:`v\in\hat V`,
-and then find :math:`u^k\in V`
-such that :math:`a(u^k,v)=L(v)` for all :math:`v\in\hat V`,
-:math:`k=1,2,\ldots`.
-
-Approximate solutions in space
-are found by
-restricting the functional spaces :math:`V` and :math:`\hat V`
-to finite-dimensional spaces,
-exactly as we have done in the Poisson problems.
-We shall use the symbol :math:`u` for the finite element
-approximation at time :math:`t_k`. In case we need to distinguish this
-space-time discrete approximation from the exact solution of
-the continuous diffusion problem, we use :math:`{u_{\small\mbox{e}}}` for the latter.
-By :math:`u^{k-1}` we mean, from now on, the finite element approximation
-of the solution at time :math:`t_{k-1}`.
-
-Note that the forms :math:`a_0` and :math:`L_0` are identical to the forms
-met in the section :ref:`tut:poisson:gradu`, except that the test and trial
-functions are now
-scalar fields and not vector fields.
-Instead of solving
-an equation for :math:`u^0`
-by a finite
-element method, i.e., projecting :math:`I` onto :math:`V` via
-the problem :math:`a_0(u,v)=L_0(v)`, we could simply interpolate :math:`u^0` from
-:math:`I`. That is, if :math:`u^0=\sum_{j=1}^N U^0_j\phi_j`, we
-simply set :math:`U_j=I(x_j,y_j)`, where :math:`(x_j,y_j)` are the coordinates of
-node number :math:`j`. We refer to these two strategies as computing
-the initial condition by either projecting :math:`I` or interpolating :math:`I`.
-Both operations are easy to compute through one statement, using either
-the ``project`` or ``interpolate`` function.
-
-.. _tut:timedep:diffusion1:impl:
-
-Implementation          (2)
----------------------------
-
-Our program needs to perform the time stepping explicitly, but can
-rely on FEniCS to easily compute :math:`a_0`, :math:`L_0`, :math:`a`, and :math:`L`, and solve
-the linear systems for the unknowns.  We realize that :math:`a` does not
-depend on time, which means that its associated matrix also will be
-time independent. Therefore, it is wise to explicitly create matrices
-and vectors as in the section :ref:`tut:poisson1:linalg`.  The matrix :math:`A`
-arising from :math:`a` can be computed prior to the time stepping, so that
-we only need to compute the right-hand side :math:`b`, corresponding to :math:`L`,
-in each pass in the time loop. Let us express the solution procedure
-in algorithmic form, writing :math:`u` for the unknown spatial function at
-the new time level (:math:`u^k`) and :math:`u_1` for the spatial solution at one
-earlier time level (:math:`u^{k-1}`):
-
- * define Dirichlet boundary condition (:math:`u_0`, Dirichlet boundary, etc.)
-
- * if :math:`u_1` is to be computed by projecting :math:`I`:
-
-   * define :math:`a_0` and :math:`L_0`
-
-   * assemble matrix :math:`M` from :math:`a_0` and vector :math:`b` from :math:`L_0`
-
-   * solve :math:`MU=b` and store :math:`U` in :math:`u_1`
-
- * else:  (interpolation)
-
-   * let :math:`u_1` interpolate :math:`I`
-
- * define :math:`a` and :math:`L`
-
- * assemble matrix :math:`A` from :math:`a`
-
- * set some stopping time :math:`T`
-
- * :math:`t={{\Delta t}}`
-
- * while :math:`t\leq T`
-
-   * assemble vector :math:`b` from :math:`L`
-
-   * apply essential boundary conditions
-
-   * solve :math:`AU=b` for :math:`U` and store in :math:`u`
-
-   * :math:`t\leftarrow t + {{\Delta t}}`
-
-   * :math:`u_1 \leftarrow u` (be ready for next step)
-
-Before starting the coding, we shall construct a problem where it is
-easy to determine if the calculations are correct. The simple backward
-time difference is exact for linear functions, so we decide to have
-a linear variation in time. Combining a second-degree polynomial in space
-with a linear term in time,
-
-.. _Eq:tut:diffusion:pde1:u0test:
-
-.. math::
-   :label: tut:diffusion:pde1:u0test
-         u = 1 + x^2 + \alpha y^2 + \beta t,
-        
-        
-
-yields a function whose computed values at the nodes may be exact,
-regardless of the size of the elements and :math:`{\Delta t}`, as long as the
-mesh is uniformly partitioned.
-We realize by inserting the simple solution in the PDE problem
-that :math:`u_0` must be given as
-:eq:`tut:diffusion:pde1:u0test` and that :math:`f(x,y,t)=\beta - 2 - 2\alpha`
-and :math:`I(x,y)=1+x^2+\alpha y^2`.
-
-.. index:: d1_d2D.py
-
-A new programming issue is how to deal with functions that vary in
-space *and time*, such as the the boundary condition
-:math:`u_0`.
-A natural solution is
-to apply an ``Expression`` object with time :math:`t` as a parameter,
-in addition to the parameters :math:`\alpha` and :math:`\beta` (see
-the section :ref:`tut:poisson:membrane` for ``Expression``
-objects with parameters):
-
-.. code-block:: python
-
-        alpha = 3; beta = 1.2
-        u0 = Expression('1 + x[0]*x[0] + alpha*x[1]*x[1] + beta*t',
-                        alpha=alpha, beta=beta, t=0)
-
-The time parameter can later be updated by assigning values to ``u0.t``.
-
-Given a ``mesh`` and an associated function space ``V``, we
-can specify the :math:`u_0` function as
-
-.. code-block:: python
-
-        alpha = 3; beta = 1.2
-        u0 = Expression('1 + x[0]*x[0] + alpha*x[1]*x[1] + beta*t',
-                        {'alpha': alpha, 'beta': beta})
-        u0.t = 0
-
-This function expression has the components of ``x`` as independent
-variables, while ``alpha``, ``beta``, and ``t`` are parameters.
-The parameters can either be set through a dictionary at construction time,
-as demonstrated for ``alpha`` and ``beta``, or anytime through
-attributes in the function
-object, as shown for the ``t`` parameter.
-
-The essential boundary conditions, along the whole boundary in this case,
-are set in the usual way,
-
-.. code-block:: python
-
-        def boundary(x, on_boundary):  # define the Dirichlet boundary
-            return on_boundary
-        
-        bc = DirichletBC(V, u0, boundary)
-
-We shall use ``u`` for the unknown :math:`u` at the new time level and
-``u_1`` for :math:`u` at the previous time level.  The initial value of
-``u_1``, implied by the initial condition on :math:`u`, can be computed
-by either projecting or interpolating :math:`I`.
-The :math:`I(x,y)` function is available in the program through
-``u0``,
-as long as ``u0.t`` is zero.
-We can then do
-
-.. code-block:: python
-
-        u_1 = interpolate(u0, V)
-        # or
-        u_1 = project(u0, V)
-
-Note that we could, as an equivalent alternative to using ``project``, define
-:math:`a_0` and :math:`L_0` as we did in the section :ref:`tut:poisson:gradu` and form
-the associated variational problem.
-To actually recover the exact solution
-to machine precision,
-it is important not to compute the discrete initial condition by
-projecting :math:`I`, but by interpolating :math:`I` so that the nodal values are
-exact at :math:`t=0` (projection results in approximative values at the nodes).
-
-The definition of :math:`a` and :math:`L` goes as follows:
-
-.. code-block:: python
-
-        dt = 0.3      # time step
-        
-        u = TrialFunction(V)
-        v = TestFunction(V)
-        f = Constant(beta - 2 - 2*alpha)
-        
-        a = u*v*dx + dt*inner(nabla_grad(u), nabla_grad(v))*dx
-        L = (u_1 + dt*f)*v*dx
-        
-        A = assemble(a)   # assemble only once, before the time stepping
-
-Finally, we perform the time stepping in a loop:
-
-.. code-block:: python
-
-        u = Function(V)   # the unknown at a new time level
-        T = 2             # total simulation time
-        t = dt
-        
-        while t <= T:
-            b = assemble(L)
-            u0.t = t
-            bc.apply(A, b)
-            solve(A, u.vector(), b)
-        
-            t += dt
-            u_1.assign(u)
-
-Observe that ``u0.t`` must be updated before the ``bc.apply``
-statement, to enforce computation of Dirichlet conditions at the
-current time level.
-
-The time loop above does not contain any comparison of the numerical
-and the exact solution, which we must include in order to verify the
-implementation.  As in many previous examples, we compute the
-difference between the array of nodal values of ``u`` and the array of
-the interpolated exact solution.  The following code is to be included
-inside the loop, after ``u`` is found:
-
-.. code-block:: python
-
-        u_e = interpolate(u0, V)
-        maxdiff = numpy.abs(u_e.vector().array()-u.vector().array()).max()
-        print 'Max error, t=%.2f: %-10.3f' % (t, maxdiff)
-
-.. index:: assemble
-
-The right-hand side vector ``b`` must obviously
-be recomputed at each time level.
-With the construction ``b = assemble(L)``, a new
-vector for ``b`` is allocated in memory in every pass of the time loop.
-It would be much more memory friendly to reuse the storage of the ``b``
-we already have.
-This is easily accomplished by
-
-.. code-block:: python
-
-            b = assemble(L, tensor=b)
-
-That is, we send in our previous ``b``, which is then filled with new values
-and returned from ``assemble``. Now there will be only a single
-memory allocation of the right-hand side vector. Before the time loop
-we set ``b = None`` such that ``b`` is defined in the first call to
-``assemble``.
-
-The complete program code for this time-dependent case is stored in the
-file ``d1_d2D.py`` in the directory ``transient/diffusion``.
-
-.. _tut:timedep:diffusion1:noassemble:
-
-Avoiding assembly
------------------
-
-.. index::
-   single: assembly, increasing efficiency
-
-The purpose of this section is to present a technique for speeding
-up FEniCS simulators for time-dependent problems where it is
-possible to perform all assembly operations prior to the time loop.
-There are two costly operations in the time loop: assembly of the
-right-hand side :math:`b` and solution of the linear system via the
-``solve`` call. The assembly process involves work proportional to
-the number of degrees of freedom :math:`N`, while the solve operation
-has a work estimate of :math:`\mathcal{O}( N^{\alpha})`, for some :math:`\alpha\geq 1`. As
-:math:`N\rightarrow\infty`, the solve operation will dominate for :math:`\alpha>1`,
-but for the values of :math:`N` typically used on smaller computers, the
-assembly step may still
-represent a considerable part of the total work at each
-time level. Avoiding repeated assembly can therefore contribute to a
-significant speed-up of a finite element code in time-dependent problems.
-
-To see how repeated assembly can be avoided, we look at the :math:`L(v)`
-form,
-which in general varies with
-time through :math:`u^{k-1}`, :math:`f^k`, and possibly also with :math:`{\Delta t}`
-if the time step is adjusted during the simulation.
-The technique for avoiding repeated assembly consists in
-expanding the finite element functions in sums over the basis functions
-:math:`\phi_i`, as explained
-in the section :ref:`tut:poisson1:linalg`, to identify matrix-vector
-products that build up the complete system. We have
-:math:`u^{k-1}=\sum_{j=1}^NU^{k-1}_j\phi_j`, and we can expand :math:`f^k` as
-:math:`f^{k}=\sum_{j=1}^NF^{k}_j\phi_j`. Inserting these expressions in :math:`L(v)`
-and using
-:math:`v=\hat\phi_i` result in
-
-.. math::
-        
-        \int_\Omega \left(u^{k-1} + {{\Delta t}}f^k\right)v {\, \mathrm{d}x} &=
-        \int_\Omega \left(\sum_{j=1}^N U^{k-1}_j\phi_j + {{\Delta t}}\sum_{j=1}^N F^{k}_j\phi_j\right)\hat\phi_i {\, \mathrm{d}x},\\ 
-        &=\sum_{j=1}^N\left(\int_\Omega \hat\phi_i\phi_j {\, \mathrm{d}x}\right)U^{k-1}_j
-         + {{\Delta t}}\sum_{j=1}^N\left(\int_\Omega \hat\phi_i\phi_j {\, \mathrm{d}x}\right)F^{k}_j{\thinspace .}
-        
-
-Introducing :math:`M_{ij} = \int_\Omega \hat\phi_i\phi_j {\, \mathrm{d}x}`, we see that
-the last expression can be written
-
-.. math::
-        
-        \sum_{j=1}^NM_{ij}U^{k-1}_j + {{\Delta t}} \sum_{j=1}^NM_{ij}F^{k}_j,
-        
-
-which is nothing but two matrix-vector products,
-
-.. math::
-        
-        MU^{k-1} + {{\Delta t}} MF^k,
-        
-
-if :math:`M` is the matrix with entries :math:`M_{ij}` and
-
-.. math::
-        
-        U^{k-1}=(U^{k-1}_1,\ldots,U^{k-1}_N)^T,
+        F(u; v) = \int_\Omega q(u)\nabla u\cdot \nabla v {\, \mathrm{d}x},
         
 
 and
 
 .. math::
         
-        F^k=(F^{k}_1,\ldots,F^{k}_N)^T{\thinspace .}
+            \hat{V} &= \{v \in H^1(\Omega) : v = 0 \mbox{ on } x_0=0\mbox{ and }x_0=1\}, \\ 
+             V      &= \{v \in H^1(\Omega) : v = 0 \mbox{ on } x_0=0\mbox{ and } v = 1\mbox{ on }x_0=1\}{\thinspace .}
         
 
-We have immediate access to :math:`U^{k-1}`
-in the program since that is the vector
-in the ``u_1`` function. The :math:`F^k` vector can easily be
-computed by interpolating the prescribed :math:`f` function (at each time level if
-:math:`f` varies with time). Given :math:`M`, :math:`U^{k-1}`, and :math:`F^k`, the right-hand side
-:math:`b` can be calculated as
+The discrete problem arises as usual by restricting :math:`V` and :math:`\hat V` to a
+pair of discrete spaces. As usual, we omit any subscript on discrete
+spaces and simply say :math:`V` and :math:`\hat V` are chosen finite dimensional
+according to some mesh with some element type.
+Similarly, we let :math:`u` be the discrete solution and use :math:`{u_{\small\mbox{e}}}` for
+the exact solution if it becomes necessary to distinguish between the two.
+
+The discrete nonlinear problem is then wirtten as: find :math:`u\in V` such that
+
+.. _Eq:tut:poisson:nonlinear:d:
 
 .. math::
+   :label: tut:poisson:nonlinear:d
         
-        b = MU^{k-1} + {{\Delta t}} MF^k {\thinspace .}
+          F(u; v) = 0 \quad \forall v \in \hat{V},
+        
         
 
-That is, no assembly is necessary to compute :math:`b`.
+with :math:`u = \sum_{j=1}^N U_j \phi_j`. Since :math:`F` is a nonlinear function
+of :math:`u`, the variational statement gives rise to a system of
+nonlinear algebraic equations.
 
-The coefficient matrix :math:`A` can also be split into two terms.
-We insert :math:`v=\hat\phi_i` and :math:`u^k = \sum_{j=1}^N U^k_j\phi_j` in
-the relevant equations to get
+FEniCS can be used in alternative ways for solving a nonlinear PDE
+problem. We shall in the following subsections go through four
+solution strategies:
+
+ 1. a simple Picard-type iteration,
+
+ 2. a Newton method at the algebraic level,
+
+ 3. a Newton method at the PDE level, and
+
+ 4. an automatic approach where FEniCS attacks the nonlinear variational
+    problem directly.
+
+The "black box" strategy 4 is definitely the simplest one from a
+programmer's point of view, but the others give more manual control of
+the solution process for nonlinear equations (which also has some
+pedagogical advantages, especially for newcomers to nonlinear finite
+element problems).
+
+.. _tut:nonlinear:Picard:
+
+Picard iteration
+----------------
+
+.. index:: Picard iteration
+
+.. index:: successive substitutions
+
+Picard iteration is an easy way of handling nonlinear PDEs: we simply
+use a known, previous solution in the nonlinear terms so that these
+terms become linear in the unknown :math:`u`. The strategy is also known as
+the method of successive substitutions.
+For our particular problem,
+we use a known, previous solution in the coefficient :math:`q(u)`.
+More precisely, given a solution :math:`u^k` from iteration :math:`k`, we seek a
+new (hopefully improved) solution :math:`u^{k+1}` in iteration :math:`k+1` such
+that :math:`u^{k+1}` solves the *linear problem*,
+
+.. _Eq:tut:poisson:nonlinear:picard1:
 
 .. math::
+   :label: tut:poisson:nonlinear:picard1
         
-        \sum_{j=1}^N \left(\int_\Omega \hat\phi_i\phi_j {\, \mathrm{d}x}\right)U^k_j + {{\Delta t}}
-        \sum_{j=1}^N \left(\int_\Omega \nabla\hat\phi_i\cdot\nabla\phi_j {\, \mathrm{d}x}\right)U^k_j,
+        
+        \nabla\cdot \left(q(u^k)\nabla u^{k+1}\right) = 0,\quad k=0,1,\ldots
         
 
-which can be written as a sum of matrix-vector products,
+The iterations require an initial guess :math:`u^0`.
+The hope is that :math:`u^{k} \rightarrow u` as :math:`k\rightarrow\infty`, and that
+:math:`u^{k+1}` is sufficiently close to the exact
+solution :math:`u` of the discrete problem after just a few iterations.
+
+We can easily formulate a variational problem for :math:`u^{k+1}` from
+:eq:`tut:poisson:nonlinear:picard1`.
+Equivalently, we can approximate :math:`q(u)` by :math:`q(u^k)` in
+:eq:`tut:poisson:nonlinear2`
+to obtain the same linear variational problem.
+In both cases, the problem consists of seeking
+:math:`u^{k+1} \in V` such that
+
+.. _Eq:tut:poisson:nonlinear:picard2:
 
 .. math::
-        
-        MU^k + {{\Delta t}} KU^k = (M + {{\Delta t}} K)U^k,
+   :label: tut:poisson:nonlinear:picard2
+         
+          \tilde F(u^{k+1}; v) = 0 \quad \forall v \in \hat{V},\quad k=0,1,\ldots,
         
 
-if we identify the matrix :math:`M` with entries :math:`M_{ij}` as above and
-the matrix :math:`K` with entries
+with
+
+.. _Eq:tut:poisson:nonlinear:picard3:
+
+.. math::
+   :label: tut:poisson:nonlinear:picard3
+        
+        
+        \tilde F(u^{k+1}; v) = \int_\Omega q(u^k)\nabla u^{k+1}\cdot \nabla v {\, \mathrm{d}x}
+        {\thinspace .}
+        
+
+Since this is a linear problem in the unknown :math:`u^{k+1}`, we can equivalently
+use the formulation
+
+.. _Eq:_auto26:
+
+.. math::
+   :label: _auto26
+        
+        a(u^{k+1},v) = L(v),
+        
+        
+
+with
+
+.. _Eq:_auto27:
+
+.. math::
+   :label: _auto27
+        
+        a(u,v) = \int_\Omega q(u^k)\nabla u\cdot \nabla v {\, \mathrm{d}x}
+        
+        
+        
+
+.. _Eq:_auto28:
+
+.. math::
+   :label: _auto28
+          
+        L(v) = 0{\thinspace .}
+        
+        
+
+The iterations can be stopped when :math:`\epsilon\equiv ||u^{k+1}-u^k||
+< \mbox{tol}`, where :math:`\mbox{tol}` is a small tolerance, say :math:`10^{-5}`, or
+when the number of iterations exceed some critical limit. The latter
+case will pick up divergence of the method or unacceptable slow
+convergence.
+
+.. index:: picard_np.py
+
+In the solution algorithm we only need to store :math:`u^k` and :math:`u^{k+1}`,
+called ``u_k`` and ``u`` in the code below.
+The algorithm can then be expressed as follows:
+
+.. code-block:: python
+
+        def q(u):
+            return (1+u)**m
+        
+        # Define variational problem for Picard iteration
+        u = TrialFunction(V)
+        v = TestFunction(V)
+        u_k = interpolate(Constant(0.0), V)  # previous (known) u
+        a = inner(q(u_k)*nabla_grad(u), nabla_grad(v))*dx
+        f = Constant(0.0)
+        L = f*v*dx
+        
+        # Picard iterations
+        u = Function(V)     # new unknown function
+        eps = 1.0           # error measure ||u-u_k||
+        tol = 1.0E-5        # tolerance
+        iter = 0            # iteration counter
+        maxiter = 25        # max no of iterations allowed
+        while eps > tol and iter < maxiter:
+            iter += 1
+            solve(a == L, u, bcs)
+            diff = u.vector().array() - u_k.vector().array()
+            eps = numpy.linalg.norm(diff, ord=numpy.Inf)
+            print 'iter=%d: norm=%g' % (iter, eps)
+            u_k.assign(u)   # update for next iteration
+
+We need to define the previous solution in the iterations, ``u_k``,
+as a finite element function so that ``u_k`` can be updated with
+``u`` at the end of the loop. We may create the initial
+``Function u_k``
+by interpolating
+an ``Expression`` or a ``Constant``
+to the same vector space as ``u`` lives in (``V``).
+
+In the code above we demonstrate how to use
+``numpy`` functionality to compute the norm of
+the difference between the two most recent solutions. Here we apply
+the maximum norm (:math:`\ell_\infty` norm) on the difference of the solution vectors
+(``ord=1`` and ``ord=2`` give the :math:`\ell_1` and :math:`\ell_2` vector
+norms - other norms are possible for ``numpy`` arrays,
+see ``pydoc numpy.linalg.norm``).
+
+The file ``picard_np.py`` contains the complete code for
+this nonlinear Poisson problem.
+The implementation is :math:`d` dimensional, with mesh
+construction and setting of Dirichlet conditions as explained in
+the section :ref:`tut:poisson:nD`.
+For a :math:`33\times 33` grid with :math:`m=2` we need 9 iterations for convergence
+when the tolerance is :math:`10^{-5}`.
+
+.. _tut:nonlinear:Newton:algebraic:
+
+A Newton method at the algebraic level
+--------------------------------------
+
+.. index:: Newton's method (algebraic equations)
+
+After having discretized our nonlinear PDE problem, we may
+use Newton's method to solve the system of nonlinear algebraic equations.
+From the continuous variational problem :eq:`tut:poisson:nonlinear1`,
+the discrete version :eq:`tut:poisson:nonlinear:d` results in a
+system of equations for the unknown parameters :math:`U_1,\ldots, U_N`
+(by inserting :math:`u = \sum_{j=1}^N U_j \phi_j`
+and :math:`v=\hat\phi_i` in :eq:`tut:poisson:nonlinear:d`):
+
+.. _Eq:tut:nonlinear:Newton:F1:
+
+.. math::
+   :label: tut:nonlinear:Newton:F1
+        
+        
+        F_i(U_1,\ldots,U_N) \equiv
+        \sum_{j=1}^N
+        \int_\Omega \left( q\left(\sum_{\ell=1}^NU_\ell\phi_\ell\right)
+        \nabla \phi_j U_j\right)\cdot \nabla \hat\phi_i {\, \mathrm{d}x} = 0,\quad i=1,\ldots,N{\thinspace .}
+        
+
+Newton's method for the system :math:`F_i(U_1,\ldots,U_j)=0`, :math:`i=1,\ldots,N`
+can be formulated as
+
+.. _Eq:_auto29:
+
+.. math::
+   :label: _auto29
+        
+        \sum_{j=1}^N
+        {\partial \over\partial U_j} F_i(U_1^k,\ldots,U_N^k)\delta U_j
+        = -F_i(U_1^k,\ldots,U_N^k),\quad i=1,\ldots,N,
+        
+        
+
+.. _Eq:_auto30:
+
+.. math::
+   :label: _auto30
+          
+        U_j^{k+1} = U_j^k + \omega\delta U_j,\quad j=1,\ldots,N,
+        
+        
+
+where :math:`\omega\in [0,1]` is a relaxation parameter, and :math:`k` is
+an iteration index. An initial guess :math:`u^0` must
+be provided to start the algorithm.
+
+.. index:: under-relaxation
+
+The original Newton method has :math:`\omega=1`, but in problems where it is
+difficult to obtain convergence,
+so-called *under-relaxation* with :math:`\omega < 1` may help. It means that
+one takes a smaller step than what is suggested by Newton's method.
+
+.. index::
+   single: Jacobian, manual computation
+
+We need, in a program, to compute the Jacobian
+matrix :math:`\partial F_i/\partial U_j`
+and the right-hand side vector :math:`-F_i`.
+Our present problem has :math:`F_i` given by :eq:`tut:nonlinear:Newton:F1`.
+The derivative :math:`\partial F_i/\partial U_j` becomes
+
+.. _Eq:tut:poisson:nonlinear:dFdU:
+
+.. math::
+   :label: tut:poisson:nonlinear:dFdU
+        
+        \int\limits_\Omega \left\lbrack
+         q'(\sum_{\ell=1}^NU_\ell^k\phi_\ell)\phi_j
+        \nabla (\sum_{j=1}^NU_j^k\phi_j)\cdot \nabla \hat\phi_i
+        +
+        q\left(\sum_{\ell=1}^NU_\ell^k\phi_\ell\right)
+        \nabla \phi_j \cdot \nabla \hat\phi_i
+        \right\rbrack
+         {\, \mathrm{d}x}{\thinspace .}
+        
+        
+
+The following results were used to obtain :eq:`tut:poisson:nonlinear:dFdU`:
 
 .. _Eq:_auto31:
 
 .. math::
    :label: _auto31
-         K_{ij} = \int_\Omega \nabla\hat\phi_i\cdot\nabla\phi_j {\, \mathrm{d}x}{\thinspace .}
+        
+        {\partial u\over\partial U_j} = {\partial\over\partial U_j}
+        \sum_{j=1}^NU_j\phi_j = \phi_j,\quad {\partial\over\partial U_j}\nabla u = \nabla\phi_j,\quad {\partial\over\partial U_j}q(u) = q'(u)\phi_j{\thinspace .}
         
         
 
-The matrix :math:`M` is often called the "mass matrix" while "stiffness matrix"
-is a common nickname for :math:`K`. The associated bilinear forms for these
-matrices, as we need them for the assembly process in a FEniCS
-program, become
-
-.. _Eq:tut:diffusion:pde1:aK:
-
-.. math::
-   :label: tut:diffusion:pde1:aK
-        
-        a_K(u,v) = \int_\Omega\nabla u\cdot\nabla v {\, \mathrm{d}x},
-        
-        
-
-.. _Eq:tut:diffusion:pde1:aM:
-
-.. math::
-   :label: tut:diffusion:pde1:aM
-          
-        a_M(u,v) = \int_\Omega uv {\, \mathrm{d}x} {\thinspace .}
-        
-
-The linear system at each time level, written as :math:`AU^k=b`,
-can now be computed by first computing :math:`M` and :math:`K`, and then forming
-:math:`A=M+{{\Delta t}} K` at :math:`t=0`, while :math:`b` is computed as
-:math:`b=MU^{k-1} + {{\Delta t}}MF^k` at each time level.
-
-.. index:: d2_d2D.py
-
-The following modifications are needed in the ``d1_d2D.py``
-program from the previous section in order to implement the new
-strategy of avoiding assembly at each time level:
-
-  * Define separate forms :math:`a_M` and :math:`a_K`
-
-  * Assemble :math:`a_M` to :math:`M` and :math:`a_K` to :math:`K`
-
-  * Compute :math:`A=M+{{\Delta t}}`, :math:`K`
-
-  * Define :math:`f` as an ``Expression``
-
-  * Interpolate the formula for :math:`f` to a finite element function :math:`F^k`
-
-  * Compute :math:`b=MU^{k-1} + {{\Delta t}}MF^k`
-
-The relevant code segments become
-
-.. code-block:: python
-
-        # 1.
-        a_K = inner(nabla_grad(u), nabla_grad(v))*dx
-        a_M = u*v*dx
-        
-        # 2. and 3.
-        M = assemble(a_M)
-        K = assemble(a_K)
-        A = M + dt*K
-        
-        # 4.
-        f = Expression('beta - 2 - 2*alpha', beta=beta, alpha=alpha)
-        
-        # 5. and 6.
-        while t <= T:
-            f_k = interpolate(f, V)
-            F_k = f_k.vector()
-            b = M*u_1.vector() + dt*M*F_k
-
-The complete program appears in the file ``d2_d2D.py``.
-
-.. _tut:timedep:diffusion2:sin:
-
-A physical example
-------------------
-
-.. index:: sin_daD.py
-
-With the basic programming techniques for time-dependent problems from
-the sections :ref:`tut:timedep:diffusion1:noassemble`-:ref:`tut:timedep:diffusion1:impl`
-we are ready to attack more physically realistic examples.
-The next example concerns the question: How is the temperature in the
-ground affected by day and night variations at the earth's surface?
-We consider some box-shaped domain :math:`\Omega` in :math:`d` dimensions with
-coordinates :math:`x_0,\ldots,x_{d-1}` (the problem is meaningful in 1D, 2D, and 3D).
-At the top of the domain, :math:`x_{d-1}=0`, we have an oscillating
-temperature
-
-.. math::
-        
-        T_0(t) = T_R + T_A\sin (\omega t),
-        
-
-where :math:`T_R` is some reference temperature, :math:`T_A` is the amplitude of
-the temperature variations at the surface, and :math:`\omega` is the frequency
-of the temperature oscillations.
-At all other boundaries we assume
-that the temperature does not change anymore when we move away from
-the boundary, i.e., the normal derivative is zero.
-Initially, the temperature can be taken as :math:`T_R` everywhere.
-The heat conductivity properties of the soil in the
-ground may vary with space so
-we introduce a variable coefficient :math:`\kappa` reflecting this property.
-Figure :ref:`tut:timedep:diffusion2:sin:fig1` shows a sketch of the
-problem, with a small region where the heat conductivity is much lower.
-
-.. _tut:timedep:diffusion2:sin:fig1:
-
-.. figure:: daynight.png
-   :width: 480
-
-   *Sketch of a (2D) problem involving heating and cooling of the ground due to an oscillating surface temperature*
-
-The initial-boundary value problem for this problem reads
+We can reformulate the Jacobian matrix
+in :eq:`tut:poisson:nonlinear:dFdU`
+by introducing the short
+notation :math:`u^k = \sum_{j=1}^NU_j^k\phi_j`:
 
 .. _Eq:_auto32:
 
 .. math::
    :label: _auto32
         
-        \varrho c{\partial T\over\partial t} = \nabla\cdot\left( \kappa\nabla T\right)\hbox{ in }\Omega\times (0,t_{\hbox{stop}}],
+        {\partial F_i\over\partial U_j} =
+        \int_\Omega \left\lbrack
+        q'(u^k)\phi_j
+        \nabla u^k \cdot \nabla \hat\phi_i
+        +
+        q(u^k)
+        \nabla \phi_j \cdot \nabla \hat\phi_i
+        \right\rbrack {\, \mathrm{d}x}{\thinspace .}
         
         
+
+In order to make FEniCS compute this matrix, we need to formulate a
+corresponding variational problem. Looking at the
+linear system of equations in Newton's method,
+
+.. math::
+        
+        \sum_{j=1}^N {\partial F_i\over\partial U_j}\delta U_j = -F_i,\quad
+        i=1,\ldots,N,
+        
+
+we can introduce :math:`v` as a general test function replacing :math:`\hat\phi_i`,
+and we can identify the unknown
+:math:`\delta u = \sum_{j=1}^N\delta U_j\phi_j`. From the linear system
+we can now go "backwards" to construct the corresponding linear
+discrete weak form to be solved in each Newton iteration:
+
+.. _Eq:tut:nonlinear:Newton:aLF:
+
+.. math::
+   :label: tut:nonlinear:Newton:aLF
+        
+        
+        \int_\Omega \left\lbrack
+        q'(u^k)\delta u
+        \nabla u^k \cdot \nabla v
+        +
+        q(u^k)
+        \nabla \delta u\cdot \nabla v
+        \right\rbrack {\, \mathrm{d}x} = - \int_\Omega q(u^k)
+        \nabla u^k\cdot \nabla v {\, \mathrm{d}x}{\thinspace .}
+        
+
+This variational form fits the standard notation
+:math:`a(\delta u,v)=L(v)` with
+
+.. math::
+        
+        a(\delta u,v) &=
+        \int_\Omega \left\lbrack
+        q'(u^k)\delta u
+        \nabla u^k \cdot \nabla v
+        +
+        q(u^k)
+        \nabla \delta u \cdot \nabla v
+        \right\rbrack
+         {\, \mathrm{d}x}\\ 
+        L(v) &= - \int_\Omega q(u^k)
+        \nabla u^k\cdot \nabla v {\, \mathrm{d}x}{\thinspace .}
+        
+
+Note the important feature in Newton's method
+that the
+previous solution :math:`u^k` replaces :math:`u`
+in the formulas when computing the matrix
+:math:`\partial F_i/\partial U_j` and vector :math:`F_i` for the linear system in
+each Newton iteration.
+
+.. index:: alg_newton_np.py
+
+We now turn to the implementation.
+To obtain a good initial guess :math:`u^0`, we can solve a simplified, linear
+problem, typically with :math:`q(u)=1`, which yields the standard Laplace
+equation :math:`\nabla^2 u^0 =0`. The recipe for solving this problem
+appears in the sections :ref:`tut:poisson1:varform`,
+:ref:`tut:poisson1:impl`, and :ref:`tut:poisson1:DN`.
+The code for computing :math:`u^0` becomes as follows:
+
+.. code-block:: python
+
+        tol = 1E-14
+        def left_boundary(x, on_boundary):
+            return on_boundary and abs(x[0]) < tol
+        
+        def right_boundary(x, on_boundary):
+            return on_boundary and abs(x[0]-1) < tol
+        
+        Gamma_0 = DirichletBC(V, Constant(0.0), left_boundary)
+        Gamma_1 = DirichletBC(V, Constant(1.0), right_boundary)
+        bcs = [Gamma_0, Gamma_1]
+        
+        # Define variational problem for initial guess (q(u)=1, i.e., m=0)
+        u = TrialFunction(V)
+        v = TestFunction(V)
+        a = inner(nabla_grad(u), nabla_grad(v))*dx
+        f = Constant(0.0)
+        L = f*v*dx
+        A, b = assemble_system(a, L, bcs)
+        u_k = Function(V)
+        U_k = u_k.vector()
+        solve(A, U_k, b)
+
+Here, ``u_k`` denotes the solution function for the previous
+iteration, so that the solution
+after each Newton iteration is ``u = u_k + omega*du``.
+Initially, ``u_k`` is the initial guess we call :math:`u^0` in the mathematics.
+
+The Dirichlet boundary conditions for :math:`\delta u`, in
+the problem to be solved in each Newton
+iteration, are somewhat different than the conditions for :math:`u`.
+Assuming that :math:`u^k` fulfills the
+Dirichlet conditions for :math:`u`, :math:`\delta u` must be zero at the boundaries
+where the Dirichlet conditions apply, in order for :math:`u^{k+1}=u^k + \omega\delta u` to fulfill
+the right boundary values. We therefore define an additional list of
+Dirichlet boundary conditions objects for :math:`\delta u`:
+
+.. code-block:: python
+
+        Gamma_0_du = DirichletBC(V, Constant(0), left_boundary)
+        Gamma_1_du = DirichletBC(V, Constant(0), right_boundary)
+        bcs_du = [Gamma_0_du, Gamma_1_du]
+
+The nonlinear coefficient and its derivative must be defined
+before coding the weak form of the Newton system:
+
+.. code-block:: python
+
+        def q(u):
+            return (1+u)**m
+        
+        def Dq(u):
+            return m*(1+u)**(m-1)
+        
+        du = TrialFunction(V) # u = u_k + omega*du
+        a = inner(q(u_k)*nabla_grad(du), nabla_grad(v))*dx + \ 
+            inner(Dq(u_k)*du*nabla_grad(u_k), nabla_grad(v))*dx
+        L = -inner(q(u_k)*nabla_grad(u_k), nabla_grad(v))*dx
+
+The Newton iteration loop is very similar to the Picard iteration loop
+in the section :ref:`tut:nonlinear:Picard`:
+
+.. code-block:: python
+
+        du = Function(V)
+        u  = Function(V)  # u = u_k + omega*du
+        omega = 1.0       # relaxation parameter
+        eps = 1.0
+        tol = 1.0E-5
+        iter = 0
+        maxiter = 25
+        while eps > tol and iter < maxiter:
+            iter += 1
+            A, b = assemble_system(a, L, bcs_du)
+            solve(A, du.vector(), b)
+            eps = numpy.linalg.norm(du.vector().array(), ord=numpy.Inf)
+            print 'Norm:', eps
+            u.vector()[:] = u_k.vector() + omega*du.vector()
+            u_k.assign(u)
+
+There are other ways of implementing the
+update of the solution as well:
+
+.. code-block:: python
+
+        u.assign(u_k)  # u = u_k
+        u.vector().axpy(omega, du.vector())
+        
+        # or
+        u.vector()[:] += omega*du.vector()
+
+The ``axpy(a, y)`` operation adds a scalar ``a`` times a ``Vector``
+``y`` to a ``Vector`` object.  It is usually a fast operation
+calling up an optimized BLAS routine for the calculation.
+
+Mesh construction for a :math:`d`-dimensional problem with arbitrary degree of
+the Lagrange elements can be done as
+explained in the section :ref:`tut:poisson:nD`.
+The complete program appears in the file ``alg_newton_np.py``.
+
+.. _tut:nonlinear:Newton:pdelevel:
+
+A Newton method at the PDE level
+--------------------------------
+
+.. index:: Newton's method (PDE level)
+
+Although Newton's method in PDE problems is normally formulated at the
+linear algebra level, i.e., as a solution method for systems of nonlinear
+algebraic equations, we can also formulate the method at the PDE level.
+This approach yields a linearization of the PDEs before they are discretized.
+FEniCS users will probably find this technique simpler to apply than
+the more standard method in the section :ref:`tut:nonlinear:Newton:algebraic`.
+
+Given an approximation to the solution field, :math:`u^k`, we seek a
+perturbation :math:`\delta u` so that
 
 .. _Eq:_auto33:
 
 .. math::
    :label: _auto33
-          
-        T = T_0(t)\hbox{ on }\Gamma_0,
+        
+        u^{k+1} = u^k + \delta u
         
         
+
+fulfills the nonlinear PDE.
+However, the problem for :math:`\delta u` is still nonlinear and nothing is
+gained. The idea is therefore to assume that :math:`\delta u` is sufficiently
+small so that we can linearize the problem with respect to :math:`\delta u`.
+Inserting :math:`u^{k+1}` in the PDE,
+linearizing the :math:`q` term as
 
 .. _Eq:_auto34:
 
 .. math::
    :label: _auto34
-          
-        {\partial T\over\partial n} = 0\hbox{ on }\partial\Omega\backslash\Gamma_0,
+        
+        q(u^{k+1}) = q(u^k) + q'(u^k)\delta u + {\cal O}((\delta u)^2)
+        \approx q(u^k) + q'(u^k)\delta u,
         
         
+
+and dropping nonlinear terms in :math:`\delta u`,
+we get
+
+.. math::
+        
+        \nabla\cdot\left( q(u^k)\nabla u^k\right) +
+        \nabla\cdot\left( q(u^k)\nabla\delta u\right) +
+        \nabla\cdot\left( q'(u^k)\delta u\nabla u^k\right) = 0{\thinspace .}
+        
+
+We may collect the terms with the unknown :math:`\delta u` on the left-hand side,
 
 .. _Eq:_auto35:
 
 .. math::
    :label: _auto35
-          
-        T = T_R\hbox{ at }t =0{\thinspace .}
+        
+        \nabla\cdot\left( q(u^k)\nabla\delta u\right) +
+        \nabla\cdot\left( q'(u^k)\delta u\nabla u^k\right) =
+        -\nabla\cdot\left( q(u^k)\nabla u^k\right),
         
         
 
-Here, :math:`\varrho` is the density of the soil, :math:`c` is the
-heat capacity, :math:`\kappa` is the thermal conductivity
-(heat conduction coefficient)
-in the soil, and :math:`\Gamma_0` is the surface boundary :math:`x_{d-1}=0`.
-
-We use a :math:`\theta`-scheme in time, i.e., the evolution equation
-:math:`\partial P/\partial t=Q(t)` is discretized as
-
-.. math::
-        
-        {P^k - P^{k-1}\over{{\Delta t}}} = \theta Q^k + (1-\theta )Q^{k-1},
-        
-
-where :math:`\theta\in[0,1]` is a weighting factor: :math:`\theta =1` corresponds
-to the backward difference scheme, :math:`\theta =1/2` to the Crank-Nicolson
-scheme, and :math:`\theta =0` to a forward difference scheme.
-The :math:`\theta`-scheme applied to our PDE results in
-
-.. math::
-        
-        \varrho c{T^k-T^{k-1}\over{{\Delta t}}} =
-        \theta \nabla\cdot\left( \kappa\nabla T^k\right)
-        + (1-\theta) \nabla\cdot\left( k\nabla T^{k-1}\right){\thinspace .}
-        
-
-Bringing this time-discrete PDE into weak form follows the technique shown
-many times earlier in this tutorial. In the standard notation
-:math:`a(T,v)=L(v)` the weak form has
+The weak form of this PDE is derived by multiplying by a test function :math:`v`
+and integrating over :math:`\Omega`, integrating as usual
+the second-order derivatives by parts:
 
 .. _Eq:_auto36:
 
 .. math::
    :label: _auto36
         
-        a(T,v) = \int_\Omega
-        \left( \varrho c Tv + \theta{{\Delta t}} \kappa\nabla T\cdot \nabla v\right) {\, \mathrm{d}x},
+        \int_\Omega \left(
+        q(u^k)\nabla\delta u\cdot \nabla v
+        + q'(u^k)\delta u\nabla u^k\cdot \nabla v\right) {\, \mathrm{d}x}
+        = -\int_\Omega q(u^k)\nabla u^k\cdot \nabla v {\, \mathrm{d}x}{\thinspace .}
         
         
+
+The variational problem reads: find :math:`\delta u\in V` such that
+:math:`a(\delta u,v) = L(v)` for all :math:`v\in \hat V`, where
+
+.. _Eq:tut:nonlinear:poisson:pdelevel:eqa:
+
+.. math::
+   :label: tut:nonlinear:poisson:pdelevel:eqa
+        
+        a(\delta u,v) =
+        \int_\Omega \left(
+        q(u^k)\nabla\delta u\cdot \nabla v
+        + q'(u^k)\delta u\nabla u^k\cdot \nabla v\right) {\, \mathrm{d}x},
+        
+        
+
+.. _Eq:tut:nonlinear:poisson:pdelevel:eqL:
+
+.. math::
+   :label: tut:nonlinear:poisson:pdelevel:eqL
+          
+        L(v) = -
+        \int_\Omega q(u^k)\nabla u^k\cdot \nabla v {\, \mathrm{d}x}{\thinspace .}
+        
+        
+
+The function spaces :math:`V` and :math:`\hat V`, being continuous or discrete,
+are as in the
+linear Poisson problem from the section :ref:`tut:poisson1:varform`.
+
+We must provide some initial guess, e.g., the solution of the
+PDE with :math:`q(u)=1`. The corresponding weak form :math:`a_0(u^0,v)=L_0(v)`
+has
+
+.. math::
+        
+        a_0(u,v)=\int_\Omega\nabla u\cdot \nabla v {\, \mathrm{d}x},\quad L_0(v)=0{\thinspace .}
+        
+
+Thereafter, we enter a loop and solve
+:math:`a(\delta u,v)=L(v)` for :math:`\delta u` and compute a new approximation
+:math:`u^{k+1} = u^k + \delta u`. Note that :math:`\delta u` is a correction, so if
+:math:`u^0` satisfies the prescribed
+Dirichlet conditions on some part :math:`\Gamma_D` of the boundary,
+we must demand :math:`\delta u=0` on :math:`\Gamma_D`.
+
+Looking at :eq:`tut:nonlinear:poisson:pdelevel:eqa` and
+:eq:`tut:nonlinear:poisson:pdelevel:eqL`,
+we see that the variational form is the same as for the Newton method
+at the algebraic level in the section :ref:`tut:nonlinear:Newton:algebraic`. Since Newton's method at the
+algebraic level required some "backward" construction of the
+underlying weak forms, FEniCS users may prefer Newton's method at the
+PDE level, which this author finds more straightforward, although not so
+commonly documented in the literature on numerical methods for PDEs.
+There is seemingly no need for differentiations to derive a Jacobian
+matrix, but a mathematically equivalent derivation is done when
+nonlinear terms are linearized using the first two Taylor series terms
+and when products in the perturbation :math:`\delta u` are neglected.
+
+.. index:: pde_newton_np.py
+
+The implementation is identical to the one in
+the section :ref:`tut:nonlinear:Newton:algebraic` and is found in
+the file ``pde_newton_np.py``. The reader is encouraged to go
+through this code to be convinced that the present method actually
+ends up with the same program as needed for the Newton method at
+the linear algebra level in the section :ref:`tut:nonlinear:Newton:algebraic`.
+
+.. _tut:nonlinear:Newton:auto:
+
+Solving the nonlinear variational problem directly
+--------------------------------------------------
+
+.. index:: vp1_np.py
+
+.. index:: vp2_np.py
+
+The previous hand-calculations and manual implementation of
+Picard or Newton methods can be automated by tools in FEniCS.
+In a nutshell, one can just write
+
+.. code-block:: python
+
+        problem = NonlinearVariationalProblem(F, u, bcs, J)
+        solver  = NonlinearVariationalSolver(problem)
+        solver.solve()
+
+where ``F`` corresponds to the nonlinear form :math:`F(u;v)`,
+``u`` is the unknown ``Function`` object, ``bcs``
+represents the essential boundary conditions (in general a list of
+``DirichletBC`` objects), and
+``J`` is a variational form for the Jacobian of ``F``.
+
+Let us explain in detail how to use the built-in tools for
+nonlinear variational problems and their solution.
+The ``F`` form corresponding to :eq:`tut:poisson:nonlinear2`
+is straightforwardly defined as follows, assuming ``q(u)`` is
+coded as a Python function:
+
+.. code-block:: python
+
+        u_ = Function(V)     # most recently computed solution
+        v  = TestFunction(V)
+        F  = inner(q(u_)*nabla_grad(u_), nabla_grad(v))*dx
+
+Note here that ``u_`` is a ``Function`` (not a ``TrialFunction``).
+An alternative and perhaps more intuitive formula for :math:`F` is to
+define :math:`F(u;v)` directly in terms of
+a trial function for :math:`u` and a test function for :math:`v`, and then
+create the proper ``F`` by
+
+.. code-block:: python
+
+        u  = TrialFunction(V)
+        v  = TestFunction(V)
+        F  = inner(q(u)*nabla_grad(u), nabla_grad(v))*dx
+        u_ = Function(V)     # the most recently computed solution
+        F  = action(F, u_)
+
+The latter statement is equivalent to :math:`F(u=u_{-}; v)`, where :math:`u_{-}` is
+an existing finite element function representing the most recently
+computed approximation to the solution.
+(Note that :math:`u^k` and :math:`u^{k+1}` in the previous notation
+correspond to :math:`u_{-}` and :math:`u` in the present
+notation. We have changed notation to better align the mathematics with
+the associated UFL code.)
+
+.. index:: Gateaux derivative
+
+The derivative :math:`J` (``J``) of :math:`F` (``F``) is formally the
+Gateaux derivative :math:`DF(u^k; \delta u, v)`
+of :math:`F(u;v)` at :math:`u=u_{-}` in the direction of :math:`\delta u`.
+Technically, this Gateaux derivative is derived by computing
+
+.. _Eq:tut:poisson:nonlinear:Gateaux1:
+
+.. math::
+   :label: tut:poisson:nonlinear:Gateaux1
+        
+        \lim_{\epsilon\rightarrow 0}{d\over d\epsilon} F_i(u_{-} + \epsilon\delta u; v)
+        {\thinspace .}  
+        
+
+The :math:`\delta u` is now the trial function and :math:`u_{-}` is the previous
+approximation to the solution :math:`u`.
+We start with
+
+.. math::
+        
+        {d\over d\epsilon}\int_\Omega \nabla v\cdot\left( q(u_{-} + \epsilon\delta u)
+        \nabla (u_{-} + \epsilon\delta u)\right) {\, \mathrm{d}x}
+        
+
+and obtain
+
+.. math::
+        
+        \int_\Omega \nabla v\cdot\left\lbrack
+        q'(u_{-} + \epsilon\delta u)\delta u
+        \nabla (u_{-} + \epsilon\delta u)
+        +
+        q(u_{-} + \epsilon\delta u)
+        \nabla \delta u
+        \right\rbrack {\, \mathrm{d}x},
+        
+
+which leads to
 
 .. _Eq:_auto37:
 
 .. math::
    :label: _auto37
-          
-        L(v) = \int_\Omega \left( \varrho c T^{k-1}v - (1-\theta){{\Delta t}}
-        \kappa\nabla T^{k-1}\cdot \nabla v\right) {\, \mathrm{d}x}{\thinspace .}
+        
+        \int_\Omega \nabla v\cdot\left\lbrack
+        q'(u_{-})\delta u
+        \nabla (u_{-})
+        +
+        q(u_{-})
+        \nabla \delta u
+        \right\rbrack {\, \mathrm{d}x},
         
         
 
-Observe that boundary integrals vanish because of the Neumann boundary
-conditions.
+as :math:`\epsilon\rightarrow 0`.
+This last expression is the Gateaux derivative of :math:`F`. We may use :math:`J` or
+:math:`a(\delta u, v)` for this derivative, the latter having the advantage
+that we easily recognize the expression as a bilinear form. However, in
+the forthcoming code examples ``J`` is used as variable name for
+the Jacobian.
 
-.. index:: heterogeneous medium
-
-.. index:: multi-material domain
-
-The size of a 3D box is taken as :math:`W\times W\times D`, where :math:`D` is
-the depth and :math:`W=D/2` is the width.
-We give the degree of the basis functions at the command line, then :math:`D`,
-and then the divisions of the domain in the various directions.
-To make a box, rectangle, or interval of arbitrary (not unit) size,
-we have the DOLFIN classes ``BoxMesh``, ``RectangleMesh``, and
-``IntervalMesh`` at our disposal. The mesh and the function space
-can be created by the following code:
+The specification of ``J``
+goes as follows if ``du`` is the ``TrialFunction``:
 
 .. code-block:: python
 
-        degree = int(sys.argv[1])
-        D = float(sys.argv[2])
-        W = D/2.0
-        divisions = [int(arg) for arg in sys.argv[3:]]
-        d = len(divisions)  # no of space dimensions
-        if d == 1:
-            mesh = IntervalMesh(divisions[0], -D, 0)
-        elif d == 2:
-            mesh = RectangleMesh(-W/2, -D, W/2, 0, divisions[0], divisions[1])
-        elif d == 3:
-            mesh = BoxMesh(-W/2, -W/2, -D, W/2, W/2, 0,
-                       divisions[0], divisions[1], divisions[2])
-        V = FunctionSpace(mesh, 'Lagrange', degree)
+        du = TrialFunction(V)
+        v  = TestFunction(V)
+        u_ = Function(V)      # the most recently computed solution
+        F  = inner(q(u_)*nabla_grad(u_), nabla_grad(v))*dx
+        
+        J = inner(q(u_)*nabla_grad(du), nabla_grad(v))*dx + \ 
+            inner(Dq(u_)*du*nabla_grad(u_), nabla_grad(v))*dx
 
-The ``RectangleMesh`` and ``BoxMesh`` objects are defined by the coordinates
-of the "minimum" and "maximum" corners.
-
-Setting Dirichlet conditions at the upper boundary can be done by
+The alternative specification of ``F``, with ``u`` as
+``TrialFunction``, leads to
 
 .. code-block:: python
 
-        T_R = 0; T_A = 1.0; omega = 2*pi
+        u  = TrialFunction(V)
+        v  = TestFunction(V)
+        u_ = Function(V)      # the most recently computed solution
+        F  = inner(q(u)*nabla_grad(u), nabla_grad(v))*dx
+        F  = action(F, u_)
         
-        T_0 = Expression('T_R + T_A*sin(omega*t)',
-                         T_R=T_R, T_A=T_A, omega=omega, t=0.0)
-        
-        def surface(x, on_boundary):
-            return on_boundary and abs(x[d-1]) < 1E-14
-        
-        bc = DirichletBC(V, T_0, surface)
+        J = inner(q(u_)*nabla_grad(u), nabla_grad(v))*dx + \ 
+            inner(Dq(u_)*u*nabla_grad(u_), nabla_grad(v))*dx
 
-The :math:`\kappa` function can be defined as a constant :math:`\kappa_1` inside
-the particular rectangular area with a special soil composition, as
-indicated in Figure :ref:`tut:timedep:diffusion2:sin:fig1`. Outside
-this area :math:`\kappa` is a constant :math:`\kappa_0`.
-The domain of the rectangular area is taken as
+.. index:: derivative
 
-.. math::
-        
-        [-W/4, W/4]\times [-W/4, W/4]\times [-D/2, -D/2 + D/4]
-        
+.. index:: automatic differentiation
 
-in 3D, with :math:`[-W/4, W/4]\times [-D/2, -D/2 + D/4]` in 2D and
-:math:`[-D/2, -D/2 + D/4]` in 1D.
-Since we need some testing in the definition of the :math:`\kappa(\boldsymbol{x})`
-function, the most straightforward approach is to define a subclass
-of ``Expression``, where we can use a full Python method instead of
-just a C++ string formula for specifying a function.
-The method that defines the function is called ``eval``:
+.. index::
+   single: Jacobian, automatic computation
+
+The UFL language, used to specify weak forms, supports differentiation
+of forms. This feature facilitates automatic *symbolic* computation of the
+Jacobian ``J`` by calling the function ``derivative`` with ``F``, the most
+recently computed solution (``Function``), and the unknown
+(``TrialFunction``) as parameters:
 
 .. code-block:: python
 
-        class Kappa(Expression):
-            def eval(self, value, x):
-                """x: spatial point, value[0]: function value."""
-                d = len(x)  # no of space dimensions
-                material = 0  # 0: outside, 1: inside
-                if d == 1:
-                    if -D/2. < x[d-1] < -D/2. + D/4.:
-                        material = 1
-                elif d == 2:
-                    if -D/2. < x[d-1] < -D/2. + D/4. and \ 
-                       -W/4. < x[0] < W/4.:
-                        material = 1
-                elif d == 3:
-                    if -D/2. < x[d-1] < -D/2. + D/4. and \ 
-                       -W/4. < x[0] < W/4. and -W/4. < x[1] < W/4.:
-                        material = 1
-                value[0] = kappa_0 if material == 0 else kappa_1
+        du = TrialFunction(V)
+        v  = TestFunction(V)
+        u_ = Function(V)      # the most recently computed solution
+        F  = inner(q(u_)*nabla_grad(u_), nabla_grad(v))*dx
+        
+        J  = derivative(F, u_, du)  # Gateaux derivative in dir. of du
 
-The ``eval`` method gives great flexibility in defining functions,
-but a downside is that C++ calls up ``eval`` in Python for
-each point ``x``, which is a slow process, and the number of calls
-is proportional to the number of nodes in the mesh.
-Function expressions in terms of strings are compiled to efficient
-C++ functions, being called from C++, so we should try to express functions
-as string expressions if possible. (The ``eval`` method can also be
-defined through C++ code, but this is much
-more complicated and not covered here.)
-Using inline if-tests in C++, we can make string expressions for
-:math:`\kappa`:
+or
 
 .. code-block:: python
 
-        kappa_str = {}
-        kappa_str[1] = 'x[0] > -D/2 && x[0] < -D/2 + D/4 ? kappa_1 : kappa_0'
-        kappa_str[2] = 'x[0] > -W/4 && x[0] < W/4 '\ 
-                       '&& x[1] > -D/2 && x[1] < -D/2 + D/4 ? '\ 
-                       'kappa_1 : kappa_0'
-        kappa_str[3] = 'x[0] > -W/4 && x[0] < W/4 '\ 
-                       'x[1] > -W/4 && x[1] < W/4 '\ 
-                       '&& x[2] > -D/2 && x[2] < -D/2 + D/4 ?'\ 
-                       'kappa_1 : kappa_0'
+        u  = TrialFunction(V)
+        v  = TestFunction(V)
+        u_ = Function(V)      # the most recently computed solution
+        F  = inner(q(u)*nabla_grad(u), nabla_grad(v))*dx
+        F  = action(F, u_)
         
-        kappa = Expression(kappa_str[d],
-                           D=D, W=W, kappa_0=kappa_0, kappa_1=kappa_1)
+        J  = derivative(F, u_, u)   # Gateaux derivative in dir. of u
 
-Let ``T`` denote the unknown spatial temperature function at the
-current time level, and let ``T_1`` be the corresponding function
-at one earlier time level.
-We are now ready to define the initial condition and the
-``a`` and ``L`` forms of our problem:
+The ``derivative`` function is obviously
+very convenient in problems where differentiating ``F`` by hand
+implies lengthy calculations.
+
+The preferred implementation of ``F`` and ``J``, depending on whether
+``du`` or ``u`` is the ``TrialFunction`` object,
+is a matter of personal taste. Derivation of the Gateaux derivative
+by hand, as shown above, is most naturally matched by an
+implementation where ``du`` is the ``TrialFunction``, while
+use of automatic symbolic differentiation with the aid of the ``derivative``
+function is most naturally matched by an implementation where
+``u`` is the ``TrialFunction``.
+We have implemented both approaches in two files:
+``vp1_np.py`` with
+``u`` as ``TrialFunction``, and
+``vp2_np.py`` with ``du`` as ``TrialFunction``.
+The directory
+``stationary/nonlinear_poisson`` contains both files.
+The first command-line argument determines if the Jacobian is to
+be automatically derived or computed from the hand-derived formula.
+
+.. index:: nonlinear variational problems
+
+.. index:: NonlinearVariationalProblem
+
+.. index:: NonlinearVariationalSolver
+
+The following code defines the nonlinear variational problem and
+an associated solver based on Newton's method. We here demonstrate
+how key parameters in
+Newton's method can be set, as well as the choice of
+solver and preconditioner, and associated parameters, for the
+linear system occurring in the Newton iteration.
 
 .. code-block:: python
 
-        T_prev = interpolate(Constant(T_R), V)
+        problem = NonlinearVariationalProblem(F, u_, bcs, J)
+        solver  = NonlinearVariationalSolver(problem)
         
-        rho = 1
-        c = 1
-        period = 2*pi/omega
-        t_stop = 5*period
-        dt = period/20  # 20 time steps per period
-        theta = 1
+        prm = solver.parameters
+        prm['newton_solver']['absolute_tolerance'] = 1E-8
+        prm['newton_solver']['relative_tolerance'] = 1E-7
+        prm['newton_solver']['maximum_iterations'] = 25
+        prm['newton_solver']['relaxation_parameter'] = 1.0
+        if iterative_solver:
+            prm['linear_solver'] = 'gmres'
+            prm['preconditioner'] = 'ilu'
+            prm['krylov_solver']['absolute_tolerance'] = 1E-9
+            prm['krylov_solver']['relative_tolerance'] = 1E-7
+            prm['krylov_solver']['maximum_iterations'] = 1000
+            prm['krylov_solver']['gmres']['restart'] = 40
+            prm['krylov_solver']['preconditioner']['ilu']['fill_level'] = 0
+        set_log_level(PROGRESS)
         
-        T = TrialFunction(V)
-        v = TestFunction(V)
-        f = Constant(0)
-        a = rho*c*T*v*dx + theta*dt*kappa*\ 
-            inner(nabla_grad(T), nabla_grad(v))*dx
-        L = (rho*c*T_prev*v + dt*f*v -
-             (1-theta)*dt*kappa*inner(nabla_grad(T_1), nabla_grad(v)))*dx
-        
-        A = assemble(a)
-        b = None  # variable used for memory savings in assemble calls
-        T = Function(V)   # unknown at the current time level
+        solver.solve()
 
-We could, alternatively, break ``a`` and ``L`` up in subexpressions
-and assemble a mass matrix and stiffness matrix, as exemplified in
-the section :ref:`tut:timedep:diffusion1:noassemble`, to avoid
-assembly of ``b`` at every time level. This modification is
-straightforward and left as an exercise. The speed-up can be significant
-in 3D problems.
-
-The time loop is very similar to what we have displayed in
-the section :ref:`tut:timedep:diffusion1:impl`:
-
-.. code-block:: python
-
-        T = Function(V)   # unknown at the current time level
-        t = dt
-        while t <= t_stop:
-            b = assemble(L, tensor=b)
-            T_0.t = t
-            bc.apply(A, b)
-            solve(A, T.vector(), b)
-            # visualization statements
-            t += dt
-            T_prev.assign(T)
-
-The complete code in ``sin_daD.py`` contains several
-statements related to visualization and animation of the solution, both as a
-finite element field (``plot`` calls) and as a curve in the
-vertical direction. The code also plots the exact analytical solution,
-
-.. math::
-        
-        T(x,t) = T_R + T_Ae^{ax}\sin (\omega t + ax),\quad a =\sqrt{\omega\varrho c\over 2\kappa},
-        
-
-which is valid when :math:`\kappa = \kappa_0=\kappa_1`.
-
-Implementing this analytical solution as a Python function
-taking scalars and numpy arrays as arguments requires a word of caution.
-A straightforward function like
-
-.. code-block:: python
-
-        def T_exact(x):
-            a = sqrt(omega*rho*c/(2*kappa_0))
-            return T_R + T_A*exp(a*x)*sin(omega*t + a*x)
-
-will not work and result in an error message from UFL. The reason is that
-the names ``exp`` and ``sin`` are those imported
-by the ``from dolfin import *`` statement, and these names
-come from UFL and are aimed at being used in variational forms.
-In the ``T_exact`` function where ``x`` may be a scalar or a
-``numpy`` array, we therefore need to explicitly specify
-``numpy.exp`` and ``numpy.sin``:
-
-.. code-block:: python
-
-        def T_exact(x):
-            a = sqrt(omega*rho*c/(2*kappa_0))
-            return T_R + T_A*numpy.exp(a*x)*numpy.sin(omega*t + a*x)
-
-The complete code is found in the file
-The reader
-is encouraged to play around with the code and test out various parameter
-sets:
-
- 1. :math:`T_R=0`, :math:`T_A=1`, :math:`\kappa_0 = \kappa_1=0.2`, :math:`\varrho = c = 1`, :math:`\omega = 2\pi`
-
- 2. :math:`T_R=0`, :math:`T_A=1`, :math:`\kappa_0=0.2`, :math:`\kappa_1=0.01`, :math:`\varrho = c = 1`, :math:`\omega = 2\pi`
-
- 3. :math:`T_R=0`, :math:`T_A=1`, :math:`\kappa_0=0.2`, :math:`\kappa_1=0.001`, :math:`\varrho = c = 1`, :math:`\omega = 2\pi`
-
- 4. :math:`T_R=10` C, :math:`T_A=10` C, :math:`\kappa_0= 2.3 \hbox{ K}^{-1}\hbox{Ns}^{-1}`,
-    :math:`\kappa_1= 100 \hbox{ K}^{-1}\hbox{Ns}^{-1}`,
-    :math:`\varrho = 1500\hbox{ kg/m}^3`,
-    :math:`c = 1480\hbox{ Nm}\cdot\hbox{kg}^{-1}\hbox{K}^{-1}`,
-    :math:`\omega = 2\pi/24` 1/h  :math:`= 7.27\cdot 10^{-5}` 1/s, :math:`D=1.5` m
-
- 5. As above, but :math:`\kappa_0= 12.3 \hbox{ K}^{-1}\hbox{Ns}^{-1}` and
-    :math:`\kappa_1= 10^4 \hbox{ K}^{-1}\hbox{Ns}^{-1}`
-
-Data set number 4 is relevant for real temperature variations in
-the ground (not necessarily the large value of :math:`\kappa_1`),
-while data set number 5
-exaggerates the effect of a large heat conduction contrast so that
-it becomes clearly visible in an animation.
-
-.. kappa_1 = 1.1, varrho_1 = 1200, c_1 = 1000 => 9.17E-7
-
-.. kappa_0 = 2.3, varrho_0 = 1800, c_0 = 1500 => 8.52E-7
+A list of available parameters and their default values can as
+usual be printed by calling ``info(prm, True)``.
+The ``u_`` we feed to the nonlinear variational problem object
+is filled with the solution by the call ``solver.solve()``.
 
