@@ -41,5 +41,6 @@ system doconce sphinx_dir dirname=$dir version=$version theme=fenics $name
 system python automake_sphinx.py
 
 dest=../pub
+rm -rf $dest/sphinx
 cp -r fenics-tutorial-4print.pdf sphinx-rootdir/_build/html $dest
 mv -f $dest/html $dest/sphinx
