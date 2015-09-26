@@ -42,11 +42,11 @@ print parameters['linear_algebra_backend']
 set_log_level(DEBUG)
 
 solve(a == L, u, bc,
-      solver_parameters={'linear_solver': 'cg', 
+      solver_parameters={'linear_solver': 'cg',
                          'preconditioner': 'ilu'})
 # Alternative syntax
-solve(a == L, u, bc, 
-      solver_parameters=dict(linear_solver='cg', 
+solve(a == L, u, bc,
+      solver_parameters=dict(linear_solver='cg',
                              preconditioner='ilu'))
 
 # Plot solution and mesh

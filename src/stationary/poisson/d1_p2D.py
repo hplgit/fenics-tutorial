@@ -34,9 +34,11 @@ u = Function(V)
 solve(a == L, u, bc)
 
 # Plot solution and mesh
-plot(u, interactive=True)
-plot(mesh, interactive=True)
+plot(u)
 
 # Dump solution to file in VTK format
 file = File('poisson.pvd')
 file << u
+
+# Hold plot
+interactive()

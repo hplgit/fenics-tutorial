@@ -1,4 +1,13 @@
 """
+This program has an error after editing
+A = assemble(a, exterior_facet_domains=boundary_parts)
+b = assemble(L, exterior_facet_domains=boundary_parts)
+to
+A = assemble(a)
+b = assemble(L)
+"""
+
+"""
 FEniCS tutorial demo program: Poisson equation with Dirichlet,
 Neumann and Robin conditions.
 The solution is checked to coincide with the exact solution at all nodes.
@@ -20,7 +29,7 @@ V = FunctionSpace(mesh, 'Lagrange', 1)
 # Define boundary segments for Neumann, Robin and Dirichlet conditions
 
 # Create mesh function over cell facets
-boundary_parts = MeshFunction("uint", mesh, mesh.topology().dim()-1)
+boundary_parts = MeshFunction('size_t', mesh, mesh.topology().dim()-1)
 
 # Mark lower boundary facets as subdomain 0
 class LowerRobinBoundary(SubDomain):
@@ -62,7 +71,7 @@ Gamma_1 = RightBoundary()
 Gamma_1.mark(boundary_parts, 3)
 
 #-------------- Solution and problem definition step -----------------
-# given mesh and boundary_parts
+# Given mesh and boundary_parts
 
 u_L = Expression('1 + 2*x[1]*x[1]')
 u_R = Expression('2 + 2*x[1]*x[1]')
@@ -77,12 +86,12 @@ a = inner(nabla_grad(u), nabla_grad(v))*dx + p*u*v*ds(0)
 L = f*v*dx - g*v*ds(1) + p*q*v*ds(0)
 
 # Compute solution
-A = assemble(a, exterior_facet_domains=boundary_parts)
-b = assemble(L, exterior_facet_domains=boundary_parts)
+A = assemble(a)
+b = assemble(L)
 for bc in bcs: bc.apply(A, b)
 
 # Alternative
-#A, b = assemble_system(a, L, bc, exterior_facet_domains=boundary_parts)
+#A, b = assemble_system(a, L, bc)
 
 u = Function(V)
 solve(A, u.vector(), b, 'lu')
@@ -95,4 +104,3 @@ u_e = interpolate(u_exact, V)
 print 'Max error:', abs(u_e.vector().array() - u.vector().array()).max()
 
 #interactive()
-

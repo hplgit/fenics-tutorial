@@ -44,23 +44,24 @@ def compute(nx, ny, degree):
     # Compute gradient
     #gradu = project(grad(u), VectorFunctionSpace(mesh, 'Lagrange', degree))
 
-    # Compute error norm
+    # Compute error norm (for very small errors, the value can be
+    # negative so we run abs(assemble(error)) to avoid failure in sqrt
 
     # Function - Expression
     error = (u - u_e)**2*dx
-    E1 = sqrt(assemble(error))
+    E1 = sqrt(abs(assemble(error)))
 
     # Explicit interpolation of u_e onto the same space as u:
     u_e_V = interpolate(u_e, V)
     error = (u - u_e_V)**2*dx
-    E2 = sqrt(assemble(error))
+    E2 = sqrt(abs(assemble(error)))
 
     # Explicit interpolation of u_e to higher-order elements,
     # u will also be interpolated to the space Ve before integration
     Ve = FunctionSpace(mesh, 'Lagrange', degree=5)
     u_e_Ve = interpolate(u_e, Ve)
     error = (u - u_e_Ve)**2*dx
-    E3 = sqrt(assemble(error))
+    E3 = sqrt(abs(assemble(error)))
 
     # errornorm interpolates u and u_e to a space with
     # given degree, and creates the error field by subtracting
@@ -78,7 +79,7 @@ def compute(nx, ny, degree):
         #e_Ve.assign(u_e_Ve)                      # e_Ve = u_e_Ve
         #e_Ve.vector().axpy(-1.0, u_Ve.vector())  # e_Ve += -1.0*u_Ve
         error = e_Ve**2*dx
-        return sqrt(assemble(error, mesh=Ve.mesh())), e_Ve
+        return sqrt(abs(assemble(error))), e_Ve
     E4, e_Ve = errornorm(u_e, u, Ve)
 
     # Infinity norm based on nodal values
@@ -91,7 +92,7 @@ def compute(nx, ny, degree):
 
     # H1 seminorm
     error = inner(grad(e_Ve), grad(e_Ve))*dx
-    E6 = sqrt(assemble(error))
+    E6 = sqrt(abs(assemble(error)))
 
     # Collect error measures in a dictionary with self-explanatory keys
     errors = {'u - u_e': E1,
@@ -121,6 +122,3 @@ for error_type in sorted(error_types):
         Eim1 = E[i-1][error_type]
         r = ln(Ei/Eim1)/ln(h[i]/h[i-1])
         print 'h=%8.2E E=%8.2E r=%.2f' % (h[i], Ei, r)
-
-
-

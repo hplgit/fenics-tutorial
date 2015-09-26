@@ -1,0 +1,210 @@
+.. !split
+
+.. _tut:prepro:
+
+Creating More Complex Domains
+=============================
+
+Up to now we have been very fond of the unit square as domain,
+which is an appropriate choice for initial versions of a
+PDE solver. The strength of the finite element method, however, is its
+ease of handling domains with complex shapes. This section
+shows some methods that can be used to create different types of
+domains and meshes.
+
+Domains of complex shape must normally be constructed in separate
+preprocessor programs. Two relevant preprocessors are Triangle for
+2D domains and NETGEN for 3D domains.
+
+.. _tut:prepro:builtin:
+
+Built-In Mesh Generation Tools
+------------------------------
+
+DOLFIN has a few tools for creating various types of meshes over
+domains with simple
+shape:
+``UnitIntervalMesh``,
+``UnitSquareMesh``,
+``UnitCubeMesh``,
+``IntervalMesh``,
+``RectangleMesh``,
+``BoxMesh``,
+``UnitCircleMesh``,
+and
+``UnitSphere``.
+
+.. index:: UnitIntervalMesh
+
+.. index:: UnitSphere
+
+.. index:: UnitSquareMesh
+
+.. index:: IntervalMesh
+
+.. index:: RectangleMesh
+
+.. index:: BoxMesh
+
+.. index:: UnitCircleMesh
+
+.. index:: UnitCubeMesh
+
+Some of these names have been briefly met in previous sections.
+The hopefully self-explanatory code snippet below summarizes
+typical constructions of meshes with the aid of these tools:
+
+.. code-block:: python
+
+        # 1D domains
+        mesh = UnitIntervalMesh(20)     # 20 cells, 21 vertices
+        mesh = IntervalMesh(20, -1, 1)  # domain [-1,1]
+        
+        # 2D domains (6x10 divisions, 120 cells, 77 vertices)
+        mesh = UnitSquareMesh(6, 10)  # 'right' diagonal is default
+        # The diagonals can be right, left or crossed
+        mesh = UnitSquareMesh(6, 10, 'left')
+        mesh = UnitSquareMesh(6, 10, 'crossed')
+        
+        # Domain [0,3]x[0,2] with 6x10 divisions and left diagonals
+        mesh = RectangleMesh(0, 0, 3, 2, 6, 10, 'left')
+        
+        # 6x10x5 boxes in the unit cube, each box gets 6 tetrahedra:
+        mesh = UnitCubeMesh(6, 10, 5)
+        
+        # Domain [-1,1]x[-1,0]x[-1,2] with 6x10x5 divisions
+        mesh = BoxMesh(-1, -1, -1, 1, 0, 2, 6, 10, 5)
+        
+        # 10 divisions in radial directions
+        mesh = UnitCircleMesh(10)
+        mesh = UnitSphere(10)
+
+.. _tut:mesh:transform:cyl:
+
+Transforming Mesh Coordinates
+-----------------------------
+
+.. index:: mesh transformations
+
+.. index:: coordinate stretching
+
+.. index:: coordinate transformations
+
+A mesh that is denser toward a boundary is often desired to increase
+accuracy in that region. Given a mesh with uniformly spaced
+coordinates :math:`x_0,\ldots,x_{M-1}` in :math:`[a,b]`, the coordinate transformation
+:math:`\xi = (x-a)/(b-a)` maps :math:`x` onto :math:`\xi\in [0,1]`. A new mapping
+:math:`\eta = \xi^s`, for some :math:`s>1`, stretches the mesh toward :math:`\xi=0` (:math:`x=a`),
+while :math:`\eta = \xi^{1/s}` makes a stretching toward :math:`\xi=1` (:math:`x=b`).
+Mapping the :math:`\eta\in[0,1]` coordinates back to :math:`[a,b]` gives new,
+stretched :math:`x` coordinates,
+
+.. _Eq:_auto38:
+
+.. math::
+   :label: _auto38
+        
+        \bar x = a + (b-a)\left({x-a\over b-a}\right)^s
+        
+        
+
+toward :math:`x=a`, or
+
+.. _Eq:_auto39:
+
+.. math::
+   :label: _auto39
+        
+        \bar x = a + (b-a)\left({x-a\over b-a}\right)^{1/s}
+        
+        
+
+toward :math:`x=b`
+
+One way of creating more complex geometries is to transform the
+vertex coordinates in a rectangular mesh according to some formula.
+Say we want to create a part of a hollow cylinder of :math:`\Theta` degrees,
+with inner radius :math:`a` and outer radius :math:`b`. A standard mapping from polar
+coordinates to Cartesian coordinates can be used to generate the
+hollow cylinder. Given a rectangle in :math:`(\bar x, \bar y)` space such that
+:math:`a\leq \bar x\leq b` and :math:`0\leq \bar y\leq 1`, the mapping
+
+.. math::
+        
+        \hat x = \bar x\cos (\Theta \bar y),\quad \hat y = \bar x\sin (\Theta \bar y),
+        
+
+takes a point in the rectangular :math:`(\bar x,\bar y)`
+geometry and maps it to a point
+:math:`(\hat x, \hat y)` in a hollow cylinder.
+
+The corresponding Python code for first stretching the mesh and
+then mapping it onto a hollow cylinder looks as follows:
+
+.. code-block:: python
+
+        Theta = pi/2
+        a, b = 1, 5.0
+        nr = 10  # divisions in r direction
+        nt = 20  # divisions in theta direction
+        mesh = RectangleMesh(a, 0, b, 1, nr, nt, 'crossed')
+        
+        # First make a denser mesh towards r=a
+        x = mesh.coordinates()[:,0]
+        y = mesh.coordinates()[:,1]
+        s = 1.3
+        
+        def denser(x, y):
+            return [a + (b-a)*((x-a)/(b-a))**s, y]
+        
+        x_bar, y_bar = denser(x, y)
+        xy_bar_coor = numpy.array([x_bar, y_bar]).transpose()
+        mesh.coordinates()[:] = xy_bar_coor
+        plot(mesh, title='stretched mesh')
+        
+        def cylinder(r, s):
+            return [r*numpy.cos(Theta*s), r*numpy.sin(Theta*s)]
+        
+        x_hat, y_hat = cylinder(x_bar, y_bar)
+        xy_hat_coor = numpy.array([x_hat, y_hat]).transpose()
+        mesh.coordinates()[:] = xy_hat_coor
+        plot(mesh, title='hollow cylinder')
+        interactive()
+
+The result of calling ``denser`` and ``cylinder`` above is a list of two
+vectors, with the :math:`x` and :math:`y` coordinates, respectively.
+Turning this list into a ``numpy`` array object results in a :math:`2\times M`
+array, :math:`M` being the number of vertices in the mesh. However,
+``mesh.coordinates()`` is by a convention an :math:`M\times 2` array so we
+need to take the transpose. The resulting mesh is displayed
+in Figure :ref:`tut:mesh:transform:cyl:fig1`.
+
+.. _tut:mesh:transform:cyl:fig1:
+
+.. figure:: hollow_cylinder.png
+   :width: 480
+
+   *Hollow cylinder generated by mapping a rectangular mesh, stretched toward the left side*
+
+Setting boundary conditions in meshes created from mappings like the one
+illustrated above is most conveniently done by using a mesh function
+to mark parts of the boundary. The marking is easiest to perform
+before the mesh is mapped since one can then conceptually work with
+the sides in a pure rectangle.
+
+.. Stretch coordinates according to Mikael.
+
+.. Use refine uniformly and adaptively (adaptive poisson demo, use just
+
+.. grad u for example)
+
+.. Check ../../dielectric/python/demo.py og MeshEditor!
+
+.. Use refine og move.
+
+.. CHeck Netgen examples in the source, 2D.
+
+.. Transfinite mappings? Laplace?
+
+.. ===== Separate Preprocessor Applications =====
+
