@@ -1,13 +1,4 @@
 """
-This program has an error after editing
-A = assemble(a, exterior_facet_domains=boundary_parts)
-b = assemble(L, exterior_facet_domains=boundary_parts)
-to
-A = assemble(a)
-b = assemble(L)
-"""
-
-"""
 FEniCS tutorial demo program: Poisson equation with Dirichlet,
 Neumann and Robin conditions.
 The solution is checked to coincide with the exact solution at all nodes.
@@ -17,6 +8,7 @@ split into two distinct parts (separate objects and integrations)
 and we have a Robin condition instead of a Neumann condition at y=0.
 """
 
+from __future__ import print_function
 from dolfin import *
 import numpy
 
@@ -82,25 +74,28 @@ bcs = [DirichletBC(V, u_L, boundary_parts, 2),
 u = TrialFunction(V)
 v = TestFunction(V)
 f = Constant(-6.0)
-a = inner(nabla_grad(u), nabla_grad(v))*dx + p*u*v*ds(0)
-L = f*v*dx - g*v*ds(1) + p*q*v*ds(0)
+ds = ds(0, subdomain_data=boundary_parts)
+a = inner(nabla_grad(u), nabla_grad(v))*dx \
+    + p*u*v*ds(0)
+L = f*v*dx - g*v*ds(1) \
+    + p*q*v*ds(0)
 
 # Compute solution
 A = assemble(a)
 b = assemble(L)
-for bc in bcs: bc.apply(A, b)
+for condition in bcs: condition.apply(A, b)
 
-# Alternative
+# Alternative is not yet supported
 #A, b = assemble_system(a, L, bc)
 
 u = Function(V)
 solve(A, u.vector(), b, 'lu')
 
-print mesh
+print(mesh)
 
 # Verification
 u_exact = Expression('1 + x[0]*x[0] + 2*x[1]*x[1]')
 u_e = interpolate(u_exact, V)
-print 'Max error:', abs(u_e.vector().array() - u.vector().array()).max()
+print('Max error:', abs(u_e.vector().array() - u.vector().array()).max())
 
 #interactive()

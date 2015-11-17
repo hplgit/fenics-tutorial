@@ -6,12 +6,10 @@ Simplest example of computation and visualization with FEniCS.
 u = u0 on the boundary.
 u0 = u = 1 + x^2 + 2y^2, f = -6.
 """
-
 from dolfin import *
 
 # Create mesh and define function space
 mesh = UnitSquareMesh(6, 4)
-#mesh = UnitCubeMesh(6, 4, 5)
 V = FunctionSpace(mesh, 'Lagrange', 1)
 
 # Define boundary conditions
@@ -37,7 +35,7 @@ solve(a == L, u, bc)
 plot(u)
 
 # Dump solution to file in VTK format
-file = File('poisson.pvd')
+file = File("poisson.pvd")
 file << u
 
 # Hold plot

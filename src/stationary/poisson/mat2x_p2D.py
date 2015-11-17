@@ -4,13 +4,14 @@ Here, u=0 on x=0 and u=1 on x=1, while du/dn=0 on y=0 and y=1.
 This yields a solution u(x,y)=x, regardless of the values of k.
 """
 
+from __future__ import print_function
 from dolfin import *
 import sys, math, numpy
 
 mesh = UnitSquareMesh(4, 6)
 
 # Define a MeshFunction over two subdomains
-subdomains = MeshFunction('uint', mesh, 2)
+subdomains = MeshFunction('size_t', mesh, 2)
 
 class Omega0(SubDomain):
     def inside(self, x, on_boundary):
@@ -29,9 +30,9 @@ subdomain1.mark(subdomains, 1)
 V0 = FunctionSpace(mesh, 'DG', 0)
 k = Function(V0)
 
-print 'mesh:', mesh
-print 'subdomains:', subdomains
-print 'k:', k
+print('mesh:', mesh)
+print('subdomains:', subdomains)
+print('k:', k)
 
 # Loop over all cell numbers, find corresponding
 # subdomain number and fill cell value in k
@@ -46,7 +47,7 @@ for cell_no in range(len(subdomains.array())):
 help = numpy.asarray(subdomains.array(), dtype=numpy.int32)
 k.vector()[:] = numpy.choose(help, k_values)
 
-print 'k degree of freedoms:', k.vector().array()
+print('k degree of freedoms:', k.vector().array())
 
 #plot(subdomains, title='subdomains')
 
@@ -71,7 +72,7 @@ class RightBoundary(SubDomain):
     def inside(self, x, on_boundary):
         tol = 1E-14   # tolerance for coordinate comparisons
         return on_boundary and abs(x[0] - 1) < tol
- 
+
 Gamma_1 = DirichletBC(V, u_R, RightBoundary())
 
 bcs = [Gamma_0, Gamma_1]
@@ -92,6 +93,6 @@ u_nodal_values = u.vector()
 u_array = u_nodal_values.array()
 coor = mesh.coordinates()
 for i in range(len(u_array)):
-    print 'u(%8g,%8g) = %g' % (coor[i][0], coor[i][1], u_array[i])
+    print('u(%8g,%8g) = %g' % (coor[i][0], coor[i][1], u_array[i]))
 
 #interactive()

@@ -63,12 +63,35 @@ much longer complete name `stationary/poisson/d2_p2D.py`.
 
 __The FEniCS version.__
 This document is up-to-date with FEniCS version 1.6. To see which version
-you have, run the following command in a Unix/Linux terminal window:
+you have, run the following command in a Unix/Linux terminal window if
+you run Python version 2.7:
 
 !bc sys
 Terminal> python -c 'import dolfin; print dolfin.__version__'
 1.6.0
 !ec
+In Python version 3.x you must write
+
+!bc sys
+Terminal> python -c 'import dolfin; print(dolfin.__version__)'
+1.6.0
+!ec
+
+__The Python version.__
+Python comes in two versions, 2 and 3, and these are not compatible.
+FEniCS has a code base that runs under both versions.
+All the programs in this tutorial are also developed such that they
+can be run under both Python 2 and 3. Programs that need to print must
+then start with
+
+!bc pycod
+from __future__ import print_function
+!ec
+to  enable the `print` function from Python 3 in Python 2. All
+use of `print` in the programs consists of function calls, like
+`print('a:', a)`. Almost all other constructions are of a form that looks the
+same in Python 2 and 3.
+
 
 ===== The Poisson equation =====
 label{tut:poisson1:bvp}
@@ -335,7 +358,7 @@ specifying an exact solution
 u_{\rm e}(x, y) = 1 +x^2 + 2y^2
 \end{equation}
 !et
-on some 2D domain.  By inserting \eqref{tut:poisson1:impl:uex} in
+on some 2D domain.  By inserting (ref{tut:poisson1:impl:uex}) in
 our Poisson problem, we find that $u_{\rm e}(x,y)$ is a solution if
 
 !bt
@@ -347,7 +370,7 @@ the domain to be the unit square,
 !bt
 \[ \Omega = [0,1]\times [0,1] .\]
 !et
-The reason for specifying the solution \eqref{tut:poisson1:impl:uex}
+The reason for specifying the solution (ref{tut:poisson1:impl:uex})
 is that the finite element method, with a rectangular domain uniformly
 partitioned into linear triangular elements, will exactly reproduce a
 second-order polynomial at the vertices of the cells, regardless of
@@ -733,40 +756,41 @@ idx{`d2_p2D.py`}
 Preconditioned Krylov solvers is a type of popular iterative methods that are
 easily accessible in FEniCS programs. The Poisson equation results in
 a symmetric, positive definite coefficient matrix, for which the optimal
-Krylov solver is the Conjugate Gradient (CG) method. Incomplete
+Krylov solver is the Conjugate Gradient (CG) method. However, the
+CG method requires boundary conditions to be implemented in a
+symmetric way. This is not the case by default, so then a Krylov solver
+for non-symmetric system, such as GMRES, is a better choice.
+Incomplete
 LU factorization (ILU) is a popular and
-robust all-round preconditioner, so let us try the CG-ILU pair:
+robust all-round preconditioner, so let us try the GMRES-ILU pair:
 
 !bc pycod
 solve(a == L, u, bc)
-      solver_parameters={'linear_solver': 'cg',
+      solver_parameters={'linear_solver': 'gmres',
                          'preconditioner': 'ilu'})
 # Alternative syntax
 solve(a == L, u, bc,
-      solver_parameters=dict(linear_solver='cg',
+      solver_parameters=dict(linear_solver='gmres',
                              preconditioner='ilu'))
 !ec
-Section ref{tut:app:solver:prec} lists the most
-popular choices of Krylov solvers and preconditioners available in
-FEniCS
+Section ref{tut:app:solver:prec} lists the most popular choices of
+Krylov solvers and preconditioners available in FEniCS.
 
 idx{linear algebra backend}
 idx{PETSc} idx{Trilinos} idx{MTL4} idx{uBLAS}
 
-The actual CG and ILU implementations that are brought into action depends on
-the choice of linear algebra package. FEniCS interfaces
-several linear algebra packages, called *linear algebra backends*
-in FEniCS terminology.
-PETSc is the default choice if DOLFIN is compiled with PETSc,
-otherwise uBLAS.  Epetra (Trilinos) and MTL4 are two other
-supported backends.
-Which backend to apply can
-be controlled by setting
+The actual GMRES and ILU implementations that are brought into action
+depends on the choice of linear algebra package. FEniCS interfaces
+several linear algebra packages, called *linear algebra backends* in
+FEniCS terminology.  PETSc is the default choice if DOLFIN is compiled
+with PETSc, otherwise uBLAS.  Epetra (Trilinos), Eigen, MTL4 are other
+supported backends.  Which backend to apply can be controlled by
+setting
 
 !bc pycod
 parameters['linear_algebra_backend'] = backendname
 !ec
-where `backendname` is a string, either `'PETSc'`, `'uBLAS'`,
+where `backendname` is a string, either ``'Eigen'`, `'PETSc'`, `'uBLAS'`,
 `'Epetra'`, or `'MTL4'`.  All these backends offer high-quality
 implementations of both iterative and direct solvers for linear systems
 of equations.
@@ -774,16 +798,12 @@ of equations.
 idx{UMFPACK}
 
 A common platform for FEniCS users is Ubuntu Linux.  The FEniCS
-distribution for Ubuntu contains PETSc, making this package the default
-linear algebra backend.  The default solver is sparse LU decomposition
-(`'lu'`), and the actual software that is called
-is then the sparse LU solver from UMFPACK (which PETSc has an
-interface to). The `MTL4` package is not available in Ubuntu, so
-this choice of backend unavailable to FEniCS users on Ubuntu unless they
-build FEniCS from the source code. There is a tool
-"Dorsal": "http://fenicsproject.org/download/installation_using_dorsal.html"
-that performs the build process automatically.  The available linear
-algebra backends in a FEniCS installation is listed by
+distribution for Ubuntu contains PETSc, making this package the
+default linear algebra backend.  The default solver is sparse LU
+decomposition (`'lu'`), and the actual software that is called is then
+the sparse LU solver from UMFPACK (which PETSc has an interface
+to). The available linear algebra backends in a FEniCS installation is
+listed by
 
 !bc pycod
 list_linear_algebra_backends()
@@ -792,12 +812,11 @@ list_linear_algebra_backends()
 idx{`parameters` database}
 idx{`info` function}
 
-We will normally like to control
-the tolerance in the stopping criterion and the maximum number
-of iterations when running an iterative method.
-Such parameters can be set by accessing
-the *global parameter database*, which is called
-`parameters` and which behaves as a nested dictionary. Write
+We will normally like to control the tolerance in the stopping
+criterion and the maximum number of iterations when running an
+iterative method.  Such parameters can be set by accessing the *global
+parameter database*, which is called `parameters` and which behaves as
+a nested dictionary. Write
 
 !bc pycod
 info(parameters, True)
@@ -843,22 +862,32 @@ prm['maximum_iterations'] = 1000
 set_log_level(PROGRESS)
 
 solve(a == L, u, bc,
-      solver_parameters={'linear_solver': 'cg',
+      solver_parameters={'linear_solver': 'gmres',
                          'preconditioner': 'ilu'})
 !ec
-The demo program `d2_p2D.py` in the
-`stationary/poisson` directory incorporates the above shown control
-of the linear solver and precnditioner, but
-is otherwise similar to the previous `d1_p2D.py` program.
+The demo program `d2_p2D.py` in the `stationary/poisson` directory
+incorporates the above shown control of the linear solver and
+precnditioner, but is otherwise similar to the previous `d1_p2D.py`
+program.
 
 We remark that default values for the global parameter database can be
-defined in an XML file, see the example file `dolfin_parameters.xml` in the
-directory `stationary/poisson`.  If such a file is
+defined in an XML file. To generate such a file from the current set
+of parameters in a program, run
+
+!bc pycod
+File('dolfin_parameters.xml') << parameters
+!ec
+If a `dolfin_parameters.xml` file is
 found in the directory where a FEniCS program is run, this file is
 read and used to initialize the `parameters` object. Otherwise,
 the file `.config/fenics/dolfin_parameters.xml` in the user's home
-directory is read, if it exists.  The XML file can also be in gzip'ed form
-with the extension `.xml.gz`.
+directory is read, if it exists.  Another alternative is to load
+the XML (with any name) manually in the program:
+
+!bc pycod
+File('dolfin_parameters.xml') >> parameters
+!ec
+The XML file can also be in gzip'ed form with the extension `.xml.gz`.
 
 
 ===== Linear variational problem and solver objects =====
@@ -906,7 +935,6 @@ The `d3_p2D.py` program modifies the `d2_p2D.py` file
 to incorporate objects for the variational problem and solver.
 
 
-
 ===== Examining the discrete solution =====
 label{tut:poisson1:verify1}
 
@@ -917,6 +945,8 @@ ref{tut:poisson1:impl}, the computed solution $u$ should equal the
 exact solution at the vertices of the cells.  An important extension
 of our first program is therefore to examine the computed values of
 the solution, which is the focus of the present section.
+
+idx{degree of freedom}
 
 A finite element function like $u$ is expressed as a linear combination
 of basis functions $\phi_j$, spanning the space $V$:
@@ -929,7 +959,6 @@ of basis functions $\phi_j$, spanning the space $V$:
 By writing `solve(a == L, u, bc)` in the program, a linear system
 will be formed from $a$ and $L$, and this system is solved for the
 $U_1,\ldots,U_N$ values. The $U_1,\ldots,U_N$ values are known
-idx{degree of freedom}
 as *degrees of freedom* of $u$. For Lagrange elements (and many other
 element types) $U_k$ is simply the value of $u$ at the node
 with global number $k$.
@@ -937,9 +966,8 @@ with global number $k$.
 for higher-order elements there may be additional nodes at
 the facets and in the interior of cells.)
 
-Having `u` represented as a `Function` object,
-we can either evaluate `u(x)` at any vertex `x` in the mesh,
-or we can grab all the values
+Having `u` represented as a `Function` object, we can either evaluate
+`u(x)` at any vertex `x` in the mesh, or we can grab all the values
 $U_j$ directly by
 
 !bc pycod
@@ -952,13 +980,14 @@ variational problem.
 Since we program in Python it is convenient to convert the
 `Vector` object to a standard `numpy` array for further
 processing:
+
 idx{degrees of freedom array}
 idx{nodal values array}
 
 !bc pycod
 u_array = u_nodal_values.array()
 !ec
-With `numpy` arrays we can write "MATLAB-like" code to analyze
+With `numpy` arrays we can write ``MATLAB-like'' code to analyze
 the data. Indexing is done with square brackets: `u_array[i]`,
 where the index `i` always starts at `0`.
 
@@ -977,11 +1006,11 @@ Mesh information can be gathered from the `mesh` object, e.g.,
   * `mesh.cells()` returns the vertex numbers of the vertices in
     each cell as a `numpy` array with shape
     (*number of cells*, *number of vertices in a cell*),
-  * `mesh.hmin()` returns the minimum cell diameter ("smallest cell"),
-  * `mesh.hmax()` returns the maximum cell diameter ("largest cell").
+  * `mesh.hmin()` returns the minimum cell diameter (``smallest cell''),
+  * `mesh.hmax()` returns the maximum cell diameter (``largest cell'').
 
-Writing `print mesh` dumps a short, "pretty print" description
-of the mesh (`print mesh` actually displays the result of str(mesh)`,
+Writing `print(mesh)` dumps a short, ``pretty print'' description
+of the mesh (`print(mesh)` actually displays the result of str(mesh)`,
 which defines the pretty print):
 
 !bc dat
@@ -1000,8 +1029,9 @@ Writing out the solution on the screen can now be done by a simple loop:
 !bc pycod
 coor = mesh.coordinates()
 if mesh.num_vertices() == len(u_array):
-    for i in range(mesh.num_vertices()):
-        print 'u(%8g,%8g) = %g' % (coor[i][0], coor[i][1], u_array[i])
+    for i in range(len(u_array)):
+        print('u(%8g,%8g) = %g' %
+	      (coor[i][0], coor[i][1], u_array[i]))
 !ec
 The beginning of the output looks like this:
 !bc dat
@@ -1041,7 +1071,7 @@ The maximum error can now be computed as
 
 !bc pycod
 u_e_array = u_e.vector().array()
-print 'Max error:', numpy.abs(u_e_array - u_array).max()
+print('Max error:', numpy.abs(u_e_array - u_array).max())
 !ec
 The value of the error should be at the level of the machine precision
 ($10^{-16}$).
@@ -1052,8 +1082,8 @@ of the domain and compare it with the exact solution:
 
 !bc pycod
 center = (0.5, 0.5)
-print 'numerical u at the center point:',  u(center)
-print 'exact     u at the center point:', u0(center)
+print('numerical u at the center point:',  u(center))
+print('exact     u at the center point:', u0(center))
 !ec
 Trying a $3\times 3$ mesh, the output from the
 previous snippet becomes
@@ -1078,33 +1108,38 @@ max_u = u_array.max()
 u_array /= max_u
 u.vector()[:] = u_array
 u.vector().set_local(u_array)  # alternative
-print u.vector().array()
+print(u.vector().array())
 !ec
-That is, we manipulate `u_array` as desired, and then
-we insert this array into `u`'s `Vector` object.
-The `/=` operator implies an
+That is, we manipulate `u_array` as desired, and then we insert this
+array into `u`'s `Vector` object.  The `/=` operator implies an
 in-place modification of the object on the left-hand side: all
 elements of the `u_array` are divided by the value `max_u`.
-Alternatively, one could write
-`u_array = u_array/max_u`, which implies creating a new
-array on the right-hand side and assigning this array to the
-name `u_array`.
+Alternatively, one could write `u_array = u_array/max_u`, which
+implies creating a new array on the right-hand side and assigning this
+array to the name `u_array`.
 
 A call like `u.vector().array()` returns a copy of the data in
 `u.vector()`. One must therefore never perform assignments like
-`u.vector.array()[:] = ...`, but instead extract the
-`numpy` array (i.e., a copy), manipulate it, and insert
-it back with `u.vector()[:] = ` or `u.set_local(...)`.
-
-All the code in this subsection can be found in the file
-`d4_p2D.py` in the `stationary/poisson` directory.
-We have commented out the plotting statements in
-this version of the program, but if you want plotting to happen, make
-sure that `interactive` is called at the very end of the program.
+`u.vector.array()[:] = ...`, but instead extract the `numpy` array
+(i.e., a copy), manipulate it, and insert it back with `u.vector()[:]
+= ` or `u.set_local(...)`.
+[[[
+All the code in this subsection can be found in the file `d4_p2D.py`
+in the `stationary/poisson` directory.  We have commented out the
+plotting statements in this version of the program, but if you want
+plotting to happen, make sure that `interactive` is called at the very
+end of the program.
 
 
 ===== Solving a real physical problem =====
 label{tut:poisson:membrane}
+
+# 2DO
+
+!bwarning
+The program example in this section relies on generating a mesh over
+a circular disk. This must be done with a preprocessor.
+!ewarning
 
 Perhaps you are not particularly amazed by viewing the simple surface
 of $u$ in the test problem from Section ref{tut:poisson1:impl}.
@@ -1197,10 +1232,16 @@ y0 = 0.6*R*sin(theta)
 sigma = 0.025
 !ec
 
+# 2DO
+
+!bwarning
+Meshr must be used to create circle mesh.
+!ewarning
+
 A mesh over the unit circle can be created by
 
 !bc pycod
-mesh = UnitCircleMesh(n)
+mesh = CircleMesh(n)
 !ec
 where `n` is the typical number of elements in the radial direction.
 
@@ -1346,6 +1387,7 @@ The `plot` function takes several other keyword arguments:
 
 @@@CODE ../../src/stationary/poisson/membrane1v.py fromto: viz_w = plot@viz_w\.write
 Figure ref{tut:poisson:2D:fig1} shows the resulting scalar surface.
+# 2DO: needs to be updated, the plot function takes other arguments now
 
 By grabbing the plotting object created by the `plot` function we can
 create a PNG and PDF plot in the program:
@@ -1907,7 +1949,7 @@ for nx in [4, 8, 16, 32, 64, 128, 264]:
 from math import log as ln  # (log is a dolfin name too - and logg :-)
 for i in range(1, len(E)):
     r = ln(E[i]/E[i-1])/ln(h[i]/h[i-1])
-    print 'h=%10.2E r=.2f'  (h[i], r)
+    print('h=%10.2E r=.2f' % (h[i], r))
 !ec
 The resulting program has the name `d6_p2D.py`
 and computes error norms in various ways. Running this
@@ -2005,7 +2047,7 @@ the collection of tools to choose among is much larger.  We shall
 demonstrate the potential of such tools and how they allow for
 tailored and flexible visualization and data analysis.
 
-idx{`UniformBoxMeshGrid`} idx{`BoxMeshField`}
+idx{`UniformBoxMeshGrid`} idx{`BoxField`}
 
 A necessary first step is to transform our `mesh` object to an object
 representing a rectangle with equally-shaped *rectangular* cells.  The
@@ -2017,24 +2059,24 @@ in the structured grid. In such grids, we want to access a value by
 its $i$ and $j$ indices, $i$ counting cells in the $x$ direction, and
 $j$ counting cells in the $y$ direction.  This transformation is in
 principle straightforward, yet it frequently leads to obscure indexing
-errors. The `BoxMeshField` object in `scitools` takes conveniently care of
-the details of the transformation.  With a `BoxMeshField` defined on a
+errors. The `BoxField` object in `scitools` takes conveniently care of
+the details of the transformation.  With a `BoxField` defined on a
 `UniformBoxMeshGrid` it is very easy to call up more standard plotting
 packages to visualize the solution along lines in the domain or as 2D
 contours or lifted surfaces.
 
 Let us go back to the `vcp2D.py` code from
 Section ref{tut:possion:2D:varcoeff} and map `u` onto a
-`BoxMeshField` object:
+`BoxField` object:
 
 !bc pycod
-import scitools.BoxMeshField
+import scitools.BoxField
 u2 = u if u.ufl_element().degree() == 1 else \
      interpolate(u, FunctionSpace(mesh, 'Lagrange', 1))
-u_box = scitools.BoxMeshField.dolfin_function2BoxMeshField(
+u_box = scitools.BoxField.dolfin_function2BoxField(
         u2, mesh, (nx,ny), uniform_mesh=True)
 !ec
-The function `dolfin_function2BoxMeshField` can only work with
+The function `dolfin_function2BoxField` can only work with
 finite element fields with *linear* (degree 1) elements, so for
 higher-degree elements we here simply interpolate the solution onto
 a mesh with linear elements. We could also
@@ -2047,11 +2089,11 @@ element degree as an integer.
 The parameters `nx` and `ny` are the number of divisions in each space
 direction that were used when calling `UnitSquareMesh` to make the
 `mesh` object.
-The result `u_box` is a `BoxMeshField`
+The result `u_box` is a `BoxField`
 object that supports "finite difference" indexing and an underlying
 grid suitable for `numpy` operations on 2D data.
 Also 1D and 3D meshes (with linear elements) can be turned
-into `BoxMeshField` objects.
+into `BoxField` objects.
 
 The ability to access a finite element field in the way one can access
 a finite difference-type of field is handy in many occasions, including
@@ -2064,9 +2106,9 @@ at a grid point with indices `i` and `j` (going from 0 to
 X = 0; Y = 1; Z = 0  # convenient indices
 
 i = nx; j = ny   # upper right corner
-print 'u(%g,%g)=%g' % (u_box.grid.coor[X][i],
+print('u(%g,%g)=%g' % (u_box.grid.coor[X][i],
                        u_box.grid.coor[Y][j],
-                       u_box.values[i,j])
+                       u_box.values[i,j]))
 !ec
 For instance,
 the $x$ coordinates are reached by `u_box.grid.coor[X]`.
@@ -2106,7 +2148,7 @@ ev.contour(u_box.grid.coorv[X], u_box.grid.coorv[Y], u_box.values,
            savefig='u_contours.pdf', title='Contour plot of u')
 !ec
 The resulting plot can be viewed in
-Figure ref{tut:poisson:2D:fig2a}.
+Figure ref{tut:poisson:2D:fig2} (left).
 The `contour` function needs arrays with the $x$ and $y$ coordinates
 expanded to 2D arrays (in the same way as demanded when
 making vectorized
@@ -2143,7 +2185,7 @@ and the `mesh` variable in our programs. Therefore, we recommend the
 `ev` prefix.
 
 
-A handy feature of `BoxMeshField` is the ability to give a start point
+A handy feature of `BoxField` is the ability to give a start point
 in the grid and a direction, and then extract the field and corresponding
 coordinates along the nearest grid
 line. In 3D fields
@@ -2182,7 +2224,7 @@ line $y=1/2$ with the exact flux:
 ev.figure()
 flux2_x = flux_x if flux_x.ufl_element().degree() == 1 else \
           interpolate(flux_x, FunctionSpace(mesh, 'Lagrange', 1))
-flux_x_box = scitools.BoxMeshField.dolfin_function2BoxMeshField(
+flux_x_box = scitools.BoxField.dolfin_function2BoxField(
           flux2_x, mesh, (nx,ny), uniform_mesh=True)
 x, fluxval, y_fixed, snapped = \
           flux_x_box.gridline(start, direction=X)
@@ -2210,7 +2252,7 @@ FIGURE:[fig/Poisson2D_Dvc_surfmesh1, width=480] Finite element function on a str
 
 It should be easy with the information above to transform a finite
 element field over a uniform rectangular or box-shaped mesh to the
-corresponding `BoxMeshField` object and perform MATLAB-style
+corresponding `BoxField` object and perform MATLAB-style
 visualizations of the whole field or the field over planes or along
 lines through the domain.  By the transformation to a regular grid we
 have some more flexibility than what the `plot` command in DOLFIN
@@ -2472,8 +2514,8 @@ coor = mesh.coordinates()
 for bc in bcs:
     bc_dict = bc.get_boundary_values()
     for dof in bc_dict:
-        print 'dof %2d: u=%g\t at point %s' % '
-              (dof, bc_dict[dof], str(tuple(coor[dof].tolist())))
+        print('dof %2d: u=%g\t at point %s' %
+              (dof, bc_dict[dof], str(tuple(coor[dof].tolist()))))
 !ec
 The printing of coordinates for each degree of freedom (node here)
 is only appropriate when degrees of freedom coincide with function
@@ -2489,12 +2531,12 @@ coor = mesh.coordinates()
 for bc in bcs:
     bc_dict = bc.get_boundary_values()
     for dof in bc_dict:
-        print 'dof %2d: u=%g' % (dof, bc_dict[dof]),
+        print('dof %2d: u=%g' % (dof, bc_dict[dof])),
         if Lagrange_1st_order:  # print vertex coor.
-            print '\t at point %s' % \
-                  (str(tuple(coor[dof].tolist())))
+            print('\t at point %s' %
+                  (str(tuple(coor[dof].tolist()))))
         else:
-            print ''
+            print('')
 !ec
 The output for a mesh made by `UnitSquareMesh(3, 2)` becomes
 !bc dat
@@ -2626,12 +2668,12 @@ print out `A` and `b` before and after the
 A = assemble(a)
 b = assemble(L)
 if mesh.num_cells() < 16:  # print for small meshes only
-    print A.array()
-    print b.array()
+    print(A.array())
+    print(b.array())
 bc.apply(A, b)
 if mesh.num_cells() < 16:
-    print A.array()
-    print b.array()
+    print(A.array())
+    print(b.array())
 !ec
 
 

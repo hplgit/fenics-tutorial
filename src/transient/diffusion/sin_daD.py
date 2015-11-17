@@ -1,8 +1,8 @@
 """Temperature variations in the ground."""
 
+from __future__ import print_function
 from dolfin import *
-import numpy as np
-import sys, time
+import sys, numpy, time
 
 # Usage:   sin_daD.py degree D   nx ny nz
 # Example: sin_daD.py   1   1.5  4  40
@@ -12,17 +12,18 @@ degree = int(sys.argv[1])
 D = float(sys.argv[2])
 W = D/2.0
 divisions = [int(arg) for arg in sys.argv[3:]]
-print 'degree=%d, D=%g, W=%g, %s cells' % \
-      (degree, D, W, 'x'.join(sys.argv[3:]))
+print('degree=%d, D=%g, W=%g, %s cells' % \
+      (degree, D, W, 'x'.join(sys.argv[3:])))
 
 d = len(divisions)  # no of space dimensions
 if d == 1:
-    mesh = IntervalMesh(divisions[0], -D, 0)
+    mesh = Interval(divisions[0], -D, 0)
 elif d == 2:
-    mesh = RectangleMesh(-W/2, -D, W/2, 0, divisions[0], divisions[1])
+    mesh = RectangleMesh(Point(-W/2, -D), Point(W/2, 0),
+                         divisions[0], divisions[1])
 elif d == 3:
     mesh = BoxMesh(-W/2, -W/2, -D, W/2, W/2, 0,
-               divisions[0], divisions[1], divisions[2])
+                   divisions[0], divisions[1], divisions[2])
 V = FunctionSpace(mesh, 'Lagrange', degree)
 
 # Define boundary conditions
@@ -92,7 +93,7 @@ kappa = Expression(kappa_str[d],
 rho = 1500
 c = 1600
 
-print 'Thermal diffusivity:', kappa_0/rho/c
+print('Thermal diffusivity:', kappa_0/rho/c)
 
 # Define initial condition
 T_1 = interpolate(Constant(T_R), V)
@@ -104,7 +105,8 @@ f = Constant(0)
 a = rho*c*T*v*dx + theta*dt*kappa*\
     inner(nabla_grad(v), nabla_grad(T))*dx
 L = (rho*c*T_1*v + dt*f*v -
-     (1-theta)*dt*kappa*inner(nabla_grad(T_1), nabla_grad(v)))*dx
+     (1-theta)*dt*kappa*inner(nabla_grad(v), nabla_grad(T_1)))*dx
+# dolfin test examples applies T (not T_1) in L
 
 A = assemble(a)
 b = None  # variable used for memory savings in assemble calls
@@ -117,8 +119,9 @@ dummy = Expression('T_R - T_A/2.0 + 2*T_A*(x[%g]+D)' % (d-1),
                    T_R=T_R, T_A=T_A, D=D)
 
 # Make all plot commands inctive
-import scitools.misc
-plot = scitools.misc.DoNothing(silent=True)
+#import scitools.misc
+#plot = scitools.misc.DoNothing(silent=True)
+
 # Need initial dummy plot
 viz = plot(dummy, axes=True,
            title='Temperature', wireframe=False)
@@ -126,7 +129,7 @@ viz.elevate(-65)
 #time.sleep(1)
 viz.update(T_1)
 
-import scitools.BoxMeshField
+import scitools.BoxField
 start_pt = [0]*d; start_pt[-1] = -D  # start pt for line plot
 import scitools.easyviz as ev
 
@@ -136,9 +139,9 @@ def line_plot():
         T2 = interpolate(T, FunctionSpace(mesh, 'Lagrange', 1))
     else:
         T2 = T
-    T_box = scitools.BoxMeshField.dolfin_function2BoxMeshField(
+    T_box = scitools.BoxField.dolfin_function2BoxField(
             T2, mesh, divisions, uniform_mesh=True)
-    #T_box = scitools.BoxMeshField.update_from_dolfin_array(
+    #T_box = scitools.BoxField.update_from_dolfin_array(
     #        T.vector().array(), T_box)
     coor, Tval, fixed, snapped = \
             T_box.gridline(start_pt, direction=d-1)
@@ -163,9 +166,8 @@ def line_plot():
     time.sleep(0.1)
 
 def T_exact(x):
-    a = np.sqrt(omega*rho*c/(2*kappa_0))
-    print T_R, type(T_R), a, type(a), x, type(x)
-    return T_R + T_A*np.exp(a*x)*np.sin(omega*t + a*x)
+    a = sqrt(omega*rho*c/(2*kappa_0))
+    return T_R + T_A*exp(a*x)*numpy.sin(omega*t + a*x)
 
 n = FacetNormal(mesh)  # for flux computation at the top boundary
 flux = -kappa*dot(nabla_grad(T), n)*ds
@@ -173,11 +175,11 @@ flux = -kappa*dot(nabla_grad(T), n)*ds
 t = dt
 counter = 0
 while t <= t_stop:
-    print 'time =', t
+    print('time =', t)
     b = assemble(L, tensor=b)
     T_0.t = t
     help = interpolate(T_0, V)
-    print 'T_0:', help.vector().array()[0]
+    print('T_0:', help.vector().array()[0])
     bc.apply(A, b)
     solve(A, T.vector(), b)
     viz.update(T)
@@ -185,7 +187,7 @@ while t <= t_stop:
     line_plot()
 
     total_flux = assemble(flux)
-    print 'Total flux:', total_flux
+    print('Total flux:', total_flux)
 
     t += dt
     T_1.assign(T)

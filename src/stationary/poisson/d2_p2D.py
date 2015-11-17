@@ -7,6 +7,7 @@ u = u0 on the boundary.
 u0 = u = 1 + x^2 + 2y^2, f = -6.
 """
 
+from __future__ import print_function  # Enable Python 3.x print syntax
 from dolfin import *
 
 # Create mesh and define function space
@@ -37,25 +38,23 @@ prm['absolute_tolerance'] = 1E-5
 prm['relative_tolerance'] = 1E-3
 prm['maximum_iterations'] = 1000
 #prm['preconditioner']['ilu']['fill_level'] = 0
-print parameters['linear_algebra_backend']
+print(parameters['linear_algebra_backend'])
 #set_log_level(PROGRESS)
 set_log_level(DEBUG)
 
 solve(a == L, u, bc,
-      solver_parameters={'linear_solver': 'cg',
+      solver_parameters={'linear_solver': 'gmres',
                          'preconditioner': 'ilu'})
-# Alternative syntax
-solve(a == L, u, bc,
-      solver_parameters=dict(linear_solver='cg',
-                             preconditioner='ilu'))
 
 # Plot solution and mesh
 plot(u)
-plot(mesh)
 
 # Dump solution to file in VTK format
 file = File('poisson.pvd')
 file << u
+
+# Dump all parameters to file
+File('prm.xml') << parameters
 
 # Hold plot
 interactive()

@@ -40,7 +40,12 @@ system doconce split_rst $name.rst
 system doconce sphinx_dir dirname=$dir version=$version theme=fenics $name
 system python automake_sphinx.py
 
+# Make Bootstrap HTML
+system doconce format html $name --encoding=utf-8 --html_theme=bootswatch_journal
+system doconce split_html $name.html --pagination
+
 dest=../pub
 rm -rf $dest/sphinx
 cp -r fenics-tutorial-4print.pdf sphinx-rootdir/_build/html $dest
 mv -f $dest/html $dest/sphinx
+cp -r $name.html ._*.html fig $dest

@@ -4,13 +4,14 @@ As d5_p2D.py, but with a more complicated solution, error computations
 and convergence studies.
 """
 
+from __future__ import print_function
 from dolfin import *
 import sys
 
 def compute(nx, ny, degree):
     # Create mesh and define function space
     mesh = UnitSquareMesh(nx, ny)
-    V = FunctionSpace(mesh, 'Lagrange', degree=degree)
+    V = FunctionSpace(mesh, 'Lagrange', degree)
 
     # Define boundary conditions
 
@@ -54,11 +55,11 @@ def compute(nx, ny, degree):
     # Explicit interpolation of u_e onto the same space as u:
     u_e_V = interpolate(u_e, V)
     error = (u - u_e_V)**2*dx
-    E2 = sqrt(abs(assemble(error)))
+    E2 = sqrt(absassemble(error)))
 
     # Explicit interpolation of u_e to higher-order elements,
     # u will also be interpolated to the space Ve before integration
-    Ve = FunctionSpace(mesh, 'Lagrange', degree=5)
+    Ve = FunctionSpace(mesh, 'Lagrange', 5)
     u_e_Ve = interpolate(u_e, Ve)
     error = (u - u_e_Ve)**2*dx
     E3 = sqrt(abs(assemble(error)))
@@ -78,17 +79,17 @@ def compute(nx, ny, degree):
         # More efficient computation (avoids the rhs array result above)
         #e_Ve.assign(u_e_Ve)                      # e_Ve = u_e_Ve
         #e_Ve.vector().axpy(-1.0, u_Ve.vector())  # e_Ve += -1.0*u_Ve
-        error = e_Ve**2*dx
+        error = e_Ve**2*dx(Ve.mesh())
         return sqrt(abs(assemble(error))), e_Ve
     E4, e_Ve = errornorm(u_e, u, Ve)
 
     # Infinity norm based on nodal values
     u_e_V = interpolate(u_e, V)
     E5 = abs(u_e_V.vector().array() - u.vector().array()).max()
-    print 'E2:', E2
-    print 'E3:', E3
-    print 'E4:', E4
-    print 'E5:', E5
+    print('E2:', E2)
+    print('E3:', E3)
+    print('E4:', E4)
+    print('E5:', E5)
 
     # H1 seminorm
     error = inner(grad(e_Ve), grad(e_Ve))*dx
@@ -114,11 +115,11 @@ for nx in [4, 8, 16, 32, 64, 128, 264]:
 
 # Convergence rates
 from math import log as ln  # log is a dolfin name too
-error_types = E[0].keys()
+error_types = list(E[0].keys())
 for error_type in sorted(error_types):
-    print '\nError norm based on', error_type
+    print('\nError norm based on', error_type)
     for i in range(1, len(E)):
         Ei   = E[i][error_type]  # E is a list of dicts
         Eim1 = E[i-1][error_type]
         r = ln(Ei/Eim1)/ln(h[i]/h[i-1])
-        print 'h=%8.2E E=%8.2E r=%.2f' % (h[i], Ei, r)
+        print('h=%8.2E E=%8.2E r=%.2f' % (h[i], Ei, r))

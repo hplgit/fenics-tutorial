@@ -2,6 +2,7 @@
 FEniCS tutorial demo: Poisson problem in 2D with 2 materials.
 """
 
+from __future__ import print_function
 from dolfin import *
 import sys, math, numpy
 
@@ -9,7 +10,7 @@ nx = 4;  ny = 6
 mesh = UnitSquareMesh(nx, ny)
 
 # Define a MeshFunction over two subdomains
-subdomains = MeshFunction('uint', mesh, 2)
+subdomains = MeshFunction('size_t', mesh, 2)
 
 class Omega0(SubDomain):
     def inside(self, x, on_boundary):
@@ -29,9 +30,9 @@ subdomain1.mark(subdomains, 1)
 V0 = FunctionSpace(mesh, 'DG', 0)
 k = Function(V0)
 
-print 'mesh:', mesh
-print 'subdomains:', subdomains
-print 'k:', k
+print('mesh:', mesh)
+print('subdomains:', subdomains)
+print('k:', k)
 
 # Loop over all cell numbers, find corresponding
 # subdomain number and fill cell value in k
@@ -46,7 +47,7 @@ for cell_no in range(len(subdomains.array())):
 help = numpy.asarray(subdomains.array(), dtype=numpy.int32)
 k.vector()[:] = numpy.choose(help, k_values)
 
-print 'k degree of freedoms:', k.vector().array()
+print('k degree of freedoms:', k.vector().array())
 
 #plot(subdomains, title='subdomains')
 
@@ -66,7 +67,7 @@ Gamma_0 = DirichletBC(V, Constant(0), BottomBoundary())
 class TopBoundary(SubDomain):
     def inside(self, x, on_boundary):
         return on_boundary and abs(x[1] - 1) < tol
- 
+
 Gamma_1 = DirichletBC(V, Constant(1), TopBoundary())
 
 bcs = [Gamma_0, Gamma_1]
@@ -92,12 +93,12 @@ u_nodal_values = u.vector()
 u_array = u_nodal_values.array()
 import numpy
 error = numpy.abs(u_e_array - u_array)
-print 'max error:', error.max()
+print('max error:', error.max())
 
 #coor = mesh.coordinates()
 #for i in range(len(u_array)):
 #    print 'u(%8g,%8g) = %g, error: %.4E' % \
-#        (coor[i][0], coor[i][1], u_array[i], 
+#        (coor[i][0], coor[i][1], u_array[i],
 #         u_exact(coor[i][1]) - u_array[i])
 
 #interactive()

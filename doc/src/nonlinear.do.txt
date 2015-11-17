@@ -156,8 +156,9 @@ L(v) &= 0\tp
 !et
 
 
-The iterations can be stopped when $\epsilon\equiv ||u^{k+1}-u^k||
-< \mbox{tol}$, where $\mbox{tol}$ is a small tolerance, say $10^{-5}$, or
+The iterations can be stopped when
+$\epsilon\equiv ||u^{k+1}-u^k|| < \mbox{tol}$,
+where $\mbox{tol}$ is a small tolerance, say $10^{-5}$, or
 when the number of iterations exceed some critical limit. The latter
 case will pick up divergence of the method or unacceptable slow
 convergence.
@@ -191,7 +192,7 @@ while eps > tol and iter < maxiter:
     solve(a == L, u, bcs)
     diff = u.vector().array() - u_k.vector().array()
     eps = numpy.linalg.norm(diff, ord=numpy.Inf)
-    print 'iter=%d: norm=%g' % (iter, eps)
+    print('iter=%d: norm=%g' % (iter, eps))
     u_k.assign(u)   # update for next iteration
 !ec
 We need to define the previous solution in the iterations, `u_k`,
@@ -445,7 +446,7 @@ while eps > tol and iter < maxiter:
     A, b = assemble_system(a, L, bcs_du)
     solve(A, du.vector(), b)
     eps = numpy.linalg.norm(du.vector().array(), ord=numpy.Inf)
-    print 'Norm:', eps
+    print('Norm:', eps)
     u.vector()[:] = u_k.vector() + omega*du.vector()
     u_k.assign(u)
 !ec
@@ -787,25 +788,35 @@ an associated solver based on Newton's method. We here demonstrate
 how key parameters in
 Newton's method can be set, as well as the choice of
 solver and preconditioner, and associated parameters, for the
-linear system occurring in the Newton iteration.
+linear system occurring in the Newton iterations.
 
 !bc pycod
 problem = NonlinearVariationalProblem(F, u_, bcs, J)
 solver  = NonlinearVariationalSolver(problem)
 
 prm = solver.parameters
-prm['newton_solver']['absolute_tolerance'] = 1E-8
-prm['newton_solver']['relative_tolerance'] = 1E-7
-prm['newton_solver']['maximum_iterations'] = 25
-prm['newton_solver']['relaxation_parameter'] = 1.0
+info(prm, True)
+prm_n = prm['newton_solver']
+prm_n['absolute_tolerance'] = 1E-8
+prm_n['relative_tolerance'] = 1E-7
+prm_n['maximum_iterations'] = 25
+prm_n['relaxation_parameter'] = 1.0
 if iterative_solver:
-    prm['linear_solver'] = 'gmres'
-    prm['preconditioner'] = 'ilu'
-    prm['krylov_solver']['absolute_tolerance'] = 1E-9
-    prm['krylov_solver']['relative_tolerance'] = 1E-7
-    prm['krylov_solver']['maximum_iterations'] = 1000
-    prm['krylov_solver']['gmres']['restart'] = 40
-    prm['krylov_solver']['preconditioner']['ilu']['fill_level'] = 0
+    prec = 'jacobi' if 'jacobi' in \
+           list(zip(*krylov_solver_preconditioners()))[0] \
+           else 'ilu'
+    prm_n['linear_solver'] = 'gmres'
+    prm_n['preconditioner'] = prec
+    prm_n['krylov_solver']['absolute_tolerance'] = 1E-9
+    prm_n['krylov_solver']['relative_tolerance'] = 1E-7
+    prm_n['krylov_solver']['maximum_iterations'] = 1000
+    prm_n['krylov_solver']['monitor_convergence'] = True
+    prm_n['krylov_solver']['nonzero_initial_guess'] = False
+    prm_n['krylov_solver']['gmres']['restart'] = 40
+    prm_n['krylov_solver']['preconditioner']['structure'] = \
+                                        'same_nonzero_pattern'
+    prm_n['krylov_solver']['preconditioner']['ilu']['fill_level'] = 0
+PROGRESS = 16
 set_log_level(PROGRESS)
 
 solver.solve()

@@ -8,6 +8,8 @@ u = u0 on the boundary.
 u0 = u = 1 + x^2 + 2y^2, f = -6.
 """
 
+from __future__ import print_function
+import os
 from dolfin import *
 
 # Create mesh and define function space
@@ -34,11 +36,11 @@ L = f*v*dx
 u = Function(V)
 problem = LinearVariationalProblem(a, L, u, bc)
 solver = LinearVariationalSolver(problem)
-solver.parameters['linear_solver'] = 'cg'
+solver.parameters['linear_solver'] = 'gmres'
 solver.parameters['preconditioner'] = 'ilu'
 info(solver.parameters, True)
 
-print parameters['linear_algebra_backend']
+print(parameters['linear_algebra_backend'])
 cg_prm = solver.parameters['krylov_solver'] # short form
 cg_prm['absolute_tolerance'] = 1E-7
 cg_prm['relative_tolerance'] = 1E-4
@@ -51,7 +53,6 @@ solver.solve()
 
 # Plot solution and mesh
 plot(u)
-plot(mesh)
 
 # Dump solution to file in VTK format
 file = File('poisson.pvd')

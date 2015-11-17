@@ -13,6 +13,7 @@ Solution method: automatic, i.e., by a NonlinearVariationalProblem/Solver
 (Newton method).
 """
 
+from __future__ import print_function
 from dolfin import *
 import numpy, sys
 
@@ -71,34 +72,39 @@ problem = NonlinearVariationalProblem(F, u_, bcs, J)
 solver  = NonlinearVariationalSolver(problem)
 prm = solver.parameters
 info(prm, True)
-prm['newton_solver']['absolute_tolerance'] = 1E-8
-prm['newton_solver']['relative_tolerance'] = 1E-7
-prm['newton_solver']['maximum_iterations'] = 25
-prm['newton_solver']['relaxation_parameter'] = 1.0
+prm_n = prm['newton_solver']
+prm_n['absolute_tolerance'] = 1E-8
+prm_n['relative_tolerance'] = 1E-7
+prm_n['maximum_iterations'] = 25
+prm_n['relaxation_parameter'] = 1.0
 if iterative_solver:
-    prm['linear_solver'] = 'gmres'
-    prm['preconditioner'] = 'ilu'
-    prm['krylov_solver']['absolute_tolerance'] = 1E-9
-    prm['krylov_solver']['relative_tolerance'] = 1E-7
-    prm['krylov_solver']['maximum_iterations'] = 1000
-    prm['krylov_solver']['monitor_convergence'] = True
-    prm['krylov_solver']['nonzero_initial_guess'] = False
-    prm['krylov_solver']['gmres']['restart'] = 40
-    prm['krylov_solver']['preconditioner']['same_nonzero_pattern'] = True
-    prm['krylov_solver']['preconditioner']['ilu']['fill_level'] = 0
+    prec = 'jacobi' if 'jacobi' in \
+           list(zip(*krylov_solver_preconditioners()))[0] \
+           else 'ilu'
+    prm_n['linear_solver'] = 'gmres'
+    prm_n['preconditioner'] = prec
+    prm_n['krylov_solver']['absolute_tolerance'] = 1E-9
+    prm_n['krylov_solver']['relative_tolerance'] = 1E-7
+    prm_n['krylov_solver']['maximum_iterations'] = 1000
+    prm_n['krylov_solver']['monitor_convergence'] = True
+    prm_n['krylov_solver']['nonzero_initial_guess'] = False
+    prm_n['krylov_solver']['gmres']['restart'] = 40
+    prm_n['krylov_solver']['preconditioner']['structure'] = \
+                                        'same_nonzero_pattern'
+    prm_n['krylov_solver']['preconditioner']['ilu']['fill_level'] = 0
 PROGRESS = 16
 set_log_level(PROGRESS)
 solver.solve()
 
-print """
+print("""
 Solution of the nonlinear Poisson problem div(q(u)*nabla_grad(u)) = f,
 with f=0, q(u) = (1+u)^m, u=0 at x=0 and u=1 at x=1.
 %s
-""" % mesh
+""" % mesh)
 
 # Find max error
 u_exact = Expression('pow((pow(2, m+1)-1)*x[0] + 1, 1.0/(m+1)) - 1', m=m)
 u_e = interpolate(u_exact, V)
 import numpy
 diff = numpy.abs(u_e.vector().array() - u_.vector().array()).max()
-print 'Max error:', diff
+print('Max error:', diff)
