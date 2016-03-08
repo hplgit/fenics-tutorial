@@ -16,6 +16,8 @@ function system {
   fi
 }
 
+system doconce spellcheck -d .dict4spell.txt *.do.txt
+
 # We have Norwegian characters in the acknowledgement and this requires utf-8
 
 # Make latex
