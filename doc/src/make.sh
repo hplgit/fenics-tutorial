@@ -20,10 +20,13 @@ system doconce spellcheck -d .dict4spell.txt *.do.txt
 
 # We have Norwegian characters in the acknowledgement and this requires utf-8
 
-# Make latex
+# Generate latex output
 system preprocess -DFORMAT=pdflatex newcommands.p.tex > newcommands.tex
-system doconce format pdflatex $name --device=paper --latex_title_layout=titlepage "--latex_code_style=default:lst[style=yellow2_fb]@sys:vrb[frame=lines,label=\\fbox{{\tiny Terminal}},framesep=2.5mm,framerule=0.7pt,fontsize=\fontsize{9pt}{9pt}]" --encoding=utf-8 --latex_copyright=titlepages
+system doconce format pdflatex $name --device=paper --latex_title_layout=titlepage "--latex_code_style=default:lst[style=yellow2_fb]@sys:vrb[frame=lines,label=\\fbox{{\tiny Terminal}},framesep=2.5mm,framerule=0.7pt,fontsize=\fontsize{9pt}{9pt}]" --encoding=utf-8 --latex_copyright=titlepages --latex_section_headings=blue
+# Fix: make full box around code blocks a la the FEniCS book
+doconce replace 'frame=tb,' 'frame=tblr,' $name.tex
 
+# Compile latex
 system pdflatex $name
 system bibtex $name
 system makeindex $name
