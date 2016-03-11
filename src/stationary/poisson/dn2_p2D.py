@@ -46,18 +46,16 @@ Gamma_1 = DirichletBC(V, u_R, RightBoundary())
 bcs = [Gamma_0, Gamma_1]
 
 # Inspect the Dirichlet conditions:
-if V.dim() < 100:  # less than 100 degrees of freedom?
-    Lagrange_1st_order = V.ufl_element().degree() == 1
+Lagrange_1st_order = V.ufl_element().degree() == 1
+if V.dim() < 100 and Lagrange_1st_order: # less than 100 degrees of freedom?
     coor = mesh.coordinates()  # used if 1st order Lagrange elements
+    d2v = dof_to_vertex_map(V)
     for bc in bcs:
         bc_dict = bc.get_boundary_values()
         for dof in bc_dict:
             print('dof %2d: u=%g' % (dof, bc_dict[dof])),
-            if Lagrange_1st_order:  # print vertex coor.
-                print('\t at point %s' %
-                      (str(tuple(coor[dof].tolist()))))
-            else:
-                print('')  # just makes a newline
+            print('\t at point %s' %
+                  (str(tuple(coor[d2v[dof]].tolist()))))
 
 # Define variational problem
 u = TrialFunction(V)

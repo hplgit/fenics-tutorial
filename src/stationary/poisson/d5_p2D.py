@@ -68,14 +68,15 @@ print(grad_u_y)
 grad_u2 = project(grad(u), VectorFunctionSpace(mesh, 'Lagrange', 1))
 
 # Dump solution and grad(u) to the screen with errors
-# (in case of linear Lagrange elements only)
+# (in case of linear Lagrange elements only and for small meshes)
 u_array = u.vector().array()
 if mesh.num_cells() < 160 and u_array.size == mesh.num_vertices():
     grad_u_x_array = grad_u_x.vector().array()
     grad_u_y_array = grad_u_y.vector().array()
     coor = mesh.coordinates()
-    for i in range(len(u_array)):
-        x, y = coor[i]
+    d2v = dof_to_vertex_map(V)
+    for i in range(len(u_array)):  # runs over dofs
+        x, y = coor[d2v[i]]
         print('Node (%.3f,%.3f): u = %.4f (%9.2e), '\
               'grad(u)_x = %.4f  (%9.2e), grad(u)_y = %.4f  (%9.2e)'
               %

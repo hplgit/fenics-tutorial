@@ -7,7 +7,7 @@ Automatically generated HTML file from DocOnce source
 <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
 <meta name="generator" content="DocOnce: https://github.com/hplgit/doconce/" />
 <meta name="description" content="FEniCS Tutorial">
-<meta name="keywords" content="Poisson's equation,variational formulation,test function,trial function,DOLFIN mesh,finite element specifications,CG finite element family,Lagrange finite element family,Dirichlet boundary conditions,boundary specification (function),boundary specification (function),UFL,linear algebra backend,PETSc,Trilinos,MTL4,uBLAS,UMFPACK,LinearVariationalProblem,LinearVariationalSolver,degree of freedom,degrees of freedom array,nodal values array,interpolation,Expression with parameters,interpolation,visualization,plotting,VTK,projection,degrees of freedom array,nodal values array,degrees of freedom array (vector field),projection,Poisson's equation with variable coefficient,functionals,energy functional,error functional,flux functional,structured mesh,visualization, structured mesh,contour plot,Neumann boundary conditions,linear systems (in FEniCS),assembly of linear systems,SLEPc,KrylovSolver,random start vector (linear systems),dimension-independent code,time-dependent PDEs,assembly, increasing efficiency,heterogeneous medium,multi-material domain,Picard iteration,successive substitutions,Newton's method (algebraic equations),under-relaxation,Jacobian, manual computation,Newton's method (PDE level),Gateaux derivative,automatic differentiation,Jacobian, automatic computation,nonlinear variational problems,mesh transformations,coordinate stretching,coordinate transformations,heterogeneous media,multi-material domain,boundary specification (class),Dirichlet boundary conditions,Neumann boundary conditions,Robin boundary conditions,boundary conditions,FEniCS,DOLFIN,Viper,UFL,class,instance,method (class),attribute (class),down-casting matrices and vectors,PETSc,Trilinos,Epetra,installing FEniCS,troubleshooting,compilation problems,plotting problems">
+<meta name="keywords" content="Poisson's equation,variational formulation,test function,trial function,DOLFIN mesh,finite element specifications,CG finite element family,Lagrange finite element family,Dirichlet boundary conditions,boundary specification (function),boundary specification (function),UFL,linear algebra backend,PETSc,Trilinos,MTL4,uBLAS,UMFPACK,LinearVariationalProblem,LinearVariationalSolver,degree of freedom,degrees of freedom array,nodal values array,compute vertex values,vertex to dof map,dof to vertex map,interpolation,Expression with parameters,interpolation,visualization,plotting,VTK,projection,degrees of freedom array,nodal values array,degrees of freedom array (vector field),projection,Poisson's equation with variable coefficient,functionals,energy functional,error functional,flux functional,structured mesh,visualization, structured mesh,contour plot,Neumann boundary conditions,linear systems (in FEniCS),assembly of linear systems,SLEPc,KrylovSolver,random start vector (linear systems),dimension-independent code,time-dependent PDEs,assembly, increasing efficiency,heterogeneous medium,multi-material domain,Picard iteration,successive substitutions,Newton's method (algebraic equations),under-relaxation,Jacobian, manual computation,Newton's method (PDE level),Gateaux derivative,automatic differentiation,Jacobian, automatic computation,nonlinear variational problems,mesh transformations,coordinate stretching,coordinate transformations,heterogeneous media,multi-material domain,boundary specification (class),Dirichlet boundary conditions,Neumann boundary conditions,Robin boundary conditions,boundary conditions,FEniCS,DOLFIN,Viper,UFL,class,instance,method (class),attribute (class),down-casting matrices and vectors,PETSc,Trilinos,Epetra,installing FEniCS,troubleshooting,compilation problems,plotting problems">
 
 <title>FEniCS Tutorial</title>
 
@@ -1506,57 +1506,123 @@ the data. Indexing is done with square brackets: <code>u_array[i]</code>,
 where the index <code>i</code> always starts at <code>0</code>.
 
 <p>
-Mesh information can be gathered from the <code>mesh</code> object, e.g.,
+Now, a fundamental question is: What are the coordinates of
+node <code>i</code> whose value is is <code>u_array[i]</code>? To answer this question,
+we need to understand how to get our hands on the coordinates, and
+in particular, the numbering of degrees of freedom and the
+numbering of vertices in the mesh. We start with P1
+(1st order Lagrange) where all the nodes are vertices in the mesh.
 
-<ul>
-  <li> <code>mesh.coordinates()</code> returns the coordinates of the
-    vertices as a <code>numpy</code> array with shape
-    (<em>number of vertices</em>, <em>number of space dimensions</em>),
-    \( M \) being the number of vertices in the mesh and \( d \) being
-    the number of space dimensions,</li>
-  <li> <code>mesh.num_cells()</code> returns the number of cells (triangles)
-    in the mesh,</li>
-  <li> <code>mesh.num_vertices()</code> returns the number of vertices in
-    the mesh (with our choice of linear Lagrange elements this equals the
-    number of nodes),</li>
-  <li> <code>mesh.cells()</code> returns the vertex numbers of the vertices in
-    each cell as a <code>numpy</code> array with shape
-    (<em>number of cells</em>, <em>number of vertices in a cell</em>),</li>
-  <li> <code>mesh.hmin()</code> returns the minimum cell diameter (&quot;smallest cell&quot;),</li>
-  <li> <code>mesh.hmax()</code> returns the maximum cell diameter (&quot;largest cell&quot;).</li>
-</ul>
-
-Writing <code>print(mesh)</code> dumps a short, pretty-print description
-of the mesh (<code>print(mesh)</code> actually displays the result of <code>str(mesh)</code>,
-which defines the pretty print):
+<p>
+The function <code>mesh.coordinates()</code> returns the coordinates of the
+vertices as a <code>numpy</code> array with shape \( (M,d \)), \( M \) being the number
+of vertices in the mesh and \( d \) being the number of space dimensions:
 
 <p>
 
-<!-- code=text (!bc dat) typeset with pygments style "default" -->
-<div class="highlight" style="background: #f8f8f8"><pre style="line-height: 125%">&lt;Mesh of topological dimension 2 (triangles) with
-16 vertices and 18 cells, ordered&gt;
+<!-- code=python (!bc pyshell) typeset with pygments style "default" -->
+<div class="highlight" style="background: #f8f8f8"><pre style="line-height: 125%"><span style="color: #666666">&gt;&gt;&gt;</span> <span style="color: #008000; font-weight: bold">from</span> <span style="color: #0000FF; font-weight: bold">dolfin</span> <span style="color: #008000; font-weight: bold">import</span> <span style="color: #666666">*</span>
+<span style="color: #666666">&gt;&gt;&gt;</span>
+<span style="color: #666666">&gt;&gt;&gt;</span> mesh <span style="color: #666666">=</span> UnitSquareMesh(<span style="color: #666666">2</span>, <span style="color: #666666">2</span>)
+<span style="color: #666666">&gt;&gt;&gt;</span> coor <span style="color: #666666">=</span> mesh<span style="color: #666666">.</span>coordinates()
+<span style="color: #666666">&gt;&gt;&gt;</span> coor
+array([[ <span style="color: #666666">0.</span> ,  <span style="color: #666666">0.</span> ],
+       [ <span style="color: #666666">0.5</span>,  <span style="color: #666666">0.</span> ],
+       [ <span style="color: #666666">1.</span> ,  <span style="color: #666666">0.</span> ],
+       [ <span style="color: #666666">0.</span> ,  <span style="color: #666666">0.5</span>],
+       [ <span style="color: #666666">0.5</span>,  <span style="color: #666666">0.5</span>],
+       [ <span style="color: #666666">1.</span> ,  <span style="color: #666666">0.5</span>],
+       [ <span style="color: #666666">0.</span> ,  <span style="color: #666666">1.</span> ],
+       [ <span style="color: #666666">0.5</span>,  <span style="color: #666666">1.</span> ],
+       [ <span style="color: #666666">1.</span> ,  <span style="color: #666666">1.</span> ]])
 </pre></div>
 <p>
-All mesh objects are of type <code>Mesh</code> so typing the command
-<code>pydoc dolfin.Mesh</code> in a terminal window will give a list
-of methods (that is, functions in a class)
-that can be called through any <code>Mesh</code> object. In fact,
-<code>pydoc dolfin.X</code> shows the documentation of any DOLFIN name <code>X</code>.
+We see from this output that vertices are first numbered along \( y=0 \)
+with increasing \( x \) coordinate, then along \( y=0.5 \), and so on.
 
 <p>
-Writing out the solution on the screen can now be done by a simple loop:
+Next we compute a function <code>u</code> on this mesh, e.g., the \( u=x+y \):
+
+<p>
+
+<!-- code=python (!bc pyshell) typeset with pygments style "default" -->
+<div class="highlight" style="background: #f8f8f8"><pre style="line-height: 125%"><span style="color: #666666">&gt;&gt;&gt;</span> V <span style="color: #666666">=</span> FunctionSpace(mesh, <span style="color: #BA2121">&#39;CG&#39;</span>, <span style="color: #666666">1</span>)
+<span style="color: #666666">&gt;&gt;&gt;</span> u <span style="color: #666666">=</span> interpolate(Expression(<span style="color: #BA2121">&#39;x[0]+x[1]&#39;</span>), V)
+<span style="color: #666666">&gt;&gt;&gt;</span> u_array <span style="color: #666666">=</span> u<span style="color: #666666">.</span>vector()<span style="color: #666666">.</span>array()
+<span style="color: #666666">&gt;&gt;&gt;</span> u_array
+array([ <span style="color: #666666">1.</span> ,  <span style="color: #666666">0.5</span>,  <span style="color: #666666">1.5</span>,  <span style="color: #666666">0.</span> ,  <span style="color: #666666">1.</span> ,  <span style="color: #666666">2.</span> ,  <span style="color: #666666">0.5</span>,  <span style="color: #666666">1.5</span>,  <span style="color: #666666">1.</span> ])
+</pre></div>
+<p>
+We observe that <code>u_array[0]</code> is <em>not</em> the value of \( x+y \) at vertex number 0,
+since this vertex has coordinates \( x=y=0 \). The numbering of the
+degrees of freedom \( U_1,\ldots,U_{N} \) is obviously not the same as the
+numbering of the vertices.
+
+<p>
+The vertex values of a <code>Function</code> object can be extracted by
+<code>u.compute_vertex_values()</code>, which returns an array where element <code>i</code>
+is the value of <code>u</code> at vertex <code>i</code>:
+
+<p>
+
+<!-- code=python (!bc pyshell) typeset with pygments style "default" -->
+<div class="highlight" style="background: #f8f8f8"><pre style="line-height: 125%"><span style="color: #666666">&gt;&gt;&gt;</span> u_at_vertices <span style="color: #666666">=</span> u<span style="color: #666666">.</span>compute_vertex_values()
+<span style="color: #666666">&gt;&gt;&gt;</span> <span style="color: #008000; font-weight: bold">for</span> i, x <span style="color: #AA22FF; font-weight: bold">in</span> <span style="color: #008000">enumerate</span>(coor):
+<span style="color: #666666">...</span>     <span style="color: #008000; font-weight: bold">print</span>(<span style="color: #BA2121">&#39;vertex </span><span style="color: #BB6688; font-weight: bold">%d</span><span style="color: #BA2121">: u_array[</span><span style="color: #BB6688; font-weight: bold">%d</span><span style="color: #BA2121">]=</span><span style="color: #BB6688; font-weight: bold">%g</span><span style="color: #BA2121"> u(</span><span style="color: #BB6688; font-weight: bold">%s</span><span style="color: #BA2121">)=</span><span style="color: #BB6688; font-weight: bold">%g</span><span style="color: #BA2121">&#39;</span> <span style="color: #666666">%</span>
+<span style="color: #666666">...</span>           (i, i, u_at_vertices[i], x, u(x)))
+vertex <span style="color: #666666">0</span>: u_array[<span style="color: #666666">0</span>]<span style="color: #666666">=0</span> u([ <span style="color: #666666">0.</span>  <span style="color: #666666">0.</span>])<span style="color: #666666">=8.46545e-16</span>
+vertex <span style="color: #666666">1</span>: u_array[<span style="color: #666666">1</span>]<span style="color: #666666">=0.5</span> u([ <span style="color: #666666">0.5</span>  <span style="color: #666666">0.</span> ])<span style="color: #666666">=0.5</span>
+vertex <span style="color: #666666">2</span>: u_array[<span style="color: #666666">2</span>]<span style="color: #666666">=1</span> u([ <span style="color: #666666">1.</span>  <span style="color: #666666">0.</span>])<span style="color: #666666">=1</span>
+vertex <span style="color: #666666">3</span>: u_array[<span style="color: #666666">3</span>]<span style="color: #666666">=0.5</span> u([ <span style="color: #666666">0.</span>   <span style="color: #666666">0.5</span>])<span style="color: #666666">=0.5</span>
+vertex <span style="color: #666666">4</span>: u_array[<span style="color: #666666">4</span>]<span style="color: #666666">=1</span> u([ <span style="color: #666666">0.5</span>  <span style="color: #666666">0.5</span>])<span style="color: #666666">=1</span>
+vertex <span style="color: #666666">5</span>: u_array[<span style="color: #666666">5</span>]<span style="color: #666666">=1.5</span> u([ <span style="color: #666666">1.</span>   <span style="color: #666666">0.5</span>])<span style="color: #666666">=1.5</span>
+vertex <span style="color: #666666">6</span>: u_array[<span style="color: #666666">6</span>]<span style="color: #666666">=1</span> u([ <span style="color: #666666">0.</span>  <span style="color: #666666">1.</span>])<span style="color: #666666">=1</span>
+vertex <span style="color: #666666">7</span>: u_array[<span style="color: #666666">7</span>]<span style="color: #666666">=1.5</span> u([ <span style="color: #666666">0.5</span>  <span style="color: #666666">1.</span> ])<span style="color: #666666">=1.5</span>
+vertex <span style="color: #666666">8</span>: u_array[<span style="color: #666666">8</span>]<span style="color: #666666">=2</span> u([ <span style="color: #666666">1.</span>  <span style="color: #666666">1.</span>])<span style="color: #666666">=2</span>
+</pre></div>
+<p>
+Alternatively, we can ask for the mapping from vertex numbering to degrees
+of freedom numbering in the space \( V \):
+
+<p>
+
+<!-- code=text typeset with pygments style "default" -->
+<div class="highlight" style="background: #f8f8f8"><pre style="line-height: 125%">v2d = vertex_to_dof_map(V)
+</pre></div>
+<p>
+Now, <code>u_array[v2d[i]]</code> will give us the value of the
+degree of freedom in <code>u</code> corresponding
+to vertex <code>i</code> (<code>v2d[i]</code>). In particular, <code>u_array[v2d]</code> is an array
+with all the elements in the same (vertex numbered) order as <code>coor</code>.
+The inverse map, from degrees of freedom
+number to vertex number is given by <code>dof_to_vertex_map(V)</code>, so
+<code>coor[dof_to_vertex_map(V)]</code> results in an array of all the
+coordinates in the same order as the degrees of freedom.
+
+<p>
+For Lagrange elements of degree larger than 1, there are degrees of
+freedom (nodes) that do not correspond to vertices.
+
+<!-- begin inline comment -->
+<font color="red">(<b>hpl 1</b>: Anders, is this true?)</font>
+<!-- end inline comment -->
+ There is no simple way of getting the
+coordinates associated with the non-vertex degrees of freedom, so
+if we want to write out the values of a finite element solution,
+the following code snippet does the task at the vertices, and this
+will work for all kinds of Lagrange elements.
 
 <p>
 
 <!-- code=python (!bc pycod) typeset with pygments style "default" -->
-<div class="highlight" style="background: #f8f8f8"><pre style="line-height: 125%">coor <span style="color: #666666">=</span> mesh<span style="color: #666666">.</span>coordinates()
-<span style="color: #008000; font-weight: bold">if</span> mesh<span style="color: #666666">.</span>num_vertices() <span style="color: #666666">==</span> <span style="color: #008000">len</span>(u_array):
-    <span style="color: #008000; font-weight: bold">for</span> i <span style="color: #AA22FF; font-weight: bold">in</span> <span style="color: #008000">range</span>(<span style="color: #008000">len</span>(u_array)):
-        <span style="color: #008000; font-weight: bold">print</span>(<span style="color: #BA2121">&#39;u(</span><span style="color: #BB6688; font-weight: bold">%8g</span><span style="color: #BA2121">,</span><span style="color: #BB6688; font-weight: bold">%8g</span><span style="color: #BA2121">) = </span><span style="color: #BB6688; font-weight: bold">%g</span><span style="color: #BA2121">&#39;</span> <span style="color: #666666">%</span>
-	      (coor[i][<span style="color: #666666">0</span>], coor[i][<span style="color: #666666">1</span>], u_array[i]))
+<div class="highlight" style="background: #f8f8f8"><pre style="line-height: 125%">u_at_vertices <span style="color: #666666">=</span> u<span style="color: #666666">.</span>compute_vertex_values()
+<span style="color: #008000; font-weight: bold">for</span> i, x <span style="color: #AA22FF; font-weight: bold">in</span> <span style="color: #008000">enumerate</span>(coor):
+    <span style="color: #008000; font-weight: bold">print</span>(<span style="color: #BA2121">&#39;u(</span><span style="color: #BB6688; font-weight: bold">%8g</span><span style="color: #BA2121">,</span><span style="color: #BB6688; font-weight: bold">%8g</span><span style="color: #BA2121">) = </span><span style="color: #BB6688; font-weight: bold">%g</span><span style="color: #BA2121">&#39;</span> <span style="color: #666666">%</span>
+          (coor[i][<span style="color: #666666">0</span>], coor[i][<span style="color: #666666">1</span>], u_at_vertices[i]))
 </pre></div>
 <p>
 The beginning of the output looks like this:
+
 <p>
 
 <!-- code=text (!bc dat) typeset with pygments style "default" -->
@@ -1668,6 +1734,41 @@ A call like <code>u.vector().array()</code> returns a copy of the data in
 (i.e., a copy), manipulate it, and insert it back with <code>u.vector()[:]
 = </code> or <code>u.set_local(...)</code>.
 [[[
+
+<p>
+There is more mesh information to be gathered from a <code>mesh</code> object:
+
+<ul>
+  <li> <code>mesh.num_cells()</code> returns the number of cells (triangles)
+    in the mesh,</li>
+  <li> <code>mesh.num_vertices()</code> returns the number of vertices in
+    the mesh (with our choice of linear Lagrange elements this equals the
+    number of nodes, <code>len(u_array)</code>, or dimension of the space <code>V.dim()</code>),</li>
+  <li> <code>mesh.cells()</code> returns the vertex numbers of the vertices in
+    each cell as a <code>numpy</code> array with shape
+    (<em>number of cells</em>, <em>number of vertices in a cell</em>),</li>
+  <li> <code>mesh.hmin()</code> returns the minimum cell diameter (&quot;smallest cell&quot;),</li>
+  <li> <code>mesh.hmax()</code> returns the maximum cell diameter (&quot;largest cell&quot;).</li>
+</ul>
+
+Writing <code>print(mesh)</code> dumps a short, pretty-print description
+of the mesh (<code>print(mesh)</code> actually displays the result of <code>str(mesh)</code>,
+which defines the pretty print):
+
+<p>
+
+<!-- code=text (!bc dat) typeset with pygments style "default" -->
+<div class="highlight" style="background: #f8f8f8"><pre style="line-height: 125%">&lt;Mesh of topological dimension 2 (triangles) with
+16 vertices and 18 cells, ordered&gt;
+</pre></div>
+<p>
+All mesh objects are of type <code>Mesh</code> so typing the command
+<code>pydoc dolfin.Mesh</code> in a terminal window will give a list
+of methods (that is, functions in a class)
+that can be called through any <code>Mesh</code> object. In fact,
+<code>pydoc dolfin.X</code> shows the documentation of any DOLFIN name <code>X</code>.
+
+<p>
 All the code in this subsection can be found in the file <code>d4_p2D.py</code>
 in the <code>stationary/poisson</code> directory.  We have commented out the
 plotting statements in this version of the program, but if you want
@@ -3332,11 +3433,13 @@ problem we can write
 
 <!-- code=python (!bc pycod) typeset with pygments style "default" -->
 <div class="highlight" style="background: #f8f8f8"><pre style="line-height: 125%">coor <span style="color: #666666">=</span> mesh<span style="color: #666666">.</span>coordinates()
+d2v <span style="color: #666666">=</span> dof_to_vertex_map(V)
 <span style="color: #008000; font-weight: bold">for</span> bc <span style="color: #AA22FF; font-weight: bold">in</span> bcs:
     bc_dict <span style="color: #666666">=</span> bc<span style="color: #666666">.</span>get_boundary_values()
     <span style="color: #008000; font-weight: bold">for</span> dof <span style="color: #AA22FF; font-weight: bold">in</span> bc_dict:
         <span style="color: #008000; font-weight: bold">print</span>(<span style="color: #BA2121">&#39;dof </span><span style="color: #BB6688; font-weight: bold">%2d</span><span style="color: #BA2121">: u=</span><span style="color: #BB6688; font-weight: bold">%g</span><span style="color: #BB6622; font-weight: bold">\t</span><span style="color: #BA2121"> at point </span><span style="color: #BB6688; font-weight: bold">%s</span><span style="color: #BA2121">&#39;</span> <span style="color: #666666">%</span>
-              (dof, bc_dict[dof], <span style="color: #008000">str</span>(<span style="color: #008000">tuple</span>(coor[dof]<span style="color: #666666">.</span>tolist()))))
+              (dof, bc_dict[dof],
+	      <span style="color: #008000">str</span>(<span style="color: #008000">tuple</span>(coor[d2v[dof]]<span style="color: #666666">.</span>tolist()))))
 </pre></div>
 <p>
 The printing of coordinates for each degree of freedom (node here)
@@ -3351,16 +3454,15 @@ Lagrange elements:
 
 <!-- code=python (!bc pycod) typeset with pygments style "default" -->
 <div class="highlight" style="background: #f8f8f8"><pre style="line-height: 125%">Lagrange_1st_order <span style="color: #666666">=</span> V<span style="color: #666666">.</span>ufl_element()<span style="color: #666666">.</span>degree() <span style="color: #666666">==</span> <span style="color: #666666">1</span>
-coor <span style="color: #666666">=</span> mesh<span style="color: #666666">.</span>coordinates()
-<span style="color: #008000; font-weight: bold">for</span> bc <span style="color: #AA22FF; font-weight: bold">in</span> bcs:
-    bc_dict <span style="color: #666666">=</span> bc<span style="color: #666666">.</span>get_boundary_values()
-    <span style="color: #008000; font-weight: bold">for</span> dof <span style="color: #AA22FF; font-weight: bold">in</span> bc_dict:
-        <span style="color: #008000; font-weight: bold">print</span>(<span style="color: #BA2121">&#39;dof </span><span style="color: #BB6688; font-weight: bold">%2d</span><span style="color: #BA2121">: u=</span><span style="color: #BB6688; font-weight: bold">%g</span><span style="color: #BA2121">&#39;</span> <span style="color: #666666">%</span> (dof, bc_dict[dof])),
-        <span style="color: #008000; font-weight: bold">if</span> Lagrange_1st_order:  <span style="color: #408080; font-style: italic"># print vertex coor.</span>
+<span style="color: #008000; font-weight: bold">if</span> Lagrange_1st_order:
+    coor <span style="color: #666666">=</span> mesh<span style="color: #666666">.</span>coordinates()
+    d2v <span style="color: #666666">=</span> dof_to_vertex_map(V)
+    <span style="color: #008000; font-weight: bold">for</span> bc <span style="color: #AA22FF; font-weight: bold">in</span> bcs:
+        bc_dict <span style="color: #666666">=</span> bc<span style="color: #666666">.</span>get_boundary_values()
+        <span style="color: #008000; font-weight: bold">for</span> dof <span style="color: #AA22FF; font-weight: bold">in</span> bc_dict:
+            <span style="color: #008000; font-weight: bold">print</span>(<span style="color: #BA2121">&#39;dof </span><span style="color: #BB6688; font-weight: bold">%2d</span><span style="color: #BA2121">: u=</span><span style="color: #BB6688; font-weight: bold">%g</span><span style="color: #BA2121">&#39;</span> <span style="color: #666666">%</span> (dof, bc_dict[dof])),
             <span style="color: #008000; font-weight: bold">print</span>(<span style="color: #BA2121">&#39;</span><span style="color: #BB6622; font-weight: bold">\t</span><span style="color: #BA2121"> at point </span><span style="color: #BB6688; font-weight: bold">%s</span><span style="color: #BA2121">&#39;</span> <span style="color: #666666">%</span>
-                  (<span style="color: #008000">str</span>(<span style="color: #008000">tuple</span>(coor[dof]<span style="color: #666666">.</span>tolist()))))
-        <span style="color: #008000; font-weight: bold">else</span>:
-            <span style="color: #008000; font-weight: bold">print</span>(<span style="color: #BA2121">&#39;&#39;</span>)
+                  (<span style="color: #008000">str</span>(<span style="color: #008000">tuple</span>(coor[d2v[dof]]<span style="color: #666666">.</span>tolist()))))
 </pre></div>
 <p>
 The output for a mesh made by <code>UnitSquareMesh(3, 2)</code> becomes

@@ -89,10 +89,10 @@ u = Function(V)
 solve(a == L, u, bcs)
 
 # Dump solution to the screen
-u_nodal_values = u.vector()
-u_array = u_nodal_values.array()
 coor = mesh.coordinates()
-for i in range(len(u_array)):
-    print('u(%8g,%8g) = %g' % (coor[i][0], coor[i][1], u_array[i]))
+u_at_vertices = u.compute_vertex_values()
+for i, x in enumerate(coor):
+    print('u(%8g,%8g) = %g' %
+          (coor[i][0], coor[i][1], u_at_vertices[i]))
 
 #interactive()

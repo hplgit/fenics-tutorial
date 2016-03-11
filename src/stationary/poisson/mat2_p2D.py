@@ -95,10 +95,4 @@ import numpy
 error = numpy.abs(u_e_array - u_array)
 print('max error:', error.max())
 
-#coor = mesh.coordinates()
-#for i in range(len(u_array)):
-#    print 'u(%8g,%8g) = %g, error: %.4E' % \
-#        (coor[i][0], coor[i][1], u_array[i],
-#         u_exact(coor[i][1]) - u_array[i])
-
 #interactive()
