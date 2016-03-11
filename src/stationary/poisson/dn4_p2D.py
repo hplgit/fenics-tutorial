@@ -106,12 +106,11 @@ with u = u0 on x=0,1 and -du/dn = g at y=0,1.
 """ % mesh)
 
 # Dump solution to the screen
-u_nodal_values = u.vector()
-u_array = u_nodal_values.array()
 coor = mesh.coordinates()
-if mesh.num_cells() <= 30:
-    for i in range(len(u_array)):
-        print('u(%8g,%8g) = %g' % (coor[i][0], coor[i][1], u_array[i]))
+u_at_vertices = u.compute_vertex_values()
+for i, x in enumerate(coor):
+    print('u(%8g,%8g) = %g' %
+          (coor[i][0], coor[i][1], u_at_vertices[i]))
 
 
 # Exact solution:
@@ -120,6 +119,7 @@ u_exact = Expression('1 + x[0]*x[0] + 2*x[1]*x[1]')
 # Verification
 u_e = interpolate(u_exact, V)
 u_e_array = u_e.vector().array()
+u_array = u.vector().array()
 print('Max error:', numpy.abs(u_e_array - u_array).max())
 
 # Compare numerical and exact solution

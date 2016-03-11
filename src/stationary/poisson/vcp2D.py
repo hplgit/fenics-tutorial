@@ -79,8 +79,9 @@ flux_y_array = flux_y.vector().array()
 #flux_y_array = q[1,:]
 if mesh.num_cells() < 1600:
     coor = mesh.coordinates()
-    for i in range(len(u_array)):
-        x, y = coor[i]
+    d2v = dof_to_vertex_map(V)
+    for i in range(len(u_array)):  # run over dofs
+        x, y = coor[d2v[i]]
         print('Node (%.3f,%.3f): u = %.4f (%9.2e), '\
               'flux_x = %.4f  (%9.2e), flux_y = %.4f  (%9.2e)' % \
               (x, y, u_array[i], 1 + x**2 + 2*y**2 - u_array[i],

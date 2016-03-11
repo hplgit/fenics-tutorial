@@ -995,6 +995,8 @@ processing:
 
 idx{degrees of freedom array}
 idx{nodal values array}
+idx{numbering!degrees of freedom}
+idx{numbering!cell vertices}
 
 !bc pycod
 u_array = u_nodal_values.array()
@@ -1003,49 +1005,106 @@ With `numpy` arrays we can write MATLAB-like code to analyze
 the data. Indexing is done with square brackets: `u_array[i]`,
 where the index `i` always starts at `0`.
 
-Mesh information can be gathered from the `mesh` object, e.g.,
+Now, a fundamental question is: What are the coordinates of
+node `i` whose value is is `u_array[i]`? To answer this question,
+we need to understand how to get our hands on the coordinates, and
+in particular, the numbering of degrees of freedom and the
+numbering of vertices in the mesh. We start with P1
+(1st order Lagrange) where all the nodes are vertices in the mesh.
 
-  * `mesh.coordinates()` returns the coordinates of the
-    vertices as a `numpy` array with shape
-    (*number of vertices*, *number of space dimensions*),
-    $M$ being the number of vertices in the mesh and $d$ being
-    the number of space dimensions,
-  * `mesh.num_cells()` returns the number of cells (triangles)
-    in the mesh,
-  * `mesh.num_vertices()` returns the number of vertices in
-    the mesh (with our choice of linear Lagrange elements this equals the
-    number of nodes),
-  * `mesh.cells()` returns the vertex numbers of the vertices in
-    each cell as a `numpy` array with shape
-    (*number of cells*, *number of vertices in a cell*),
-  * `mesh.hmin()` returns the minimum cell diameter (``smallest cell''),
-  * `mesh.hmax()` returns the maximum cell diameter (``largest cell'').
+The function `mesh.coordinates()` returns the coordinates of the
+vertices as a `numpy` array with shape $(M,d$), $M$ being the number
+of vertices in the mesh and $d$ being the number of space dimensions:
 
-Writing `print(mesh)` dumps a short, pretty-print description
-of the mesh (`print(mesh)` actually displays the result of `str(mesh)`,
-which defines the pretty print):
-
-!bc dat
-<Mesh of topological dimension 2 (triangles) with
-16 vertices and 18 cells, ordered>
+!bc pyshell
+>>> from dolfin import *
+>>>
+>>> mesh = UnitSquareMesh(2, 2)
+>>> coor = mesh.coordinates()
+>>> coor
+array([[ 0. ,  0. ],
+       [ 0.5,  0. ],
+       [ 1. ,  0. ],
+       [ 0. ,  0.5],
+       [ 0.5,  0.5],
+       [ 1. ,  0.5],
+       [ 0. ,  1. ],
+       [ 0.5,  1. ],
+       [ 1. ,  1. ]])
 !ec
-idx{`pydoc`}
-All mesh objects are of type `Mesh` so typing the command
-`pydoc dolfin.Mesh` in a terminal window will give a list
-of methods (that is, functions in a class)
-that can be called through any `Mesh` object. In fact,
-`pydoc dolfin.X` shows the documentation of any DOLFIN name `X`.
+We see from this output that vertices are first numbered along $y=0$
+with increasing $x$ coordinate, then along $y=0.5$, and so on.
 
-Writing out the solution on the screen can now be done by a simple loop:
+Next we compute a function `u` on this mesh, e.g., the $u=x+y$:
+
+!bc pyshell
+>>> V = FunctionSpace(mesh, 'CG', 1)
+>>> u = interpolate(Expression('x[0]+x[1]'), V)
+>>> u_array = u.vector().array()
+>>> u_array
+array([ 1. ,  0.5,  1.5,  0. ,  1. ,  2. ,  0.5,  1.5,  1. ])
+!ec
+We observe that `u_array[0]` is *not* the value of $x+y$ at vertex number 0,
+since this vertex has coordinates $x=y=0$. The numbering of the
+degrees of freedom $U_1,\ldots,U_{N}$ is obviously not the same as the
+numbering of the vertices.
+
+idx{compute vertex values}
+
+The vertex values of a `Function` object can be extracted by
+`u.compute_vertex_values()`, which returns an array where element `i`
+is the value of `u` at vertex `i`:
+
+!bc pyshell
+>>> u_at_vertices = u.compute_vertex_values()
+>>> for i, x in enumerate(coor):
+...     print('vertex %d: u_array[%d]=%g u(%s)=%g' %
+...           (i, i, u_at_vertices[i], x, u(x)))
+vertex 0: u_array[0]=0 u([ 0.  0.])=8.46545e-16
+vertex 1: u_array[1]=0.5 u([ 0.5  0. ])=0.5
+vertex 2: u_array[2]=1 u([ 1.  0.])=1
+vertex 3: u_array[3]=0.5 u([ 0.   0.5])=0.5
+vertex 4: u_array[4]=1 u([ 0.5  0.5])=1
+vertex 5: u_array[5]=1.5 u([ 1.   0.5])=1.5
+vertex 6: u_array[6]=1 u([ 0.  1.])=1
+vertex 7: u_array[7]=1.5 u([ 0.5  1. ])=1.5
+vertex 8: u_array[8]=2 u([ 1.  1.])=2
+!ec
+
+idx{vertex to dof map}
+idx{dof to vertex map}
+
+Alternatively, we can ask for the mapping from vertex numbering to degrees
+of freedom numbering in the space $V$:
+
+!bc
+v2d = vertex_to_dof_map(V)
+!ec
+Now, `u_array[v2d[i]]` will give us the value of the
+degree of freedom in `u` corresponding
+to vertex `i` (`v2d[i]`). In particular, `u_array[v2d]` is an array
+with all the elements in the same (vertex numbered) order as `coor`.
+The inverse map, from degrees of freedom
+number to vertex number is given by `dof_to_vertex_map(V)`, so
+`coor[dof_to_vertex_map(V)]` results in an array of all the
+coordinates in the same order as the degrees of freedom.
+
+For Lagrange elements of degree larger than 1, there are degrees of
+freedom (nodes) that do not correspond to vertices.
+[hpl: Anders, is this true?] There is no simple way of getting the
+coordinates associated with the non-vertex degrees of freedom, so
+if we want to write out the values of a finite element solution,
+the following code snippet does the task at the vertices, and this
+will work for all kinds of Lagrange elements.
 
 !bc pycod
-coor = mesh.coordinates()
-if mesh.num_vertices() == len(u_array):
-    for i in range(len(u_array)):
-        print('u(%8g,%8g) = %g' %
-	      (coor[i][0], coor[i][1], u_array[i]))
+u_at_vertices = u.compute_vertex_values()
+for i, x in enumerate(coor):
+    print('u(%8g,%8g) = %g' %
+          (coor[i][0], coor[i][1], u_at_vertices[i]))
 !ec
 The beginning of the output looks like this:
+
 !bc dat
 u(       0,       0) = 1
 u(0.166667,       0) = 1.02778
@@ -1137,6 +1196,35 @@ A call like `u.vector().array()` returns a copy of the data in
 (i.e., a copy), manipulate it, and insert it back with `u.vector()[:]
 = ` or `u.set_local(...)`.
 [[[
+
+There is more mesh information to be gathered from a `mesh` object:
+
+  * `mesh.num_cells()` returns the number of cells (triangles)
+    in the mesh,
+  * `mesh.num_vertices()` returns the number of vertices in
+    the mesh (with our choice of linear Lagrange elements this equals the
+    number of nodes, `len(u_array)`, or dimension of the space `V.dim()`),
+  * `mesh.cells()` returns the vertex numbers of the vertices in
+    each cell as a `numpy` array with shape
+    (*number of cells*, *number of vertices in a cell*),
+  * `mesh.hmin()` returns the minimum cell diameter (``smallest cell''),
+  * `mesh.hmax()` returns the maximum cell diameter (``largest cell'').
+
+Writing `print(mesh)` dumps a short, pretty-print description
+of the mesh (`print(mesh)` actually displays the result of `str(mesh)`,
+which defines the pretty print):
+
+!bc dat
+<Mesh of topological dimension 2 (triangles) with
+16 vertices and 18 cells, ordered>
+!ec
+idx{`pydoc`}
+All mesh objects are of type `Mesh` so typing the command
+`pydoc dolfin.Mesh` in a terminal window will give a list
+of methods (that is, functions in a class)
+that can be called through any `Mesh` object. In fact,
+`pydoc dolfin.X` shows the documentation of any DOLFIN name `X`.
+
 All the code in this subsection can be found in the file `${prog["d4_p2D"]}.py`
 in the `stationary/poisson` directory.  We have commented out the
 plotting statements in this version of the program, but if you want
@@ -2525,11 +2613,13 @@ problem we can write
 
 !bc pycod
 coor = mesh.coordinates()
+d2v = dof_to_vertex_map(V)
 for bc in bcs:
     bc_dict = bc.get_boundary_values()
     for dof in bc_dict:
         print('dof %2d: u=%g\t at point %s' %
-              (dof, bc_dict[dof], str(tuple(coor[dof].tolist()))))
+              (dof, bc_dict[dof],
+	      str(tuple(coor[d2v[dof]].tolist()))))
 !ec
 The printing of coordinates for each degree of freedom (node here)
 is only appropriate when degrees of freedom coincide with function
@@ -2541,16 +2631,15 @@ Lagrange elements:
 
 !bc pycod
 Lagrange_1st_order = V.ufl_element().degree() == 1
-coor = mesh.coordinates()
-for bc in bcs:
-    bc_dict = bc.get_boundary_values()
-    for dof in bc_dict:
-        print('dof %2d: u=%g' % (dof, bc_dict[dof])),
-        if Lagrange_1st_order:  # print vertex coor.
+if Lagrange_1st_order:
+    coor = mesh.coordinates()
+    d2v = dof_to_vertex_map(V)
+    for bc in bcs:
+        bc_dict = bc.get_boundary_values()
+        for dof in bc_dict:
+            print('dof %2d: u=%g' % (dof, bc_dict[dof])),
             print('\t at point %s' %
-                  (str(tuple(coor[dof].tolist()))))
-        else:
-            print('')
+                  (str(tuple(coor[d2v[dof]].tolist()))))
 !ec
 The output for a mesh made by `UnitSquareMesh(3, 2)` becomes
 !bc dat

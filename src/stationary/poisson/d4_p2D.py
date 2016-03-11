@@ -44,17 +44,11 @@ with u = u0 on the boundary and a
 """ % str(mesh))
 
 # Dump solution to the screen
-u_nodal_values = u.vector()
-u_array = u_nodal_values.array()
 coor = mesh.coordinates()
-if coor.shape[0] == u_array.shape[0]:  # degree 1 element
-    for i in range(len(u_array)):
-        print('u(%8g,%8g) = %g' % (coor[i][0], coor[i][1], u_array[i]))
-else:
-    print("""\
-Cannot print vertex coordinates and corresponding values
-because the element is not a first-order Lagrange element.
-""")
+u_at_vertices = u.compute_vertex_values()
+for i, x in enumerate(coor):
+    print('u(%8g,%8g) = %g' %
+          (coor[i][0], coor[i][1], u_at_vertices[i]))
 
 # Note: u_nodal_values.array() returns a copy
 print(id(u_nodal_values.array()), id(u_array))
