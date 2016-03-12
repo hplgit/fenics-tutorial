@@ -1,515 +1,574 @@
 .. !split
 
-Miscellaneous topics
-====================
+Handling domains with different materials
+=========================================
 
-Glossary
---------
+.. index:: heterogeneous media
 
-.. index:: self
+.. index:: multi-material domain
 
-.. index:: FEniCS
+Solving PDEs in domains made up of different materials is a frequently
+encountered task. In FEniCS, these kind of problems are handled by
+defining subdomains inside the domain. The subdomains may represent the
+various materials. We can thereafter define material properties through
+functions, known in FEniCS as *mesh functions*,
+that are piecewise constant in each subdomain.
+A simple example with
+two materials (subdomains) in 2D will
+demonstrate the basic steps in the process.
 
-.. index:: DOLFIN
+.. Later, a multi-material
 
-.. index:: Viper
+.. problem in :math:`d` space dimensions is addressed.
 
-.. index:: UFL
+.. _tut:possion:2D:2mat:problem:
 
-.. index:: class
+Working with two subdomains
+---------------------------
 
-.. index:: instance
+.. _tut:possion:2D:2mat:fig1:
 
-.. index:: method (class)
+.. figure:: layered_medium_2.png
+   :width: 400
 
-.. index:: attribute (class)
+   *Medium with discontinuous material properties*
 
-Below we explain some key terms used in this tutorial.
+Suppose we want to solve
 
-  FEniCS: name of a software suite composed of many individual software
-          components (see ``fenicsproject.org``). Some components are DOLFIN and
-	  Viper, explicitly referred to in this tutorial. Others are
-          FFC and FIAT, heavily used by the programs appearing in this tutorial,
-          but never explicitly used from the programs.
+.. _Eq:tut:poisson:2D:2mat:varcoeff2:
 
-  DOLFIN: a FEniCS component, more precisely a C++ library, with
-          a Python interface, for performing important actions in finite element
-          programs. DOLFIN makes use of many other FEniCS components and
-          many external software packages.
+.. math::
 
-  Viper:  a FEniCS component for quick visualization of finite element
-          meshes and solutions.
+    \tag{90}
+    \nabla\cdot \left\lbrack k(x,y)\nabla u(x,y)\right\rbrack = 0,
+        
 
-  UFL:    a FEniCS component implementing the *unified form language*
-          for specifying finite element forms in FEniCS programs.
-          The definition of the forms, typically called ``a`` and ``L`` in
-          this tutorial, must have legal UFL syntax. The same applies to
-          the definition of functionals (see the section :ref:`tut:poisson1:functionals`).
+in a domain :math:`\Omega` consisting of two subdomains where :math:`k` takes on
+a different value in each subdomain.
+For simplicity, yet without loss of generality, we choose for the current
+implementation
+the domain :math:`\Omega = [0,1]\times [0,1]` and divide it into two equal
+subdomains,
+as depicted in Figure :ref:`tut:possion:2D:2mat:fig1`,
 
-  Class (Python): a programming construction for creating objects
-          containing a set of variables and functions. Most
-          types of FEniCS objects are defined through the class concept.
+.. math::
+        
+        \Omega_0 = [0, 1]\times [0,1/2],\quad
+        \Omega_1 = [0, 1]\times (1/2,1]{\thinspace .}
+        
 
-  Instance (Python): an object of a particular type, where the type is
-          implemented as a class. For instance,
-          ``mesh = UnitIntervalMesh(10)`` creates
-          an instance of class ``UnitIntervalMesh``, which is reached by the
-          name ``mesh``. (Class ``UnitIntervalMesh`` is actually just
-          an interface to a corresponding C++ class in the DOLFIN C++ library.)
+We define :math:`k(x,y)=k_0` in :math:`\Omega_0` and :math:`k(x,y)=k_1` in :math:`\Omega_1`,
+where :math:`k_0>0` and :math:`k_1>0` are given constants.
+As boundary conditions, we choose :math:`u=0` at :math:`y=0`, :math:`u=1` at :math:`y=1`,
+and :math:`\partial u/\partial n=0` at :math:`x=0` and :math:`x=1`.
+One can show that the exact solution is now given by
 
-  Class method (Python): a function in a class, reached by dot
-          notation: ``instance_name.method_name``
+.. _Eq:_auto42:
 
-  argument ``self`` (Python): required first parameter in class methods,
-         representing a particular object of the class.
-         Used in method definitions, but never in calls to a method.
-         For example, if ``method(self, x)`` is the definition of
-         ``method`` in a class ``Y``, ``method`` is called as
-         ``y.method(x)``, where ``y`` is an instance of class ``Y``.
-         In a call like ``y.method(x)``, ``method`` is invoked with
-         ``self=y``.
+.. math::
 
-  Class attribute (Python): a variable in a class, reached by
-         dot notation: ``instance_name.attribute_name``
+    \tag{91}
+    u(x, y) = \left\lbrace\begin{array}{ll}
+        {2yk_1\over k_0+k_1}, & y \leq 1/2\\ 
+        {(2y-1)k_0 + k_1\over k_0+k_1}, & y \geq 1/2
+        \end{array}\right.
+        
+        
 
-Overview of objects and functions
----------------------------------
+As long as the element boundaries coincide with the internal boundary
+:math:`y=1/2`, this piecewise linear solution should be exactly recovered
+by Lagrange elements of any degree. We use this property to verify
+the implementation.
 
-Most classes in FEniCS have an explanation of the purpose and usage
-that can be seen by using the general documentation command
-``pydoc`` for Python objects. You can type
+Physically, the present problem may correspond to heat conduction, where
+the heat conduction in :math:`\Omega_1` is ten times more efficient than
+in :math:`\Omega_0`. An alternative interpretation is flow in porous media
+with two geological layers, where the layers' ability to transport
+the fluid differs by a factor of 10.
 
-.. index:: pydoc
+.. _tut:possion:2D:2mat:impl:
 
-.. code-block:: text
+Implementation          (2)
+---------------------------
 
-        pydoc dolfin.X
+.. index:: boundary specification (class)
 
-to look up documentation of a Python class ``X`` from the DOLFIN
-library (``X`` can be ``UnitSquareMesh``, ``Function``,
-``Viper``, etc.). Below is an overview of the most important classes
-and functions
-in FEniCS programs, in the order they typically appear within programs.
+.. index:: mat2_p2D.py
 
-``UnitSquareMesh(nx, ny)``: generate mesh over the unit square
-:math:`[0,1]\times [0,1]` using ``nx`` divisions in :math:`x` direction and
-``ny`` divisions in :math:`y` direction. Each of the ``nx*ny`` squares
-are divided into two cells of triangular shape.
-
-``UnitIntervalMesh``, ``UnitCubeMesh``, ``UnitCircleMesh``, ``UnitSphere``,
-``IntervalMesh``, ``RectangleMesh``, and ``BoxMesh``: generate mesh over
-domains of simple geometric shape, see the section :ref:`tut:prepro`.
-
-``FunctionSpace(mesh, element_type, degree)``:
-a function space defined over a mesh, with a given element type
-(e.g., ``'Lagrange'`` or ``'DG'``), with basis functions as polynomials of
-a specified degree.
-
-``Expression(formula, p1=v1, p2=v2, ...)``:
-a scalar- or vector-valued function, given as a
-mathematical expression ``formula`` (string) written in C++ syntax.
-The spatial coordinates in the expression are named
-``x[0]``, ``x[1]``, and ``x[2]``, while time and other
-physical parameters can be represented as symbols ``p1``, ``p2``,
-etc., with corresponding values ``v1``, ``v2``, etc., initialized
-through keyword arguments. These parameters become attributes,
-whose values can be modified when desired.
-
-``Function(V)``: a scalar- or vector-valued finite element field in
-the function space ``V``. If ``V`` is a ``FunctionSpace`` object,
-``Function(V)`` becomes a scalar field, and with ``V`` as a
-``VectorFunctionSpace`` object, ``Function(V)`` becomes a
-vector field.
-
-``SubDomain``: class for defining a subdomain, either a part of the
-boundary, an internal boundary, or a part of the domain.
-The programmer must subclass ``SubDomain`` and implement the
-``inside(self, x, on_boundary)`` function
-(see the section :ref:`tut:poisson1:impl`) for telling whether a
-point ``x`` is inside the subdomain or not.
-
-``Mesh``: class for representing a finite element mesh, consisting of
-cells, vertices, and optionally faces, edges, and facets.
-
-``MeshFunction``: tool for marking parts of the domain or the boundary.
-Used for variable coefficients ("material properties", see
-the section :ref:`tut:possion:2D:2mat:problem`) or for
-boundary conditions (see the section :ref:`tut:poisson:mat:neumann`).
-
-``DirichletBC(V, value, where)``: specification of Dirichlet (essential)
-boundary conditions via a function space ``V``, a function
-``value(x)`` for computing the value of the condition at a point ``x``,
-and a specification ``where`` of the boundary, either as a
-``SubDomain`` subclass instance, a plain function, or as a
-``MeshFunction`` instance.
-In the latter case, a 4th argument is provided to describe which subdomain
-number that describes the relevant boundary.
-
-``TestFunction(V)``: define a test function on a space ``V`` to be used
-in a variational form.
-
-``TrialFunction(V)``: define a trial function on a space ``V`` to be used
-in a variational form to represent the unknown in a finite element problem.
-
-``assemble(X)``: assemble a matrix, a right-hand side, or a functional,
-given a from ``X`` written with UFL syntax.
-
-``assemble_system(a, L, bcs)``: assemble the matrix and the right-hand
-side from a bilinear (``a``) and linear (``L``) form written with UFL
-syntax. The ``bcs`` parameter holds one or more ``DirichletBC`` objects.
-
-``LinearVariationalProblem(a, L, u, bcs)``: define a variational problem,
-given a bilinear (``a``) and linear (``L``) form, written with UFL
-syntax, and one or more ``DirichletBC`` objects stored in ``bcs``.
-
-``LinearVariationalSolver(problem)``: create solver object for a linear
-variational problem object (``problem``).
-
-``solve(A, U, b)``: solve a linear system with ``A`` as coefficient
-matrix (``Matrix`` object), ``U`` as unknown (``Vector`` object),
-and ``b`` as right-hand side (``Vector`` object).
-Usually, ``U = u.vector()``, where
-``u`` is a ``Function`` object representing the unknown finite
-element function of the problem, while
-``A`` and ``b`` are computed by calls to ``assemble``
-or ``assemble_system``.
-
-``plot(q)``: quick visualization of a mesh, function, or mesh function
-``q``, using the Viper component in FEniCS.
-
-``interpolate(func, V)``: interpolate a formula or finite
-element function ``func`` onto the function space ``V``.
-
-``project(func, V)``: project a formula or finite element function ``func``
-onto the function space ``V``.
-
-.. _tut:app:cpp:functions:
-
-User-defined functions
-----------------------
-
-When defining a function in terms of a mathematical expression inside
-a string formula, e.g.,
+The new functionality in this subsection regards how to define the
+subdomains :math:`\Omega_0` and :math:`\Omega_1`. For this purpose we need to use
+subclasses of class ``SubDomain``, not only plain functions as we have
+used so far for specifying boundaries. Consider the boundary function
 
 .. code-block:: python
 
-        myfunc = Expression('sin(x[0])*cos(x[1])')
+        def boundary(x, on_boundary):
+            tol = 1E-14
+            return on_boundary and abs(x[0]) < tol
 
-the expression contained in the first argument
-will be turned into a C++ function
-and compiled to gain efficiency. Therefore,
-the syntax used in the expression must be valid C++ syntax.
-Most Python syntax for mathematical expressions are also valid C++ syntax,
-but power expressions make an exception: ``p**a`` must be written as
-``pow(p,a)`` in C++ (this is also an alternative Python syntax).
-The following mathematical functions can be used directly
-in C++
-expressions when defining ``Expression`` objects:
-``cos``, ``sin``, ``tan``, ``acos``, ``asin``,
-``atan``, ``atan2``, ``cosh``, ``sinh``, ``tanh``, ``exp``,
-``frexp``, ``ldexp``, ``log``, ``log10``, ``modf``,
-``pow``, ``sqrt``, ``ceil``, ``fabs``, ``floor``, and ``fmod``.
-Moreover, the number :math:`\pi` is available as the symbol ``pi``.
-All the listed functions are taken from the ``cmath`` C++ header file, and
-one may hence
-consult documentation of ``cmath`` for more information on the
-various functions.
-
-Parameters in expression strings must be initialized via keyword
-arguments when creating the ``Expression`` object:
+for defining the boundary :math:`x=0`. Instead of using such a stand-alone
+function, we can create an instance (or object)
+of a subclass of ``SubDomain``,
+which implements the ``inside`` method as an alternative to the
+``boundary`` function:
 
 .. code-block:: python
 
-        myfunc = Expression('sin(w_x*x[0])*cos(w_y*x[1])',
-                             w_x=pi, w_y=2*pi)
+        class Boundary(SubDomain):
+            def inside(self, x, on_boundary):
+                tol = 1E-14
+                return on_boundary and abs(x[0]) < tol
+        
+        boundary = Boundary()
+        bc = DirichletBC(V, Constant(0), boundary)
 
-.. _tut:app:solver:prec:
+A word about computer science terminology may be used here:
+The term *instance*
+means a Python object of a particular type (such as ``SubDomain``,
+``Function``
+``FunctionSpace``, etc.).
+Many use *instance* and *object*
+as interchangeable terms. In other computer programming languages one may
+also use the term *variable* for the same thing.
+We mostly use the well-known  term *object* in this text.
 
-Linear solvers and preconditioners
-----------------------------------
-
-The following solution methods for linear
-systems can be accessed in FEniCS programs:
-
-================  ============================================  
-      Name                           Method                     
-================  ============================================  
-``'lu'``          sparse LU factorization (Gaussian elim.)      
-``'cholesky'``    sparse Cholesky factorization                 
-``'cg'``          Conjugate gradient method                     
-``'gmres'``       Generalized minimal residual method           
-``'bicgstab'``    Biconjugate gradient stabilized method        
-``'minres'``      Minimal residual method                       
-``'tfqmr'``       Transpose-free quasi-minimal residual method  
-``'richardson'``  Richardson method                             
-================  ============================================  
-
-Possible choices of preconditioners include
-
-======================  ==========================================  
-         Name                             Method                    
-======================  ==========================================  
-``'none'``              No preconditioner                           
-``'ilu'``               Incomplete LU factorization                 
-``'icc'``               Incomplete Cholesky factorization           
-``'jacobi'``            Jacobi iteration                            
-``'bjacobi'``           Block Jacobi iteration                      
-``'sor'``               Successive over-relaxation                  
-``'amg'``               Algebraic multigrid (BoomerAMG or ML)       
-``'additive_schwarz'``  Additive Schwarz                            
-``'hypre_amg'``         Hypre algebraic multigrid (BoomerAMG)       
-``'hypre_euclid'``      Hypre parallel incomplete LU factorization  
-``'hypre_parasails'``   Hypre parallel sparse approximate inverse   
-``'ml_amg'``            ML algebraic multigrid                      
-======================  ==========================================  
-
-Many of the choices listed above
-are only offered by a specific backend, so setting the backend
-appropriately is necessary for being able to choose a desired
-linear solver or preconditioner.
-
-An up-to-date list of the available solvers and preconditioners
-in FEniCS can be produced by
+A subclass of ``SubDomain`` with an ``inside`` method offers
+functionality for marking parts of the domain or
+the boundary. Now we need to define one class for the
+subdomain :math:`\Omega_0`
+where :math:`y\leq 1/2` and another for the subdomain :math:`\Omega_1` where :math:`y\geq 1/2`:
 
 .. code-block:: python
 
-        list_linear_solver_methods()
-        list_krylov_solver_preconditioners()
+        class Omega0(SubDomain):
+            def inside(self, x, on_boundary):
+                return True if x[1] <= 0.5 else False
+        
+        class Omega1(SubDomain):
+            def inside(self, x, on_boundary):
+                return True if x[1] >= 0.5 else False
 
-.. _tut:Epetra:
+Notice the use of ``<=`` and ``>=`` in both tests. For a cell to
+belong to, e.g., :math:`\Omega_1`, the ``inside`` method must return
+``True`` for all the vertices ``x`` of the cell. So to make the
+cells at the internal boundary :math:`y=1/2` belong to :math:`\Omega_1`, we need
+the test ``x[1] >= 0.5``.
 
-Using a backend-specific solver
--------------------------------
+The next task is to use a ``MeshFunction`` to mark all
+cells in :math:`\Omega_0` with the subdomain number 0 and all cells in :math:`\Omega_1`
+with the subdomain number 1.
+Our convention is to number subdomains as :math:`0,1,2,\ldots`.
+
+A ``MeshFunction`` is a discrete function that can be evaluated at a set
+of so-called *mesh entities*. Examples of mesh entities are
+cells, facets, and vertices. A ``MeshFunction`` over cells is suitable to
+represent subdomains (materials), while a ``MeshFunction`` over
+facets is used to represent pieces of external or internal boundaries.
+Mesh functions over vertices can be used to describe continuous fields.
+
+Since we need to define subdomains of :math:`\Omega`
+in the present example, we must make use
+of a ``MeshFunction`` over cells. The
+``MeshFunction`` constructor is fed with three arguments: 1) the type
+of value: ``'int'`` for integers, ``'uint'`` for positive
+(unsigned) integers, ``'double'`` for real numbers, and
+``'bool'`` for logical values; 2) a ``Mesh`` object, and 3)
+the topological dimension of the mesh entity in question: cells
+have topological dimension equal to the number of space dimensions in
+the PDE problem, and facets have one dimension lower.
+Alternatively, the constructor can take just a filename
+and initialize the ``MeshFunction`` from data in a file.
+
+We start with creating a ``MeshFunction`` whose
+values are non-negative integers (``'uint'``)
+for numbering the subdomains.
+The mesh entities of interest are the cells, which have dimension 2
+in a two-dimensional problem (1 in 1D, 3 in 3D). The appropriate code for
+defining the ``MeshFunction`` for two subdomains then reads
+
+.. code-block:: python
+
+        subdomains = MeshFunction('uint', mesh, 2)
+        # Mark subdomains with numbers 0 and 1
+        subdomain0 = Omega0()
+        subdomain0.mark(subdomains, 0)
+        subdomain1 = Omega1()
+        subdomain1.mark(subdomains, 1)
+
+Calling ``subdomains.array()`` returns a ``numpy`` array of the
+subdomain values. That is, ``subdomain.array()[i]`` is
+the subdomain value of cell number ``i``. This array is used to
+look up the subdomain or material number of a specific element.
+
+We need a function ``k`` that is constant in
+each subdomain :math:`\Omega_0` and :math:`\Omega_1`. Since we want ``k``
+to be a finite element function, it is natural to choose
+a space of functions that are constant over each element.
+The family of discontinuous Galerkin methods, in FEniCS
+denoted by ``'DG'``, is suitable for this purpose. Since we
+want functions that are piecewise constant, the value of
+the degree parameter is zero:
+
+.. code-block:: python
+
+        V0 = FunctionSpace(mesh, 'DG', 0)
+        k  = Function(V0)
+
+To fill ``k`` with the right values in each element, we loop over
+all cells (i.e., indices in ``subdomain.array()``),
+extract the corresponding subdomain number of a cell,
+and assign the corresponding :math:`k` value to the ``k.vector()`` array:
+
+.. code-block:: python
+
+        k_values = [1.5, 50]  # values of k in the two subdomains
+        for cell_no in range(len(subdomains.array())):
+            subdomain_no = subdomains.array()[cell_no]
+            k.vector()[cell_no] = k_values[subdomain_no]
+
+Long loops in Python are known to be slow, so for large meshes
+it is preferable to avoid such loops and instead use *vectorized code*.
+Normally this implies that the loop must be replaced by
+calls to functions from the ``numpy`` library that operate on complete
+arrays (in efficient C code). The functionality we want in the present
+case is to compute an array of the same size as
+``subdomain.array()``, but where the value ``i`` of an entry
+in ``subdomain.array()`` is replaced by ``k_values[i]``.
+Such an operation is carried out by the ``numpy`` function ``choose``:
+
+.. code-block:: python
+
+        help = numpy.asarray(subdomains.array(), dtype=numpy.int32)
+        k.vector()[:] = numpy.choose(help, k_values)
+
+The ``help`` array is required since ``choose`` cannot work with
+``subdomain.array()`` because this array has elements of
+type ``uint32``. We must therefore transform this array to an array
+``help`` with standard ``int32`` integers.
+
+Having the ``k`` function ready for finite element computations, we
+can proceed in the normal manner with defining essential boundary
+conditions, as in the section :ref:`tut:poisson:multiple:Dirichlet`,
+and the :math:`a(u,v)` and :math:`L(v)` forms, as in
+the section :ref:`tut:possion:2D:varcoeff`.
+All the details can be found in the file ``mat2_p2D.py``.
+
+.. _tut:poisson:mat:neumann:
+
+Multiple Neumann, Robin, and Dirichlet condition
+------------------------------------------------
+
+.. index:: Dirichlet boundary conditions
+
+.. index:: Neumann boundary conditions
+
+.. index:: Robin boundary conditions
+
+.. index:: boundary conditions
+
+Let us go back to the model problem from
+the section :ref:`tut:poisson:multiple:Dirichlet`
+where we had both Dirichlet and Neumann conditions.
+The term ``v*g*ds`` in the expression for ``L`` implies a
+boundary integral over the complete boundary, or in FEniCS terms,
+an integral over all exterior facets.
+However, the contributions from the parts of the boundary where we have
+Dirichlet conditions are erased when the linear system is modified by
+the Dirichlet conditions.
+We would like, from an efficiency point of view, to integrate ``v*g*ds``
+only over the parts of the boundary where we actually have Neumann conditions.
+And more importantly,
+in other problems one may have different Neumann conditions or
+other conditions like the Robin type condition.
+With the mesh function concept we can mark
+different parts of the boundary and integrate over specific parts.
+The same concept can also be used to treat multiple Dirichlet conditions.
+The forthcoming text illustrates how this is done.
+
+Essentially, we still stick to the model problem from
+the section :ref:`tut:poisson:multiple:Dirichlet`, but replace the
+Neumann condition at :math:`y=0` by a *Robin condition*:
+
+.. math::
+        
+        -{\partial u\over\partial n} = p(u-q),
+        
+
+where :math:`p` and :math:`q` are specified functions.
+The Robin condition is
+most often used to model heat transfer to the surroundings and arise
+naturally from Newton's cooling law.
+
+Since we have prescribed a simple solution in our model problem,
+:math:`u=1+x^2+2y^2`, we adjust :math:`p` and :math:`q` such that the condition holds
+at :math:`y=0`. This implies that :math:`q=1+x^2+2y^2` and :math:`p` can be arbitrary
+(the normal derivative at :math:`y=0`: :math:`\partial u/\partial n = -\partial u/\partial y = -4y=0`).
+
+Now we have four parts of the boundary: :math:`\Gamma_N` which corresponds to
+the upper side :math:`y=1`, :math:`\Gamma_R` which corresponds to the lower part
+:math:`y=0`, :math:`\Gamma_0` which corresponds to the left part :math:`x=0`, and
+:math:`\Gamma_1` which corresponds to the right part :math:`x=1`. The
+complete boundary-value problem reads
+
+.. _Eq:tut:poisson:2D:DN3:
+
+.. math::
+
+    \tag{92}
+    - \nabla^2 u = -6 \mbox{ in } \Omega, 
+        
+
+.. _Eq:tut:poisson:2D:DN3:bc1:
+
+.. math::
+
+    \tag{93}
+    u = u_L \mbox{ on } \Gamma_0, 
+        
+
+.. _Eq:tut:poisson:2D:DN3:bc2:
+
+.. math::
+
+    \tag{94}
+    u = u_R \mbox{ on } \Gamma_1, 
+        
+
+.. _Eq:tut:poisson:2D:DN3:bc3:
+
+.. math::
+
+    \tag{95}
+    - {\partial u\over\partial n} = p(u-q) \mbox{ on } \Gamma_R,
+        
+        
+
+.. _Eq:tut:poisson:2D:DN3:bc4:
+
+.. math::
+
+    \tag{96}
+    - {\partial u\over\partial n} = g \mbox{ on } \Gamma_N{\thinspace .}
+        
+        
+
+The involved prescribed functions are :math:`u_L= 1 + 2y^2`,
+:math:`u_R = 2 + 2y^2`, :math:`q=1+x^2+2y^2`, :math:`p` is arbitrary, and :math:`g=-4y`.
+
+Integration by parts of :math:`-\int_\Omega v\nabla^2 u {\, \mathrm{d}x}` becomes
+as usual
+
+.. math::
+        
+         -\int_\Omega v\nabla^2 u {\, \mathrm{d}x}
+        = \int_\Omega\nabla u\cdot \nabla v {\, \mathrm{d}x} - \int_{\partial\Omega}{\partial u\over
+        \partial n}v {\, \mathrm{d}s}{\thinspace .}
+        
+
+The boundary integral vanishes on :math:`\Gamma_0\cup\Gamma_1`, and
+we split the parts over :math:`\Gamma_N` and :math:`\Gamma_R` since we have
+different conditions at those parts:
+
+.. math::
+        
+        - \int_{\partial\Omega}v{\partial u\over\partial n} {\, \mathrm{d}s}
+        =
+        -\int_{\Gamma_N}v{\partial u\over\partial n} {\, \mathrm{d}s} -
+        \int_{\Gamma_R}v{\partial u\over\partial n} {\, \mathrm{d}s}
+        = \int_{\Gamma_N}vg {\, \mathrm{d}s} +
+        \int_{\Gamma_R}vp(u-q) {\, \mathrm{d}s}{\thinspace .}
+        
+
+The weak form then becomes
+
+.. math::
+        
+        \int_{\Omega} \nabla u\cdot \nabla v {\, \mathrm{d}x} +
+        \int_{\Gamma_N} gv {\, \mathrm{d}s} + \int_{\Gamma_R}p(u-q)v {\, \mathrm{d}s}
+        = \int_{\Omega} fv {\, \mathrm{d}x},
+        
+
+We want to write this weak form in the standard
+notation :math:`a(u,v)=L(v)`, which
+requires that we identify all integrals with *both* :math:`u` and :math:`v`,
+and collect these in :math:`a(u,v)`, while the remaining integrals with
+:math:`v` and not :math:`u` go
+into :math:`L(v)`.
+The integral from the Robin condition must of this reason be split in two
+parts:
+
+.. math::
+         \int_{\Gamma_R}p(u-q)v {\, \mathrm{d}s}
+        = \int_{\Gamma_R}puv {\, \mathrm{d}s} - \int_{\Gamma_R}pqv {\, \mathrm{d}s}{\thinspace .}
+        
+
+We then have
+
+.. _Eq:tut:poisson:2D:DN3:var:a:
+
+.. math::
+
+    \tag{97}
+    a(u, v) = \int_{\Omega} \nabla u\cdot \nabla v {\, \mathrm{d}x}
+        + \int_{\Gamma_R}puv {\, \mathrm{d}s},
+        
+        
+
+.. _Eq:tut:poisson:2D:DN3:var:L:
+
+.. math::
+
+    \tag{98}
+    L(v) = \int_{\Omega} fv {\, \mathrm{d}x} -
+        \int_{\Gamma_N} g v {\, \mathrm{d}s} + \int_{\Gamma_R}pqv {\, \mathrm{d}s}{\thinspace .}
+        
+        
+
+.. index:: dnr_p2D.py
+
+A natural starting point for implementation is the ``dn2_p2D.py``
+program in the directory ``stationary/poisson``. The new aspects are
+
+ 1. definition of a mesh function over the boundary,
+
+ 2. marking each side as a subdomain, using the mesh function,
+
+ 3. splitting a boundary integral into parts.
+
+Task 1 makes use of the ``MeshFunction`` object, but contrary to
+the section :ref:`tut:possion:2D:2mat:impl`, this is not a function over
+cells, but a function over cell facets. The topological dimension of
+cell facets is one lower than the cell interiors, so in a two-dimensional
+problem the dimension
+becomes 1. In general, the facet dimension
+is given as ``mesh.topology().dim()-1``,
+which we use in the code for ease of direct reuse in other problems.
+The construction of a ``MeshFunction`` object to mark boundary parts
+now reads
+
+.. code-block:: python
+
+        boundary_parts = \ 
+          MeshFunction('size_t', mesh, mesh.topology().dim()-1)
+
+As in the section :ref:`tut:possion:2D:2mat:impl` we
+use a subclass of ``SubDomain`` to identify the various parts
+of the mesh function. Problems with domains of more complicated geometries may
+set the mesh function for marking boundaries as part of the mesh
+generation.
+In our case, the :math:`y=0` boundary can be marked by
+
+.. code-block:: python
+
+        class LowerRobinBoundary(SubDomain):
+            def inside(self, x, on_boundary):
+                tol = 1E-14   # tolerance for coordinate comparisons
+                return on_boundary and abs(x[1]) < tol
+        
+        Gamma_R = LowerRobinBoundary()
+        Gamma_R.mark(boundary_parts, 0)
+
+The code for the :math:`y=1` boundary is similar and is seen in
+``dnr_p2D.py``.
+
+The Dirichlet boundaries are marked similarly, using subdomain number 2 for :math:`\Gamma_0` and 3 for :math:`\Gamma_1`:
+
+.. code-block:: python
+
+        class LeftBoundary(SubDomain):
+            def inside(self, x, on_boundary):
+                tol = 1E-14   # tolerance for coordinate comparisons
+                return on_boundary and abs(x[0]) < tol
+        
+        Gamma_0 = LeftBoundary()
+        Gamma_0.mark(boundary_parts, 2)
+        
+        class RightBoundary(SubDomain):
+            def inside(self, x, on_boundary):
+                tol = 1E-14   # tolerance for coordinate comparisons
+                return on_boundary and abs(x[0] - 1) < tol
+        
+        Gamma_1 = RightBoundary()
+        Gamma_1.mark(boundary_parts, 3)
+
+Specifying the ``DirichletBC`` objects may now make use of
+the mesh function (instead of a ``SubDomain`` subclass object)
+and an indicator for which subdomain each condition
+should be applied to:
+
+.. code-block:: python
+
+        u_L = Expression('1 + 2*x[1]*x[1]')
+        u_R = Expression('2 + 2*x[1]*x[1]')
+        bcs = [DirichletBC(V, u_L, boundary_parts, 2),
+               DirichletBC(V, u_R, boundary_parts, 3)]
+
+Some functions need to be defined before we can go on with the
+``a`` and ``L`` of the variational problem:
+
+.. code-block:: python
+
+        g = Expression('-4*x[1]')
+        q = Expression('1 + x[0]*x[0] + 2*x[1]*x[1]')
+        p = Constant(100)  # arbitrary function can go here
+        u = TrialFunction(V)
+        v = TestFunction(V)
+        f = Constant(-6.0)
+
+The new aspect of the variational problem is the two distinct
+boundary integrals.
+Having a mesh function over exterior cell facets (our
+``boundary_parts`` object), where subdomains (boundary parts) are
+numbered as :math:`0,1,2,\ldots`, the special symbol ``ds(0)``
+implies integration over subdomain (part) 0, ``ds(1)`` denotes
+integration over subdomain (part) 1, and so on.
+The idea of multiple ``ds``-type objects generalizes to volume
+integrals too: ``dx(0)``, ``dx(1)``, etc., are used to
+integrate over subdomain 0, 1, etc.,  inside :math:`\Omega`.
+
+The variational problem can be defined as
+
+.. code-block:: python
+
+        a = inner(nabla_grad(u), nabla_grad(v))*dx + p*u*v*ds(0)
+        L = f*v*dx - g*v*ds(1) + p*q*v*ds(0)
+
+For the ``ds(0)`` and ``ds(1)`` symbols to work we must obviously
+connect them (or ``a`` and ``L``) to the mesh function marking
+parts of the boundary. This is done by a certain keyword argument
+to the ``assemble`` function:
 
 
 .. warning::
-    The linear algebra backends in FEniCS have recently changed. This
-    section is not yet up-to-date.
+    The old code looked like
+    
+    .. code-block:: python
+    
+            A = assemble(a, exterior_facet_domains=boundary_parts)
+            b = assemble(L, exterior_facet_domains=boundary_parts)
+    
+    but the ``exterior_facet_domain`` argument is no longer legal.
+    The text must be updated! The associated code gives wrong results.
 
 
 
-
-.. index:: down-casting matrices and vectors
-
-.. index:: PETSc
-
-The linear algebra backend determines the specific data structures
-that are used in the ``Matrix`` and ``Vector`` classes. For example, with
-the PETSc backend, ``Matrix`` encapsulates a PETSc matrix storage
-structure, and ``Vector`` encapsulates a PETSc vector storage structure.
-Sometimes one wants to perform operations directly on (say) the
-underlying PETSc objects. These can be fetched by
 
 .. code-block:: python
 
-        A_PETSc =
-        down_cast(A).mat() b_PETSc = down_cast(b).vec() U_PETSc =
-        down_cast(u.vector()).vec()
+        A = assemble(a)
+        b = assemble(L)
 
-Here, ``u`` is a ``Function``, ``A`` is a
-``Matrix``, and ``b`` is a ``Vector``.  The same syntax applies if we want
-to fetch the underlying Epetra, uBLAS, or MTL4 matrices and vectors.
-
-.. ../../../la/trilinos/python/demo.py
-
-.. index:: Trilinos
-
-.. index:: Epetra
-
-Sometimes one wants to implement tailored solution algorithms, using
-special features of the underlying numerical packages.
-Here is an example where we create an ML preconditioned Conjugate
-Gradient solver by programming with Trilinos-specific objects directly.
-Given a linear system
-:math:`AU=b`, represented by a ``Matrix`` object ``A``,
-and two ``Vector`` objects ``U`` and ``b`` in a
-Python program, the purpose is to
-set up a solver using the Aztec Conjugate Gradient method from
-Trilinos' Aztec library and combine that solver with the
-algebraic multigrid preconditioner ML
-from the ML library in Trilinos. Since the various parts of
-Trilinos are mirrored in Python through the PyTrilinos package,
-we can operate directly
-on Trilinos-specific objects.
+Then essential boundary conditions are enforced, and the system can
+be solved in the usual way:
 
 .. code-block:: python
 
-        try:
-            from PyTrilinos import Epetra, AztecOO, TriUtils, ML
-        except:
-            print('''You Need to have PyTrilinos with
-        Epetra, AztecOO, TriUtils and ML installed
-        for this demo to run''')
-            exit()
-        
-        from dolfin import *
-        
-        if not has_la_backend('Epetra'):
-            print('Warning: Dolfin is not compiled with Trilinos')
-            exit()
-        
-        parameters['linear_algebra_backend'] = 'Epetra'
-        
-        # create matrix A and vector b in the usual way
-        # u is a Function
-        
-        # Fetch underlying Epetra objects
-        A_epetra = down_cast(A).mat()
-        b_epetra = down_cast(b).vec()
-        U_epetra = down_cast(u.vector()).vec()
-        
-        # Sets up the parameters for ML using a python dictionary
-        ML_param = {"max levels"        : 3,
-                    "output"            : 10,
-                    "smoother: type"    : "ML symmetric Gauss-Seidel",
-                    "aggregation: type" : "Uncoupled",
-                    "ML validate parameter list" : False
-        }
-        
-        # Create the preconditioner
-        prec = ML.MultiLevelPreconditioner(A_epetra, False)
-        prec.SetParameterList(ML_param)
-        prec.ComputePreconditioner()
-        
-        # Create solver and solve system
-        solver = AztecOO.AztecOO(A_epetra, U_epetra, b_epetra)
-        solver.SetPrecOperator(prec)
-        solver.SetAztecOption(AztecOO.AZ_solver, AztecOO.AZ_cg)
-        solver.SetAztecOption(AztecOO.AZ_output, 16)
-        solver.Iterate(MaxIters=1550, Tolerance=1e-5)
-        
-        plot(u)
+        for bc in bcs:
+            bc.apply(A, b)
+        u = Function(V)
+        U = u.vector()
+        solve(A, U, b)
 
-.. _tut:app:install:
-
-Installing FEniCS
------------------
-
-.. index:: installing FEniCS
-
-The FEniCS software components are available for Linux, Windows and Mac OS
-X platforms. Detailed information on how to get FEniCS running on such
-machines are available at the ``fenicsproject.org`` website.
-Here are just some quick descriptions and recommendations by the author.
-
-To make the installation of FEniCS as painless and reliable as
-possible, I strongly recommend to use Ubuntu Linux.  (Even though Mac
-users now can get FEniCS by a one-click install, I recommend using
-Ubuntu on Mac, unless you have significant experience with compiling
-and linking C++ libraries on Mac OS X.)  Any standard PC can easily be
-equipped with Ubuntu Linux, which may live side by side with either
-Windows or Mac OS X or another Linux installation.
-
-On Windows you can use the tool `Wubi <http://www.ubuntu.com/download/desktop/windows-installer>`__ to
-automatically install Ubuntu in a dual boot fashion.  A very popular
-alternative is to run Ubuntu in a separate window in your existing
-operation system, using a *virtual machine*.  There are several
-virtual machine solutions to chose among, e.g., the free `VirtualBoxMesh <https://www.virtualbox.org/>`__ or the commercial tool `VMWare Fusion <http://www.vmware.com/products/fusion/>`__. VirtualBoxMesh works well for
-many, but there might be hardware integration problems on Mac, so the
-superior VMWare Fusion tool is often worth the investment.  The author
-has a description of `how to install Ubuntu in a VMWare Fusion virtual
-machine <http://hplgit.github.io/teamods/ubuntu/vmware/index.html>`__.
-
-Once Ubuntu
-is up and running, FEniCS is painlessly installed by
-
-.. code-block:: text
-
-        sudo apt-get install fenics
-
-Sometimes the FEniCS software in a standard Ubuntu installation
-lacks some recent features and bug fixes. Go to
-`fenicsproject.org <http://fenicsproject.org>`__, click on *Download*
-and then the Ubuntu logo, move down to *Ubuntu PPA* and copy a few Unix
-commands to install the newest version of the FEniCS software.
-
-A different type of virtual machine technology is `Vagrant <http://www.vagrantup.com/>`__, which allows you to download a big file
-with a complete Ubuntu environment and run that environment in a
-terminal window on your Mac or Windows computer. This Ubuntu machine
-is integrated with the file system on your computer. The author has
-made a Vagrant box with most of the scientific computing
-software you need for programming
-with FEniCS, see a preliminary `guide <http://hplgit.github.io/INF5620/doc/web/vagrant_inf5620.html>`__
-for download, installation, and usage.
-
-The FEniCS installation also features a set of demo programs.
-These are stored in locations depending on the type of operating system.
-For Ubuntu the programs are stored in ``/usr/share/dolfin/demo``.
-
-The graphical user interface (GUI) of Ubuntu is quite similar to both
-Windows and Mac OS X, but to be efficient when doing science with
-FEniCS I recommend to run programs in a terminal window and write them
-in a text editor like Emacs or Vim. You can employ an integrated
-development environment such as Eclipse, but intensive FEniCS
-developers and users tend to find terminal windows and plain text
-editors more efficient and user friendly.
-
-.. Vagrant!
-
-.. _tut:appendix:books:
-
-Books on the finite element method
-----------------------------------
-
-There are a large number of books on the finite element method.  The
-books typically fall in either of two categories: the abstract
-mathematical version of the method and the engineering "structural
-analysis" formulation. FEniCS builds heavily on concepts in the
-abstract mathematical exposition. The author has in development
-a `book <http://tinyurl.com/opdfafk/>`__
-that explains all details of the finite element method with
-the abstract mathematical formulations that FEniCS employ.
-
-An easy-to-read book, which
-provides a good general background for using FEniCS, is Gockenbach
-[Ref04]_. The book by Donea and Huerta
-[Ref05]_ has a similar style, but aims at readers with
-interest in fluid flow problems. Hughes [Ref06]_ is also
-highly recommended, especially for those interested in solid mechanics
-and heat transfer applications.
-
-Readers with background in the engineering "structural analysis"
-version of the finite element method may find Bickford
-[Ref07]_ as an attractive bridge over to the abstract
-mathematical formulation that FEniCS builds upon.  Those who have a
-weak background in differential equations in general should consult a
-more fundamental book, and Eriksson {\em et
-al}. [Ref08]_ is a very good choice.  On the
-other hand, FEniCS users with a strong background in mathematics and
-interest in the mathematical properties of the finite element method,
-will appreciate the texts by Brenner and Scott [Ref09]_,
-Braess [Ref10]_, Ern and Guermond [Ref11]_,
-Quarteroni and Valli [Ref12]_, or Ciarlet [Ref13]_.
-
-.. _tut:appendix:pybooks:
-
-Books on Python
----------------
-
-Two very popular introductory books on Python are
-"Learning Python"  by Lutz [Ref14]_ and
-"Practical Python"  by Hetland [Ref15]_.
-More advanced and comprehensive books include
-"Programming Python" by Lutz [Ref16]_,
-and "Python Cookbook" [Ref17]_ and "Python in a Nutshell"
-[Ref18]_ by Martelli.
-The web page ``http://wiki.python.org/moin/PythonBooks``
-lists numerous additional books.
-Very few texts teach Python in a mathematical and numerical context,
-but the references [Ref19]_ [Ref20]_ [Ref21]_
-are exceptions.
-
-Acknowledgments
----------------
-
-The author is very thankful to Johan Hake, Anders Logg, Kent-Andre
-Mardal, and Kristian Valen-Sendstad for promptly answering all my
-questions about FEniCS functionality and for implementing all my
-requests.  I will in particular thank Professor Douglas Arnold for
-very valuable feedback on the text. Øystein Sørensen pointed out a lot
-of typos and contributed with many helpful comments.  Many errors and
-typos were also reported by Mauricio Angeles, Ida Drøsdal, Miroslav Kuchta,
-Hans Ekkehard Plesser, Marie Rognes, and Hans Joachim (Achim) Scroll.
-Ekkehard Ellmann as well as two anonymous reviewers
-provided a series of suggestions and improvements.
+The complete code is in the ``dnr_p2D.py`` file in the
+``stationary/poisson`` directory.
 

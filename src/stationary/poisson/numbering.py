@@ -15,6 +15,9 @@ u = interpolate(Expression('x[0]+x[1]'), V)
 u_array = u.vector().array()
 u_array
 
+# plot(u) enables toggling the mesh with numbering of vertices
+plot(u, interactive=True)
+
 # Different ways of testing for P1 elements
 assert mesh.num_vertices() == V.dim()
 assert len(coor) == len(u_array)
@@ -23,7 +26,7 @@ assert coor.shape[0] == u_array.shape[0]
 
 u_at_vertices = u.compute_vertex_values()
 for i, x in enumerate(coor):
-    print('vertex %d: u_array[%d]=%g u(%s)=%g' %
+    print('vertex %d: u_at_vertices[%d]=%g u(%s)=%g' %
           (i, i, u_at_vertices[i], x, u(x)))
 
 # The next two methods shall use the fact that while the ordering of dofs and

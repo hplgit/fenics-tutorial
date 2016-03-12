@@ -347,7 +347,7 @@ we must first perform two steps:
     specifying the mesh and type of finite elements.
 
 
-======= Simple implementation of a Poisson solver =======
+======= Implementation of a Poisson solver =======
 label{tut:poisson1:impl}
 
 idx{`${prog["d1_p2D"]}.py`}
@@ -388,12 +388,11 @@ to machine precision *at the nodes*.
 Test problems with this property will be frequently constructed
 throughout this tutorial.
 
-===== The code =====
+===== A simple code =====
 label{tut:poisson1:impl:code}
 
-A FEniCS program for solving the Poisson equation in 2D
-with the given choices
-of $u_0$, $f$, and $\Omega$ may look as follows:
+A FEniCS program for solving the Poisson equation in 2D with the given
+choices of $u_0$, $f$, and $\Omega$ may look as follows:
 
 @@@CODE ../../src/stationary/poisson/${prog['p2D_plain']}.py fromto: from dolfin import@
 
@@ -404,11 +403,11 @@ directory "`src/stationary/poisson`": "${src_url}/stationary/poisson".
 ===== Running the program =====
 label{tut:poisson1:impl:run}
 
-To run the program `${prog["d1_p2D"]}.py`, open a terminal window, move to
+To run the program `${prog["p2D_plain"]}.py`, open a terminal window, move to
 the directory containing the program and write
 
 !bc sys
-Terminal> python ${prog['d1_p2D']}.py
+Terminal> python ${prog['p2D_plain']}.py
 !ec
 A plot window pops up showing how the solution $u$ looks like as a surface.
 With the left mouse button you can tilt the figure. Click `m` to bring
@@ -496,6 +495,7 @@ idx{`FunctionSpace`}
 idx{finite element specifications}
 idx{CG finite element family}
 idx{Lagrange finite element family}
+idx{P1 element}
 
 === Defining a function space corresponding to a mesh ===
 
@@ -511,12 +511,13 @@ family of elements.  (Some FEniCS programs use `'CG'`, for Continuous
 Galerkin, as a synonym for `'Lagrange'`.)  With degree 1, we simply
 get the standard linear Lagrange element, which is a triangle with
 nodes at the three vertices.  Some finite element practitioners refer
-to this element as the ``linear triangle''.  The computed $u$ will be
-continuous and linearly varying in $x$ and $y$ over each cell in the
-mesh.  Higher-degree polynomial approximations over each cell are
-trivially obtained by increasing the third parameter in
-`FunctionSpace`. Changing the second parameter to `'DG'` creates a
-function space for discontinuous Galerkin methods.
+to this element as the ``linear triangle'' or the P1 element.  The
+computed $u$ will be continuous and linearly varying in $x$ and $y$
+over each cell in the mesh.  Higher-degree polynomial approximations
+over each cell are trivially obtained by increasing the third
+parameter in `FunctionSpace`, which will then generate P2, P3, and so
+forth, type of elements. Changing the second parameter to `'DG'`
+creates a function space for discontinuous Galerkin methods.
 
 idx{`TestFunction`} idx{`TrialFunction`}
 idx{`DirichletBC`}
@@ -694,12 +695,16 @@ same variable name for both objects. In a program, however,
 problem specification (the form `a`), while `Function` objects must be
 used for quantities that are computed (known).
 
+idx{degrees of freedom}
+
 === Examining the values of the solution ===
 
-The present test problems should produce a numerical solution that
+The present test problem should produce a numerical solution that
 equals the exact solution to machine precision. That is, there are
 no approximation errors in our test problem. We can use this property
-to ``prove'' that our implementation is correct. To this end, we need
+to ``prove'' that our implementation is correct, a necessary first step
+before we try to apply our code to more complicated problems.
+For such verification, we need
 to compare the computed `u` function to `u0`.
 
 A finite element function like $u$ is expressed as a linear combination
@@ -716,12 +721,13 @@ $U_1,\ldots,U_N$ values. The $U_1,\ldots,U_N$ values are known
 as *degrees of freedom* of $u$. For Lagrange elements (and many other
 element types) $U_k$ is simply the value of $u$ at the node
 with global number $k$.
-(The nodes and cell vertices coincide for linear Lagrange elements, while
-for higher-order elements there may be additional nodes at
-the facets and in the interior of cells.)
+The nodes and cell vertices coincide for linear Lagrange elements, while
+for higher-order elements there are additional nodes at
+the facets and maybe also in the interior of cells.
 
 Having `u` represented as a `Function` object, we can either evaluate
-`u(x)` at any point `x` in the mesh, or we can grab all the degrees of
+`u(x)` at any point `x` in the mesh (expensive operation!),
+or we can grab all the degrees of
 freedom values $U_j$ directly by
 
 !bc pycod
@@ -747,13 +753,13 @@ With `numpy` arrays we can write MATLAB-like code to analyze
 the data. Indexing is done with square brackets: `u_array[i]`,
 where the index `i` always starts at `0`. However, `i` corresponds
 to $u$ at some point in the mesh and the correspondence requires
-some care and numbering of degrees of freedom and numbering of
+knowledge of the numbering of degrees of freedom and the numbering of
 vertices in elements in the mesh, see Section ref{tut:poisson1:verify1}
 for details.
 
 For now, we want to check that the values in `u_array` are correct:
 they should equal our `u0` function. The most natural approach is
-to interpolate our `u0` expression in our space
+to interpolate our `u0` expression onto our space
 (i.e., the finite element mesh),
 
 !bc pycod
@@ -826,31 +832,24 @@ visual investigations of finite element solutions will normally
 benefit from using highly professional tools such as ParaView and
 VisIt.
 
-The next three sections deal with some technicalities about specifying
-the solution method for linear systems (so that you can solve large
-problems) and examining array data from the computed solution (so that
-you can check that the program is correct).  These technicalities are
-scattered around in forthcoming programs. However, the impatient
-reader who is more interested in seeing the previous program being
-adapted to a real physical problem, and play around with some
-interesting visualizations, can safely jump to Section
-ref{tut:poisson:membrane}.  Information in the intermediate sections
-can be studied on demand.
 
 ===== Refactored implementation =====
 label{tut:poisson1:impl2}
 
 Our initial program above is ``flat''. That is, it is not organized into
-logical, reusable units in terms of functions. Such flat programs are
+logical, reusable units in terms of Python functions. Such flat programs are
 popular for quickly testing out some software, but not well suited for
 serious problem solving. We shall therefore at once *refactor* the program,
-meaning that we divide into functions. The aim is to make functions as
-reusable as possible in other context, but sometimes we also encapuslate
-code that is special for a special problem in a separate function.
-Distinguishing reusanble code from specialized code is a key issue
-when refactoring code. Note that we are not going to add new computations
-or new statements, we are just going to reorganize the statements we
-already have.
+meaning that we divide it into functions, but this is just a
+reordering of the existing statements. During refactoring, we try
+make functions as reusable as possible in other contexts, but
+statements specific to a certain problem or task are also encapsulated
+in (non-reusable) functions.
+Being able to distinguish reusable code from specialized code is a key issue
+when refactoring code, and this ability depends on a good mathematical
+understanding of the problem at hand (``what is general, what is special?'').
+In a flat program, general and specialized code (and mathematics)
+is often mixed together.
 
 === A general solver function ===
 
@@ -858,16 +857,19 @@ Some of the code in the previous flat program are needed to solve any
 Poisson problem $-\nabla^2 u=f$ on $[0,1]\times [0,1]$ with $u=u_0$ on
 the boundary. Let us collect this code in a reusable function
 `solver`.  Our special test problem will then just be an application
-of `solver`.  We parameterize `solver` by $f$, $u_0$, and the
+of `solver` with some additional statements.
+We limit the `solver` function to just *compute the numerical
+solution*. Plotting and comparing the solution with the exact solution
+are considered to be problem-specific activities to be performed elsewhere.
+
+We parameterize `solver` by $f$, $u_0$, and the
 resolution of the mesh. Since it is so trivial to use higher-order
 finite element functions by changing the third argument to
 `FunctionSpace`, we let also the degree of the polynomials in the
 finite element basis functions be an argument to `solver`.
+[hpl: The refactoring extends functionality. Should we be strict and keep linear elements? The test is better when it tests the degree parameter as well...]
 
 @@@CODE ../../src/stationary/poisson/${prog['p2D_func']}.py fromto: from dolfin import@def test_solver
-Note that we limit the `solver` function to just *compute the numerical
-solution*. Plotting and comparing the solution with the exact solution
-are considered to be problem-specific activities to be performed elsewhere.
 
 === Plotting for the test problem ===
 
@@ -877,6 +879,9 @@ test problem is placed in an
 `application_test` function:
 
 @@@CODE ../../src/stationary/poisson/${prog['p2D_func']}.py fromto: def application_test@if __name
+
+=== Make a module! ===
+
 The refactored code is put in a file "`${prog['p2D_func']}.py`":
 "${src_url}/stationary/poisson/${prog['p2D_func']}.py". We should make
 sure that such a file can be imported (and hence reused) in other programs.
@@ -884,7 +889,7 @@ Then all statements in the main program should appear with a test
 `if __name__ == '__main__':`. This test is true if the file is executed
 as a program, but false if the file is imported.
 If we want to run this file in the same way as we can
-run "`${prog['p2D_func']}.py`", the main program is simply a call to
+run `${prog['p2D_func']}.py`, the main program is simply a call to
 `application_test()` followed by a call `interactive()` to hold the plot:
 
 @@@CODE ../../src/stationary/poisson/${prog['p2D_func']}.py fromto: if __name@
@@ -902,7 +907,7 @@ can run all our tests automatically and check that all tests pass.
 Python has several tools for unit testing. Two very popular ones are
 pytest and nose. These are almost identical and very easy to use.
 More classical unit testing with test classes is offered by the built-in
-tool `unittest`, but here we are going to use `py.test` since it demands
+tool `unittest`, but here we are going to use pytest (or nose) since it demands
 shorter and clearer code.
 
 Mathematically, our unit test is that the finite element solution of
@@ -912,13 +917,13 @@ numerical solution. Because of rounding errors, we cannot demand this
 maximum error to be zero, but we have to use a tolerance, which depends
 to the number of elements and the degrees of the polynomials in the finite
 element basis functions. In Section ref{tut:poisson1:impl:dissect} we
-reported some experiments with the size of `max_error`. If we want
+reported some experiments with the size of the maximum error. If we want
 to test that `solver` works for meshes up to $2(20\times 20)$ elements
 and cubic Lagrange elements, $10^{-11}$ is
 an appropriate tolerance for testing that the maximum error vanishes.
 
 Only three statements are necessary to carry out the unit test. However,
-we shall embed the test in software that the testing frameworks
+we shall embed these statements in software that the testing frameworks
 pytest and nose can recognize. This means that each unit test
 must be placed in a function that
 
@@ -931,11 +936,12 @@ if the test fails, and in that case the string `msg` is written to the
 screen. When the test fails, `assert` raises an `AssertionError` exception
 in Python, otherwise the statement runs silently. The `msg` string is
 optional, so `assert success` is the minimal test. In our case, we
-will do `assert max_error < tol`, where `tol` is the tolerance (10^{-11})
+will do `assert max_error < tol`, where `tol` is the tolerance ($10^{-11}$)
 mentioned above.
 
 A proper *test function* for implementing this unit test in the pytest
-or nose testing frameworks is then
+or nose testing frameworks has the following form. Note that we perform
+the test for different mesh resolutions and degrees of finite elements.
 
 @@@CODE ../../src/stationary/poisson/${prog['p2D_func']}.py fromto: def test_solver@def application_test
 We can at any time run
@@ -943,13 +949,14 @@ We can at any time run
 !bc sys
 Terminal> py.test -s -v ${prog['p2D_func']}.py
 !ec
-and the pytest will run all functions `test_*()` in the file and report
+and the pytest tool will run all functions `test_*()` in the file and report
 how the tests go.
 
 We shall make it a habit in this book to encapsulate numerical test
 problems in unit tests as done above, and we strongly encourage the
 reader to create similar unit tests whenever a FEniCS solver is
-implemented.
+implemented. We dare to assert that this is the only serious way
+do reliable computational science with FEniCS.
 
 !bnotice Tip: Print messages in test functions
 The `assert` statement runs silently when the test passes so users may
@@ -961,6 +968,120 @@ test really takes place.
 from the test functions.)
 !enotice
 
+The next three sections deal with some technicalities about specifying
+the solution method for linear systems (so that you can solve large
+problems) and examining array data from the computed solution (so that
+you can check that the program is correct).  These technicalities are
+scattered around in forthcoming programs. However, the impatient
+reader who is more interested in seeing the previous program being
+adapted to a real physical problem, and play around with some
+interesting visualizations, can safely jump to Section
+ref{tut:poisson:membrane}.  Information in the intermediate sections
+can be studied on demand.
+
+===== Exercise: Solve a Poisson problem =====
+
+Solve the following problem
+
+!bt
+\begin{align}
+\nabla^2 u &= 2e^{-2x}\sin(\pi y)((4-5\pi^2)\sin(2\pi x) - 8\pi\cos(2\pi x)),
+\quad\hbox{ in }\Omega = [0,1]\times [0,1]\\
+u &= 0\quad\hbox{ on }\partial\Omega
+\end{align}
+!et
+The exact solution is given by
+
+!bt
+\[ \uex = 2e^{-2x}\sin(\pi x)\sin(\pi y)\tp\]
+!et
+Compute the maximum numerical approximation error in a mesh with
+$2(N_x\times N_y)$ elements and in a mesh with double resolution:
+$4(N_x\times N_y)$ elements. Show that the doubling the resolution
+reduces the error by a factor 4 when using Lagrange elements of degree one.
+(This is a good verification that the implementation is correct, but
+note that the result requires sufficiently fine mesh - here
+one may start with $N_x=N_y=20$.)
+Make an illustrative plot of the solution too.
+
+!bsubex
+file=p2D_fsin_plain
+
+Base your implementation on editing the program
+`${prog["p2D_plain"]}.py`.
+
+!bhint
+In the string for an `Expression` object, `DOLFIN_PI` is the value of
+$\pi$. Also note that $\pi^2$ must be expressed with syntax
+`pow(DOLFIN_PI,2)` and not (the common Python syntax) `DOLFIN_PI**2`.
+
+FEniCS will abort with a compilation error if you type the expressions
+in a wrong way syntax-wise.  Search for `error:` in the
+`/very/long/path/compile.log` file mentioned in the error message to
+see what the C++ compiler reported as error in the expressions.
+!ehint
+
+!bsol
+Looking at the `${prog["p2D_plain"]}.py` code, we realize that
+the following edits are required:
+
+ * Modify the `mesh` computation.
+ * Modify `u0` and `f`.
+ * Add expression for the exact solution.
+ * Modify the computation of the numerical error.
+ * Insert a loop to enable solving the problem twice.
+ * Put the error reduction computation and the plot statements after the loop.
+
+Here is the modified code:
+
+@@@CODE exer/p2D_fsin_plain.py fromto: from dolfin import@
+
+Note that instead of writing a lot of long `DOLFIN_PI` names
+in the expression for `f`, we simply write the more readable
+`PI` and do a string replacement of `PI` by the required
+`DOLFIN_PI`.
+
+FIGURE: [fig/p2D_fsin, width=500 frac=0.8]
+
+!esol
+!esubex
+
+!bsubex
+file=p2D_fsin_func
+
+Base your implementation on a new file that imports functionality
+from the module `${prog["p2D_func"]}.py`. Embed the check of the
+reduction of the numerical approximation error in a unit test.
+
+!bsol
+Solving the two problems is a matter of calling `solver` with
+different sets of arguments.
+To compute the numerical error,
+we need code that is close to what we have in `test_solver`.
+
+@@@CODE exer/p2D_fsin_func.py fromto: from p2D_func import@
+The unit test is embedded in a proper test function `test_solver`
+for the pytest or
+nose testing frameworks. Visualization of the solution is encapsulated
+in the `application` function. Since we need `u_e`, `u0`, and `f`
+in two functions, we place the definitions in a function `data` to
+avoid copies of these expressions.
+
+!esol
+!esubex
+
+!bremarks
+This exercise demonstrates that changing a flat program to solve a new
+problem requires careful editing of statements scattered around in the
+file, while
+the solution in b), based on the `solver` function, requires *no modifications*
+of the `${prog["p2D_func"]}.py` file, just
+*minimalistic additional new code* in a separate file. The Poisson solver
+remains in one place (`${prog["p2D_func"]}.py`) while in a) we got two
+Poisson solvers. If you decide to switch to an iterative solution method
+for linear systems, you can do so in one place in b), and all applications
+can take advantage of the extension.
+!eremarks
 
 ===== Controlling the solution process =====
 label{tut:poisson1:solve:prm}
@@ -972,18 +1093,19 @@ equation system, and may hence be the method of choice in many 2D and
 smaller 3D problems. However, sparse LU decomposition becomes slow and
 memory demanding in large problems.  This fact forces the use of
 iterative methods, which are faster and require much less memory.
+Consequently, we must tell you already now how you can take
+advantage of state-of-the-art iterative solution methods in FEniCS.
 
-idx{`${prog["d2_p2D"]}.py`}
+=== Setting linear solver parameters ===
 
-Preconditioned Krylov solvers is a type of popular iterative methods that are
-easily accessible in FEniCS programs. The Poisson equation results in
-a symmetric, positive definite coefficient matrix, for which the optimal
-Krylov solver is the Conjugate Gradient (CG) method. However, the
-CG method requires boundary conditions to be implemented in a
-symmetric way. This is not the case by default, so then a Krylov solver
-for non-symmetric system, such as GMRES, is a better choice.
-Incomplete
-LU factorization (ILU) is a popular and
+Preconditioned Krylov solvers is a type of popular iterative methods
+that are easily accessible in FEniCS programs. The Poisson equation
+results in a symmetric, positive definite coefficient matrix, for
+which the optimal Krylov solver is the Conjugate Gradient (CG)
+method. However, the CG method requires boundary conditions to be
+implemented in a symmetric way. This is not the case by default, so
+then a Krylov solver for non-symmetric system, such as GMRES, is a
+better choice.  Incomplete LU factorization (ILU) is a popular and
 robust all-round preconditioner, so let us try the GMRES-ILU pair:
 
 !bc pycod
@@ -1000,6 +1122,8 @@ Krylov solvers and preconditioners available in FEniCS.
 
 idx{linear algebra backend}
 idx{PETSc} idx{Trilinos} idx{MTL4} idx{uBLAS}
+
+=== Linear algebra backend ===
 
 The actual GMRES and ILU implementations that are brought into action
 depends on the choice of linear algebra package. FEniCS interfaces
@@ -1034,6 +1158,8 @@ list_linear_algebra_backends()
 idx{`parameters` database}
 idx{`info` function}
 
+=== The `parameters` database ===
+
 We will normally like to control the tolerance in the stopping
 criterion and the maximum number of iterations when running an
 iterative method.  Such parameters can be set by accessing the *global
@@ -1041,7 +1167,7 @@ parameter database*, which is called `parameters` and which behaves as
 a nested dictionary. Write
 
 !bc pycod
-info(parameters, True)
+info(parameters, verbose=True)
 !ec
 to list all parameters and their default values in the database.
 The nesting of parameter sets is indicated through indentation in the
@@ -1050,7 +1176,7 @@ According to this output, the relevant parameter set is
 named `'krylov_solver'`, and the parameters are set like this:
 
 !bc pycod
-prm = parameters['krylov_solver'] # short form
+prm = parameters['krylov_solver']  # short form
 prm['absolute_tolerance'] = 1E-10
 prm['relative_tolerance'] = 1E-6
 prm['maximum_iterations'] = 1000
@@ -1073,25 +1199,6 @@ iterations arises from specifying the argument `PROGRESS`, while
 `DEBUG` results in more information, including CPU time spent in
 the various parts of the matrix assembly and solve process.
 
-The complete solution process with control of the solver parameters
-now contains the statements
-
-!bc pycod
-prm = parameters['krylov_solver'] # short form
-prm['absolute_tolerance'] = 1E-10
-prm['relative_tolerance'] = 1E-6
-prm['maximum_iterations'] = 1000
-set_log_level(PROGRESS)
-
-solve(a == L, u, bc,
-      solver_parameters={'linear_solver': 'gmres',
-                         'preconditioner': 'ilu'})
-!ec
-The demo program `${prog["d2_p2D"]}.py` in the `stationary/poisson` directory
-incorporates the above shown control of the linear solver and
-preconditioner, but is otherwise similar to the previous `${prog["d1_p2D"]}.py`
-program.
-
 We remark that default values for the global parameter database can be
 defined in an XML file. To generate such a file from the current set
 of parameters in a program, run
@@ -1099,12 +1206,12 @@ of parameters in a program, run
 !bc pycod
 File('dolfin_parameters.xml') << parameters
 !ec
-If a `dolfin_parameters.xml` file is
-found in the directory where a FEniCS program is run, this file is
-read and used to initialize the `parameters` object. Otherwise,
-the file `.config/fenics/dolfin_parameters.xml` in the user's home
-directory is read, if it exists.  Another alternative is to load
-the XML (with any name) manually in the program:
+If a `dolfin_parameters.xml` file is found in the directory where a
+FEniCS program is run, this file is read and used to initialize the
+`parameters` object. Otherwise, the file
+`.config/fenics/dolfin_parameters.xml` in the user's home directory is
+read, if it exists.  Another alternative is to load the XML (with any
+name) manually in the program:
 
 !bc pycod
 File('dolfin_parameters.xml') >> parameters
@@ -1112,12 +1219,49 @@ File('dolfin_parameters.xml') >> parameters
 The XML file can also be in gzip'ed form with the extension `.xml.gz`.
 
 
+idx{`${prog["p2D_iter"]}.py`}
+
+=== An extended solver function ===
+
+Let us extend the previous solver function from
+`${prog["p2D_func"]}.py` such that it also offers the GMRES+ILU
+preconditioned Krylov solver.
+
+@@@CODE ../../src/stationary/poisson/${prog['p2D_iter']}.py fromto: from dolfin import@def test_solver
+This new `solver` function, found in the file
+`${prog["p2D_iter"]}.py`, replaces the one in `${prog["p2D_func"]}.py`:
+it has all the funcitonality of the previous `solver` function,
+but can also solve the linear system with
+iterative methods and report the progress of such solvers.
+
+=== Remark regarding unit tests ===
+
+Regarding verification of the new `solver` function in terms of unit
+tests, it turns out that unit testing in a problem where the
+approximation error vansihes is gets more complicated when we use
+iterative methods. The problem is to keep the error due to iterative
+solution smaller than the tolerance used in the verification
+tests. First of all this means that the tolerances used in the Krylov
+solvers must be smaller than the tolerance used in the `assert` test,
+but this is no guarantee to keep the linear solver error this small.
+For linear elements and small meshes, a tolerance of $10^{-11}$ works
+well in the case of Krylov solvers too (using a tolerance $10^{-12}$
+in those solvers. However, as soon as we switch to P2 elements, it is
+hard to force the linear solver error below $10^{-6}$. Consequently,
+tolerances in tests depend on the numerical methods. The interested
+reader is referred to the `test_solver` function in
+`${prog["p2D_iter"]}.py` for details: this test function tests the
+numerical solution for direct and iterative linear solvers, for
+different meshes, and different degrees of the polynomials in the
+finite element basis functions.
+
+
 ===== Linear variational problem and solver objects =====
 label{tut:poisson1:solver:problem}
 idx{LinearVariationalProblem}
 idx{LinearVariationalSolver}
 
-idx{`${prog["d3_p2D"]}.py`}
+idx{`${prog["p2D_iter"]}.py`}
 
 The `solve(a == L, u, bc)` call is just a compact syntax alternative to a
 slightly more comprehensive specification of the variational equation
@@ -1140,44 +1284,40 @@ method and specifying solver-specific parameters can be done
 like this:
 
 !bc pycod
-solver.parameters['linear_solver'] = 'cg'
+solver.parameters['linear_solver'] = 'gmres'
 solver.parameters['preconditioner'] = 'ilu'
-cg_prm = solver.parameters['krylov_solver'] # short form
-cg_prm['absolute_tolerance'] = 1E-7
-cg_prm['relative_tolerance'] = 1E-4
-cg_prm['maximum_iterations'] = 1000
+prm = solver.parameters['krylov_solver'] # short form
+prm['absolute_tolerance'] = 1E-7
+prm['relative_tolerance'] = 1E-4
+prm['maximum_iterations'] = 1000
 !ec
-Calling `info(solver.parameters, True)` lists all the available
-parameter sets with default values for each parameter.
 Settings in the global `parameters` database are
 propagated to parameter sets in individual objects, with the
 possibility of being overwritten as done above.
 
-The `${prog["d3_p2D"]}.py` program modifies the `${prog["d2_p2D"]}.py` file
-to incorporate objects for the variational problem and solver.
+The linear variational problem and solver objects as outlined above
+are incorporated in an alternative solver function, named
+`solver_objects`, in
+`${prog["p2D_iter"]}.py`. Otherwise, this function is parallel to the
+previously shown `solver` function.
 
 
-===== Examining the discrete solution =====
+===== Writing out the discrete solution =====
 label{tut:poisson1:verify1}
 
-idx{`${prog["d4_p2D"]}.py`}
+We have seen how to grab the degrees of freedom array from a
+finite element function `u`:
 
-We know that, in the particular boundary-value problem of Section
-ref{tut:poisson1:impl}, the computed solution $u$ should equal the
-exact solution at the vertices of the cells.  An important extension
-of our first program is therefore to examine the computed values of
-the solution, which is the focus of the present section.
-
-idx{degree of freedom}
-
-We know that we can extract the degrees of freedom of a finite
-element solution `u` by `u.vector().array()`.
-Now, a fundamental question is: What are the coordinates of
-node `i` whose value is is `u_array[i]`? To answer this question,
-we need to understand how to get our hands on the coordinates, and
-in particular, the numbering of degrees of freedom and the
-numbering of vertices in the mesh. We start with P1
-(1st order Lagrange) where all the nodes are vertices in the mesh.
+!bc pycod
+u_array = `u.vector().array()
+!ec
+The elements in `u_array` correspond to function values of `u` at nodes
+in the mesh.  Now, a fundamental question is: What are the
+coordinates of node `i` whose value is `u_array[i]`? To answer this
+question, we need to understand how to get our hands on the
+coordinates, and in particular, the numbering of degrees of freedom
+and the numbering of vertices in the mesh. We start with P1 (1st order
+Lagrange) elements where all the nodes are vertices in the mesh.
 
 The function `mesh.coordinates()` returns the coordinates of the
 vertices as a `numpy` array with shape $(M,d$), $M$ being the number
@@ -1205,8 +1345,9 @@ with increasing $x$ coordinate, then along $y=0.5$, and so on.
 Next we compute a function `u` on this mesh, e.g., the $u=x+y$:
 
 !bc pyshell
->>> V = FunctionSpace(mesh, 'CG', 1)
+>>> V = FunctionSpace(mesh, 'Lagrange', 1)
 >>> u = interpolate(Expression('x[0]+x[1]'), V)
+>>> plot(u, interactive=True)
 >>> u_array = u.vector().array()
 >>> u_array
 array([ 1. ,  0.5,  1.5,  0. ,  1. ,  2. ,  0.5,  1.5,  1. ])
@@ -1216,7 +1357,20 @@ since this vertex has coordinates $x=y=0$. The numbering of the
 degrees of freedom $U_1,\ldots,U_{N}$ is obviously not the same as the
 numbering of the vertices.
 
+In the plot of `u`, type `w` to turn on wireframe instead of fully colored
+surface, `m` to show the mesh, and then `v` to show the
+numbering of the vertices.
+
+<linebreak>
+<linebreak>
+
+FIGURE: [fig/vertex_numbering, width=500 frac=0.8]
+
+<linebreak>
+<linebreak>
+
 idx{compute vertex values}
+idx{vertex values}
 
 The vertex values of a `Function` object can be extracted by
 `u.compute_vertex_values()`, which returns an array where element `i`
@@ -1225,17 +1379,17 @@ is the value of `u` at vertex `i`:
 !bc pyshell
 >>> u_at_vertices = u.compute_vertex_values()
 >>> for i, x in enumerate(coor):
-...     print('vertex %d: u_array[%d]=%g u(%s)=%g' %
+...     print('vertex %d: u_at_vertices[%d]=%g u(%s)=%g' %
 ...           (i, i, u_at_vertices[i], x, u(x)))
-vertex 0: u_array[0]=0 u([ 0.  0.])=8.46545e-16
-vertex 1: u_array[1]=0.5 u([ 0.5  0. ])=0.5
-vertex 2: u_array[2]=1 u([ 1.  0.])=1
-vertex 3: u_array[3]=0.5 u([ 0.   0.5])=0.5
-vertex 4: u_array[4]=1 u([ 0.5  0.5])=1
-vertex 5: u_array[5]=1.5 u([ 1.   0.5])=1.5
-vertex 6: u_array[6]=1 u([ 0.  1.])=1
-vertex 7: u_array[7]=1.5 u([ 0.5  1. ])=1.5
-vertex 8: u_array[8]=2 u([ 1.  1.])=2
+vertex 0: u_at_vertices[0]=0 u([ 0.  0.])=8.46545e-16
+vertex 1: u_at_vertices[1]=0.5 u([ 0.5  0. ])=0.5
+vertex 2: u_at_vertices[2]=1 u([ 1.  0.])=1
+vertex 3: u_at_vertices[3]=0.5 u([ 0.   0.5])=0.5
+vertex 4: u_at_vertices[4]=1 u([ 0.5  0.5])=1
+vertex 5: u_at_vertices[5]=1.5 u([ 1.   0.5])=1.5
+vertex 6: u_at_vertices[6]=1 u([ 0.  1.])=1
+vertex 7: u_at_vertices[7]=1.5 u([ 0.5  1. ])=1.5
+vertex 8: u_at_vertices[8]=2 u([ 1.  1.])=2
 !ec
 
 idx{vertex to dof map}
@@ -1258,7 +1412,7 @@ coordinates in the same order as the degrees of freedom.
 
 For Lagrange elements of degree larger than 1, there are degrees of
 freedom (nodes) that do not correspond to vertices.
-[hpl: Anders, is this true?] There is no simple way of getting the
+[hpl: Anders, is the following true?] There is no simple way of getting the
 coordinates associated with the non-vertex degrees of freedom, so
 if we want to write out the values of a finite element solution,
 the following code snippet does the task at the vertices, and this
@@ -1478,7 +1632,7 @@ Now $D$ is related to $w$ through $D = AR^2w/(8\pi\sigma T)$.
 
 
 Let us list the modifications of the
-`${prog["d1_p2D"]}.py` program that are needed to solve this membrane problem:
+`${prog["p2D_func"]}.py` program that are needed to solve this membrane problem:
 
   * Initialize $T$, $A$, $R$, $x_0$, $y_0$, and $\sigma$,
   * create a mesh over the unit circle,
@@ -1650,6 +1804,19 @@ where `X` is an integer that is increase by one from the last plot
 that was made. The file stem `dolfin_plot_` can be set to something
 more suitable through the `prefix` keyword argument to `plot`,
 for instance, `plot(f, prefix='pressure')`.
+
+idx{rotate PDF plots}
+idx{`pdftk`}
+
+Plots stored in PDF format need to be rotated 90 degrees before
+inclusion in documents. This can be done by the `convert -rotate 90`
+command (from the ImageMagick utility), but the resulting file is
+then no more high-resolution PDF vector graphics. A better solution
+is therefore to use `pdftk` to preserve the vector graphics:
+
+!bc sys
+Terminal> pdftk dolfin_plot_1.pdf cat 1-endnorth output out.pdf
+!ec
 
 The `plot` function takes several other keyword arguments:
 
@@ -3060,7 +3227,7 @@ idx{dimension-independent code}
 FEniCS makes it is easy to write a unified simulation code that can
 operate in 1D, 2D, and 3D. We will conveniently make use of this
 feature in forthcoming examples.  As an appetizer, go back to the
-introductory program `${prog["d1_p2D"]}.py` in the `stationary/poisson` directory
+introductory programs `${prog["p2D_plain"]}.py` or `${prog["p2D_func"]}.py` in the `stationary/poisson` directory
 and change the mesh construction from `UnitSquareMesh(6, 4)` to
 `UnitCubeMesh(6, 4, 5)`. Now the domain is the unit cube partitioned into
 $6\times 4\times 5$|$6x4x5$ boxes, and each box is divided into six

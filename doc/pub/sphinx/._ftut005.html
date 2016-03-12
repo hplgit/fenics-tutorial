@@ -6,7 +6,7 @@
   <head>
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
     
-    <title>Handling domains with different materials</title>
+    <title>Nonlinear problems</title>
     
     <link rel="stylesheet" href="_static/fenics.css" type="text/css" />
     <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
@@ -41,9 +41,9 @@
         </style>
 
     
-    <link rel="top" title="FEniCS Tutorial" href="index.html" />
-    <link rel="next" title="More Examples" href="._ftut006.html" />
-    <link rel="prev" title="Creating more complex domains" href="._ftut004.html" />
+    <link rel="top" title="The FEniCS Tutorial" href="index.html" />
+    <link rel="next" title="Creating more complex domains" href="._ftut006.html" />
+    <link rel="prev" title="Time-dependent problems" href="._ftut004.html" />
 
 <!--[if lte IE 6]>
 <link rel="stylesheet" href="_static/ie6.css" type="text/css" media="screen" charset="utf-8" />
@@ -132,415 +132,656 @@
         <div class="bodywrapper">
           <div class="body" role="main">
             
-  <div class="section" id="handling-domains-with-different-materials">
-<h1>Handling domains with different materials<a class="headerlink" href="#handling-domains-with-different-materials" title="Permalink to this headline">¶</a></h1>
-<span class="target" id="index-0"></span><p id="index-1">Solving PDEs in domains made up of different materials is a frequently
-encountered task. In FEniCS, these kind of problems are handled by
-defining subdomains inside the domain. The subdomains may represent the
-various materials. We can thereafter define material properties through
-functions, known in FEniCS as <em>mesh functions</em>,
-that are piecewise constant in each subdomain.
-A simple example with
-two materials (subdomains) in 2D will
-demonstrate the basic steps in the process.</p>
-<div class="section" id="working-with-two-subdomains">
-<span id="tut-possion-2d-2mat-problem"></span><h2>Working with two subdomains<a class="headerlink" href="#working-with-two-subdomains" title="Permalink to this headline">¶</a></h2>
-<div class="figure" id="id1">
-<span id="tut-possion-2d-2mat-fig1"></span><a class="reference internal image-reference" href="_images/layered_medium_2.png"><img alt="_images/layered_medium_2.png" src="_images/layered_medium_2.png" style="width: 400px;" /></a>
-<p class="caption"><span class="caption-text"><em>Medium with discontinuous material properties</em></span></p>
-</div>
-<p>Suppose we want to solve</p>
-<div class="math" id="eq-tut-poisson-2d-2mat-varcoeff2">
-\[\tag{88}
-\nabla\cdot \left\lbrack k(x,y)\nabla u(x,y)\right\rbrack = 0,\]</div>
-<p>in a domain <span class="math">\(\Omega\)</span> consisting of two subdomains where <span class="math">\(k\)</span> takes on
-a different value in each subdomain.
-For simplicity, yet without loss of generality, we choose for the current
-implementation
-the domain <span class="math">\(\Omega = [0,1]\times [0,1]\)</span> and divide it into two equal
-subdomains,
-as depicted in Figure <a class="reference internal" href="#tut-possion-2d-2mat-fig1"><span class="std std-ref">Medium with discontinuous material properties</span></a>,</p>
+  <div class="section" id="nonlinear-problems">
+<span id="tut-poisson-nonlinear"></span><h1>Nonlinear problems<a class="headerlink" href="#nonlinear-problems" title="Permalink to this headline">¶</a></h1>
+<p>Now we shall address how to solve nonlinear PDEs in FEniCS. Our
+sample PDE for implementation is taken as a nonlinear Poisson equation:</p>
+<div class="math" id="eq-auto26">
+\[\tag{62}
+-\nabla\cdot\left( q(u)\nabla u\right) = f{\thinspace .}\]</div>
+<p>The coefficient <span class="math">\(q(u)\)</span> makes the equation nonlinear (unless <span class="math">\(q(u)\)</span>
+is constant in <span class="math">\(u\)</span>).</p>
+<p>To be able to easily verify our implementation,
+we choose the domain, <span class="math">\(q(u)\)</span>, <span class="math">\(f\)</span>, and the boundary
+conditions such that we have
+a simple, exact solution <span class="math">\(u\)</span>. Let
+<span class="math">\(\Omega\)</span> be the unit hypercube <span class="math">\([0, 1]^d\)</span>
+in <span class="math">\(d\)</span> dimensions, <span class="math">\(q(u)=(1+u)^m\)</span>, <span class="math">\(f=0\)</span>, <span class="math">\(u=0\)</span> for <span class="math">\(x_0=0\)</span>, <span class="math">\(u=1\)</span>
+for <span class="math">\(x_0=1\)</span>, and <span class="math">\(\partial u/\partial n=0\)</span> at all other boundaries
+<span class="math">\(x_i=0\)</span> and <span class="math">\(x_i=1\)</span>, <span class="math">\(i=1,\ldots,d-1\)</span>. The coordinates are now represented by
+the symbols <span class="math">\(x_0,\ldots,x_{d-1}\)</span>. The exact solution is then</p>
+<div class="math" id="eq-auto27">
+\[\tag{63}
+u(x_0,\ldots,x_{d-1}) = \left((2^{m+1}-1)x_0 + 1\right)^{1/(m+1)} - 1{\thinspace .}\]</div>
+<p>We refer to the section <a class="reference internal" href="._ftut003.html#tut-poisson-nd"><span class="std std-ref">Parameterizing the number of space dimensions</span></a> for details on formulating a PDE
+problem in <span class="math">\(d\)</span> space dimensions.</p>
+<p>The variational formulation of our model problem reads:
+Find <span class="math">\(u \in V\)</span> such that</p>
+<div class="math" id="eq-tut-poisson-nonlinear1">
+\[\tag{64}
+F(u; v) = 0 \quad \forall v \in \hat{V},\]</div>
+<p>where</p>
+<div class="math" id="eq-tut-poisson-nonlinear2">
+\[\tag{65}
+F(u; v) = \int_\Omega q(u)\nabla u\cdot \nabla v {\, \mathrm{d}x},\]</div>
+<p>and</p>
 <div class="math">
-\[\Omega_0 = [0, 1]\times [0,1/2],\quad
-\Omega_1 = [0, 1]\times (1/2,1]{\thinspace .}\]</div>
-<p>We define <span class="math">\(k(x,y)=k_0\)</span> in <span class="math">\(\Omega_0\)</span> and <span class="math">\(k(x,y)=k_1\)</span> in <span class="math">\(\Omega_1\)</span>,
-where <span class="math">\(k_0&gt;0\)</span> and <span class="math">\(k_1&gt;0\)</span> are given constants.
-As boundary conditions, we choose <span class="math">\(u=0\)</span> at <span class="math">\(y=0\)</span>, <span class="math">\(u=1\)</span> at <span class="math">\(y=1\)</span>,
-and <span class="math">\(\partial u/\partial n=0\)</span> at <span class="math">\(x=0\)</span> and <span class="math">\(x=1\)</span>.
-One can show that the exact solution is now given by</p>
-<div class="math" id="eq-auto40">
-\[\begin{split}\tag{89}
-u(x, y) = \left\lbrace\begin{array}{ll}
-    {2yk_1\over k_0+k_1}, &amp; y \leq 1/2\\
-    {(2y-1)k_0 + k_1\over k_0+k_1}, &amp; y \geq 1/2
-    \end{array}\right.\end{split}\]</div>
-<p>As long as the element boundaries coincide with the internal boundary
-<span class="math">\(y=1/2\)</span>, this piecewise linear solution should be exactly recovered
-by Lagrange elements of any degree. We use this property to verify
-the implementation.</p>
-<p>Physically, the present problem may correspond to heat conduction, where
-the heat conduction in <span class="math">\(\Omega_1\)</span> is ten times more efficient than
-in <span class="math">\(\Omega_0\)</span>. An alternative interpretation is flow in porous media
-with two geological layers, where the layers&#8217; ability to transport
-the fluid differs by a factor of 10.</p>
-</div>
-<div class="section" id="implementation-3">
-<span id="tut-possion-2d-2mat-impl"></span><h2>Implementation<a class="headerlink" href="#implementation-3" title="Permalink to this headline">¶</a></h2>
-<span class="target" id="index-2"></span><p id="index-3">The new functionality in this subsection regards how to define the
-subdomains <span class="math">\(\Omega_0\)</span> and <span class="math">\(\Omega_1\)</span>. For this purpose we need to use
-subclasses of class <code class="docutils literal"><span class="pre">SubDomain</span></code>, not only plain functions as we have
-used so far for specifying boundaries. Consider the boundary function</p>
-<div class="highlight-python"><div class="highlight"><pre><span class="k">def</span> <span class="nf">boundary</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">on_boundary</span><span class="p">):</span>
-    <span class="n">tol</span> <span class="o">=</span> <span class="mf">1E-14</span>
-    <span class="k">return</span> <span class="n">on_boundary</span> <span class="ow">and</span> <span class="nb">abs</span><span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span> <span class="o">&lt;</span> <span class="n">tol</span>
-</pre></div>
-</div>
-<p>for defining the boundary <span class="math">\(x=0\)</span>. Instead of using such a stand-alone
-function, we can create an instance (or object)
-of a subclass of <code class="docutils literal"><span class="pre">SubDomain</span></code>,
-which implements the <code class="docutils literal"><span class="pre">inside</span></code> method as an alternative to the
-<code class="docutils literal"><span class="pre">boundary</span></code> function:</p>
-<div class="highlight-python"><div class="highlight"><pre><span class="k">class</span> <span class="nc">Boundary</span><span class="p">(</span><span class="n">SubDomain</span><span class="p">):</span>
-    <span class="k">def</span> <span class="nf">inside</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">on_boundary</span><span class="p">):</span>
-        <span class="n">tol</span> <span class="o">=</span> <span class="mf">1E-14</span>
-        <span class="k">return</span> <span class="n">on_boundary</span> <span class="ow">and</span> <span class="nb">abs</span><span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span> <span class="o">&lt;</span> <span class="n">tol</span>
-
-<span class="n">boundary</span> <span class="o">=</span> <span class="n">Boundary</span><span class="p">()</span>
-<span class="n">bc</span> <span class="o">=</span> <span class="n">DirichletBC</span><span class="p">(</span><span class="n">V</span><span class="p">,</span> <span class="n">Constant</span><span class="p">(</span><span class="mi">0</span><span class="p">),</span> <span class="n">boundary</span><span class="p">)</span>
-</pre></div>
-</div>
-<p>A word about computer science terminology may be used here:
-The term <em>instance</em>
-means a Python object of a particular type (such as <code class="docutils literal"><span class="pre">SubDomain</span></code>,
-<code class="docutils literal"><span class="pre">Function</span></code>
-<code class="docutils literal"><span class="pre">FunctionSpace</span></code>, etc.).
-Many use <em>instance</em> and <em>object</em>
-as interchangeable terms. In other computer programming languages one may
-also use the term <em>variable</em> for the same thing.
-We mostly use the well-known  term <em>object</em> in this text.</p>
-<p>A subclass of <code class="docutils literal"><span class="pre">SubDomain</span></code> with an <code class="docutils literal"><span class="pre">inside</span></code> method offers
-functionality for marking parts of the domain or
-the boundary. Now we need to define one class for the
-subdomain <span class="math">\(\Omega_0\)</span>
-where <span class="math">\(y\leq 1/2\)</span> and another for the subdomain <span class="math">\(\Omega_1\)</span> where <span class="math">\(y\geq 1/2\)</span>:</p>
-<div class="highlight-python"><div class="highlight"><pre><span class="k">class</span> <span class="nc">Omega0</span><span class="p">(</span><span class="n">SubDomain</span><span class="p">):</span>
-    <span class="k">def</span> <span class="nf">inside</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">on_boundary</span><span class="p">):</span>
-        <span class="k">return</span> <span class="bp">True</span> <span class="k">if</span> <span class="n">x</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">&lt;=</span> <span class="mf">0.5</span> <span class="k">else</span> <span class="bp">False</span>
-
-<span class="k">class</span> <span class="nc">Omega1</span><span class="p">(</span><span class="n">SubDomain</span><span class="p">):</span>
-    <span class="k">def</span> <span class="nf">inside</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">on_boundary</span><span class="p">):</span>
-        <span class="k">return</span> <span class="bp">True</span> <span class="k">if</span> <span class="n">x</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">&gt;=</span> <span class="mf">0.5</span> <span class="k">else</span> <span class="bp">False</span>
-</pre></div>
-</div>
-<p>Notice the use of <code class="docutils literal"><span class="pre">&lt;=</span></code> and <code class="docutils literal"><span class="pre">&gt;=</span></code> in both tests. For a cell to
-belong to, e.g., <span class="math">\(\Omega_1\)</span>, the <code class="docutils literal"><span class="pre">inside</span></code> method must return
-<code class="docutils literal"><span class="pre">True</span></code> for all the vertices <code class="docutils literal"><span class="pre">x</span></code> of the cell. So to make the
-cells at the internal boundary <span class="math">\(y=1/2\)</span> belong to <span class="math">\(\Omega_1\)</span>, we need
-the test <code class="docutils literal"><span class="pre">x[1]</span> <span class="pre">&gt;=</span> <span class="pre">0.5</span></code>.</p>
-<p>The next task is to use a <code class="docutils literal"><span class="pre">MeshFunction</span></code> to mark all
-cells in <span class="math">\(\Omega_0\)</span> with the subdomain number 0 and all cells in <span class="math">\(\Omega_1\)</span>
-with the subdomain number 1.
-Our convention is to number subdomains as <span class="math">\(0,1,2,\ldots\)</span>.</p>
-<p>A <code class="docutils literal"><span class="pre">MeshFunction</span></code> is a discrete function that can be evaluated at a set
-of so-called <em>mesh entities</em>. Examples of mesh entities are
-cells, facets, and vertices. A <code class="docutils literal"><span class="pre">MeshFunction</span></code> over cells is suitable to
-represent subdomains (materials), while a <code class="docutils literal"><span class="pre">MeshFunction</span></code> over
-facets is used to represent pieces of external or internal boundaries.
-Mesh functions over vertices can be used to describe continuous fields.</p>
-<p>Since we need to define subdomains of <span class="math">\(\Omega\)</span>
-in the present example, we must make use
-of a <code class="docutils literal"><span class="pre">MeshFunction</span></code> over cells. The
-<code class="docutils literal"><span class="pre">MeshFunction</span></code> constructor is fed with three arguments: 1) the type
-of value: <code class="docutils literal"><span class="pre">'int'</span></code> for integers, <code class="docutils literal"><span class="pre">'uint'</span></code> for positive
-(unsigned) integers, <code class="docutils literal"><span class="pre">'double'</span></code> for real numbers, and
-<code class="docutils literal"><span class="pre">'bool'</span></code> for logical values; 2) a <code class="docutils literal"><span class="pre">Mesh</span></code> object, and 3)
-the topological dimension of the mesh entity in question: cells
-have topological dimension equal to the number of space dimensions in
-the PDE problem, and facets have one dimension lower.
-Alternatively, the constructor can take just a filename
-and initialize the <code class="docutils literal"><span class="pre">MeshFunction</span></code> from data in a file.</p>
-<p>We start with creating a <code class="docutils literal"><span class="pre">MeshFunction</span></code> whose
-values are non-negative integers (<code class="docutils literal"><span class="pre">'uint'</span></code>)
-for numbering the subdomains.
-The mesh entities of interest are the cells, which have dimension 2
-in a two-dimensional problem (1 in 1D, 3 in 3D). The appropriate code for
-defining the <code class="docutils literal"><span class="pre">MeshFunction</span></code> for two subdomains then reads</p>
-<div class="highlight-python"><div class="highlight"><pre><span class="n">subdomains</span> <span class="o">=</span> <span class="n">MeshFunction</span><span class="p">(</span><span class="s">&#39;uint&#39;</span><span class="p">,</span> <span class="n">mesh</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>
-<span class="c"># Mark subdomains with numbers 0 and 1</span>
-<span class="n">subdomain0</span> <span class="o">=</span> <span class="n">Omega0</span><span class="p">()</span>
-<span class="n">subdomain0</span><span class="o">.</span><span class="n">mark</span><span class="p">(</span><span class="n">subdomains</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
-<span class="n">subdomain1</span> <span class="o">=</span> <span class="n">Omega1</span><span class="p">()</span>
-<span class="n">subdomain1</span><span class="o">.</span><span class="n">mark</span><span class="p">(</span><span class="n">subdomains</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
-</pre></div>
-</div>
-<p>Calling <code class="docutils literal"><span class="pre">subdomains.array()</span></code> returns a <code class="docutils literal"><span class="pre">numpy</span></code> array of the
-subdomain values. That is, <code class="docutils literal"><span class="pre">subdomain.array()[i]</span></code> is
-the subdomain value of cell number <code class="docutils literal"><span class="pre">i</span></code>. This array is used to
-look up the subdomain or material number of a specific element.</p>
-<p>We need a function <code class="docutils literal"><span class="pre">k</span></code> that is constant in
-each subdomain <span class="math">\(\Omega_0\)</span> and <span class="math">\(\Omega_1\)</span>. Since we want <code class="docutils literal"><span class="pre">k</span></code>
-to be a finite element function, it is natural to choose
-a space of functions that are constant over each element.
-The family of discontinuous Galerkin methods, in FEniCS
-denoted by <code class="docutils literal"><span class="pre">'DG'</span></code>, is suitable for this purpose. Since we
-want functions that are piecewise constant, the value of
-the degree parameter is zero:</p>
-<div class="highlight-python"><div class="highlight"><pre><span class="n">V0</span> <span class="o">=</span> <span class="n">FunctionSpace</span><span class="p">(</span><span class="n">mesh</span><span class="p">,</span> <span class="s">&#39;DG&#39;</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
-<span class="n">k</span>  <span class="o">=</span> <span class="n">Function</span><span class="p">(</span><span class="n">V0</span><span class="p">)</span>
-</pre></div>
-</div>
-<p>To fill <code class="docutils literal"><span class="pre">k</span></code> with the right values in each element, we loop over
-all cells (i.e., indices in <code class="docutils literal"><span class="pre">subdomain.array()</span></code>),
-extract the corresponding subdomain number of a cell,
-and assign the corresponding <span class="math">\(k\)</span> value to the <code class="docutils literal"><span class="pre">k.vector()</span></code> array:</p>
-<div class="highlight-python"><div class="highlight"><pre><span class="n">k_values</span> <span class="o">=</span> <span class="p">[</span><span class="mf">1.5</span><span class="p">,</span> <span class="mi">50</span><span class="p">]</span>  <span class="c"># values of k in the two subdomains</span>
-<span class="k">for</span> <span class="n">cell_no</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">subdomains</span><span class="o">.</span><span class="n">array</span><span class="p">())):</span>
-    <span class="n">subdomain_no</span> <span class="o">=</span> <span class="n">subdomains</span><span class="o">.</span><span class="n">array</span><span class="p">()[</span><span class="n">cell_no</span><span class="p">]</span>
-    <span class="n">k</span><span class="o">.</span><span class="n">vector</span><span class="p">()[</span><span class="n">cell_no</span><span class="p">]</span> <span class="o">=</span> <span class="n">k_values</span><span class="p">[</span><span class="n">subdomain_no</span><span class="p">]</span>
-</pre></div>
-</div>
-<p>Long loops in Python are known to be slow, so for large meshes
-it is preferable to avoid such loops and instead use <em>vectorized code</em>.
-Normally this implies that the loop must be replaced by
-calls to functions from the <code class="docutils literal"><span class="pre">numpy</span></code> library that operate on complete
-arrays (in efficient C code). The functionality we want in the present
-case is to compute an array of the same size as
-<code class="docutils literal"><span class="pre">subdomain.array()</span></code>, but where the value <code class="docutils literal"><span class="pre">i</span></code> of an entry
-in <code class="docutils literal"><span class="pre">subdomain.array()</span></code> is replaced by <code class="docutils literal"><span class="pre">k_values[i]</span></code>.
-Such an operation is carried out by the <code class="docutils literal"><span class="pre">numpy</span></code> function <code class="docutils literal"><span class="pre">choose</span></code>:</p>
-<div class="highlight-python"><div class="highlight"><pre><span class="n">help</span> <span class="o">=</span> <span class="n">numpy</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">subdomains</span><span class="o">.</span><span class="n">array</span><span class="p">(),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">numpy</span><span class="o">.</span><span class="n">int32</span><span class="p">)</span>
-<span class="n">k</span><span class="o">.</span><span class="n">vector</span><span class="p">()[:]</span> <span class="o">=</span> <span class="n">numpy</span><span class="o">.</span><span class="n">choose</span><span class="p">(</span><span class="n">help</span><span class="p">,</span> <span class="n">k_values</span><span class="p">)</span>
-</pre></div>
-</div>
-<p>The <code class="docutils literal"><span class="pre">help</span></code> array is required since <code class="docutils literal"><span class="pre">choose</span></code> cannot work with
-<code class="docutils literal"><span class="pre">subdomain.array()</span></code> because this array has elements of
-type <code class="docutils literal"><span class="pre">uint32</span></code>. We must therefore transform this array to an array
-<code class="docutils literal"><span class="pre">help</span></code> with standard <code class="docutils literal"><span class="pre">int32</span></code> integers.</p>
-<p>Having the <code class="docutils literal"><span class="pre">k</span></code> function ready for finite element computations, we
-can proceed in the normal manner with defining essential boundary
-conditions, as in the section <a class="reference internal" href="._ftut001.html#tut-poisson-multiple-dirichlet"><span class="std std-ref">Multiple Dirichlet conditions</span></a>,
-and the <span class="math">\(a(u,v)\)</span> and <span class="math">\(L(v)\)</span> forms, as in
-the section <a class="reference internal" href="._ftut001.html#tut-possion-2d-varcoeff"><span class="std std-ref">A variable-coefficient poisson problem</span></a>.
-All the details can be found in the file <code class="docutils literal"><span class="pre">mat2_p2D.py</span></code>.</p>
-</div>
-<div class="section" id="multiple-neumann-robin-and-dirichlet-condition">
-<span id="tut-poisson-mat-neumann"></span><h2>Multiple Neumann, Robin, and Dirichlet condition<a class="headerlink" href="#multiple-neumann-robin-and-dirichlet-condition" title="Permalink to this headline">¶</a></h2>
-<span class="target" id="index-4"></span><span class="target" id="index-5"></span><span class="target" id="index-6"></span><p id="index-7">Let us go back to the model problem from
-the section <a class="reference internal" href="._ftut001.html#tut-poisson-multiple-dirichlet"><span class="std std-ref">Multiple Dirichlet conditions</span></a>
-where we had both Dirichlet and Neumann conditions.
-The term <code class="docutils literal"><span class="pre">v*g*ds</span></code> in the expression for <code class="docutils literal"><span class="pre">L</span></code> implies a
-boundary integral over the complete boundary, or in FEniCS terms,
-an integral over all exterior facets.
-However, the contributions from the parts of the boundary where we have
-Dirichlet conditions are erased when the linear system is modified by
-the Dirichlet conditions.
-We would like, from an efficiency point of view, to integrate <code class="docutils literal"><span class="pre">v*g*ds</span></code>
-only over the parts of the boundary where we actually have Neumann conditions.
-And more importantly,
-in other problems one may have different Neumann conditions or
-other conditions like the Robin type condition.
-With the mesh function concept we can mark
-different parts of the boundary and integrate over specific parts.
-The same concept can also be used to treat multiple Dirichlet conditions.
-The forthcoming text illustrates how this is done.</p>
-<p>Essentially, we still stick to the model problem from
-the section <a class="reference internal" href="._ftut001.html#tut-poisson-multiple-dirichlet"><span class="std std-ref">Multiple Dirichlet conditions</span></a>, but replace the
-Neumann condition at <span class="math">\(y=0\)</span> by a <em>Robin condition</em>:</p>
-<div class="math">
-\[-{\partial u\over\partial n} = p(u-q),\]</div>
-<p>where <span class="math">\(p\)</span> and <span class="math">\(q\)</span> are specified functions.
-The Robin condition is
-most often used to model heat transfer to the surroundings and arise
-naturally from Newton&#8217;s cooling law.</p>
-<p>Since we have prescribed a simple solution in our model problem,
-<span class="math">\(u=1+x^2+2y^2\)</span>, we adjust <span class="math">\(p\)</span> and <span class="math">\(q\)</span> such that the condition holds
-at <span class="math">\(y=0\)</span>. This implies that <span class="math">\(q=1+x^2+2y^2\)</span> and <span class="math">\(p\)</span> can be arbitrary
-(the normal derivative at <span class="math">\(y=0\)</span>: <span class="math">\(\partial u/\partial n = -\partial u/\partial y = -4y=0\)</span>).</p>
-<p>Now we have four parts of the boundary: <span class="math">\(\Gamma_N\)</span> which corresponds to
-the upper side <span class="math">\(y=1\)</span>, <span class="math">\(\Gamma_R\)</span> which corresponds to the lower part
-<span class="math">\(y=0\)</span>, <span class="math">\(\Gamma_0\)</span> which corresponds to the left part <span class="math">\(x=0\)</span>, and
-<span class="math">\(\Gamma_1\)</span> which corresponds to the right part <span class="math">\(x=1\)</span>. The
-complete boundary-value problem reads</p>
-<div class="math" id="eq-tut-poisson-2d-dn3">
-\[\tag{90}
-- \nabla^2 u = -6 \mbox{ in } \Omega,\]</div>
-<div class="math" id="eq-tut-poisson-2d-dn3-bc1">
-\[\tag{91}
-u = u_L \mbox{ on } \Gamma_0,\]</div>
-<div class="math" id="eq-tut-poisson-2d-dn3-bc2">
-\[\tag{92}
-u = u_R \mbox{ on } \Gamma_1,\]</div>
-<div class="math" id="eq-tut-poisson-2d-dn3-bc3">
-\[\tag{93}
-- {\partial u\over\partial n} = p(u-q) \mbox{ on } \Gamma_R,\]</div>
-<div class="math" id="eq-tut-poisson-2d-dn3-bc4">
-\[\tag{94}
-- {\partial u\over\partial n} = g \mbox{ on } \Gamma_N{\thinspace .}\]</div>
-<p>The involved prescribed functions are <span class="math">\(u_L= 1 + 2y^2\)</span>,
-<span class="math">\(u_R = 2 + 2y^2\)</span>, <span class="math">\(q=1+x^2+2y^2\)</span>, <span class="math">\(p\)</span> is arbitrary, and <span class="math">\(g=-4y\)</span>.</p>
-<p>Integration by parts of <span class="math">\(-\int_\Omega v\nabla^2 u {\, \mathrm{d}x}\)</span> becomes
-as usual</p>
-<div class="math">
-\[ -\int_\Omega v\nabla^2 u {\, \mathrm{d}x}
-= \int_\Omega\nabla u\cdot \nabla v {\, \mathrm{d}x} - \int_{\partial\Omega}{\partial u\over
-\partial n}v {\, \mathrm{d}s}{\thinspace .}\]</div>
-<p>The boundary integral vanishes on <span class="math">\(\Gamma_0\cup\Gamma_1\)</span>, and
-we split the parts over <span class="math">\(\Gamma_N\)</span> and <span class="math">\(\Gamma_R\)</span> since we have
-different conditions at those parts:</p>
-<div class="math">
-\[- \int_{\partial\Omega}v{\partial u\over\partial n} {\, \mathrm{d}s}
-=
--\int_{\Gamma_N}v{\partial u\over\partial n} {\, \mathrm{d}s} -
-\int_{\Gamma_R}v{\partial u\over\partial n} {\, \mathrm{d}s}
-= \int_{\Gamma_N}vg {\, \mathrm{d}s} +
-\int_{\Gamma_R}vp(u-q) {\, \mathrm{d}s}{\thinspace .}\]</div>
-<p>The weak form then becomes</p>
-<div class="math">
-\[\int_{\Omega} \nabla u\cdot \nabla v {\, \mathrm{d}x} +
-\int_{\Gamma_N} gv {\, \mathrm{d}s} + \int_{\Gamma_R}p(u-q)v {\, \mathrm{d}s}
-= \int_{\Omega} fv {\, \mathrm{d}x},\]</div>
-<p>We want to write this weak form in the standard
-notation <span class="math">\(a(u,v)=L(v)\)</span>, which
-requires that we identify all integrals with <em>both</em> <span class="math">\(u\)</span> and <span class="math">\(v\)</span>,
-and collect these in <span class="math">\(a(u,v)\)</span>, while the remaining integrals with
-<span class="math">\(v\)</span> and not <span class="math">\(u\)</span> go
-into <span class="math">\(L(v)\)</span>.
-The integral from the Robin condition must of this reason be split in two
-parts:</p>
-<div class="math">
-\[\int_{\Gamma_R}p(u-q)v {\, \mathrm{d}s}
-= \int_{\Gamma_R}puv {\, \mathrm{d}s} - \int_{\Gamma_R}pqv {\, \mathrm{d}s}{\thinspace .}\]</div>
-<p>We then have</p>
-<div class="math" id="eq-tut-poisson-2d-dn3-var-a">
-\[\tag{95}
-a(u, v) = \int_{\Omega} \nabla u\cdot \nabla v {\, \mathrm{d}x}
-    + \int_{\Gamma_R}puv {\, \mathrm{d}s},\]</div>
-<div class="math" id="eq-tut-poisson-2d-dn3-var-l">
-\[\tag{96}
-L(v) = \int_{\Omega} fv {\, \mathrm{d}x} -
-    \int_{\Gamma_N} g v {\, \mathrm{d}s} + \int_{\Gamma_R}pqv {\, \mathrm{d}s}{\thinspace .}\]</div>
-<p id="index-8">A natural starting point for implementation is the <code class="docutils literal"><span class="pre">dn2_p2D.py</span></code>
-program in the directory <code class="docutils literal"><span class="pre">stationary/poisson</span></code>. The new aspects are</p>
+\[\begin{split}\hat{V} &amp;= \{v \in H^1(\Omega) : v = 0 \mbox{ on } x_0=0\mbox{ and }x_0=1\}, \\
+ V      &amp;= \{v \in H^1(\Omega) : v = 0 \mbox{ on } x_0=0\mbox{ and } v = 1\mbox{ on }x_0=1\}{\thinspace .}\end{split}\]</div>
+<p>The discrete problem arises as usual by restricting <span class="math">\(V\)</span> and <span class="math">\(\hat V\)</span> to a
+pair of discrete spaces. As usual, we omit any subscript on discrete
+spaces and simply say <span class="math">\(V\)</span> and <span class="math">\(\hat V\)</span> are chosen finite dimensional
+according to some mesh with some element type.
+Similarly, we let <span class="math">\(u\)</span> be the discrete solution and use <span class="math">\({u_{\small\mbox{e}}}\)</span> for
+the exact solution if it becomes necessary to distinguish between the two.</p>
+<p>The discrete nonlinear problem is then written as: find <span class="math">\(u\in V\)</span> such that</p>
+<div class="math" id="eq-tut-poisson-nonlinear-d">
+\[\tag{66}
+F(u; v) = 0 \quad \forall v \in \hat{V},\]</div>
+<p>with <span class="math">\(u = \sum_{j=1}^N U_j \phi_j\)</span>. Since <span class="math">\(F\)</span> is a nonlinear function
+of <span class="math">\(u\)</span>, the variational statement gives rise to a system of
+nonlinear algebraic equations.</p>
+<p>FEniCS can be used in alternative ways for solving a nonlinear PDE
+problem. We shall in the following subsections go through four
+solution strategies:</p>
 <blockquote>
 <div><ol class="arabic simple">
-<li>definition of a mesh function over the boundary,</li>
-<li>marking each side as a subdomain, using the mesh function,</li>
-<li>splitting a boundary integral into parts.</li>
+<li>a simple Picard-type iteration,</li>
+<li>a Newton method at the algebraic level,</li>
+<li>a Newton method at the PDE level, and</li>
+<li>an automatic approach where FEniCS attacks the nonlinear variational
+problem directly.</li>
 </ol>
 </div></blockquote>
-<p>Task 1 makes use of the <code class="docutils literal"><span class="pre">MeshFunction</span></code> object, but contrary to
-the section <a class="reference internal" href="#tut-possion-2d-2mat-impl"><span class="std std-ref">Implementation</span></a>, this is not a function over
-cells, but a function over cell facets. The topological dimension of
-cell facets is one lower than the cell interiors, so in a two-dimensional
-problem the dimension
-becomes 1. In general, the facet dimension
-is given as <code class="docutils literal"><span class="pre">mesh.topology().dim()-1</span></code>,
-which we use in the code for ease of direct reuse in other problems.
-The construction of a <code class="docutils literal"><span class="pre">MeshFunction</span></code> object to mark boundary parts
-now reads</p>
-<div class="highlight-python"><div class="highlight"><pre><span class="n">boundary_parts</span> <span class="o">=</span> \
-  <span class="n">MeshFunction</span><span class="p">(</span><span class="s">&#39;size_t&#39;</span><span class="p">,</span> <span class="n">mesh</span><span class="p">,</span> <span class="n">mesh</span><span class="o">.</span><span class="n">topology</span><span class="p">()</span><span class="o">.</span><span class="n">dim</span><span class="p">()</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span>
-</pre></div>
-</div>
-<p>As in the section <a class="reference internal" href="#tut-possion-2d-2mat-impl"><span class="std std-ref">Implementation</span></a> we
-use a subclass of <code class="docutils literal"><span class="pre">SubDomain</span></code> to identify the various parts
-of the mesh function. Problems with domains of more complicated geometries may
-set the mesh function for marking boundaries as part of the mesh
-generation.
-In our case, the <span class="math">\(y=0\)</span> boundary can be marked by</p>
-<div class="highlight-python"><div class="highlight"><pre><span class="k">class</span> <span class="nc">LowerRobinBoundary</span><span class="p">(</span><span class="n">SubDomain</span><span class="p">):</span>
-    <span class="k">def</span> <span class="nf">inside</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">on_boundary</span><span class="p">):</span>
-        <span class="n">tol</span> <span class="o">=</span> <span class="mf">1E-14</span>   <span class="c"># tolerance for coordinate comparisons</span>
-        <span class="k">return</span> <span class="n">on_boundary</span> <span class="ow">and</span> <span class="nb">abs</span><span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span> <span class="o">&lt;</span> <span class="n">tol</span>
+<p>The &#8220;black box&#8221; strategy 4 is definitely the simplest one from a
+programmer&#8217;s point of view, but the others give more manual control of
+the solution process for nonlinear equations (which also has some
+pedagogical advantages, especially for newcomers to nonlinear finite
+element problems).</p>
+<div class="section" id="picard-iteration">
+<span id="tut-nonlinear-picard"></span><h2>Picard iteration<a class="headerlink" href="#picard-iteration" title="Permalink to this headline">¶</a></h2>
+<span class="target" id="index-0"></span><p id="index-1">Picard iteration is an easy way of handling nonlinear PDEs: we simply
+use a known, previous solution in the nonlinear terms so that these
+terms become linear in the unknown <span class="math">\(u\)</span>. The strategy is also known as
+the method of successive substitutions.
+For our particular problem,
+we use a known, previous solution in the coefficient <span class="math">\(q(u)\)</span>.
+More precisely, given a solution <span class="math">\(u^k\)</span> from iteration <span class="math">\(k\)</span>, we seek a
+new (hopefully improved) solution <span class="math">\(u^{k+1}\)</span> in iteration <span class="math">\(k+1\)</span> such
+that <span class="math">\(u^{k+1}\)</span> solves the <em>linear problem</em>,</p>
+<div class="math" id="eq-tut-poisson-nonlinear-picard1">
+\[\tag{67}
+\nabla\cdot \left(q(u^k)\nabla u^{k+1}\right) = 0,\quad k=0,1,\ldots\]</div>
+<p>The iterations require an initial guess <span class="math">\(u^0\)</span>.
+The hope is that <span class="math">\(u^{k} \rightarrow u\)</span> as <span class="math">\(k\rightarrow\infty\)</span>, and that
+<span class="math">\(u^{k+1}\)</span> is sufficiently close to the exact
+solution <span class="math">\(u\)</span> of the discrete problem after just a few iterations.</p>
+<p>We can easily formulate a variational problem for <span class="math">\(u^{k+1}\)</span> from
+<a class="reference internal" href="#eq-tut-poisson-nonlinear-picard1"><span class="std std-ref">(67)</span></a>.
+Equivalently, we can approximate <span class="math">\(q(u)\)</span> by <span class="math">\(q(u^k)\)</span> in
+<a class="reference internal" href="#eq-tut-poisson-nonlinear2"><span class="std std-ref">(65)</span></a>
+to obtain the same linear variational problem.
+In both cases, the problem consists of seeking
+<span class="math">\(u^{k+1} \in V\)</span> such that</p>
+<div class="math" id="eq-tut-poisson-nonlinear-picard2">
+\[\tag{68}
+\tilde F(u^{k+1}; v) = 0 \quad \forall v \in \hat{V},\quad k=0,1,\ldots,\]</div>
+<p>with</p>
+<div class="math" id="eq-tut-poisson-nonlinear-picard3">
+\[\tag{69}
+\tilde F(u^{k+1}; v) = \int_\Omega q(u^k)\nabla u^{k+1}\cdot \nabla v {\, \mathrm{d}x}
+    {\thinspace .}\]</div>
+<p>Since this is a linear problem in the unknown <span class="math">\(u^{k+1}\)</span>, we can equivalently
+use the formulation</p>
+<div class="math" id="eq-auto28">
+\[\tag{70}
+a(u^{k+1},v) = L(v),\]</div>
+<p>with</p>
+<div class="math" id="eq-auto29">
+\[\tag{71}
+a(u,v) = \int_\Omega q(u^k)\nabla u\cdot \nabla v {\, \mathrm{d}x}\]</div>
+<div class="math" id="eq-auto30">
+\[\tag{72}
+L(v) = 0{\thinspace .}\]</div>
+<p>The iterations can be stopped when
+<span class="math">\(\epsilon\equiv ||u^{k+1}-u^k|| &lt; \mbox{tol}\)</span>,
+where <span class="math">\(\mbox{tol}\)</span> is a small tolerance, say <span class="math">\(10^{-5}\)</span>, or
+when the number of iterations exceed some critical limit. The latter
+case will pick up divergence of the method or unacceptable slow
+convergence.</p>
+<p id="index-2">In the solution algorithm we only need to store <span class="math">\(u^k\)</span> and <span class="math">\(u^{k+1}\)</span>,
+called <code class="docutils literal"><span class="pre">u_k</span></code> and <code class="docutils literal"><span class="pre">u</span></code> in the code below.
+The algorithm can then be expressed as follows:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="k">def</span> <span class="nf">q</span><span class="p">(</span><span class="n">u</span><span class="p">):</span>
+    <span class="k">return</span> <span class="p">(</span><span class="mi">1</span><span class="o">+</span><span class="n">u</span><span class="p">)</span><span class="o">**</span><span class="n">m</span>
 
-<span class="n">Gamma_R</span> <span class="o">=</span> <span class="n">LowerRobinBoundary</span><span class="p">()</span>
-<span class="n">Gamma_R</span><span class="o">.</span><span class="n">mark</span><span class="p">(</span><span class="n">boundary_parts</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
-</pre></div>
-</div>
-<p>The code for the <span class="math">\(y=1\)</span> boundary is similar and is seen in
-<code class="docutils literal"><span class="pre">dnr_p2D.py</span></code>.</p>
-<p>The Dirichlet boundaries are marked similarly, using subdomain number 2 for <span class="math">\(\Gamma_0\)</span> and 3 for <span class="math">\(\Gamma_1\)</span>:</p>
-<div class="highlight-python"><div class="highlight"><pre><span class="k">class</span> <span class="nc">LeftBoundary</span><span class="p">(</span><span class="n">SubDomain</span><span class="p">):</span>
-    <span class="k">def</span> <span class="nf">inside</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">on_boundary</span><span class="p">):</span>
-        <span class="n">tol</span> <span class="o">=</span> <span class="mf">1E-14</span>   <span class="c"># tolerance for coordinate comparisons</span>
-        <span class="k">return</span> <span class="n">on_boundary</span> <span class="ow">and</span> <span class="nb">abs</span><span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span> <span class="o">&lt;</span> <span class="n">tol</span>
-
-<span class="n">Gamma_0</span> <span class="o">=</span> <span class="n">LeftBoundary</span><span class="p">()</span>
-<span class="n">Gamma_0</span><span class="o">.</span><span class="n">mark</span><span class="p">(</span><span class="n">boundary_parts</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>
-
-<span class="k">class</span> <span class="nc">RightBoundary</span><span class="p">(</span><span class="n">SubDomain</span><span class="p">):</span>
-    <span class="k">def</span> <span class="nf">inside</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">on_boundary</span><span class="p">):</span>
-        <span class="n">tol</span> <span class="o">=</span> <span class="mf">1E-14</span>   <span class="c"># tolerance for coordinate comparisons</span>
-        <span class="k">return</span> <span class="n">on_boundary</span> <span class="ow">and</span> <span class="nb">abs</span><span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span> <span class="o">&lt;</span> <span class="n">tol</span>
-
-<span class="n">Gamma_1</span> <span class="o">=</span> <span class="n">RightBoundary</span><span class="p">()</span>
-<span class="n">Gamma_1</span><span class="o">.</span><span class="n">mark</span><span class="p">(</span><span class="n">boundary_parts</span><span class="p">,</span> <span class="mi">3</span><span class="p">)</span>
-</pre></div>
-</div>
-<p>Specifying the <code class="docutils literal"><span class="pre">DirichletBC</span></code> objects may now make use of
-the mesh function (instead of a <code class="docutils literal"><span class="pre">SubDomain</span></code> subclass object)
-and an indicator for which subdomain each condition
-should be applied to:</p>
-<div class="highlight-python"><div class="highlight"><pre><span class="n">u_L</span> <span class="o">=</span> <span class="n">Expression</span><span class="p">(</span><span class="s">&#39;1 + 2*x[1]*x[1]&#39;</span><span class="p">)</span>
-<span class="n">u_R</span> <span class="o">=</span> <span class="n">Expression</span><span class="p">(</span><span class="s">&#39;2 + 2*x[1]*x[1]&#39;</span><span class="p">)</span>
-<span class="n">bcs</span> <span class="o">=</span> <span class="p">[</span><span class="n">DirichletBC</span><span class="p">(</span><span class="n">V</span><span class="p">,</span> <span class="n">u_L</span><span class="p">,</span> <span class="n">boundary_parts</span><span class="p">,</span> <span class="mi">2</span><span class="p">),</span>
-       <span class="n">DirichletBC</span><span class="p">(</span><span class="n">V</span><span class="p">,</span> <span class="n">u_R</span><span class="p">,</span> <span class="n">boundary_parts</span><span class="p">,</span> <span class="mi">3</span><span class="p">)]</span>
-</pre></div>
-</div>
-<p>Some functions need to be defined before we can go on with the
-<code class="docutils literal"><span class="pre">a</span></code> and <code class="docutils literal"><span class="pre">L</span></code> of the variational problem:</p>
-<div class="highlight-python"><div class="highlight"><pre><span class="n">g</span> <span class="o">=</span> <span class="n">Expression</span><span class="p">(</span><span class="s">&#39;-4*x[1]&#39;</span><span class="p">)</span>
-<span class="n">q</span> <span class="o">=</span> <span class="n">Expression</span><span class="p">(</span><span class="s">&#39;1 + x[0]*x[0] + 2*x[1]*x[1]&#39;</span><span class="p">)</span>
-<span class="n">p</span> <span class="o">=</span> <span class="n">Constant</span><span class="p">(</span><span class="mi">100</span><span class="p">)</span>  <span class="c"># arbitrary function can go here</span>
+<span class="c"># Define variational problem for Picard iteration</span>
 <span class="n">u</span> <span class="o">=</span> <span class="n">TrialFunction</span><span class="p">(</span><span class="n">V</span><span class="p">)</span>
 <span class="n">v</span> <span class="o">=</span> <span class="n">TestFunction</span><span class="p">(</span><span class="n">V</span><span class="p">)</span>
-<span class="n">f</span> <span class="o">=</span> <span class="n">Constant</span><span class="p">(</span><span class="o">-</span><span class="mf">6.0</span><span class="p">)</span>
+<span class="n">u_k</span> <span class="o">=</span> <span class="n">interpolate</span><span class="p">(</span><span class="n">Constant</span><span class="p">(</span><span class="mf">0.0</span><span class="p">),</span> <span class="n">V</span><span class="p">)</span>  <span class="c"># previous (known) u</span>
+<span class="n">a</span> <span class="o">=</span> <span class="n">inner</span><span class="p">(</span><span class="n">q</span><span class="p">(</span><span class="n">u_k</span><span class="p">)</span><span class="o">*</span><span class="n">nabla_grad</span><span class="p">(</span><span class="n">u</span><span class="p">),</span> <span class="n">nabla_grad</span><span class="p">(</span><span class="n">v</span><span class="p">))</span><span class="o">*</span><span class="n">dx</span>
+<span class="n">f</span> <span class="o">=</span> <span class="n">Constant</span><span class="p">(</span><span class="mf">0.0</span><span class="p">)</span>
+<span class="n">L</span> <span class="o">=</span> <span class="n">f</span><span class="o">*</span><span class="n">v</span><span class="o">*</span><span class="n">dx</span>
+
+<span class="c"># Picard iterations</span>
+<span class="n">u</span> <span class="o">=</span> <span class="n">Function</span><span class="p">(</span><span class="n">V</span><span class="p">)</span>     <span class="c"># new unknown function</span>
+<span class="n">eps</span> <span class="o">=</span> <span class="mf">1.0</span>           <span class="c"># error measure ||u-u_k||</span>
+<span class="n">tol</span> <span class="o">=</span> <span class="mf">1.0E-5</span>        <span class="c"># tolerance</span>
+<span class="nb">iter</span> <span class="o">=</span> <span class="mi">0</span>            <span class="c"># iteration counter</span>
+<span class="n">maxiter</span> <span class="o">=</span> <span class="mi">25</span>        <span class="c"># max no of iterations allowed</span>
+<span class="k">while</span> <span class="n">eps</span> <span class="o">&gt;</span> <span class="n">tol</span> <span class="ow">and</span> <span class="nb">iter</span> <span class="o">&lt;</span> <span class="n">maxiter</span><span class="p">:</span>
+    <span class="nb">iter</span> <span class="o">+=</span> <span class="mi">1</span>
+    <span class="n">solve</span><span class="p">(</span><span class="n">a</span> <span class="o">==</span> <span class="n">L</span><span class="p">,</span> <span class="n">u</span><span class="p">,</span> <span class="n">bcs</span><span class="p">)</span>
+    <span class="n">diff</span> <span class="o">=</span> <span class="n">u</span><span class="o">.</span><span class="n">vector</span><span class="p">()</span><span class="o">.</span><span class="n">array</span><span class="p">()</span> <span class="o">-</span> <span class="n">u_k</span><span class="o">.</span><span class="n">vector</span><span class="p">()</span><span class="o">.</span><span class="n">array</span><span class="p">()</span>
+    <span class="n">eps</span> <span class="o">=</span> <span class="n">numpy</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">norm</span><span class="p">(</span><span class="n">diff</span><span class="p">,</span> <span class="nb">ord</span><span class="o">=</span><span class="n">numpy</span><span class="o">.</span><span class="n">Inf</span><span class="p">)</span>
+    <span class="k">print</span><span class="p">(</span><span class="s">&#39;iter=</span><span class="si">%d</span><span class="s">: norm=</span><span class="si">%g</span><span class="s">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="nb">iter</span><span class="p">,</span> <span class="n">eps</span><span class="p">))</span>
+    <span class="n">u_k</span><span class="o">.</span><span class="n">assign</span><span class="p">(</span><span class="n">u</span><span class="p">)</span>   <span class="c"># update for next iteration</span>
 </pre></div>
 </div>
-<p>The new aspect of the variational problem is the two distinct
-boundary integrals.
-Having a mesh function over exterior cell facets (our
-<code class="docutils literal"><span class="pre">boundary_parts</span></code> object), where subdomains (boundary parts) are
-numbered as <span class="math">\(0,1,2,\ldots\)</span>, the special symbol <code class="docutils literal"><span class="pre">ds(0)</span></code>
-implies integration over subdomain (part) 0, <code class="docutils literal"><span class="pre">ds(1)</span></code> denotes
-integration over subdomain (part) 1, and so on.
-The idea of multiple <code class="docutils literal"><span class="pre">ds</span></code>-type objects generalizes to volume
-integrals too: <code class="docutils literal"><span class="pre">dx(0)</span></code>, <code class="docutils literal"><span class="pre">dx(1)</span></code>, etc., are used to
-integrate over subdomain 0, 1, etc.,  inside <span class="math">\(\Omega\)</span>.</p>
-<p>The variational problem can be defined as</p>
-<div class="highlight-python"><div class="highlight"><pre><span class="n">a</span> <span class="o">=</span> <span class="n">inner</span><span class="p">(</span><span class="n">nabla_grad</span><span class="p">(</span><span class="n">u</span><span class="p">),</span> <span class="n">nabla_grad</span><span class="p">(</span><span class="n">v</span><span class="p">))</span><span class="o">*</span><span class="n">dx</span> <span class="o">+</span> <span class="n">p</span><span class="o">*</span><span class="n">u</span><span class="o">*</span><span class="n">v</span><span class="o">*</span><span class="n">ds</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
-<span class="n">L</span> <span class="o">=</span> <span class="n">f</span><span class="o">*</span><span class="n">v</span><span class="o">*</span><span class="n">dx</span> <span class="o">-</span> <span class="n">g</span><span class="o">*</span><span class="n">v</span><span class="o">*</span><span class="n">ds</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span> <span class="o">+</span> <span class="n">p</span><span class="o">*</span><span class="n">q</span><span class="o">*</span><span class="n">v</span><span class="o">*</span><span class="n">ds</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+<p>We need to define the previous solution in the iterations, <code class="docutils literal"><span class="pre">u_k</span></code>,
+as a finite element function so that <code class="docutils literal"><span class="pre">u_k</span></code> can be updated with
+<code class="docutils literal"><span class="pre">u</span></code> at the end of the loop. We may create the initial
+<code class="docutils literal"><span class="pre">Function</span> <span class="pre">u_k</span></code>
+by interpolating
+an <code class="docutils literal"><span class="pre">Expression</span></code> or a <code class="docutils literal"><span class="pre">Constant</span></code>
+to the same vector space as <code class="docutils literal"><span class="pre">u</span></code> lives in (<code class="docutils literal"><span class="pre">V</span></code>).</p>
+<p>In the code above we demonstrate how to use
+<code class="docutils literal"><span class="pre">numpy</span></code> functionality to compute the norm of
+the difference between the two most recent solutions. Here we apply
+the maximum norm (<span class="math">\(\ell_\infty\)</span> norm) on the difference of the solution vectors
+(<code class="docutils literal"><span class="pre">ord=1</span></code> and <code class="docutils literal"><span class="pre">ord=2</span></code> give the <span class="math">\(\ell_1\)</span> and <span class="math">\(\ell_2\)</span> vector
+norms - other norms are possible for <code class="docutils literal"><span class="pre">numpy</span></code> arrays,
+see <code class="docutils literal"><span class="pre">pydoc</span> <span class="pre">numpy.linalg.norm</span></code>).</p>
+<p>The file <code class="docutils literal"><span class="pre">picard_np.py</span></code> contains the complete code for
+this nonlinear Poisson problem.
+The implementation is <span class="math">\(d\)</span> dimensional, with mesh
+construction and setting of Dirichlet conditions as explained in
+the section <a class="reference internal" href="._ftut003.html#tut-poisson-nd"><span class="std std-ref">Parameterizing the number of space dimensions</span></a>.
+For a <span class="math">\(33\times 33\)</span> grid with <span class="math">\(m=2\)</span> we need 9 iterations for convergence
+when the tolerance is <span class="math">\(10^{-5}\)</span>.</p>
+</div>
+<div class="section" id="a-newton-method-at-the-algebraic-level">
+<span id="tut-nonlinear-newton-algebraic"></span><h2>A Newton method at the algebraic level<a class="headerlink" href="#a-newton-method-at-the-algebraic-level" title="Permalink to this headline">¶</a></h2>
+<p id="index-3">After having discretized our nonlinear PDE problem, we may
+use Newton&#8217;s method to solve the system of nonlinear algebraic equations.
+From the continuous variational problem <a class="reference internal" href="#eq-tut-poisson-nonlinear1"><span class="std std-ref">(64)</span></a>,
+the discrete version <a class="reference internal" href="#eq-tut-poisson-nonlinear-d"><span class="std std-ref">(66)</span></a> results in a
+system of equations for the unknown parameters <span class="math">\(U_1,\ldots, U_N\)</span>
+(by inserting <span class="math">\(u = \sum_{j=1}^N U_j \phi_j\)</span>
+and <span class="math">\(v=\hat\phi_i\)</span> in <a class="reference internal" href="#eq-tut-poisson-nonlinear-d"><span class="std std-ref">(66)</span></a>):</p>
+<div class="math" id="eq-tut-nonlinear-newton-f1">
+\[\tag{73}
+F_i(U_1,\ldots,U_N) \equiv
+    \sum_{j=1}^N
+    \int_\Omega \left( q\left(\sum_{\ell=1}^NU_\ell\phi_\ell\right)
+    \nabla \phi_j U_j\right)\cdot \nabla \hat\phi_i {\, \mathrm{d}x} = 0,\quad i=1,\ldots,N{\thinspace .}\]</div>
+<p>Newton&#8217;s method for the system <span class="math">\(F_i(U_1,\ldots,U_j)=0\)</span>, <span class="math">\(i=1,\ldots,N\)</span>
+can be formulated as</p>
+<div class="math" id="eq-auto31">
+\[\tag{74}
+\sum_{j=1}^N
+    {\partial \over\partial U_j} F_i(U_1^k,\ldots,U_N^k)\delta U_j
+    = -F_i(U_1^k,\ldots,U_N^k),\quad i=1,\ldots,N,\]</div>
+<div class="math" id="eq-auto32">
+\[\tag{75}
+U_j^{k+1} = U_j^k + \omega\delta U_j,\quad j=1,\ldots,N,\]</div>
+<p>where <span class="math">\(\omega\in [0,1]\)</span> is a relaxation parameter, and <span class="math">\(k\)</span> is
+an iteration index. An initial guess <span class="math">\(u^0\)</span> must
+be provided to start the algorithm.</p>
+<p id="index-4">The original Newton method has <span class="math">\(\omega=1\)</span>, but in problems where it is
+difficult to obtain convergence,
+so-called <em>under-relaxation</em> with <span class="math">\(\omega &lt; 1\)</span> may help. It means that
+one takes a smaller step than what is suggested by Newton&#8217;s method.</p>
+<p id="index-5">We need, in a program, to compute the Jacobian
+matrix <span class="math">\(\partial F_i/\partial U_j\)</span>
+and the right-hand side vector <span class="math">\(-F_i\)</span>.
+Our present problem has <span class="math">\(F_i\)</span> given by <a class="reference internal" href="#eq-tut-nonlinear-newton-f1"><span class="std std-ref">(73)</span></a>.
+The derivative <span class="math">\(\partial F_i/\partial U_j\)</span> becomes</p>
+<div class="math" id="eq-tut-poisson-nonlinear-dfdu">
+\[\tag{76}
+\int\limits_\Omega \left\lbrack
+     q'(\sum_{\ell=1}^NU_\ell^k\phi_\ell)\phi_j
+    \nabla (\sum_{j=1}^NU_j^k\phi_j)\cdot \nabla \hat\phi_i
+    +
+    q\left(\sum_{\ell=1}^NU_\ell^k\phi_\ell\right)
+    \nabla \phi_j \cdot \nabla \hat\phi_i
+    \right\rbrack
+     {\, \mathrm{d}x}{\thinspace .}\]</div>
+<p>The following results were used to obtain <a class="reference internal" href="#eq-tut-poisson-nonlinear-dfdu"><span class="std std-ref">(76)</span></a>:</p>
+<div class="math" id="eq-auto33">
+\[\tag{77}
+{\partial u\over\partial U_j} = {\partial\over\partial U_j}
+    \sum_{j=1}^NU_j\phi_j = \phi_j,\quad {\partial\over\partial U_j}\nabla u = \nabla\phi_j,\quad {\partial\over\partial U_j}q(u) = q'(u)\phi_j{\thinspace .}\]</div>
+<p>We can reformulate the Jacobian matrix
+in <a class="reference internal" href="#eq-tut-poisson-nonlinear-dfdu"><span class="std std-ref">(76)</span></a>
+by introducing the short
+notation <span class="math">\(u^k = \sum_{j=1}^NU_j^k\phi_j\)</span>:</p>
+<div class="math" id="eq-auto34">
+\[\tag{78}
+{\partial F_i\over\partial U_j} =
+    \int_\Omega \left\lbrack
+    q'(u^k)\phi_j
+    \nabla u^k \cdot \nabla \hat\phi_i
+    +
+    q(u^k)
+    \nabla \phi_j \cdot \nabla \hat\phi_i
+    \right\rbrack {\, \mathrm{d}x}{\thinspace .}\]</div>
+<p>In order to make FEniCS compute this matrix, we need to formulate a
+corresponding variational problem. Looking at the
+linear system of equations in Newton&#8217;s method,</p>
+<div class="math">
+\[\sum_{j=1}^N {\partial F_i\over\partial U_j}\delta U_j = -F_i,\quad
+i=1,\ldots,N,\]</div>
+<p>we can introduce <span class="math">\(v\)</span> as a general test function replacing <span class="math">\(\hat\phi_i\)</span>,
+and we can identify the unknown
+<span class="math">\(\delta u = \sum_{j=1}^N\delta U_j\phi_j\)</span>. From the linear system
+we can now go &#8220;backwards&#8221; to construct the corresponding linear
+discrete weak form to be solved in each Newton iteration:</p>
+<div class="math" id="eq-tut-nonlinear-newton-alf">
+\[\tag{79}
+\int_\Omega \left\lbrack
+    q'(u^k)\delta u
+    \nabla u^k \cdot \nabla v
+    +
+    q(u^k)
+    \nabla \delta u\cdot \nabla v
+    \right\rbrack {\, \mathrm{d}x} = - \int_\Omega q(u^k)
+    \nabla u^k\cdot \nabla v {\, \mathrm{d}x}{\thinspace .}\]</div>
+<p>This variational form fits the standard notation
+<span class="math">\(a(\delta u,v)=L(v)\)</span> with</p>
+<div class="math">
+\[\begin{split}a(\delta u,v) &amp;=
+\int_\Omega \left\lbrack
+q'(u^k)\delta u
+\nabla u^k \cdot \nabla v
++
+q(u^k)
+\nabla \delta u \cdot \nabla v
+\right\rbrack
+ {\, \mathrm{d}x}\\
+L(v) &amp;= - \int_\Omega q(u^k)
+\nabla u^k\cdot \nabla v {\, \mathrm{d}x}{\thinspace .}\end{split}\]</div>
+<p>Note the important feature in Newton&#8217;s method
+that the
+previous solution <span class="math">\(u^k\)</span> replaces <span class="math">\(u\)</span>
+in the formulas when computing the matrix
+<span class="math">\(\partial F_i/\partial U_j\)</span> and vector <span class="math">\(F_i\)</span> for the linear system in
+each Newton iteration.</p>
+<p id="index-6">We now turn to the implementation.
+To obtain a good initial guess <span class="math">\(u^0\)</span>, we can solve a simplified, linear
+problem, typically with <span class="math">\(q(u)=1\)</span>, which yields the standard Laplace
+equation <span class="math">\(\nabla^2 u^0 =0\)</span>. The recipe for solving this problem
+appears in the sections <a class="reference internal" href="._ftut002.html#tut-poisson1-varform"><span class="std std-ref">Variational formulation</span></a>,
+<a class="reference internal" href="._ftut003.html#tut-poisson1-impl"><span class="std std-ref">Implementation of a Poisson solver</span></a>, and <a class="reference internal" href="._ftut003.html#tut-poisson1-dn"><span class="std std-ref">Combining Dirichlet and Neumann conditions</span></a>.
+The code for computing <span class="math">\(u^0\)</span> becomes as follows:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">tol</span> <span class="o">=</span> <span class="mf">1E-14</span>
+<span class="k">def</span> <span class="nf">left_boundary</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">on_boundary</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">on_boundary</span> <span class="ow">and</span> <span class="nb">abs</span><span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span> <span class="o">&lt;</span> <span class="n">tol</span>
+
+<span class="k">def</span> <span class="nf">right_boundary</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">on_boundary</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">on_boundary</span> <span class="ow">and</span> <span class="nb">abs</span><span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span> <span class="o">&lt;</span> <span class="n">tol</span>
+
+<span class="n">Gamma_0</span> <span class="o">=</span> <span class="n">DirichletBC</span><span class="p">(</span><span class="n">V</span><span class="p">,</span> <span class="n">Constant</span><span class="p">(</span><span class="mf">0.0</span><span class="p">),</span> <span class="n">left_boundary</span><span class="p">)</span>
+<span class="n">Gamma_1</span> <span class="o">=</span> <span class="n">DirichletBC</span><span class="p">(</span><span class="n">V</span><span class="p">,</span> <span class="n">Constant</span><span class="p">(</span><span class="mf">1.0</span><span class="p">),</span> <span class="n">right_boundary</span><span class="p">)</span>
+<span class="n">bcs</span> <span class="o">=</span> <span class="p">[</span><span class="n">Gamma_0</span><span class="p">,</span> <span class="n">Gamma_1</span><span class="p">]</span>
+
+<span class="c"># Define variational problem for initial guess (q(u)=1, i.e., m=0)</span>
+<span class="n">u</span> <span class="o">=</span> <span class="n">TrialFunction</span><span class="p">(</span><span class="n">V</span><span class="p">)</span>
+<span class="n">v</span> <span class="o">=</span> <span class="n">TestFunction</span><span class="p">(</span><span class="n">V</span><span class="p">)</span>
+<span class="n">a</span> <span class="o">=</span> <span class="n">inner</span><span class="p">(</span><span class="n">nabla_grad</span><span class="p">(</span><span class="n">u</span><span class="p">),</span> <span class="n">nabla_grad</span><span class="p">(</span><span class="n">v</span><span class="p">))</span><span class="o">*</span><span class="n">dx</span>
+<span class="n">f</span> <span class="o">=</span> <span class="n">Constant</span><span class="p">(</span><span class="mf">0.0</span><span class="p">)</span>
+<span class="n">L</span> <span class="o">=</span> <span class="n">f</span><span class="o">*</span><span class="n">v</span><span class="o">*</span><span class="n">dx</span>
+<span class="n">A</span><span class="p">,</span> <span class="n">b</span> <span class="o">=</span> <span class="n">assemble_system</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">L</span><span class="p">,</span> <span class="n">bcs</span><span class="p">)</span>
+<span class="n">u_k</span> <span class="o">=</span> <span class="n">Function</span><span class="p">(</span><span class="n">V</span><span class="p">)</span>
+<span class="n">U_k</span> <span class="o">=</span> <span class="n">u_k</span><span class="o">.</span><span class="n">vector</span><span class="p">()</span>
+<span class="n">solve</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="n">U_k</span><span class="p">,</span> <span class="n">b</span><span class="p">)</span>
 </pre></div>
 </div>
-<p>For the <code class="docutils literal"><span class="pre">ds(0)</span></code> and <code class="docutils literal"><span class="pre">ds(1)</span></code> symbols to work we must obviously
-connect them (or <code class="docutils literal"><span class="pre">a</span></code> and <code class="docutils literal"><span class="pre">L</span></code>) to the mesh function marking
-parts of the boundary. This is done by a certain keyword argument
-to the <code class="docutils literal"><span class="pre">assemble</span></code> function:</p>
-<div class="admonition warning">
-<p class="first admonition-title">Warning</p>
-<p>The old code looked like</p>
-<div class="highlight-python"><div class="highlight"><pre><span class="n">A</span> <span class="o">=</span> <span class="n">assemble</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">exterior_facet_domains</span><span class="o">=</span><span class="n">boundary_parts</span><span class="p">)</span>
-<span class="n">b</span> <span class="o">=</span> <span class="n">assemble</span><span class="p">(</span><span class="n">L</span><span class="p">,</span> <span class="n">exterior_facet_domains</span><span class="o">=</span><span class="n">boundary_parts</span><span class="p">)</span>
+<p>Here, <code class="docutils literal"><span class="pre">u_k</span></code> denotes the solution function for the previous
+iteration, so that the solution
+after each Newton iteration is <code class="docutils literal"><span class="pre">u</span> <span class="pre">=</span> <span class="pre">u_k</span> <span class="pre">+</span> <span class="pre">omega*du</span></code>.
+Initially, <code class="docutils literal"><span class="pre">u_k</span></code> is the initial guess we call <span class="math">\(u^0\)</span> in the mathematics.</p>
+<p>The Dirichlet boundary conditions for <span class="math">\(\delta u\)</span>, in
+the problem to be solved in each Newton
+iteration, are somewhat different than the conditions for <span class="math">\(u\)</span>.
+Assuming that <span class="math">\(u^k\)</span> fulfills the
+Dirichlet conditions for <span class="math">\(u\)</span>, <span class="math">\(\delta u\)</span> must be zero at the boundaries
+where the Dirichlet conditions apply, in order for <span class="math">\(u^{k+1}=u^k + \omega\delta u\)</span> to fulfill
+the right boundary values. We therefore define an additional list of
+Dirichlet boundary conditions objects for <span class="math">\(\delta u\)</span>:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">Gamma_0_du</span> <span class="o">=</span> <span class="n">DirichletBC</span><span class="p">(</span><span class="n">V</span><span class="p">,</span> <span class="n">Constant</span><span class="p">(</span><span class="mi">0</span><span class="p">),</span> <span class="n">left_boundary</span><span class="p">)</span>
+<span class="n">Gamma_1_du</span> <span class="o">=</span> <span class="n">DirichletBC</span><span class="p">(</span><span class="n">V</span><span class="p">,</span> <span class="n">Constant</span><span class="p">(</span><span class="mi">0</span><span class="p">),</span> <span class="n">right_boundary</span><span class="p">)</span>
+<span class="n">bcs_du</span> <span class="o">=</span> <span class="p">[</span><span class="n">Gamma_0_du</span><span class="p">,</span> <span class="n">Gamma_1_du</span><span class="p">]</span>
 </pre></div>
 </div>
-<p class="last">but the <code class="docutils literal"><span class="pre">exterior_facet_domain</span></code> argument is no longer legal.
-The text must be updated! The associated code gives wrong results.</p>
-</div>
-<div class="highlight-python"><div class="highlight"><pre><span class="n">A</span> <span class="o">=</span> <span class="n">assemble</span><span class="p">(</span><span class="n">a</span><span class="p">)</span>
-<span class="n">b</span> <span class="o">=</span> <span class="n">assemble</span><span class="p">(</span><span class="n">L</span><span class="p">)</span>
+<p>The nonlinear coefficient and its derivative must be defined
+before coding the weak form of the Newton system:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="k">def</span> <span class="nf">q</span><span class="p">(</span><span class="n">u</span><span class="p">):</span>
+    <span class="k">return</span> <span class="p">(</span><span class="mi">1</span><span class="o">+</span><span class="n">u</span><span class="p">)</span><span class="o">**</span><span class="n">m</span>
+
+<span class="k">def</span> <span class="nf">Dq</span><span class="p">(</span><span class="n">u</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">m</span><span class="o">*</span><span class="p">(</span><span class="mi">1</span><span class="o">+</span><span class="n">u</span><span class="p">)</span><span class="o">**</span><span class="p">(</span><span class="n">m</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+
+<span class="n">du</span> <span class="o">=</span> <span class="n">TrialFunction</span><span class="p">(</span><span class="n">V</span><span class="p">)</span> <span class="c"># u = u_k + omega*du</span>
+<span class="n">a</span> <span class="o">=</span> <span class="n">inner</span><span class="p">(</span><span class="n">q</span><span class="p">(</span><span class="n">u_k</span><span class="p">)</span><span class="o">*</span><span class="n">nabla_grad</span><span class="p">(</span><span class="n">du</span><span class="p">),</span> <span class="n">nabla_grad</span><span class="p">(</span><span class="n">v</span><span class="p">))</span><span class="o">*</span><span class="n">dx</span> <span class="o">+</span> \
+    <span class="n">inner</span><span class="p">(</span><span class="n">Dq</span><span class="p">(</span><span class="n">u_k</span><span class="p">)</span><span class="o">*</span><span class="n">du</span><span class="o">*</span><span class="n">nabla_grad</span><span class="p">(</span><span class="n">u_k</span><span class="p">),</span> <span class="n">nabla_grad</span><span class="p">(</span><span class="n">v</span><span class="p">))</span><span class="o">*</span><span class="n">dx</span>
+<span class="n">L</span> <span class="o">=</span> <span class="o">-</span><span class="n">inner</span><span class="p">(</span><span class="n">q</span><span class="p">(</span><span class="n">u_k</span><span class="p">)</span><span class="o">*</span><span class="n">nabla_grad</span><span class="p">(</span><span class="n">u_k</span><span class="p">),</span> <span class="n">nabla_grad</span><span class="p">(</span><span class="n">v</span><span class="p">))</span><span class="o">*</span><span class="n">dx</span>
 </pre></div>
 </div>
-<p>Then essential boundary conditions are enforced, and the system can
-be solved in the usual way:</p>
-<div class="highlight-python"><div class="highlight"><pre><span class="k">for</span> <span class="n">bc</span> <span class="ow">in</span> <span class="n">bcs</span><span class="p">:</span>
-    <span class="n">bc</span><span class="o">.</span><span class="n">apply</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="n">b</span><span class="p">)</span>
-<span class="n">u</span> <span class="o">=</span> <span class="n">Function</span><span class="p">(</span><span class="n">V</span><span class="p">)</span>
-<span class="n">U</span> <span class="o">=</span> <span class="n">u</span><span class="o">.</span><span class="n">vector</span><span class="p">()</span>
-<span class="n">solve</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="n">U</span><span class="p">,</span> <span class="n">b</span><span class="p">)</span>
+<p>The Newton iteration loop is very similar to the Picard iteration loop
+in the section <a class="reference internal" href="#tut-nonlinear-picard"><span class="std std-ref">Picard iteration</span></a>:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">du</span> <span class="o">=</span> <span class="n">Function</span><span class="p">(</span><span class="n">V</span><span class="p">)</span>
+<span class="n">u</span>  <span class="o">=</span> <span class="n">Function</span><span class="p">(</span><span class="n">V</span><span class="p">)</span>  <span class="c"># u = u_k + omega*du</span>
+<span class="n">omega</span> <span class="o">=</span> <span class="mf">1.0</span>       <span class="c"># relaxation parameter</span>
+<span class="n">eps</span> <span class="o">=</span> <span class="mf">1.0</span>
+<span class="n">tol</span> <span class="o">=</span> <span class="mf">1.0E-5</span>
+<span class="nb">iter</span> <span class="o">=</span> <span class="mi">0</span>
+<span class="n">maxiter</span> <span class="o">=</span> <span class="mi">25</span>
+<span class="k">while</span> <span class="n">eps</span> <span class="o">&gt;</span> <span class="n">tol</span> <span class="ow">and</span> <span class="nb">iter</span> <span class="o">&lt;</span> <span class="n">maxiter</span><span class="p">:</span>
+    <span class="nb">iter</span> <span class="o">+=</span> <span class="mi">1</span>
+    <span class="n">A</span><span class="p">,</span> <span class="n">b</span> <span class="o">=</span> <span class="n">assemble_system</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">L</span><span class="p">,</span> <span class="n">bcs_du</span><span class="p">)</span>
+    <span class="n">solve</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="n">du</span><span class="o">.</span><span class="n">vector</span><span class="p">(),</span> <span class="n">b</span><span class="p">)</span>
+    <span class="n">eps</span> <span class="o">=</span> <span class="n">numpy</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">norm</span><span class="p">(</span><span class="n">du</span><span class="o">.</span><span class="n">vector</span><span class="p">()</span><span class="o">.</span><span class="n">array</span><span class="p">(),</span> <span class="nb">ord</span><span class="o">=</span><span class="n">numpy</span><span class="o">.</span><span class="n">Inf</span><span class="p">)</span>
+    <span class="k">print</span><span class="p">(</span><span class="s">&#39;Norm:&#39;</span><span class="p">,</span> <span class="n">eps</span><span class="p">)</span>
+    <span class="n">u</span><span class="o">.</span><span class="n">vector</span><span class="p">()[:]</span> <span class="o">=</span> <span class="n">u_k</span><span class="o">.</span><span class="n">vector</span><span class="p">()</span> <span class="o">+</span> <span class="n">omega</span><span class="o">*</span><span class="n">du</span><span class="o">.</span><span class="n">vector</span><span class="p">()</span>
+    <span class="n">u_k</span><span class="o">.</span><span class="n">assign</span><span class="p">(</span><span class="n">u</span><span class="p">)</span>
 </pre></div>
 </div>
-<p>The complete code is in the <code class="docutils literal"><span class="pre">dnr_p2D.py</span></code> file in the
-<code class="docutils literal"><span class="pre">stationary/poisson</span></code> directory.</p>
+<p>There are other ways of implementing the
+update of the solution as well:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">u</span><span class="o">.</span><span class="n">assign</span><span class="p">(</span><span class="n">u_k</span><span class="p">)</span>  <span class="c"># u = u_k</span>
+<span class="n">u</span><span class="o">.</span><span class="n">vector</span><span class="p">()</span><span class="o">.</span><span class="n">axpy</span><span class="p">(</span><span class="n">omega</span><span class="p">,</span> <span class="n">du</span><span class="o">.</span><span class="n">vector</span><span class="p">())</span>
+
+<span class="c"># or</span>
+<span class="n">u</span><span class="o">.</span><span class="n">vector</span><span class="p">()[:]</span> <span class="o">+=</span> <span class="n">omega</span><span class="o">*</span><span class="n">du</span><span class="o">.</span><span class="n">vector</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>The <code class="docutils literal"><span class="pre">axpy(a,</span> <span class="pre">y)</span></code> operation adds a scalar <code class="docutils literal"><span class="pre">a</span></code> times a <code class="docutils literal"><span class="pre">Vector</span></code>
+<code class="docutils literal"><span class="pre">y</span></code> to a <code class="docutils literal"><span class="pre">Vector</span></code> object.  It is usually a fast operation
+calling up an optimized BLAS routine for the calculation.</p>
+<p>Mesh construction for a <span class="math">\(d\)</span>-dimensional problem with arbitrary degree of
+the Lagrange elements can be done as
+explained in the section <a class="reference internal" href="._ftut003.html#tut-poisson-nd"><span class="std std-ref">Parameterizing the number of space dimensions</span></a>.
+The complete program appears in the file <code class="docutils literal"><span class="pre">alg_newton_np.py</span></code>.</p>
+</div>
+<div class="section" id="a-newton-method-at-the-pde-level">
+<span id="tut-nonlinear-newton-pdelevel"></span><h2>A Newton method at the PDE level<a class="headerlink" href="#a-newton-method-at-the-pde-level" title="Permalink to this headline">¶</a></h2>
+<p id="index-7">Although Newton&#8217;s method in PDE problems is normally formulated at the
+linear algebra level, i.e., as a solution method for systems of nonlinear
+algebraic equations, we can also formulate the method at the PDE level.
+This approach yields a linearization of the PDEs before they are discretized.
+FEniCS users will probably find this technique simpler to apply than
+the more standard method in the section <a class="reference internal" href="#tut-nonlinear-newton-algebraic"><span class="std std-ref">A Newton method at the algebraic level</span></a>.</p>
+<p>Given an approximation to the solution field, <span class="math">\(u^k\)</span>, we seek a
+perturbation <span class="math">\(\delta u\)</span> so that</p>
+<div class="math" id="eq-auto35">
+\[\tag{80}
+u^{k+1} = u^k + \delta u\]</div>
+<p>fulfills the nonlinear PDE.
+However, the problem for <span class="math">\(\delta u\)</span> is still nonlinear and nothing is
+gained. The idea is therefore to assume that <span class="math">\(\delta u\)</span> is sufficiently
+small so that we can linearize the problem with respect to <span class="math">\(\delta u\)</span>.
+Inserting <span class="math">\(u^{k+1}\)</span> in the PDE,
+linearizing the <span class="math">\(q\)</span> term as</p>
+<div class="math" id="eq-auto36">
+\[\tag{81}
+q(u^{k+1}) = q(u^k) + q'(u^k)\delta u + {\cal O}((\delta u)^2)
+    \approx q(u^k) + q'(u^k)\delta u,\]</div>
+<p>and dropping nonlinear terms in <span class="math">\(\delta u\)</span>,
+we get</p>
+<div class="math">
+\[\nabla\cdot\left( q(u^k)\nabla u^k\right) +
+\nabla\cdot\left( q(u^k)\nabla\delta u\right) +
+\nabla\cdot\left( q'(u^k)\delta u\nabla u^k\right) = 0{\thinspace .}\]</div>
+<p>We may collect the terms with the unknown <span class="math">\(\delta u\)</span> on the left-hand side,</p>
+<div class="math" id="eq-auto37">
+\[\tag{82}
+\nabla\cdot\left( q(u^k)\nabla\delta u\right) +
+    \nabla\cdot\left( q'(u^k)\delta u\nabla u^k\right) =
+    -\nabla\cdot\left( q(u^k)\nabla u^k\right),\]</div>
+<p>The weak form of this PDE is derived by multiplying by a test function <span class="math">\(v\)</span>
+and integrating over <span class="math">\(\Omega\)</span>, integrating as usual
+the second-order derivatives by parts:</p>
+<div class="math" id="eq-auto38">
+\[\tag{83}
+\int_\Omega \left(
+    q(u^k)\nabla\delta u\cdot \nabla v
+    + q'(u^k)\delta u\nabla u^k\cdot \nabla v\right) {\, \mathrm{d}x}
+    = -\int_\Omega q(u^k)\nabla u^k\cdot \nabla v {\, \mathrm{d}x}{\thinspace .}\]</div>
+<p>The variational problem reads: find <span class="math">\(\delta u\in V\)</span> such that
+<span class="math">\(a(\delta u,v) = L(v)\)</span> for all <span class="math">\(v\in \hat V\)</span>, where</p>
+<div class="math" id="eq-tut-nonlinear-poisson-pdelevel-eqa">
+\[\tag{84}
+a(\delta u,v) =
+    \int_\Omega \left(
+    q(u^k)\nabla\delta u\cdot \nabla v
+    + q'(u^k)\delta u\nabla u^k\cdot \nabla v\right) {\, \mathrm{d}x},\]</div>
+<div class="math" id="eq-tut-nonlinear-poisson-pdelevel-eql">
+\[\tag{85}
+L(v) = -
+    \int_\Omega q(u^k)\nabla u^k\cdot \nabla v {\, \mathrm{d}x}{\thinspace .}\]</div>
+<p>The function spaces <span class="math">\(V\)</span> and <span class="math">\(\hat V\)</span>, being continuous or discrete,
+are as in the
+linear Poisson problem from the section <a class="reference internal" href="._ftut002.html#tut-poisson1-varform"><span class="std std-ref">Variational formulation</span></a>.</p>
+<p>We must provide some initial guess, e.g., the solution of the
+PDE with <span class="math">\(q(u)=1\)</span>. The corresponding weak form <span class="math">\(a_0(u^0,v)=L_0(v)\)</span>
+has</p>
+<div class="math">
+\[a_0(u,v)=\int_\Omega\nabla u\cdot \nabla v {\, \mathrm{d}x},\quad L_0(v)=0{\thinspace .}\]</div>
+<p>Thereafter, we enter a loop and solve
+<span class="math">\(a(\delta u,v)=L(v)\)</span> for <span class="math">\(\delta u\)</span> and compute a new approximation
+<span class="math">\(u^{k+1} = u^k + \delta u\)</span>. Note that <span class="math">\(\delta u\)</span> is a correction, so if
+<span class="math">\(u^0\)</span> satisfies the prescribed
+Dirichlet conditions on some part <span class="math">\(\Gamma_D\)</span> of the boundary,
+we must demand <span class="math">\(\delta u=0\)</span> on <span class="math">\(\Gamma_D\)</span>.</p>
+<p>Looking at <a class="reference internal" href="#eq-tut-nonlinear-poisson-pdelevel-eqa"><span class="std std-ref">(84)</span></a> and
+<a class="reference internal" href="#eq-tut-nonlinear-poisson-pdelevel-eql"><span class="std std-ref">(85)</span></a>,
+we see that the variational form is the same as for the Newton method
+at the algebraic level in the section <a class="reference internal" href="#tut-nonlinear-newton-algebraic"><span class="std std-ref">A Newton method at the algebraic level</span></a>. Since Newton&#8217;s method at the
+algebraic level required some &#8220;backward&#8221; construction of the
+underlying weak forms, FEniCS users may prefer Newton&#8217;s method at the
+PDE level, which this author finds more straightforward, although not so
+commonly documented in the literature on numerical methods for PDEs.
+There is seemingly no need for differentiations to derive a Jacobian
+matrix, but a mathematically equivalent derivation is done when
+nonlinear terms are linearized using the first two Taylor series terms
+and when products in the perturbation <span class="math">\(\delta u\)</span> are neglected.</p>
+<p id="index-8">The implementation is identical to the one in
+the section <a class="reference internal" href="#tut-nonlinear-newton-algebraic"><span class="std std-ref">A Newton method at the algebraic level</span></a> and is found in
+the file <code class="docutils literal"><span class="pre">pde_newton_np.py</span></code>. The reader is encouraged to go
+through this code to be convinced that the present method actually
+ends up with the same program as needed for the Newton method at
+the linear algebra level in the section <a class="reference internal" href="#tut-nonlinear-newton-algebraic"><span class="std std-ref">A Newton method at the algebraic level</span></a>.</p>
+</div>
+<div class="section" id="solving-the-nonlinear-variational-problem-directly">
+<span id="tut-nonlinear-newton-auto"></span><h2>Solving the nonlinear variational problem directly<a class="headerlink" href="#solving-the-nonlinear-variational-problem-directly" title="Permalink to this headline">¶</a></h2>
+<span class="target" id="index-9"></span><p id="index-10">The previous hand-calculations and manual implementation of
+Picard or Newton methods can be automated by tools in FEniCS.
+In a nutshell, one can just write</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">problem</span> <span class="o">=</span> <span class="n">NonlinearVariationalProblem</span><span class="p">(</span><span class="n">F</span><span class="p">,</span> <span class="n">u</span><span class="p">,</span> <span class="n">bcs</span><span class="p">,</span> <span class="n">J</span><span class="p">)</span>
+<span class="n">solver</span>  <span class="o">=</span> <span class="n">NonlinearVariationalSolver</span><span class="p">(</span><span class="n">problem</span><span class="p">)</span>
+<span class="n">solver</span><span class="o">.</span><span class="n">solve</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>where <code class="docutils literal"><span class="pre">F</span></code> corresponds to the nonlinear form <span class="math">\(F(u;v)\)</span>,
+<code class="docutils literal"><span class="pre">u</span></code> is the unknown <code class="docutils literal"><span class="pre">Function</span></code> object, <code class="docutils literal"><span class="pre">bcs</span></code>
+represents the essential boundary conditions (in general a list of
+<code class="docutils literal"><span class="pre">DirichletBC</span></code> objects), and
+<code class="docutils literal"><span class="pre">J</span></code> is a variational form for the Jacobian of <code class="docutils literal"><span class="pre">F</span></code>.</p>
+<p>Let us explain in detail how to use the built-in tools for
+nonlinear variational problems and their solution.
+The <code class="docutils literal"><span class="pre">F</span></code> form corresponding to <a class="reference internal" href="#eq-tut-poisson-nonlinear2"><span class="std std-ref">(65)</span></a>
+is straightforwardly defined as follows, assuming <code class="docutils literal"><span class="pre">q(u)</span></code> is
+coded as a Python function:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">u_</span> <span class="o">=</span> <span class="n">Function</span><span class="p">(</span><span class="n">V</span><span class="p">)</span>     <span class="c"># most recently computed solution</span>
+<span class="n">v</span>  <span class="o">=</span> <span class="n">TestFunction</span><span class="p">(</span><span class="n">V</span><span class="p">)</span>
+<span class="n">F</span>  <span class="o">=</span> <span class="n">inner</span><span class="p">(</span><span class="n">q</span><span class="p">(</span><span class="n">u_</span><span class="p">)</span><span class="o">*</span><span class="n">nabla_grad</span><span class="p">(</span><span class="n">u_</span><span class="p">),</span> <span class="n">nabla_grad</span><span class="p">(</span><span class="n">v</span><span class="p">))</span><span class="o">*</span><span class="n">dx</span>
+</pre></div>
+</div>
+<p>Note here that <code class="docutils literal"><span class="pre">u_</span></code> is a <code class="docutils literal"><span class="pre">Function</span></code> (not a <code class="docutils literal"><span class="pre">TrialFunction</span></code>).
+An alternative and perhaps more intuitive formula for <span class="math">\(F\)</span> is to
+define <span class="math">\(F(u;v)\)</span> directly in terms of
+a trial function for <span class="math">\(u\)</span> and a test function for <span class="math">\(v\)</span>, and then
+create the proper <code class="docutils literal"><span class="pre">F</span></code> by</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">u</span>  <span class="o">=</span> <span class="n">TrialFunction</span><span class="p">(</span><span class="n">V</span><span class="p">)</span>
+<span class="n">v</span>  <span class="o">=</span> <span class="n">TestFunction</span><span class="p">(</span><span class="n">V</span><span class="p">)</span>
+<span class="n">F</span>  <span class="o">=</span> <span class="n">inner</span><span class="p">(</span><span class="n">q</span><span class="p">(</span><span class="n">u</span><span class="p">)</span><span class="o">*</span><span class="n">nabla_grad</span><span class="p">(</span><span class="n">u</span><span class="p">),</span> <span class="n">nabla_grad</span><span class="p">(</span><span class="n">v</span><span class="p">))</span><span class="o">*</span><span class="n">dx</span>
+<span class="n">u_</span> <span class="o">=</span> <span class="n">Function</span><span class="p">(</span><span class="n">V</span><span class="p">)</span>     <span class="c"># the most recently computed solution</span>
+<span class="n">F</span>  <span class="o">=</span> <span class="n">action</span><span class="p">(</span><span class="n">F</span><span class="p">,</span> <span class="n">u_</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>The latter statement is equivalent to <span class="math">\(F(u=u_{-}; v)\)</span>, where <span class="math">\(u_{-}\)</span> is
+an existing finite element function representing the most recently
+computed approximation to the solution.
+(Note that <span class="math">\(u^k\)</span> and <span class="math">\(u^{k+1}\)</span> in the previous notation
+correspond to <span class="math">\(u_{-}\)</span> and <span class="math">\(u\)</span> in the present
+notation. We have changed notation to better align the mathematics with
+the associated UFL code.)</p>
+<p id="index-11">The derivative <span class="math">\(J\)</span> (<code class="docutils literal"><span class="pre">J</span></code>) of <span class="math">\(F\)</span> (<code class="docutils literal"><span class="pre">F</span></code>) is formally the
+Gateaux derivative <span class="math">\(DF(u^k; \delta u, v)\)</span>
+of <span class="math">\(F(u;v)\)</span> at <span class="math">\(u=u_{-}\)</span> in the direction of <span class="math">\(\delta u\)</span>.
+Technically, this Gateaux derivative is derived by computing</p>
+<div class="math" id="eq-tut-poisson-nonlinear-gateaux1">
+\[\tag{86}
+\lim_{\epsilon\rightarrow 0}{d\over d\epsilon} F_i(u_{-} + \epsilon\delta u; v)
+    {\thinspace .}\]</div>
+<p>The <span class="math">\(\delta u\)</span> is now the trial function and <span class="math">\(u_{-}\)</span> is the previous
+approximation to the solution <span class="math">\(u\)</span>.
+We start with</p>
+<div class="math">
+\[{d\over d\epsilon}\int_\Omega \nabla v\cdot\left( q(u_{-} + \epsilon\delta u)
+\nabla (u_{-} + \epsilon\delta u)\right) {\, \mathrm{d}x}\]</div>
+<p>and obtain</p>
+<div class="math">
+\[\int_\Omega \nabla v\cdot\left\lbrack
+q'(u_{-} + \epsilon\delta u)\delta u
+\nabla (u_{-} + \epsilon\delta u)
++
+q(u_{-} + \epsilon\delta u)
+\nabla \delta u
+\right\rbrack {\, \mathrm{d}x},\]</div>
+<p>which leads to</p>
+<div class="math" id="eq-auto39">
+\[\tag{87}
+\int_\Omega \nabla v\cdot\left\lbrack
+    q'(u_{-})\delta u
+    \nabla (u_{-})
+    +
+    q(u_{-})
+    \nabla \delta u
+    \right\rbrack {\, \mathrm{d}x},\]</div>
+<p>as <span class="math">\(\epsilon\rightarrow 0\)</span>.
+This last expression is the Gateaux derivative of <span class="math">\(F\)</span>. We may use <span class="math">\(J\)</span> or
+<span class="math">\(a(\delta u, v)\)</span> for this derivative, the latter having the advantage
+that we easily recognize the expression as a bilinear form. However, in
+the forthcoming code examples <code class="docutils literal"><span class="pre">J</span></code> is used as variable name for
+the Jacobian.</p>
+<p>The specification of <code class="docutils literal"><span class="pre">J</span></code>
+goes as follows if <code class="docutils literal"><span class="pre">du</span></code> is the <code class="docutils literal"><span class="pre">TrialFunction</span></code>:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">du</span> <span class="o">=</span> <span class="n">TrialFunction</span><span class="p">(</span><span class="n">V</span><span class="p">)</span>
+<span class="n">v</span>  <span class="o">=</span> <span class="n">TestFunction</span><span class="p">(</span><span class="n">V</span><span class="p">)</span>
+<span class="n">u_</span> <span class="o">=</span> <span class="n">Function</span><span class="p">(</span><span class="n">V</span><span class="p">)</span>      <span class="c"># the most recently computed solution</span>
+<span class="n">F</span>  <span class="o">=</span> <span class="n">inner</span><span class="p">(</span><span class="n">q</span><span class="p">(</span><span class="n">u_</span><span class="p">)</span><span class="o">*</span><span class="n">nabla_grad</span><span class="p">(</span><span class="n">u_</span><span class="p">),</span> <span class="n">nabla_grad</span><span class="p">(</span><span class="n">v</span><span class="p">))</span><span class="o">*</span><span class="n">dx</span>
+
+<span class="n">J</span> <span class="o">=</span> <span class="n">inner</span><span class="p">(</span><span class="n">q</span><span class="p">(</span><span class="n">u_</span><span class="p">)</span><span class="o">*</span><span class="n">nabla_grad</span><span class="p">(</span><span class="n">du</span><span class="p">),</span> <span class="n">nabla_grad</span><span class="p">(</span><span class="n">v</span><span class="p">))</span><span class="o">*</span><span class="n">dx</span> <span class="o">+</span> \
+    <span class="n">inner</span><span class="p">(</span><span class="n">Dq</span><span class="p">(</span><span class="n">u_</span><span class="p">)</span><span class="o">*</span><span class="n">du</span><span class="o">*</span><span class="n">nabla_grad</span><span class="p">(</span><span class="n">u_</span><span class="p">),</span> <span class="n">nabla_grad</span><span class="p">(</span><span class="n">v</span><span class="p">))</span><span class="o">*</span><span class="n">dx</span>
+</pre></div>
+</div>
+<p>The alternative specification of <code class="docutils literal"><span class="pre">F</span></code>, with <code class="docutils literal"><span class="pre">u</span></code> as
+<code class="docutils literal"><span class="pre">TrialFunction</span></code>, leads to</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">u</span>  <span class="o">=</span> <span class="n">TrialFunction</span><span class="p">(</span><span class="n">V</span><span class="p">)</span>
+<span class="n">v</span>  <span class="o">=</span> <span class="n">TestFunction</span><span class="p">(</span><span class="n">V</span><span class="p">)</span>
+<span class="n">u_</span> <span class="o">=</span> <span class="n">Function</span><span class="p">(</span><span class="n">V</span><span class="p">)</span>      <span class="c"># the most recently computed solution</span>
+<span class="n">F</span>  <span class="o">=</span> <span class="n">inner</span><span class="p">(</span><span class="n">q</span><span class="p">(</span><span class="n">u</span><span class="p">)</span><span class="o">*</span><span class="n">nabla_grad</span><span class="p">(</span><span class="n">u</span><span class="p">),</span> <span class="n">nabla_grad</span><span class="p">(</span><span class="n">v</span><span class="p">))</span><span class="o">*</span><span class="n">dx</span>
+<span class="n">F</span>  <span class="o">=</span> <span class="n">action</span><span class="p">(</span><span class="n">F</span><span class="p">,</span> <span class="n">u_</span><span class="p">)</span>
+
+<span class="n">J</span> <span class="o">=</span> <span class="n">inner</span><span class="p">(</span><span class="n">q</span><span class="p">(</span><span class="n">u_</span><span class="p">)</span><span class="o">*</span><span class="n">nabla_grad</span><span class="p">(</span><span class="n">u</span><span class="p">),</span> <span class="n">nabla_grad</span><span class="p">(</span><span class="n">v</span><span class="p">))</span><span class="o">*</span><span class="n">dx</span> <span class="o">+</span> \
+    <span class="n">inner</span><span class="p">(</span><span class="n">Dq</span><span class="p">(</span><span class="n">u_</span><span class="p">)</span><span class="o">*</span><span class="n">u</span><span class="o">*</span><span class="n">nabla_grad</span><span class="p">(</span><span class="n">u_</span><span class="p">),</span> <span class="n">nabla_grad</span><span class="p">(</span><span class="n">v</span><span class="p">))</span><span class="o">*</span><span class="n">dx</span>
+</pre></div>
+</div>
+<span class="target" id="index-12"></span><span class="target" id="index-13"></span><p id="index-14">The UFL language, used to specify weak forms, supports differentiation
+of forms. This feature facilitates automatic <em>symbolic</em> computation of the
+Jacobian <code class="docutils literal"><span class="pre">J</span></code> by calling the function <code class="docutils literal"><span class="pre">derivative</span></code> with <code class="docutils literal"><span class="pre">F</span></code>, the most
+recently computed solution (<code class="docutils literal"><span class="pre">Function</span></code>), and the unknown
+(<code class="docutils literal"><span class="pre">TrialFunction</span></code>) as parameters:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">du</span> <span class="o">=</span> <span class="n">TrialFunction</span><span class="p">(</span><span class="n">V</span><span class="p">)</span>
+<span class="n">v</span>  <span class="o">=</span> <span class="n">TestFunction</span><span class="p">(</span><span class="n">V</span><span class="p">)</span>
+<span class="n">u_</span> <span class="o">=</span> <span class="n">Function</span><span class="p">(</span><span class="n">V</span><span class="p">)</span>      <span class="c"># the most recently computed solution</span>
+<span class="n">F</span>  <span class="o">=</span> <span class="n">inner</span><span class="p">(</span><span class="n">q</span><span class="p">(</span><span class="n">u_</span><span class="p">)</span><span class="o">*</span><span class="n">nabla_grad</span><span class="p">(</span><span class="n">u_</span><span class="p">),</span> <span class="n">nabla_grad</span><span class="p">(</span><span class="n">v</span><span class="p">))</span><span class="o">*</span><span class="n">dx</span>
+
+<span class="n">J</span>  <span class="o">=</span> <span class="n">derivative</span><span class="p">(</span><span class="n">F</span><span class="p">,</span> <span class="n">u_</span><span class="p">,</span> <span class="n">du</span><span class="p">)</span>  <span class="c"># Gateaux derivative in dir. of du</span>
+</pre></div>
+</div>
+<p>or</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">u</span>  <span class="o">=</span> <span class="n">TrialFunction</span><span class="p">(</span><span class="n">V</span><span class="p">)</span>
+<span class="n">v</span>  <span class="o">=</span> <span class="n">TestFunction</span><span class="p">(</span><span class="n">V</span><span class="p">)</span>
+<span class="n">u_</span> <span class="o">=</span> <span class="n">Function</span><span class="p">(</span><span class="n">V</span><span class="p">)</span>      <span class="c"># the most recently computed solution</span>
+<span class="n">F</span>  <span class="o">=</span> <span class="n">inner</span><span class="p">(</span><span class="n">q</span><span class="p">(</span><span class="n">u</span><span class="p">)</span><span class="o">*</span><span class="n">nabla_grad</span><span class="p">(</span><span class="n">u</span><span class="p">),</span> <span class="n">nabla_grad</span><span class="p">(</span><span class="n">v</span><span class="p">))</span><span class="o">*</span><span class="n">dx</span>
+<span class="n">F</span>  <span class="o">=</span> <span class="n">action</span><span class="p">(</span><span class="n">F</span><span class="p">,</span> <span class="n">u_</span><span class="p">)</span>
+
+<span class="n">J</span>  <span class="o">=</span> <span class="n">derivative</span><span class="p">(</span><span class="n">F</span><span class="p">,</span> <span class="n">u_</span><span class="p">,</span> <span class="n">u</span><span class="p">)</span>   <span class="c"># Gateaux derivative in dir. of u</span>
+</pre></div>
+</div>
+<p>The <code class="docutils literal"><span class="pre">derivative</span></code> function is obviously
+very convenient in problems where differentiating <code class="docutils literal"><span class="pre">F</span></code> by hand
+implies lengthy calculations.</p>
+<p>The preferred implementation of <code class="docutils literal"><span class="pre">F</span></code> and <code class="docutils literal"><span class="pre">J</span></code>, depending on whether
+<code class="docutils literal"><span class="pre">du</span></code> or <code class="docutils literal"><span class="pre">u</span></code> is the <code class="docutils literal"><span class="pre">TrialFunction</span></code> object,
+is a matter of personal taste. Derivation of the Gateaux derivative
+by hand, as shown above, is most naturally matched by an
+implementation where <code class="docutils literal"><span class="pre">du</span></code> is the <code class="docutils literal"><span class="pre">TrialFunction</span></code>, while
+use of automatic symbolic differentiation with the aid of the <code class="docutils literal"><span class="pre">derivative</span></code>
+function is most naturally matched by an implementation where
+<code class="docutils literal"><span class="pre">u</span></code> is the <code class="docutils literal"><span class="pre">TrialFunction</span></code>.
+We have implemented both approaches in two files:
+<code class="docutils literal"><span class="pre">vp1_np.py</span></code> with
+<code class="docutils literal"><span class="pre">u</span></code> as <code class="docutils literal"><span class="pre">TrialFunction</span></code>, and
+<code class="docutils literal"><span class="pre">vp2_np.py</span></code> with <code class="docutils literal"><span class="pre">du</span></code> as <code class="docutils literal"><span class="pre">TrialFunction</span></code>.
+The directory
+<code class="docutils literal"><span class="pre">stationary/nonlinear_poisson</span></code> contains both files.
+The first command-line argument determines if the Jacobian is to
+be automatically derived or computed from the hand-derived formula.</p>
+<span class="target" id="index-15"></span><span class="target" id="index-16"></span><p id="index-17">The following code defines the nonlinear variational problem and
+an associated solver based on Newton&#8217;s method. We here demonstrate
+how key parameters in
+Newton&#8217;s method can be set, as well as the choice of
+solver and preconditioner, and associated parameters, for the
+linear system occurring in the Newton iterations.</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">problem</span> <span class="o">=</span> <span class="n">NonlinearVariationalProblem</span><span class="p">(</span><span class="n">F</span><span class="p">,</span> <span class="n">u_</span><span class="p">,</span> <span class="n">bcs</span><span class="p">,</span> <span class="n">J</span><span class="p">)</span>
+<span class="n">solver</span>  <span class="o">=</span> <span class="n">NonlinearVariationalSolver</span><span class="p">(</span><span class="n">problem</span><span class="p">)</span>
+
+<span class="n">prm</span> <span class="o">=</span> <span class="n">solver</span><span class="o">.</span><span class="n">parameters</span>
+<span class="n">info</span><span class="p">(</span><span class="n">prm</span><span class="p">,</span> <span class="bp">True</span><span class="p">)</span>
+<span class="n">prm_n</span> <span class="o">=</span> <span class="n">prm</span><span class="p">[</span><span class="s">&#39;newton_solver&#39;</span><span class="p">]</span>
+<span class="n">prm_n</span><span class="p">[</span><span class="s">&#39;absolute_tolerance&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="mf">1E-8</span>
+<span class="n">prm_n</span><span class="p">[</span><span class="s">&#39;relative_tolerance&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="mf">1E-7</span>
+<span class="n">prm_n</span><span class="p">[</span><span class="s">&#39;maximum_iterations&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="mi">25</span>
+<span class="n">prm_n</span><span class="p">[</span><span class="s">&#39;relaxation_parameter&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="mf">1.0</span>
+<span class="k">if</span> <span class="n">iterative_solver</span><span class="p">:</span>
+    <span class="n">prec</span> <span class="o">=</span> <span class="s">&#39;jacobi&#39;</span> <span class="k">if</span> <span class="s">&#39;jacobi&#39;</span> <span class="ow">in</span> \
+           <span class="nb">list</span><span class="p">(</span><span class="nb">zip</span><span class="p">(</span><span class="o">*</span><span class="n">krylov_solver_preconditioners</span><span class="p">()))[</span><span class="mi">0</span><span class="p">]</span> \
+           <span class="k">else</span> <span class="s">&#39;ilu&#39;</span>
+    <span class="n">prm_n</span><span class="p">[</span><span class="s">&#39;linear_solver&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s">&#39;gmres&#39;</span>
+    <span class="n">prm_n</span><span class="p">[</span><span class="s">&#39;preconditioner&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">prec</span>
+    <span class="n">prm_n</span><span class="p">[</span><span class="s">&#39;krylov_solver&#39;</span><span class="p">][</span><span class="s">&#39;absolute_tolerance&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="mf">1E-9</span>
+    <span class="n">prm_n</span><span class="p">[</span><span class="s">&#39;krylov_solver&#39;</span><span class="p">][</span><span class="s">&#39;relative_tolerance&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="mf">1E-7</span>
+    <span class="n">prm_n</span><span class="p">[</span><span class="s">&#39;krylov_solver&#39;</span><span class="p">][</span><span class="s">&#39;maximum_iterations&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="mi">1000</span>
+    <span class="n">prm_n</span><span class="p">[</span><span class="s">&#39;krylov_solver&#39;</span><span class="p">][</span><span class="s">&#39;monitor_convergence&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">True</span>
+    <span class="n">prm_n</span><span class="p">[</span><span class="s">&#39;krylov_solver&#39;</span><span class="p">][</span><span class="s">&#39;nonzero_initial_guess&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">False</span>
+    <span class="n">prm_n</span><span class="p">[</span><span class="s">&#39;krylov_solver&#39;</span><span class="p">][</span><span class="s">&#39;gmres&#39;</span><span class="p">][</span><span class="s">&#39;restart&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="mi">40</span>
+    <span class="n">prm_n</span><span class="p">[</span><span class="s">&#39;krylov_solver&#39;</span><span class="p">][</span><span class="s">&#39;preconditioner&#39;</span><span class="p">][</span><span class="s">&#39;structure&#39;</span><span class="p">]</span> <span class="o">=</span> \
+                                        <span class="s">&#39;same_nonzero_pattern&#39;</span>
+    <span class="n">prm_n</span><span class="p">[</span><span class="s">&#39;krylov_solver&#39;</span><span class="p">][</span><span class="s">&#39;preconditioner&#39;</span><span class="p">][</span><span class="s">&#39;ilu&#39;</span><span class="p">][</span><span class="s">&#39;fill_level&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="mi">0</span>
+<span class="n">PROGRESS</span> <span class="o">=</span> <span class="mi">16</span>
+<span class="n">set_log_level</span><span class="p">(</span><span class="n">PROGRESS</span><span class="p">)</span>
+
+<span class="n">solver</span><span class="o">.</span><span class="n">solve</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>A list of available parameters and their default values can as
+usual be printed by calling <code class="docutils literal"><span class="pre">info(prm,</span> <span class="pre">True)</span></code>.
+The <code class="docutils literal"><span class="pre">u_</span></code> we feed to the nonlinear variational problem object
+is filled with the solution by the call <code class="docutils literal"><span class="pre">solver.solve()</span></code>.</p>
 </div>
 </div>
 

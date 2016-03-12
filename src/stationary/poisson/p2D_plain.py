@@ -6,6 +6,7 @@ Simplest example of computation and visualization with FEniCS.
 u = u0 on the boundary.
 u0 = u = 1 + x^2 + 2y^2, f = -6.
 """
+from __future__ import print_function
 from dolfin import *
 
 # Create mesh and define function space

@@ -1,293 +1,354 @@
 .. !split
 
-.. _tut:trouble:
+.. _tut:possion:nD:nmat:
 
-Troubleshooting
-===============
+A General :math:`d`-Dimensional multi-material test problem
+===========================================================
 
-.. index:: troubleshooting
+**This section is in a preliminary state!**
 
-Compilation Problems
---------------------
+The purpose of the present section is to generalize the basic
+ideas from the previous section to a problem involving
+an arbitrary number of materials in 1D, 2D, or 3D domains.
+The example also highlights how to build more general and flexible
+FEniCS applications.
 
-.. index:: compilation problems
+More to be done:
 
-Expressions and variational forms in a FEniCS program need to be
-compiled to C++ and linked with libraries if the expressions or forms
-have been modified since last time they were compiled.  The tool
-Instant, which is part of the FEniCS software suite, is used for
-compiling and linking C++ code so that it can be used with Python.
+  * Batch compilation of subdomains, see mailinglist.txt, lots of
+    useful stuff in Hake's example with "pointwise", see what the
+    bcs are etc.
 
-Sometimes the compilation fails. You can see from the
-series of error messages which statement in the Python program that
-led to a compilation problem. Make sure to scroll back and identify
-whether the problematic line is associated with an expression,
-variational form, or the solve step.
+  * Use of ``near`` or similar function (better: user-adjusted tolerance)
 
-The final line in the output of error messages points to a log file
-from the compilation where one can examine the error messages from the
-compiler. It is usually the last lines of this log file that are of
-interest. Occasionally, the compiler's message can quickly lead to an
-understanding of the problem.
-A more fruitful approach is normally to examine the below list
-of common compilation problems and their remedies.
+.. _tut:possion:nD:nmat:PDE:
 
-Problems with the Instant cache
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+The PDE problem
+---------------
 
-Instant remembers information about previous compilations and versions
-of your program. Sometimes removal of this information can solve
-the problem. Just run
+We generalize the problem in the section :ref:`tut:possion:2D:2mat:problem`
+to the case where there are :math:`s` materials :math:`\Omega_0,\ldots,\Omega_{s-1}`,
+with associated constant :math:`k` values :math:`k_0,k_1,\ldots,k_{s-1}`,
+as illustrated in Figure :ref:`tut:possion:nD:nmat:fig1`.
 
-.. code-block:: text
+.. _tut:possion:nD:nmat:fig1:
 
-        instant-clean
+.. figure:: layers.sh
+   :width: 480
 
-in a terminal window whenever you encounter a compilation problem.
+   *Sketch of a multi-material problem*
 
-Syntax errors in expressions
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Although the sketch of the domain is in two dimensions, we can easily
+define this problem in any number of dimensions, using
+the ideas of the section :ref:`tut:poisson:nD`, but the layer
+boundaries are planes :math:`x_0=\hbox{const}` and :math:`u` varies with
+:math:`x_0` only.
 
-If the compilation problem arises from line with an ``Expression``
-object, examine the syntax of the expression carefully. The section :ref:`tut:app:cpp:functions` contains some information on valid
-syntax. You may also want to examine the log file, pointed to in the
-last line in the output of error messages. The compiler's message
-about the syntax problem may lead you to a solution.
+The PDE reads
 
-Some common problems are
+.. _Eq:tut:poisson:2D:varcoeff2:
 
- 1. using ``a**b`` for exponentiation (illegal in C++) instead of ``pow(a, b)``,
+.. math::
 
- 2. forgetting that the spatial coordinates are denoted by a vector ``x``,
+    \tag{99}
+    \nabla\cdot (k\nabla u) =0 {\thinspace .}
+        
 
- 3. forgetting that the :math:`x`, :math:`y`, and :math:`z` coordinates in space correspond
-    to ``x[0]``, ``x[1]``, and ``x[2]``, respectively.
+To construct a problem where we can find an analytical solution that can
+be computed to machine precision regardless of the element size,
+we choose :math:`\Omega` as a hypercube :math:`[0,1]^d`, and the materials as
+layers in the :math:`x_0` direction, as depicted in
+Figure :ref:`tut:possion:nD:nmat:fig1` for a 2D case with four materials.
+The boundaries :math:`x_0=0` and :math:`x_0=1` have Dirichlet conditions
+:math:`u=0` and :math:`u=1`, respectively, while Neumann conditions
+:math:`\partial u/\partial n=0` are set on the remaining boundaries.
+The complete boundary-value problem is then
 
-Failure to initialize parameters in the expressions lead to a
-compilation error where this problem is explicitly pointed out.
+.. _Eq:tut:poisson:2D:varcoeff3:
 
-Problems in the solve step
-~~~~~~~~~~~~~~~~~~~~~~~~~~
+.. math::
 
-Sometimes the problem lies in the solve step where a variational form
-is turned into a system of algebraic equations.
-The error message *Unable to extract all indicies* points to a problem with the
-variational form. Common errors include
+    \tag{100}
+    \begin{array}{rcll}
+            \nabla\cdot \left(k(x_0)\nabla u(x_0,\ldots,x_{d-1})\right)
+              &= 0 &\mbox{in } \Omega, \\ 
+            u &= 0 &\mbox{on } \Gamma_0,\\ 
+            u &= 1 &\mbox{on } \Gamma_1,\\ 
+            {\partial u\over\partial n} &= 0 &\mbox{on } \Gamma_N{\thinspace .}
+          \end{array}
+        
 
- 1. missing either the ``TrialFunction`` or the ``TestFunction`` object,
+The domain :math:`\Omega` is divided into :math:`s` materials :math:`\Omega_i`, :math:`i=0,\ldots,s-1`,
+where
 
- 2. no terms without ``TrialFunction`` objects.
+.. math::
+        
+        \Omega_i = \{ (x_0,\ldots,x_{d-1})\, |\, L_i \leq x_0 < L_{i+1}\}
+        
 
- 3. mathematically invalid operations in the variational form.
+for given :math:`x_0` values :math:`0=L_0<L_1<\cdots< L_s=1`
+of the material (subdomain) boundaries.
+The :math:`k(x_0)` function takes on the value :math:`k_i` in :math:`\Omega_i`.
 
-The first problem implies that one cannot make a matrix system or
-system of nonlinear algebraic equations out of the variational form.
-The second problem means that there is no "right-hand side" terms in the PDE
-with known quantities. Sometimes this is seemingly the case mathematically
-because the "right-hand side" is zero. Variational forms must represent this
-case as ``Constant(0)*v*dx`` where ``v`` is a ``TestFunction`` object.
-An example of the third problem is to take the ``inner`` product of
-a scalar and a vector (causing in this particular case
-the error message to be "Shape mismatch").
+The exact solution of the basic PDE
+in :ref:`(100) <Eq:tut:poisson:2D:varcoeff3>`
 
-The message *Unable to extract common cell; missing cell definition in
-form or expression* will typically arise from a term in the form where
-a test function (holding mesh and cell information) is missing.
-For example, a zero right-hand side ``Constant(0)*dx`` will generate
-this error.
+.. math::
+        
+        u(x_0,\ldots,x_{d-1}) =
+        {\int_0^{x_0} (k(\tau ))^{-1}d\tau\over
+        \int_0^1 (k(\tau ))^{-1}d\tau}{\thinspace .}
+        
 
-Unable to convert object to a UFL form
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+For a piecewise constant :math:`k(x_0)` as explained, we get
 
-One common reason for the above error message is that a form is
-written without being multiplied by ``dx`` or ``ds``.
+.. _Eq:tut:poisson:2D:varcoeff2:exact:
 
-UFL reports that a numpy array cannot be converted to any UFL type
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+.. math::
 
-One reason may be that there are mathematical functions like ``sin`` and
-``exp`` operating on ``numpy`` arrays. The problem is that
-the
+    \tag{101}
+    u(x_0,\ldots,x_{d-1}) =
+        {(x_0-L_i)k_i^{-1} + \sum_{j=0}^{i-1} (L_{j+1}-L_j)k_j^{-1}\over
+        \sum_{j=0}^{s-1} (L_{j+1}-L_j)k_j^{-1}},\quad L_i\leq x_0 \leq L_{i+1}{\thinspace .}
+        
+        
 
-.. code-block:: python
+That is, :math:`u(x_0,\ldots,x_{d-1})` is piecewise linear in :math:`x_0` and
+constant in all other directions.
+If :math:`L_i`
+coincides with the element boundaries, Lagrange elements will
+reproduce this exact solution to machine precision, which is ideal
+for a test case.
 
-        from dolfin import *
+.. SHOULD WE HAVE A CLASS INSTEAD? Or functions? No, class, and a module
 
-statement imports
-``sin``, ``cos``,
-and similar mathematical functions from UFL and these are aimed at
-taking ``Function`` or ``TrialFunction``
-objects as arguments and not ``numpy`` arrays.
-The remedy is to use prefix mathematical functions aimed at
-``numpy`` arrays with ``numpy``, or ``np`` if ``numpy`` is imported as ``np``:
-``numpy.exp`` or ``np.exp``, for instance.
-Normally, boundary conditions and analytical solutions are represented
-by ``Expression`` objects and then this problem does not arise.
-The problem usually arises when pure Python functions with, e.g., analytical
-solutions are introduced for, e.g., plotting.
+.. where both the preprocess step and the solve step and special BCs
 
-All programs fail to compile
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+.. are handled. Separate general and special pieces of the problem and
 
-When encountering a compilation problem where the Instant log file says
-something about missing double quote in an ``Expression``, try compiling
-a previously working program. If that program faces the same problem,
-reboot Ubuntu and try again.  If the problem persists, try running the
-Update Manager (because unfinished updates can cause compiler
-problems), reboot and try again.
+.. the implementation such that the code can easily be resued
 
-Plotting Problems
------------------
+.. in a different problem (different PDE, different BCs, different domain).
 
-.. index:: plotting problems
+.. class BC with essential and natural conditions, class Domain
 
-The plot disapperas quickly from the screen
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+.. (:math:`k` sits in domain - or in PDE or in Problem?),
 
-You have forgotten to insert ``interactive()`` as the last statement in
-the program.
+.. class PDE, and class Problem that has all of them.
 
-Problems with Expression Objects
+.. But illustrate this first for a simpler problem!
+
+.. _tut:possion:nD:nmat:prepro:
+
+Preparing a mesh with subdomains
 --------------------------------
 
-There seems to be some bug in an Expression object
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Our first task is to generate a mesh for :math:`\Omega = [0,1]^d` and divide
+it into subdomains
 
-Run the command ``instant-clean`` to ensure that everything is
-(re)compiled.  Check the formulas in string expressions carefully, and
-make sure that divisions do not lead to integer division (i.e., at
-least one of the operands in a division must be a floating-point
-variable).
+.. math::
+        
+        \Omega_i = \{ (x_0,\ldots,x_{d-1})\, |\, L_i<x_0<L_{i+1}\}
+        
 
-I get a segmentation fault when using an Expression object
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+for given subdomain boundaries :math:`x_0=L_i`, :math:`i=0,\ldots,s`, :math:`L_0=0`, :math:`L_s=1`.
+Note that the boundaries :math:`x_0=L_i` are points in 1D, lines in 2D, and
+planes in 3D.
 
-One reason may be that the point vector ``x`` has indices out of
-bounds, e.g., that you access ``x[2]`` but the mesh is only a 2D mesh.
-Also recall that the components of ``x`` are ``x[0]``, ``x[1]``, etc.
-Accessing ``x[2]``  as the "y" coordinate is a common error.
+Let us, on the command line, specify the polynomial degree of Lagrange
+elements and the number of element divisions in the various space
+directions, as explained in detail in
+the section :ref:`tut:poisson:nD`. This results in an object ``mesh``
+representing the interval :math:`[0,1]` in 1D, the unit square in 2D, or the
+unit cube in 3D.
 
-Other Problems
---------------
-
-Only parts of the program are executed
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-Check if a call to ``interactive()`` appears in the middle of the program.
-The computations are halted by this call and not continued before
-you press ``q`` in a plot window. Most people thus prefer to
-have ``interactive()`` as the last statement.
-
-I get an error in the definition of the boundary
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-Consider this code and error message:
+Specification of subdomains (and boundary parts, if desired) is
+done using a user-defined subclass of ``SubDomain``, as
+explained in the section :ref:`tut:possion:2D:2mat:impl`.
+We could, in principle,
+introduce one subclass of ``SubDomain`` for each subdomain, and
+this would be feasible if one has a small and fixed number of
+subdomains as in the example in the section :ref:`tut:possion:2D:2mat:problem` with
+two subdomains. Our present case is more general as we
+have :math:`s` subdomains. It then makes sense to create one
+subclass ``Material`` of ``SubDomain`` and have an attribute
+to reflect the subdomain (material) number. We use this number
+in the test whether a spatial point ``x`` is inside a subdomain or not:
 
 .. code-block:: python
 
-        class DirichletBoundary(SubDomain):  # define the Dirichlet boundary
+        class Material(SubDomain):
+            """Define material (subdomain) no. i."""
+            def __init__(self, subdomain_number, subdomain_boundaries):
+                self.number = subdomain_number
+                self.boundaries = subdomain_boundaries
+                SubDomain.__init__(self)
+        
             def inside(self, x, on_boundary):
-                return on_boundary and abs(x) < 1E-14
-        
-        bc = DirichletBC(V, u0, xleft_boundary)
-        
-        Error: ValueError: The truth value of an array with more than
-        one element is ambiguous. Use a.any() or a.all()
+                i = self.number
+                L = self.boundaries         # short form (cf. the math)
+                if L[i] <= x[0] <= L[i+1]:
+                    return True
+                else:
+                    return False
 
-The reason for this error message
-is that ``x`` is a point vector, not just a number.
-In the ``inside`` function one must work with the
-components of ``x``: ``x[0]``, ``x[1]``, etc.
+The ``<=`` in the test if a point is inside a subdomain is important as
+``x`` will equal vertex coordinates in the cells, and all vertices
+of a cell must lead to a ``True`` return value from the ``inside``
+method
+for the cell to be a part of the actual subdomain. That is, the
+more mathematically natural test ``L[i] <= x[0] < L[i+1]`` fails to
+include elements with :math:`x=L_{i+1}` as boundary in subdomain :math:`\Omega_i`.
 
-The solver in a nonlinear problems does not converge
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-There can be many reasons for this common problem:
-
- 1. The form (variational formulation) is not consistent with the
-    PDE(s).
-
- 2. The boundary conditions in a Newton method are wrong. The
-    correction vector must have vanishing essential conditions where
-    the complete solution has zero or non-zero values.
-
- 3. The initial guess for the solution is not appropriate. In some
-    problems, a simple function equal to 0 just leads to a zero
-    solution or a divergent solver. Try 1 as initial guess, or
-    (better) try to identify a linear problem that can be used to
-    compute an appropriate initial guess, see the section :ref:`tut:nonlinear:Newton:algebraic`.
-
-How To Debug a FEniCS Program?
-------------------------------
-
-.. A true case study with a few bugs would be really helpful here.
-
-.. 1. Linear problem.
-
-.. 2. Nonlinear problem.
-
-.. 3. Time-dependent problem.
-
-.. 4. Time-dependent nonlinear problem.
-
-Here is an action list you may follow.
-
-**Step 1.**
-Examine the weak form and its implementation carefully.
-Check that all terms are multiplied by ``dx`` or ``ds``, and that the
-terms do not vanish; check that at least one term has both a
-``TrialFunction`` and a ``TestFunction`` (term with unknown); and check
-that at least one term has no ``TrialFunction`` (known term).
-
-**Step 2.**
-Check that Dirichlet boundary conditions are set correctly.
+The marking and numbering of all subdomains
+goes as follows:
 
 .. code-block:: python
 
-        # bcs is list of DirichletBC objects
-        for bc in bcs:
-        bc_dict = bc.get_boundary_values()
-            for dof in bc_dict:
-                print('dof %d: value=%s' % (dof, bc_dict[dof]))
+        cell_entity_dim = mesh.topology().dim()  # = d
+        subdomains = MeshFunction('uint', mesh, cell_entity_dim)
+        # Mark subdomains with numbers i=0,1,\ldots,s (=len(L)-1)
+        for i in range(s):
+            material_i = Material(i, L)
+            material_i.mark(subdomains, i)
 
-See also an expanded version of this snippet in ``dn2_p2D.py``, located
-in the directory ``stationary/poisson``.
+.. Note that the subdomain numbers must :math:`0,1,2,\ldots`.
 
-A next step in the debugging, if these values are wrong, is to
-call the functions that define the boundary parts. For example,
+We have now all the geometric information about subdomains in
+a ``MeshFunction`` object ``subdomains``. The subdomain number
+of mesh entity number ``e``, here cell ``e``, is given
+by ``subdomains.array()[e]``.
+
+.. index:: define_layers.py
+
+The code presented so far had the purpose of preparing a mesh and
+a mesh function defining the subdomain. It is smart to put this code
+in a separate file, say ``define_layers.py``,
+and view the code as a preprocessing step.
+We must then store the computed mesh and mesh function in files.
+Another program may load the files and perform the actually
+solve the boundary-value problem.
+
+Storing the mesh itself and the mesh function in XML format is done by
 
 .. code-block:: python
 
-        for coor in mesh.coordinates():
-            if my_boundary_function(coor, True):
-                print('%s is on the boundary' % coor)
+        file = File('hypercube_mesh.xml.gz')
+        file << mesh
+        file = File('layers.xml.gz')
+        file << subdomains
+
+This preprocessing code knows about the layer geometries and
+the corresponding :math:`k`, which
+must be propagated to the solver code. One idea is to let the
+preprocessing code write a Python module containing
+the ``L`` and ``k`` lists as well as an implementation of a
+function that evaluates the exact solution.
+The solver code can import this module to get access to ``L``,
+``k``, and the exact solution (for comparison).
+The relevant Python code for generating a Python module may take
+the form
+
+.. code-block:: python
+
+        f = open('u_layered.py', 'w')
+        f.write("""
+        import numpy
+        L = numpy.array(
+        #s, float)
+        k = numpy.array(
+        #s, float)
+        s = len(L)-1
         
-        # or, in case of a SubDomain subclass my_subdomain_object,
-        for coor in mesh.coordinates():
-            if my_subdomain_object.inside(coor, True):
-                print('%s is on the boundary' % coor)
+        def u_e(x):
+            # First find which subdomain x0 is located in
+            for i in range(len(L)-1):
+                if L[i] <= x <= L[i+1]:
+                    break
+        
+            # Vectorized implementation of summation:
+            s2 = sum((L[1:s+1] - L[0:s])*(1.0/k[:]))
+            if i == 0:
+                u = (x - L[i])*(1.0/k[0])/s2
+            else:
+                s1 = sum((L[1:i+1] - L[0:i])*(1.0/k[0:i]))
+                u = ((x - L[i])*(1.0/k[i]) + s1)/s2
+            return u
+        
+        if __name__ == '__main__':
+            # Plot the exact solution
+            from scitools.std import linspace, plot, array
+            x = linspace(0, 1, 101)
+            u = array([u_e(xi) for xi in x])
+            print(u)
+            plot(x, u)
+        """
+        # (L, k))
+        f.close()
 
-You may map the solution to a structured grid with structured data,
-i.e., a ``BoxField``, see the chapters :ref:`tut:quickviz`
-and :ref:`tut:timedep:diffusion2:sin`, and then examine the solution field
-along grid lines in :math:`x` and :math:`y` directions. For example, you can
-easily check that correct
-Dirichlet conditions are set, e.g.,
-at the upper boundary (check ``u_box[:,-1]``).
+.. _tut:possion:nD:nmat:solve:
 
-**Step 4.**
-Switching to a simple set of coefficients and boundary conditions,
-such that the solution becomes simple too,
-but still obeys the same PDE, may help since it is then easier to
-examine numerical values in the solution array.
+Solving the PDE problem
+-----------------------
 
-**Step 5.**
-Formulate a corresponding 1D problem. Often this can be
-done by just running the problem with a 1D mesh. Doing hand calculations
-of element matrices and vectors, and comparing the assembled system
-from these hand calculations with the assembled system from the
-FEniCS program can uncover bugs. For nonlinear problems, or problems
-with variable coefficients, it is usually wise to choose simple
-coefficients so that the problem becomes effectively linear and the
-hand calculations are doable.
+The solver program starts with loading a prepared mesh with a mesh
+function representing the subdomains:
+
+.. code-block:: python
+
+        mesh = Mesh('hypercube_mesh.xml.gz')
+        subdomains = MeshFunction('uint', mesh, 'layers.xml.gz')
+
+The next task is to define the :math:`k` function as a finite element function.
+As we recall from the section :ref:`tut:possion:2D:2mat:impl`, a :math:`k` that
+is constant in each element is suitable.
+We then follow the recipe from the section :ref:`tut:possion:2D:2mat:impl`
+to compute :math:`k`:
+
+.. code-block:: python
+
+        V0 = FunctionSpace(mesh, 'DG', 0)
+        k = Function(V0)
+        
+        # Vectorized calculation
+        help = numpy.asarray(subdomains.array(), dtype=numpy.int32)
+        k.vector()[:] = numpy.choose(help, k_values)
+
+The essential boundary conditions are defined in the same way is
+in ``dn2_p2D.py`` from the section :ref:`tut:poisson:multiple:Dirichlet`
+and therefore not repeated here.
+The variational problem is defined and solved in a standard manner,
+
+.. code-block:: python
+
+        u = TrialFunction(V)
+        v = TestFunction(V)
+        f = Constant(0)
+        a = k*inner(nabla_grad(u), nabla_grad(v))*dx
+        L = f*v*dx
+        
+        problem = VariationalProblem(a, L, bc)
+        u = problem.solve()
+
+Plotting the discontinuous ``k`` is often desired. Just a ``plot(k)``
+makes a continuous function out of ``k``, which is not what we want.
+Making a ``MeshFunction`` over cells and filling in the right :math:`k`
+values results in an object that can be displayed as a discontinuous field.
+A relevant code is
+
+.. code-block:: python
+
+        k_meshfunc = MeshFunction('double', mesh, mesh.topology().dim())
+        
+        # Scalar version
+        for i in range(len(subdomains.array())):
+            k_meshfunc.array()[i] = k_values[subdomains.array()[i]]
+        
+        # Vectorized version
+        help = numpy.asarray(subdomains.array(), dtype=numpy.int32)
+        k_meshfunc.array()[:] = numpy.choose(help, k_values)
+        
+        plot(k_meshfunc, title='k as mesh function')
+
+The file ``Poisson_layers.py`` contains the complete code.
 

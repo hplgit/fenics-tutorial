@@ -16,6 +16,7 @@ function system {
   fi
 }
 
+rm -rf tmp_*.do.txt  # don't spellcheck old versions
 system doconce spellcheck -d .dict4spell.txt *.do.txt
 
 # We have Norwegian characters in the acknowledgement and this requires utf-8

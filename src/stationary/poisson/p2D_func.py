@@ -2,6 +2,7 @@
 Solve -Laplace(u) = f on the unit square
 with u = u0 on the boundary.
 """
+from __future__ import print_function
 from dolfin import *
 
 def solver(f, u0, Nx, Ny, degree=1):

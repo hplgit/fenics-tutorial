@@ -6,7 +6,7 @@
   <head>
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
     
-    <title>Miscellaneous topics</title>
+    <title>Handling domains with different materials</title>
     
     <link rel="stylesheet" href="_static/fenics.css" type="text/css" />
     <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
@@ -41,9 +41,9 @@
         </style>
 
     
-    <link rel="top" title="FEniCS Tutorial" href="index.html" />
-    <link rel="next" title="Troubleshooting" href="._ftut008.html" />
-    <link rel="prev" title="More Examples" href="._ftut006.html" />
+    <link rel="top" title="The FEniCS Tutorial" href="index.html" />
+    <link rel="next" title="A General \(d\)-Dimensional multi-material test problem" href="._ftut008.html" />
+    <link rel="prev" title="Creating more complex domains" href="._ftut006.html" />
 
 <!--[if lte IE 6]>
 <link rel="stylesheet" href="_static/ie6.css" type="text/css" media="screen" charset="utf-8" />
@@ -132,467 +132,415 @@
         <div class="bodywrapper">
           <div class="body" role="main">
             
-  <div class="section" id="miscellaneous-topics">
-<h1>Miscellaneous topics<a class="headerlink" href="#miscellaneous-topics" title="Permalink to this headline">¶</a></h1>
-<div class="section" id="glossary">
-<h2>Glossary<a class="headerlink" href="#glossary" title="Permalink to this headline">¶</a></h2>
-<span class="target" id="index-0"></span><span class="target" id="index-1"></span><span class="target" id="index-2"></span><span class="target" id="index-3"></span><span class="target" id="index-4"></span><span class="target" id="index-5"></span><span class="target" id="index-6"></span><span class="target" id="index-7"></span><p id="index-8">Below we explain some key terms used in this tutorial.</p>
+  <div class="section" id="handling-domains-with-different-materials">
+<h1>Handling domains with different materials<a class="headerlink" href="#handling-domains-with-different-materials" title="Permalink to this headline">¶</a></h1>
+<span class="target" id="index-0"></span><p id="index-1">Solving PDEs in domains made up of different materials is a frequently
+encountered task. In FEniCS, these kind of problems are handled by
+defining subdomains inside the domain. The subdomains may represent the
+various materials. We can thereafter define material properties through
+functions, known in FEniCS as <em>mesh functions</em>,
+that are piecewise constant in each subdomain.
+A simple example with
+two materials (subdomains) in 2D will
+demonstrate the basic steps in the process.</p>
+<div class="section" id="working-with-two-subdomains">
+<span id="tut-possion-2d-2mat-problem"></span><h2>Working with two subdomains<a class="headerlink" href="#working-with-two-subdomains" title="Permalink to this headline">¶</a></h2>
+<div class="figure" id="id1">
+<span id="tut-possion-2d-2mat-fig1"></span><a class="reference internal image-reference" href="_images/layered_medium_2.png"><img alt="_images/layered_medium_2.png" src="_images/layered_medium_2.png" style="width: 400px;" /></a>
+<p class="caption"><span class="caption-text"><em>Medium with discontinuous material properties</em></span></p>
+</div>
+<p>Suppose we want to solve</p>
+<div class="math" id="eq-tut-poisson-2d-2mat-varcoeff2">
+\[\tag{90}
+\nabla\cdot \left\lbrack k(x,y)\nabla u(x,y)\right\rbrack = 0,\]</div>
+<p>in a domain <span class="math">\(\Omega\)</span> consisting of two subdomains where <span class="math">\(k\)</span> takes on
+a different value in each subdomain.
+For simplicity, yet without loss of generality, we choose for the current
+implementation
+the domain <span class="math">\(\Omega = [0,1]\times [0,1]\)</span> and divide it into two equal
+subdomains,
+as depicted in Figure <a class="reference internal" href="#tut-possion-2d-2mat-fig1"><span class="std std-ref">Medium with discontinuous material properties</span></a>,</p>
+<div class="math">
+\[\Omega_0 = [0, 1]\times [0,1/2],\quad
+\Omega_1 = [0, 1]\times (1/2,1]{\thinspace .}\]</div>
+<p>We define <span class="math">\(k(x,y)=k_0\)</span> in <span class="math">\(\Omega_0\)</span> and <span class="math">\(k(x,y)=k_1\)</span> in <span class="math">\(\Omega_1\)</span>,
+where <span class="math">\(k_0&gt;0\)</span> and <span class="math">\(k_1&gt;0\)</span> are given constants.
+As boundary conditions, we choose <span class="math">\(u=0\)</span> at <span class="math">\(y=0\)</span>, <span class="math">\(u=1\)</span> at <span class="math">\(y=1\)</span>,
+and <span class="math">\(\partial u/\partial n=0\)</span> at <span class="math">\(x=0\)</span> and <span class="math">\(x=1\)</span>.
+One can show that the exact solution is now given by</p>
+<div class="math" id="eq-auto42">
+\[\begin{split}\tag{91}
+u(x, y) = \left\lbrace\begin{array}{ll}
+    {2yk_1\over k_0+k_1}, &amp; y \leq 1/2\\
+    {(2y-1)k_0 + k_1\over k_0+k_1}, &amp; y \geq 1/2
+    \end{array}\right.\end{split}\]</div>
+<p>As long as the element boundaries coincide with the internal boundary
+<span class="math">\(y=1/2\)</span>, this piecewise linear solution should be exactly recovered
+by Lagrange elements of any degree. We use this property to verify
+the implementation.</p>
+<p>Physically, the present problem may correspond to heat conduction, where
+the heat conduction in <span class="math">\(\Omega_1\)</span> is ten times more efficient than
+in <span class="math">\(\Omega_0\)</span>. An alternative interpretation is flow in porous media
+with two geological layers, where the layers&#8217; ability to transport
+the fluid differs by a factor of 10.</p>
+</div>
+<div class="section" id="implementation-2">
+<span id="tut-possion-2d-2mat-impl"></span><h2>Implementation<a class="headerlink" href="#implementation-2" title="Permalink to this headline">¶</a></h2>
+<span class="target" id="index-2"></span><p id="index-3">The new functionality in this subsection regards how to define the
+subdomains <span class="math">\(\Omega_0\)</span> and <span class="math">\(\Omega_1\)</span>. For this purpose we need to use
+subclasses of class <code class="docutils literal"><span class="pre">SubDomain</span></code>, not only plain functions as we have
+used so far for specifying boundaries. Consider the boundary function</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="k">def</span> <span class="nf">boundary</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">on_boundary</span><span class="p">):</span>
+    <span class="n">tol</span> <span class="o">=</span> <span class="mf">1E-14</span>
+    <span class="k">return</span> <span class="n">on_boundary</span> <span class="ow">and</span> <span class="nb">abs</span><span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span> <span class="o">&lt;</span> <span class="n">tol</span>
+</pre></div>
+</div>
+<p>for defining the boundary <span class="math">\(x=0\)</span>. Instead of using such a stand-alone
+function, we can create an instance (or object)
+of a subclass of <code class="docutils literal"><span class="pre">SubDomain</span></code>,
+which implements the <code class="docutils literal"><span class="pre">inside</span></code> method as an alternative to the
+<code class="docutils literal"><span class="pre">boundary</span></code> function:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="k">class</span> <span class="nc">Boundary</span><span class="p">(</span><span class="n">SubDomain</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">inside</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">on_boundary</span><span class="p">):</span>
+        <span class="n">tol</span> <span class="o">=</span> <span class="mf">1E-14</span>
+        <span class="k">return</span> <span class="n">on_boundary</span> <span class="ow">and</span> <span class="nb">abs</span><span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span> <span class="o">&lt;</span> <span class="n">tol</span>
+
+<span class="n">boundary</span> <span class="o">=</span> <span class="n">Boundary</span><span class="p">()</span>
+<span class="n">bc</span> <span class="o">=</span> <span class="n">DirichletBC</span><span class="p">(</span><span class="n">V</span><span class="p">,</span> <span class="n">Constant</span><span class="p">(</span><span class="mi">0</span><span class="p">),</span> <span class="n">boundary</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>A word about computer science terminology may be used here:
+The term <em>instance</em>
+means a Python object of a particular type (such as <code class="docutils literal"><span class="pre">SubDomain</span></code>,
+<code class="docutils literal"><span class="pre">Function</span></code>
+<code class="docutils literal"><span class="pre">FunctionSpace</span></code>, etc.).
+Many use <em>instance</em> and <em>object</em>
+as interchangeable terms. In other computer programming languages one may
+also use the term <em>variable</em> for the same thing.
+We mostly use the well-known  term <em>object</em> in this text.</p>
+<p>A subclass of <code class="docutils literal"><span class="pre">SubDomain</span></code> with an <code class="docutils literal"><span class="pre">inside</span></code> method offers
+functionality for marking parts of the domain or
+the boundary. Now we need to define one class for the
+subdomain <span class="math">\(\Omega_0\)</span>
+where <span class="math">\(y\leq 1/2\)</span> and another for the subdomain <span class="math">\(\Omega_1\)</span> where <span class="math">\(y\geq 1/2\)</span>:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="k">class</span> <span class="nc">Omega0</span><span class="p">(</span><span class="n">SubDomain</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">inside</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">on_boundary</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">True</span> <span class="k">if</span> <span class="n">x</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">&lt;=</span> <span class="mf">0.5</span> <span class="k">else</span> <span class="bp">False</span>
+
+<span class="k">class</span> <span class="nc">Omega1</span><span class="p">(</span><span class="n">SubDomain</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">inside</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">on_boundary</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">True</span> <span class="k">if</span> <span class="n">x</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">&gt;=</span> <span class="mf">0.5</span> <span class="k">else</span> <span class="bp">False</span>
+</pre></div>
+</div>
+<p>Notice the use of <code class="docutils literal"><span class="pre">&lt;=</span></code> and <code class="docutils literal"><span class="pre">&gt;=</span></code> in both tests. For a cell to
+belong to, e.g., <span class="math">\(\Omega_1\)</span>, the <code class="docutils literal"><span class="pre">inside</span></code> method must return
+<code class="docutils literal"><span class="pre">True</span></code> for all the vertices <code class="docutils literal"><span class="pre">x</span></code> of the cell. So to make the
+cells at the internal boundary <span class="math">\(y=1/2\)</span> belong to <span class="math">\(\Omega_1\)</span>, we need
+the test <code class="docutils literal"><span class="pre">x[1]</span> <span class="pre">&gt;=</span> <span class="pre">0.5</span></code>.</p>
+<p>The next task is to use a <code class="docutils literal"><span class="pre">MeshFunction</span></code> to mark all
+cells in <span class="math">\(\Omega_0\)</span> with the subdomain number 0 and all cells in <span class="math">\(\Omega_1\)</span>
+with the subdomain number 1.
+Our convention is to number subdomains as <span class="math">\(0,1,2,\ldots\)</span>.</p>
+<p>A <code class="docutils literal"><span class="pre">MeshFunction</span></code> is a discrete function that can be evaluated at a set
+of so-called <em>mesh entities</em>. Examples of mesh entities are
+cells, facets, and vertices. A <code class="docutils literal"><span class="pre">MeshFunction</span></code> over cells is suitable to
+represent subdomains (materials), while a <code class="docutils literal"><span class="pre">MeshFunction</span></code> over
+facets is used to represent pieces of external or internal boundaries.
+Mesh functions over vertices can be used to describe continuous fields.</p>
+<p>Since we need to define subdomains of <span class="math">\(\Omega\)</span>
+in the present example, we must make use
+of a <code class="docutils literal"><span class="pre">MeshFunction</span></code> over cells. The
+<code class="docutils literal"><span class="pre">MeshFunction</span></code> constructor is fed with three arguments: 1) the type
+of value: <code class="docutils literal"><span class="pre">'int'</span></code> for integers, <code class="docutils literal"><span class="pre">'uint'</span></code> for positive
+(unsigned) integers, <code class="docutils literal"><span class="pre">'double'</span></code> for real numbers, and
+<code class="docutils literal"><span class="pre">'bool'</span></code> for logical values; 2) a <code class="docutils literal"><span class="pre">Mesh</span></code> object, and 3)
+the topological dimension of the mesh entity in question: cells
+have topological dimension equal to the number of space dimensions in
+the PDE problem, and facets have one dimension lower.
+Alternatively, the constructor can take just a filename
+and initialize the <code class="docutils literal"><span class="pre">MeshFunction</span></code> from data in a file.</p>
+<p>We start with creating a <code class="docutils literal"><span class="pre">MeshFunction</span></code> whose
+values are non-negative integers (<code class="docutils literal"><span class="pre">'uint'</span></code>)
+for numbering the subdomains.
+The mesh entities of interest are the cells, which have dimension 2
+in a two-dimensional problem (1 in 1D, 3 in 3D). The appropriate code for
+defining the <code class="docutils literal"><span class="pre">MeshFunction</span></code> for two subdomains then reads</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">subdomains</span> <span class="o">=</span> <span class="n">MeshFunction</span><span class="p">(</span><span class="s">&#39;uint&#39;</span><span class="p">,</span> <span class="n">mesh</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>
+<span class="c"># Mark subdomains with numbers 0 and 1</span>
+<span class="n">subdomain0</span> <span class="o">=</span> <span class="n">Omega0</span><span class="p">()</span>
+<span class="n">subdomain0</span><span class="o">.</span><span class="n">mark</span><span class="p">(</span><span class="n">subdomains</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+<span class="n">subdomain1</span> <span class="o">=</span> <span class="n">Omega1</span><span class="p">()</span>
+<span class="n">subdomain1</span><span class="o">.</span><span class="n">mark</span><span class="p">(</span><span class="n">subdomains</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Calling <code class="docutils literal"><span class="pre">subdomains.array()</span></code> returns a <code class="docutils literal"><span class="pre">numpy</span></code> array of the
+subdomain values. That is, <code class="docutils literal"><span class="pre">subdomain.array()[i]</span></code> is
+the subdomain value of cell number <code class="docutils literal"><span class="pre">i</span></code>. This array is used to
+look up the subdomain or material number of a specific element.</p>
+<p>We need a function <code class="docutils literal"><span class="pre">k</span></code> that is constant in
+each subdomain <span class="math">\(\Omega_0\)</span> and <span class="math">\(\Omega_1\)</span>. Since we want <code class="docutils literal"><span class="pre">k</span></code>
+to be a finite element function, it is natural to choose
+a space of functions that are constant over each element.
+The family of discontinuous Galerkin methods, in FEniCS
+denoted by <code class="docutils literal"><span class="pre">'DG'</span></code>, is suitable for this purpose. Since we
+want functions that are piecewise constant, the value of
+the degree parameter is zero:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">V0</span> <span class="o">=</span> <span class="n">FunctionSpace</span><span class="p">(</span><span class="n">mesh</span><span class="p">,</span> <span class="s">&#39;DG&#39;</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+<span class="n">k</span>  <span class="o">=</span> <span class="n">Function</span><span class="p">(</span><span class="n">V0</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>To fill <code class="docutils literal"><span class="pre">k</span></code> with the right values in each element, we loop over
+all cells (i.e., indices in <code class="docutils literal"><span class="pre">subdomain.array()</span></code>),
+extract the corresponding subdomain number of a cell,
+and assign the corresponding <span class="math">\(k\)</span> value to the <code class="docutils literal"><span class="pre">k.vector()</span></code> array:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">k_values</span> <span class="o">=</span> <span class="p">[</span><span class="mf">1.5</span><span class="p">,</span> <span class="mi">50</span><span class="p">]</span>  <span class="c"># values of k in the two subdomains</span>
+<span class="k">for</span> <span class="n">cell_no</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">subdomains</span><span class="o">.</span><span class="n">array</span><span class="p">())):</span>
+    <span class="n">subdomain_no</span> <span class="o">=</span> <span class="n">subdomains</span><span class="o">.</span><span class="n">array</span><span class="p">()[</span><span class="n">cell_no</span><span class="p">]</span>
+    <span class="n">k</span><span class="o">.</span><span class="n">vector</span><span class="p">()[</span><span class="n">cell_no</span><span class="p">]</span> <span class="o">=</span> <span class="n">k_values</span><span class="p">[</span><span class="n">subdomain_no</span><span class="p">]</span>
+</pre></div>
+</div>
+<p>Long loops in Python are known to be slow, so for large meshes
+it is preferable to avoid such loops and instead use <em>vectorized code</em>.
+Normally this implies that the loop must be replaced by
+calls to functions from the <code class="docutils literal"><span class="pre">numpy</span></code> library that operate on complete
+arrays (in efficient C code). The functionality we want in the present
+case is to compute an array of the same size as
+<code class="docutils literal"><span class="pre">subdomain.array()</span></code>, but where the value <code class="docutils literal"><span class="pre">i</span></code> of an entry
+in <code class="docutils literal"><span class="pre">subdomain.array()</span></code> is replaced by <code class="docutils literal"><span class="pre">k_values[i]</span></code>.
+Such an operation is carried out by the <code class="docutils literal"><span class="pre">numpy</span></code> function <code class="docutils literal"><span class="pre">choose</span></code>:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">help</span> <span class="o">=</span> <span class="n">numpy</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">subdomains</span><span class="o">.</span><span class="n">array</span><span class="p">(),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">numpy</span><span class="o">.</span><span class="n">int32</span><span class="p">)</span>
+<span class="n">k</span><span class="o">.</span><span class="n">vector</span><span class="p">()[:]</span> <span class="o">=</span> <span class="n">numpy</span><span class="o">.</span><span class="n">choose</span><span class="p">(</span><span class="n">help</span><span class="p">,</span> <span class="n">k_values</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>The <code class="docutils literal"><span class="pre">help</span></code> array is required since <code class="docutils literal"><span class="pre">choose</span></code> cannot work with
+<code class="docutils literal"><span class="pre">subdomain.array()</span></code> because this array has elements of
+type <code class="docutils literal"><span class="pre">uint32</span></code>. We must therefore transform this array to an array
+<code class="docutils literal"><span class="pre">help</span></code> with standard <code class="docutils literal"><span class="pre">int32</span></code> integers.</p>
+<p>Having the <code class="docutils literal"><span class="pre">k</span></code> function ready for finite element computations, we
+can proceed in the normal manner with defining essential boundary
+conditions, as in the section <a class="reference internal" href="._ftut003.html#tut-poisson-multiple-dirichlet"><span class="std std-ref">Multiple Dirichlet conditions</span></a>,
+and the <span class="math">\(a(u,v)\)</span> and <span class="math">\(L(v)\)</span> forms, as in
+the section <a class="reference internal" href="._ftut003.html#tut-possion-2d-varcoeff"><span class="std std-ref">A variable-coefficient poisson problem</span></a>.
+All the details can be found in the file <code class="docutils literal"><span class="pre">mat2_p2D.py</span></code>.</p>
+</div>
+<div class="section" id="multiple-neumann-robin-and-dirichlet-condition">
+<span id="tut-poisson-mat-neumann"></span><h2>Multiple Neumann, Robin, and Dirichlet condition<a class="headerlink" href="#multiple-neumann-robin-and-dirichlet-condition" title="Permalink to this headline">¶</a></h2>
+<span class="target" id="index-4"></span><span class="target" id="index-5"></span><span class="target" id="index-6"></span><p id="index-7">Let us go back to the model problem from
+the section <a class="reference internal" href="._ftut003.html#tut-poisson-multiple-dirichlet"><span class="std std-ref">Multiple Dirichlet conditions</span></a>
+where we had both Dirichlet and Neumann conditions.
+The term <code class="docutils literal"><span class="pre">v*g*ds</span></code> in the expression for <code class="docutils literal"><span class="pre">L</span></code> implies a
+boundary integral over the complete boundary, or in FEniCS terms,
+an integral over all exterior facets.
+However, the contributions from the parts of the boundary where we have
+Dirichlet conditions are erased when the linear system is modified by
+the Dirichlet conditions.
+We would like, from an efficiency point of view, to integrate <code class="docutils literal"><span class="pre">v*g*ds</span></code>
+only over the parts of the boundary where we actually have Neumann conditions.
+And more importantly,
+in other problems one may have different Neumann conditions or
+other conditions like the Robin type condition.
+With the mesh function concept we can mark
+different parts of the boundary and integrate over specific parts.
+The same concept can also be used to treat multiple Dirichlet conditions.
+The forthcoming text illustrates how this is done.</p>
+<p>Essentially, we still stick to the model problem from
+the section <a class="reference internal" href="._ftut003.html#tut-poisson-multiple-dirichlet"><span class="std std-ref">Multiple Dirichlet conditions</span></a>, but replace the
+Neumann condition at <span class="math">\(y=0\)</span> by a <em>Robin condition</em>:</p>
+<div class="math">
+\[-{\partial u\over\partial n} = p(u-q),\]</div>
+<p>where <span class="math">\(p\)</span> and <span class="math">\(q\)</span> are specified functions.
+The Robin condition is
+most often used to model heat transfer to the surroundings and arise
+naturally from Newton&#8217;s cooling law.</p>
+<p>Since we have prescribed a simple solution in our model problem,
+<span class="math">\(u=1+x^2+2y^2\)</span>, we adjust <span class="math">\(p\)</span> and <span class="math">\(q\)</span> such that the condition holds
+at <span class="math">\(y=0\)</span>. This implies that <span class="math">\(q=1+x^2+2y^2\)</span> and <span class="math">\(p\)</span> can be arbitrary
+(the normal derivative at <span class="math">\(y=0\)</span>: <span class="math">\(\partial u/\partial n = -\partial u/\partial y = -4y=0\)</span>).</p>
+<p>Now we have four parts of the boundary: <span class="math">\(\Gamma_N\)</span> which corresponds to
+the upper side <span class="math">\(y=1\)</span>, <span class="math">\(\Gamma_R\)</span> which corresponds to the lower part
+<span class="math">\(y=0\)</span>, <span class="math">\(\Gamma_0\)</span> which corresponds to the left part <span class="math">\(x=0\)</span>, and
+<span class="math">\(\Gamma_1\)</span> which corresponds to the right part <span class="math">\(x=1\)</span>. The
+complete boundary-value problem reads</p>
+<div class="math" id="eq-tut-poisson-2d-dn3">
+\[\tag{92}
+- \nabla^2 u = -6 \mbox{ in } \Omega,\]</div>
+<div class="math" id="eq-tut-poisson-2d-dn3-bc1">
+\[\tag{93}
+u = u_L \mbox{ on } \Gamma_0,\]</div>
+<div class="math" id="eq-tut-poisson-2d-dn3-bc2">
+\[\tag{94}
+u = u_R \mbox{ on } \Gamma_1,\]</div>
+<div class="math" id="eq-tut-poisson-2d-dn3-bc3">
+\[\tag{95}
+- {\partial u\over\partial n} = p(u-q) \mbox{ on } \Gamma_R,\]</div>
+<div class="math" id="eq-tut-poisson-2d-dn3-bc4">
+\[\tag{96}
+- {\partial u\over\partial n} = g \mbox{ on } \Gamma_N{\thinspace .}\]</div>
+<p>The involved prescribed functions are <span class="math">\(u_L= 1 + 2y^2\)</span>,
+<span class="math">\(u_R = 2 + 2y^2\)</span>, <span class="math">\(q=1+x^2+2y^2\)</span>, <span class="math">\(p\)</span> is arbitrary, and <span class="math">\(g=-4y\)</span>.</p>
+<p>Integration by parts of <span class="math">\(-\int_\Omega v\nabla^2 u {\, \mathrm{d}x}\)</span> becomes
+as usual</p>
+<div class="math">
+\[ -\int_\Omega v\nabla^2 u {\, \mathrm{d}x}
+= \int_\Omega\nabla u\cdot \nabla v {\, \mathrm{d}x} - \int_{\partial\Omega}{\partial u\over
+\partial n}v {\, \mathrm{d}s}{\thinspace .}\]</div>
+<p>The boundary integral vanishes on <span class="math">\(\Gamma_0\cup\Gamma_1\)</span>, and
+we split the parts over <span class="math">\(\Gamma_N\)</span> and <span class="math">\(\Gamma_R\)</span> since we have
+different conditions at those parts:</p>
+<div class="math">
+\[- \int_{\partial\Omega}v{\partial u\over\partial n} {\, \mathrm{d}s}
+=
+-\int_{\Gamma_N}v{\partial u\over\partial n} {\, \mathrm{d}s} -
+\int_{\Gamma_R}v{\partial u\over\partial n} {\, \mathrm{d}s}
+= \int_{\Gamma_N}vg {\, \mathrm{d}s} +
+\int_{\Gamma_R}vp(u-q) {\, \mathrm{d}s}{\thinspace .}\]</div>
+<p>The weak form then becomes</p>
+<div class="math">
+\[\int_{\Omega} \nabla u\cdot \nabla v {\, \mathrm{d}x} +
+\int_{\Gamma_N} gv {\, \mathrm{d}s} + \int_{\Gamma_R}p(u-q)v {\, \mathrm{d}s}
+= \int_{\Omega} fv {\, \mathrm{d}x},\]</div>
+<p>We want to write this weak form in the standard
+notation <span class="math">\(a(u,v)=L(v)\)</span>, which
+requires that we identify all integrals with <em>both</em> <span class="math">\(u\)</span> and <span class="math">\(v\)</span>,
+and collect these in <span class="math">\(a(u,v)\)</span>, while the remaining integrals with
+<span class="math">\(v\)</span> and not <span class="math">\(u\)</span> go
+into <span class="math">\(L(v)\)</span>.
+The integral from the Robin condition must of this reason be split in two
+parts:</p>
+<div class="math">
+\[\int_{\Gamma_R}p(u-q)v {\, \mathrm{d}s}
+= \int_{\Gamma_R}puv {\, \mathrm{d}s} - \int_{\Gamma_R}pqv {\, \mathrm{d}s}{\thinspace .}\]</div>
+<p>We then have</p>
+<div class="math" id="eq-tut-poisson-2d-dn3-var-a">
+\[\tag{97}
+a(u, v) = \int_{\Omega} \nabla u\cdot \nabla v {\, \mathrm{d}x}
+    + \int_{\Gamma_R}puv {\, \mathrm{d}s},\]</div>
+<div class="math" id="eq-tut-poisson-2d-dn3-var-l">
+\[\tag{98}
+L(v) = \int_{\Omega} fv {\, \mathrm{d}x} -
+    \int_{\Gamma_N} g v {\, \mathrm{d}s} + \int_{\Gamma_R}pqv {\, \mathrm{d}s}{\thinspace .}\]</div>
+<p id="index-8">A natural starting point for implementation is the <code class="docutils literal"><span class="pre">dn2_p2D.py</span></code>
+program in the directory <code class="docutils literal"><span class="pre">stationary/poisson</span></code>. The new aspects are</p>
 <blockquote>
-<div><dl class="docutils">
-<dt>FEniCS: name of a software suite composed of many individual software</dt>
-<dd>components (see <code class="docutils literal"><span class="pre">fenicsproject.org</span></code>). Some components are DOLFIN and
-Viper, explicitly referred to in this tutorial. Others are
-FFC and FIAT, heavily used by the programs appearing in this tutorial,
-but never explicitly used from the programs.</dd>
-<dt>DOLFIN: a FEniCS component, more precisely a C++ library, with</dt>
-<dd>a Python interface, for performing important actions in finite element
-programs. DOLFIN makes use of many other FEniCS components and
-many external software packages.</dd>
-<dt>Viper:  a FEniCS component for quick visualization of finite element</dt>
-<dd>meshes and solutions.</dd>
-<dt>UFL:    a FEniCS component implementing the <em>unified form language</em></dt>
-<dd>for specifying finite element forms in FEniCS programs.
-The definition of the forms, typically called <code class="docutils literal"><span class="pre">a</span></code> and <code class="docutils literal"><span class="pre">L</span></code> in
-this tutorial, must have legal UFL syntax. The same applies to
-the definition of functionals (see the section <a class="reference internal" href="._ftut001.html#tut-poisson1-functionals"><span class="std std-ref">Computing functionals</span></a>).</dd>
-<dt>Class (Python): a programming construction for creating objects</dt>
-<dd>containing a set of variables and functions. Most
-types of FEniCS objects are defined through the class concept.</dd>
-<dt>Instance (Python): an object of a particular type, where the type is</dt>
-<dd>implemented as a class. For instance,
-<code class="docutils literal"><span class="pre">mesh</span> <span class="pre">=</span> <span class="pre">UnitIntervalMesh(10)</span></code> creates
-an instance of class <code class="docutils literal"><span class="pre">UnitIntervalMesh</span></code>, which is reached by the
-name <code class="docutils literal"><span class="pre">mesh</span></code>. (Class <code class="docutils literal"><span class="pre">UnitIntervalMesh</span></code> is actually just
-an interface to a corresponding C++ class in the DOLFIN C++ library.)</dd>
-<dt>Class method (Python): a function in a class, reached by dot</dt>
-<dd>notation: <code class="docutils literal"><span class="pre">instance_name.method_name</span></code></dd>
-<dt>argument <code class="docutils literal"><span class="pre">self</span></code> (Python): required first parameter in class methods,</dt>
-<dd>representing a particular object of the class.
-Used in method definitions, but never in calls to a method.
-For example, if <code class="docutils literal"><span class="pre">method(self,</span> <span class="pre">x)</span></code> is the definition of
-<code class="docutils literal"><span class="pre">method</span></code> in a class <code class="docutils literal"><span class="pre">Y</span></code>, <code class="docutils literal"><span class="pre">method</span></code> is called as
-<code class="docutils literal"><span class="pre">y.method(x)</span></code>, where <code class="docutils literal"><span class="pre">y</span></code> is an instance of class <code class="docutils literal"><span class="pre">Y</span></code>.
-In a call like <code class="docutils literal"><span class="pre">y.method(x)</span></code>, <code class="docutils literal"><span class="pre">method</span></code> is invoked with
-<code class="docutils literal"><span class="pre">self=y</span></code>.</dd>
-<dt>Class attribute (Python): a variable in a class, reached by</dt>
-<dd>dot notation: <code class="docutils literal"><span class="pre">instance_name.attribute_name</span></code></dd>
-</dl>
+<div><ol class="arabic simple">
+<li>definition of a mesh function over the boundary,</li>
+<li>marking each side as a subdomain, using the mesh function,</li>
+<li>splitting a boundary integral into parts.</li>
+</ol>
 </div></blockquote>
-</div>
-<div class="section" id="overview-of-objects-and-functions">
-<h2>Overview of objects and functions<a class="headerlink" href="#overview-of-objects-and-functions" title="Permalink to this headline">¶</a></h2>
-<p>Most classes in FEniCS have an explanation of the purpose and usage
-that can be seen by using the general documentation command
-<code class="docutils literal"><span class="pre">pydoc</span></code> for Python objects. You can type</p>
-<div class="highlight-text" id="index-9"><div class="highlight"><pre>pydoc dolfin.X
+<p>Task 1 makes use of the <code class="docutils literal"><span class="pre">MeshFunction</span></code> object, but contrary to
+the section <a class="reference internal" href="#tut-possion-2d-2mat-impl"><span class="std std-ref">Implementation</span></a>, this is not a function over
+cells, but a function over cell facets. The topological dimension of
+cell facets is one lower than the cell interiors, so in a two-dimensional
+problem the dimension
+becomes 1. In general, the facet dimension
+is given as <code class="docutils literal"><span class="pre">mesh.topology().dim()-1</span></code>,
+which we use in the code for ease of direct reuse in other problems.
+The construction of a <code class="docutils literal"><span class="pre">MeshFunction</span></code> object to mark boundary parts
+now reads</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">boundary_parts</span> <span class="o">=</span> \
+  <span class="n">MeshFunction</span><span class="p">(</span><span class="s">&#39;size_t&#39;</span><span class="p">,</span> <span class="n">mesh</span><span class="p">,</span> <span class="n">mesh</span><span class="o">.</span><span class="n">topology</span><span class="p">()</span><span class="o">.</span><span class="n">dim</span><span class="p">()</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span>
 </pre></div>
 </div>
-<p>to look up documentation of a Python class <code class="docutils literal"><span class="pre">X</span></code> from the DOLFIN
-library (<code class="docutils literal"><span class="pre">X</span></code> can be <code class="docutils literal"><span class="pre">UnitSquareMesh</span></code>, <code class="docutils literal"><span class="pre">Function</span></code>,
-<code class="docutils literal"><span class="pre">Viper</span></code>, etc.). Below is an overview of the most important classes
-and functions
-in FEniCS programs, in the order they typically appear within programs.</p>
-<p><code class="docutils literal"><span class="pre">UnitSquareMesh(nx,</span> <span class="pre">ny)</span></code>: generate mesh over the unit square
-<span class="math">\([0,1]\times [0,1]\)</span> using <code class="docutils literal"><span class="pre">nx</span></code> divisions in <span class="math">\(x\)</span> direction and
-<code class="docutils literal"><span class="pre">ny</span></code> divisions in <span class="math">\(y\)</span> direction. Each of the <code class="docutils literal"><span class="pre">nx*ny</span></code> squares
-are divided into two cells of triangular shape.</p>
-<p><code class="docutils literal"><span class="pre">UnitIntervalMesh</span></code>, <code class="docutils literal"><span class="pre">UnitCubeMesh</span></code>, <code class="docutils literal"><span class="pre">UnitCircleMesh</span></code>, <code class="docutils literal"><span class="pre">UnitSphere</span></code>,
-<code class="docutils literal"><span class="pre">IntervalMesh</span></code>, <code class="docutils literal"><span class="pre">RectangleMesh</span></code>, and <code class="docutils literal"><span class="pre">BoxMesh</span></code>: generate mesh over
-domains of simple geometric shape, see the section <a class="reference internal" href="._ftut004.html#tut-prepro"><span class="std std-ref">Creating more complex domains</span></a>.</p>
-<p><code class="docutils literal"><span class="pre">FunctionSpace(mesh,</span> <span class="pre">element_type,</span> <span class="pre">degree)</span></code>:
-a function space defined over a mesh, with a given element type
-(e.g., <code class="docutils literal"><span class="pre">'Lagrange'</span></code> or <code class="docutils literal"><span class="pre">'DG'</span></code>), with basis functions as polynomials of
-a specified degree.</p>
-<p><code class="docutils literal"><span class="pre">Expression(formula,</span> <span class="pre">p1=v1,</span> <span class="pre">p2=v2,</span> <span class="pre">...)</span></code>:
-a scalar- or vector-valued function, given as a
-mathematical expression <code class="docutils literal"><span class="pre">formula</span></code> (string) written in C++ syntax.
-The spatial coordinates in the expression are named
-<code class="docutils literal"><span class="pre">x[0]</span></code>, <code class="docutils literal"><span class="pre">x[1]</span></code>, and <code class="docutils literal"><span class="pre">x[2]</span></code>, while time and other
-physical parameters can be represented as symbols <code class="docutils literal"><span class="pre">p1</span></code>, <code class="docutils literal"><span class="pre">p2</span></code>,
-etc., with corresponding values <code class="docutils literal"><span class="pre">v1</span></code>, <code class="docutils literal"><span class="pre">v2</span></code>, etc., initialized
-through keyword arguments. These parameters become attributes,
-whose values can be modified when desired.</p>
-<p><code class="docutils literal"><span class="pre">Function(V)</span></code>: a scalar- or vector-valued finite element field in
-the function space <code class="docutils literal"><span class="pre">V</span></code>. If <code class="docutils literal"><span class="pre">V</span></code> is a <code class="docutils literal"><span class="pre">FunctionSpace</span></code> object,
-<code class="docutils literal"><span class="pre">Function(V)</span></code> becomes a scalar field, and with <code class="docutils literal"><span class="pre">V</span></code> as a
-<code class="docutils literal"><span class="pre">VectorFunctionSpace</span></code> object, <code class="docutils literal"><span class="pre">Function(V)</span></code> becomes a
-vector field.</p>
-<p><code class="docutils literal"><span class="pre">SubDomain</span></code>: class for defining a subdomain, either a part of the
-boundary, an internal boundary, or a part of the domain.
-The programmer must subclass <code class="docutils literal"><span class="pre">SubDomain</span></code> and implement the
-<code class="docutils literal"><span class="pre">inside(self,</span> <span class="pre">x,</span> <span class="pre">on_boundary)</span></code> function
-(see the section <a class="reference internal" href="._ftut001.html#tut-poisson1-impl"><span class="std std-ref">Implementation</span></a>) for telling whether a
-point <code class="docutils literal"><span class="pre">x</span></code> is inside the subdomain or not.</p>
-<p><code class="docutils literal"><span class="pre">Mesh</span></code>: class for representing a finite element mesh, consisting of
-cells, vertices, and optionally faces, edges, and facets.</p>
-<p><code class="docutils literal"><span class="pre">MeshFunction</span></code>: tool for marking parts of the domain or the boundary.
-Used for variable coefficients (&#8220;material properties&#8221;, see
-the section <a class="reference internal" href="._ftut005.html#tut-possion-2d-2mat-problem"><span class="std std-ref">Working with two subdomains</span></a>) or for
-boundary conditions (see the section <a class="reference internal" href="._ftut005.html#tut-poisson-mat-neumann"><span class="std std-ref">Multiple Neumann, Robin, and Dirichlet condition</span></a>).</p>
-<p><code class="docutils literal"><span class="pre">DirichletBC(V,</span> <span class="pre">value,</span> <span class="pre">where)</span></code>: specification of Dirichlet (essential)
-boundary conditions via a function space <code class="docutils literal"><span class="pre">V</span></code>, a function
-<code class="docutils literal"><span class="pre">value(x)</span></code> for computing the value of the condition at a point <code class="docutils literal"><span class="pre">x</span></code>,
-and a specification <code class="docutils literal"><span class="pre">where</span></code> of the boundary, either as a
-<code class="docutils literal"><span class="pre">SubDomain</span></code> subclass instance, a plain function, or as a
-<code class="docutils literal"><span class="pre">MeshFunction</span></code> instance.
-In the latter case, a 4th argument is provided to describe which subdomain
-number that describes the relevant boundary.</p>
-<p><code class="docutils literal"><span class="pre">TestFunction(V)</span></code>: define a test function on a space <code class="docutils literal"><span class="pre">V</span></code> to be used
-in a variational form.</p>
-<p><code class="docutils literal"><span class="pre">TrialFunction(V)</span></code>: define a trial function on a space <code class="docutils literal"><span class="pre">V</span></code> to be used
-in a variational form to represent the unknown in a finite element problem.</p>
-<p><code class="docutils literal"><span class="pre">assemble(X)</span></code>: assemble a matrix, a right-hand side, or a functional,
-given a from <code class="docutils literal"><span class="pre">X</span></code> written with UFL syntax.</p>
-<p><code class="docutils literal"><span class="pre">assemble_system(a,</span> <span class="pre">L,</span> <span class="pre">bcs)</span></code>: assemble the matrix and the right-hand
-side from a bilinear (<code class="docutils literal"><span class="pre">a</span></code>) and linear (<code class="docutils literal"><span class="pre">L</span></code>) form written with UFL
-syntax. The <code class="docutils literal"><span class="pre">bcs</span></code> parameter holds one or more <code class="docutils literal"><span class="pre">DirichletBC</span></code> objects.</p>
-<p><code class="docutils literal"><span class="pre">LinearVariationalProblem(a,</span> <span class="pre">L,</span> <span class="pre">u,</span> <span class="pre">bcs)</span></code>: define a variational problem,
-given a bilinear (<code class="docutils literal"><span class="pre">a</span></code>) and linear (<code class="docutils literal"><span class="pre">L</span></code>) form, written with UFL
-syntax, and one or more <code class="docutils literal"><span class="pre">DirichletBC</span></code> objects stored in <code class="docutils literal"><span class="pre">bcs</span></code>.</p>
-<p><code class="docutils literal"><span class="pre">LinearVariationalSolver(problem)</span></code>: create solver object for a linear
-variational problem object (<code class="docutils literal"><span class="pre">problem</span></code>).</p>
-<p><code class="docutils literal"><span class="pre">solve(A,</span> <span class="pre">U,</span> <span class="pre">b)</span></code>: solve a linear system with <code class="docutils literal"><span class="pre">A</span></code> as coefficient
-matrix (<code class="docutils literal"><span class="pre">Matrix</span></code> object), <code class="docutils literal"><span class="pre">U</span></code> as unknown (<code class="docutils literal"><span class="pre">Vector</span></code> object),
-and <code class="docutils literal"><span class="pre">b</span></code> as right-hand side (<code class="docutils literal"><span class="pre">Vector</span></code> object).
-Usually, <code class="docutils literal"><span class="pre">U</span> <span class="pre">=</span> <span class="pre">u.vector()</span></code>, where
-<code class="docutils literal"><span class="pre">u</span></code> is a <code class="docutils literal"><span class="pre">Function</span></code> object representing the unknown finite
-element function of the problem, while
-<code class="docutils literal"><span class="pre">A</span></code> and <code class="docutils literal"><span class="pre">b</span></code> are computed by calls to <code class="docutils literal"><span class="pre">assemble</span></code>
-or <code class="docutils literal"><span class="pre">assemble_system</span></code>.</p>
-<p><code class="docutils literal"><span class="pre">plot(q)</span></code>: quick visualization of a mesh, function, or mesh function
-<code class="docutils literal"><span class="pre">q</span></code>, using the Viper component in FEniCS.</p>
-<p><code class="docutils literal"><span class="pre">interpolate(func,</span> <span class="pre">V)</span></code>: interpolate a formula or finite
-element function <code class="docutils literal"><span class="pre">func</span></code> onto the function space <code class="docutils literal"><span class="pre">V</span></code>.</p>
-<p><code class="docutils literal"><span class="pre">project(func,</span> <span class="pre">V)</span></code>: project a formula or finite element function <code class="docutils literal"><span class="pre">func</span></code>
-onto the function space <code class="docutils literal"><span class="pre">V</span></code>.</p>
-</div>
-<div class="section" id="user-defined-functions">
-<span id="tut-app-cpp-functions"></span><h2>User-defined functions<a class="headerlink" href="#user-defined-functions" title="Permalink to this headline">¶</a></h2>
-<p>When defining a function in terms of a mathematical expression inside
-a string formula, e.g.,</p>
-<div class="highlight-python"><div class="highlight"><pre><span class="n">myfunc</span> <span class="o">=</span> <span class="n">Expression</span><span class="p">(</span><span class="s">&#39;sin(x[0])*cos(x[1])&#39;</span><span class="p">)</span>
+<p>As in the section <a class="reference internal" href="#tut-possion-2d-2mat-impl"><span class="std std-ref">Implementation</span></a> we
+use a subclass of <code class="docutils literal"><span class="pre">SubDomain</span></code> to identify the various parts
+of the mesh function. Problems with domains of more complicated geometries may
+set the mesh function for marking boundaries as part of the mesh
+generation.
+In our case, the <span class="math">\(y=0\)</span> boundary can be marked by</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="k">class</span> <span class="nc">LowerRobinBoundary</span><span class="p">(</span><span class="n">SubDomain</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">inside</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">on_boundary</span><span class="p">):</span>
+        <span class="n">tol</span> <span class="o">=</span> <span class="mf">1E-14</span>   <span class="c"># tolerance for coordinate comparisons</span>
+        <span class="k">return</span> <span class="n">on_boundary</span> <span class="ow">and</span> <span class="nb">abs</span><span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span> <span class="o">&lt;</span> <span class="n">tol</span>
+
+<span class="n">Gamma_R</span> <span class="o">=</span> <span class="n">LowerRobinBoundary</span><span class="p">()</span>
+<span class="n">Gamma_R</span><span class="o">.</span><span class="n">mark</span><span class="p">(</span><span class="n">boundary_parts</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
 </pre></div>
 </div>
-<p>the expression contained in the first argument
-will be turned into a C++ function
-and compiled to gain efficiency. Therefore,
-the syntax used in the expression must be valid C++ syntax.
-Most Python syntax for mathematical expressions are also valid C++ syntax,
-but power expressions make an exception: <code class="docutils literal"><span class="pre">p**a</span></code> must be written as
-<code class="docutils literal"><span class="pre">pow(p,a)</span></code> in C++ (this is also an alternative Python syntax).
-The following mathematical functions can be used directly
-in C++
-expressions when defining <code class="docutils literal"><span class="pre">Expression</span></code> objects:
-<code class="docutils literal"><span class="pre">cos</span></code>, <code class="docutils literal"><span class="pre">sin</span></code>, <code class="docutils literal"><span class="pre">tan</span></code>, <code class="docutils literal"><span class="pre">acos</span></code>, <code class="docutils literal"><span class="pre">asin</span></code>,
-<code class="docutils literal"><span class="pre">atan</span></code>, <code class="docutils literal"><span class="pre">atan2</span></code>, <code class="docutils literal"><span class="pre">cosh</span></code>, <code class="docutils literal"><span class="pre">sinh</span></code>, <code class="docutils literal"><span class="pre">tanh</span></code>, <code class="docutils literal"><span class="pre">exp</span></code>,
-<code class="docutils literal"><span class="pre">frexp</span></code>, <code class="docutils literal"><span class="pre">ldexp</span></code>, <code class="docutils literal"><span class="pre">log</span></code>, <code class="docutils literal"><span class="pre">log10</span></code>, <code class="docutils literal"><span class="pre">modf</span></code>,
-<code class="docutils literal"><span class="pre">pow</span></code>, <code class="docutils literal"><span class="pre">sqrt</span></code>, <code class="docutils literal"><span class="pre">ceil</span></code>, <code class="docutils literal"><span class="pre">fabs</span></code>, <code class="docutils literal"><span class="pre">floor</span></code>, and <code class="docutils literal"><span class="pre">fmod</span></code>.
-Moreover, the number <span class="math">\(\pi\)</span> is available as the symbol <code class="docutils literal"><span class="pre">pi</span></code>.
-All the listed functions are taken from the <code class="docutils literal"><span class="pre">cmath</span></code> C++ header file, and
-one may hence
-consult documentation of <code class="docutils literal"><span class="pre">cmath</span></code> for more information on the
-various functions.</p>
-<p>Parameters in expression strings must be initialized via keyword
-arguments when creating the <code class="docutils literal"><span class="pre">Expression</span></code> object:</p>
-<div class="highlight-python"><div class="highlight"><pre><span class="n">myfunc</span> <span class="o">=</span> <span class="n">Expression</span><span class="p">(</span><span class="s">&#39;sin(w_x*x[0])*cos(w_y*x[1])&#39;</span><span class="p">,</span>
-                     <span class="n">w_x</span><span class="o">=</span><span class="n">pi</span><span class="p">,</span> <span class="n">w_y</span><span class="o">=</span><span class="mi">2</span><span class="o">*</span><span class="n">pi</span><span class="p">)</span>
+<p>The code for the <span class="math">\(y=1\)</span> boundary is similar and is seen in
+<code class="docutils literal"><span class="pre">dnr_p2D.py</span></code>.</p>
+<p>The Dirichlet boundaries are marked similarly, using subdomain number 2 for <span class="math">\(\Gamma_0\)</span> and 3 for <span class="math">\(\Gamma_1\)</span>:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="k">class</span> <span class="nc">LeftBoundary</span><span class="p">(</span><span class="n">SubDomain</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">inside</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">on_boundary</span><span class="p">):</span>
+        <span class="n">tol</span> <span class="o">=</span> <span class="mf">1E-14</span>   <span class="c"># tolerance for coordinate comparisons</span>
+        <span class="k">return</span> <span class="n">on_boundary</span> <span class="ow">and</span> <span class="nb">abs</span><span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span> <span class="o">&lt;</span> <span class="n">tol</span>
+
+<span class="n">Gamma_0</span> <span class="o">=</span> <span class="n">LeftBoundary</span><span class="p">()</span>
+<span class="n">Gamma_0</span><span class="o">.</span><span class="n">mark</span><span class="p">(</span><span class="n">boundary_parts</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>
+
+<span class="k">class</span> <span class="nc">RightBoundary</span><span class="p">(</span><span class="n">SubDomain</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">inside</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">on_boundary</span><span class="p">):</span>
+        <span class="n">tol</span> <span class="o">=</span> <span class="mf">1E-14</span>   <span class="c"># tolerance for coordinate comparisons</span>
+        <span class="k">return</span> <span class="n">on_boundary</span> <span class="ow">and</span> <span class="nb">abs</span><span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span> <span class="o">&lt;</span> <span class="n">tol</span>
+
+<span class="n">Gamma_1</span> <span class="o">=</span> <span class="n">RightBoundary</span><span class="p">()</span>
+<span class="n">Gamma_1</span><span class="o">.</span><span class="n">mark</span><span class="p">(</span><span class="n">boundary_parts</span><span class="p">,</span> <span class="mi">3</span><span class="p">)</span>
 </pre></div>
 </div>
-</div>
-<div class="section" id="linear-solvers-and-preconditioners">
-<span id="tut-app-solver-prec"></span><h2>Linear solvers and preconditioners<a class="headerlink" href="#linear-solvers-and-preconditioners" title="Permalink to this headline">¶</a></h2>
-<p>The following solution methods for linear
-systems can be accessed in FEniCS programs:</p>
-<table border="1" class="docutils">
-<colgroup>
-<col width="27%" />
-<col width="73%" />
-</colgroup>
-<thead valign="bottom">
-<tr class="row-odd"><th class="head">Name</th>
-<th class="head">Method</th>
-</tr>
-</thead>
-<tbody valign="top">
-<tr class="row-even"><td><code class="docutils literal"><span class="pre">'lu'</span></code></td>
-<td>sparse LU factorization (Gaussian elim.)</td>
-</tr>
-<tr class="row-odd"><td><code class="docutils literal"><span class="pre">'cholesky'</span></code></td>
-<td>sparse Cholesky factorization</td>
-</tr>
-<tr class="row-even"><td><code class="docutils literal"><span class="pre">'cg'</span></code></td>
-<td>Conjugate gradient method</td>
-</tr>
-<tr class="row-odd"><td><code class="docutils literal"><span class="pre">'gmres'</span></code></td>
-<td>Generalized minimal residual method</td>
-</tr>
-<tr class="row-even"><td><code class="docutils literal"><span class="pre">'bicgstab'</span></code></td>
-<td>Biconjugate gradient stabilized method</td>
-</tr>
-<tr class="row-odd"><td><code class="docutils literal"><span class="pre">'minres'</span></code></td>
-<td>Minimal residual method</td>
-</tr>
-<tr class="row-even"><td><code class="docutils literal"><span class="pre">'tfqmr'</span></code></td>
-<td>Transpose-free quasi-minimal residual method</td>
-</tr>
-<tr class="row-odd"><td><code class="docutils literal"><span class="pre">'richardson'</span></code></td>
-<td>Richardson method</td>
-</tr>
-</tbody>
-</table>
-<p>Possible choices of preconditioners include</p>
-<table border="1" class="docutils">
-<colgroup>
-<col width="34%" />
-<col width="66%" />
-</colgroup>
-<thead valign="bottom">
-<tr class="row-odd"><th class="head">Name</th>
-<th class="head">Method</th>
-</tr>
-</thead>
-<tbody valign="top">
-<tr class="row-even"><td><code class="docutils literal"><span class="pre">'none'</span></code></td>
-<td>No preconditioner</td>
-</tr>
-<tr class="row-odd"><td><code class="docutils literal"><span class="pre">'ilu'</span></code></td>
-<td>Incomplete LU factorization</td>
-</tr>
-<tr class="row-even"><td><code class="docutils literal"><span class="pre">'icc'</span></code></td>
-<td>Incomplete Cholesky factorization</td>
-</tr>
-<tr class="row-odd"><td><code class="docutils literal"><span class="pre">'jacobi'</span></code></td>
-<td>Jacobi iteration</td>
-</tr>
-<tr class="row-even"><td><code class="docutils literal"><span class="pre">'bjacobi'</span></code></td>
-<td>Block Jacobi iteration</td>
-</tr>
-<tr class="row-odd"><td><code class="docutils literal"><span class="pre">'sor'</span></code></td>
-<td>Successive over-relaxation</td>
-</tr>
-<tr class="row-even"><td><code class="docutils literal"><span class="pre">'amg'</span></code></td>
-<td>Algebraic multigrid (BoomerAMG or ML)</td>
-</tr>
-<tr class="row-odd"><td><code class="docutils literal"><span class="pre">'additive_schwarz'</span></code></td>
-<td>Additive Schwarz</td>
-</tr>
-<tr class="row-even"><td><code class="docutils literal"><span class="pre">'hypre_amg'</span></code></td>
-<td>Hypre algebraic multigrid (BoomerAMG)</td>
-</tr>
-<tr class="row-odd"><td><code class="docutils literal"><span class="pre">'hypre_euclid'</span></code></td>
-<td>Hypre parallel incomplete LU factorization</td>
-</tr>
-<tr class="row-even"><td><code class="docutils literal"><span class="pre">'hypre_parasails'</span></code></td>
-<td>Hypre parallel sparse approximate inverse</td>
-</tr>
-<tr class="row-odd"><td><code class="docutils literal"><span class="pre">'ml_amg'</span></code></td>
-<td>ML algebraic multigrid</td>
-</tr>
-</tbody>
-</table>
-<p>Many of the choices listed above
-are only offered by a specific backend, so setting the backend
-appropriately is necessary for being able to choose a desired
-linear solver or preconditioner.</p>
-<p>An up-to-date list of the available solvers and preconditioners
-in FEniCS can be produced by</p>
-<div class="highlight-python"><div class="highlight"><pre><span class="n">list_linear_solver_methods</span><span class="p">()</span>
-<span class="n">list_krylov_solver_preconditioners</span><span class="p">()</span>
+<p>Specifying the <code class="docutils literal"><span class="pre">DirichletBC</span></code> objects may now make use of
+the mesh function (instead of a <code class="docutils literal"><span class="pre">SubDomain</span></code> subclass object)
+and an indicator for which subdomain each condition
+should be applied to:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">u_L</span> <span class="o">=</span> <span class="n">Expression</span><span class="p">(</span><span class="s">&#39;1 + 2*x[1]*x[1]&#39;</span><span class="p">)</span>
+<span class="n">u_R</span> <span class="o">=</span> <span class="n">Expression</span><span class="p">(</span><span class="s">&#39;2 + 2*x[1]*x[1]&#39;</span><span class="p">)</span>
+<span class="n">bcs</span> <span class="o">=</span> <span class="p">[</span><span class="n">DirichletBC</span><span class="p">(</span><span class="n">V</span><span class="p">,</span> <span class="n">u_L</span><span class="p">,</span> <span class="n">boundary_parts</span><span class="p">,</span> <span class="mi">2</span><span class="p">),</span>
+       <span class="n">DirichletBC</span><span class="p">(</span><span class="n">V</span><span class="p">,</span> <span class="n">u_R</span><span class="p">,</span> <span class="n">boundary_parts</span><span class="p">,</span> <span class="mi">3</span><span class="p">)]</span>
 </pre></div>
 </div>
+<p>Some functions need to be defined before we can go on with the
+<code class="docutils literal"><span class="pre">a</span></code> and <code class="docutils literal"><span class="pre">L</span></code> of the variational problem:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">g</span> <span class="o">=</span> <span class="n">Expression</span><span class="p">(</span><span class="s">&#39;-4*x[1]&#39;</span><span class="p">)</span>
+<span class="n">q</span> <span class="o">=</span> <span class="n">Expression</span><span class="p">(</span><span class="s">&#39;1 + x[0]*x[0] + 2*x[1]*x[1]&#39;</span><span class="p">)</span>
+<span class="n">p</span> <span class="o">=</span> <span class="n">Constant</span><span class="p">(</span><span class="mi">100</span><span class="p">)</span>  <span class="c"># arbitrary function can go here</span>
+<span class="n">u</span> <span class="o">=</span> <span class="n">TrialFunction</span><span class="p">(</span><span class="n">V</span><span class="p">)</span>
+<span class="n">v</span> <span class="o">=</span> <span class="n">TestFunction</span><span class="p">(</span><span class="n">V</span><span class="p">)</span>
+<span class="n">f</span> <span class="o">=</span> <span class="n">Constant</span><span class="p">(</span><span class="o">-</span><span class="mf">6.0</span><span class="p">)</span>
+</pre></div>
 </div>
-<div class="section" id="using-a-backend-specific-solver">
-<span id="tut-epetra"></span><h2>Using a backend-specific solver<a class="headerlink" href="#using-a-backend-specific-solver" title="Permalink to this headline">¶</a></h2>
+<p>The new aspect of the variational problem is the two distinct
+boundary integrals.
+Having a mesh function over exterior cell facets (our
+<code class="docutils literal"><span class="pre">boundary_parts</span></code> object), where subdomains (boundary parts) are
+numbered as <span class="math">\(0,1,2,\ldots\)</span>, the special symbol <code class="docutils literal"><span class="pre">ds(0)</span></code>
+implies integration over subdomain (part) 0, <code class="docutils literal"><span class="pre">ds(1)</span></code> denotes
+integration over subdomain (part) 1, and so on.
+The idea of multiple <code class="docutils literal"><span class="pre">ds</span></code>-type objects generalizes to volume
+integrals too: <code class="docutils literal"><span class="pre">dx(0)</span></code>, <code class="docutils literal"><span class="pre">dx(1)</span></code>, etc., are used to
+integrate over subdomain 0, 1, etc.,  inside <span class="math">\(\Omega\)</span>.</p>
+<p>The variational problem can be defined as</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">a</span> <span class="o">=</span> <span class="n">inner</span><span class="p">(</span><span class="n">nabla_grad</span><span class="p">(</span><span class="n">u</span><span class="p">),</span> <span class="n">nabla_grad</span><span class="p">(</span><span class="n">v</span><span class="p">))</span><span class="o">*</span><span class="n">dx</span> <span class="o">+</span> <span class="n">p</span><span class="o">*</span><span class="n">u</span><span class="o">*</span><span class="n">v</span><span class="o">*</span><span class="n">ds</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+<span class="n">L</span> <span class="o">=</span> <span class="n">f</span><span class="o">*</span><span class="n">v</span><span class="o">*</span><span class="n">dx</span> <span class="o">-</span> <span class="n">g</span><span class="o">*</span><span class="n">v</span><span class="o">*</span><span class="n">ds</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span> <span class="o">+</span> <span class="n">p</span><span class="o">*</span><span class="n">q</span><span class="o">*</span><span class="n">v</span><span class="o">*</span><span class="n">ds</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>For the <code class="docutils literal"><span class="pre">ds(0)</span></code> and <code class="docutils literal"><span class="pre">ds(1)</span></code> symbols to work we must obviously
+connect them (or <code class="docutils literal"><span class="pre">a</span></code> and <code class="docutils literal"><span class="pre">L</span></code>) to the mesh function marking
+parts of the boundary. This is done by a certain keyword argument
+to the <code class="docutils literal"><span class="pre">assemble</span></code> function:</p>
 <div class="admonition warning">
 <p class="first admonition-title">Warning</p>
-<p class="last">The linear algebra backends in FEniCS have recently changed. This
-section is not yet up-to-date.</p>
-</div>
-<span class="target" id="index-10"></span><p id="index-11">The linear algebra backend determines the specific data structures
-that are used in the <code class="docutils literal"><span class="pre">Matrix</span></code> and <code class="docutils literal"><span class="pre">Vector</span></code> classes. For example, with
-the PETSc backend, <code class="docutils literal"><span class="pre">Matrix</span></code> encapsulates a PETSc matrix storage
-structure, and <code class="docutils literal"><span class="pre">Vector</span></code> encapsulates a PETSc vector storage structure.
-Sometimes one wants to perform operations directly on (say) the
-underlying PETSc objects. These can be fetched by</p>
-<div class="highlight-python"><div class="highlight"><pre><span class="n">A_PETSc</span> <span class="o">=</span>
-<span class="n">down_cast</span><span class="p">(</span><span class="n">A</span><span class="p">)</span><span class="o">.</span><span class="n">mat</span><span class="p">()</span> <span class="n">b_PETSc</span> <span class="o">=</span> <span class="n">down_cast</span><span class="p">(</span><span class="n">b</span><span class="p">)</span><span class="o">.</span><span class="n">vec</span><span class="p">()</span> <span class="n">U_PETSc</span> <span class="o">=</span>
-<span class="n">down_cast</span><span class="p">(</span><span class="n">u</span><span class="o">.</span><span class="n">vector</span><span class="p">())</span><span class="o">.</span><span class="n">vec</span><span class="p">()</span>
+<p>The old code looked like</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">A</span> <span class="o">=</span> <span class="n">assemble</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">exterior_facet_domains</span><span class="o">=</span><span class="n">boundary_parts</span><span class="p">)</span>
+<span class="n">b</span> <span class="o">=</span> <span class="n">assemble</span><span class="p">(</span><span class="n">L</span><span class="p">,</span> <span class="n">exterior_facet_domains</span><span class="o">=</span><span class="n">boundary_parts</span><span class="p">)</span>
 </pre></div>
 </div>
-<p>Here, <code class="docutils literal"><span class="pre">u</span></code> is a <code class="docutils literal"><span class="pre">Function</span></code>, <code class="docutils literal"><span class="pre">A</span></code> is a
-<code class="docutils literal"><span class="pre">Matrix</span></code>, and <code class="docutils literal"><span class="pre">b</span></code> is a <code class="docutils literal"><span class="pre">Vector</span></code>.  The same syntax applies if we want
-to fetch the underlying Epetra, uBLAS, or MTL4 matrices and vectors.</p>
-<span class="target" id="index-12"></span><p id="index-13">Sometimes one wants to implement tailored solution algorithms, using
-special features of the underlying numerical packages.
-Here is an example where we create an ML preconditioned Conjugate
-Gradient solver by programming with Trilinos-specific objects directly.
-Given a linear system
-<span class="math">\(AU=b\)</span>, represented by a <code class="docutils literal"><span class="pre">Matrix</span></code> object <code class="docutils literal"><span class="pre">A</span></code>,
-and two <code class="docutils literal"><span class="pre">Vector</span></code> objects <code class="docutils literal"><span class="pre">U</span></code> and <code class="docutils literal"><span class="pre">b</span></code> in a
-Python program, the purpose is to
-set up a solver using the Aztec Conjugate Gradient method from
-Trilinos&#8217; Aztec library and combine that solver with the
-algebraic multigrid preconditioner ML
-from the ML library in Trilinos. Since the various parts of
-Trilinos are mirrored in Python through the PyTrilinos package,
-we can operate directly
-on Trilinos-specific objects.</p>
-<div class="highlight-python"><div class="highlight"><pre><span class="k">try</span><span class="p">:</span>
-    <span class="kn">from</span> <span class="nn">PyTrilinos</span> <span class="kn">import</span> <span class="n">Epetra</span><span class="p">,</span> <span class="n">AztecOO</span><span class="p">,</span> <span class="n">TriUtils</span><span class="p">,</span> <span class="n">ML</span>
-<span class="k">except</span><span class="p">:</span>
-    <span class="k">print</span><span class="p">(</span><span class="s">&#39;&#39;&#39;You Need to have PyTrilinos with</span>
-<span class="s">Epetra, AztecOO, TriUtils and ML installed</span>
-<span class="s">for this demo to run&#39;&#39;&#39;</span><span class="p">)</span>
-    <span class="nb">exit</span><span class="p">()</span>
-
-<span class="kn">from</span> <span class="nn">dolfin</span> <span class="kn">import</span> <span class="o">*</span>
-
-<span class="k">if</span> <span class="ow">not</span> <span class="n">has_la_backend</span><span class="p">(</span><span class="s">&#39;Epetra&#39;</span><span class="p">):</span>
-    <span class="k">print</span><span class="p">(</span><span class="s">&#39;Warning: Dolfin is not compiled with Trilinos&#39;</span><span class="p">)</span>
-    <span class="nb">exit</span><span class="p">()</span>
-
-<span class="n">parameters</span><span class="p">[</span><span class="s">&#39;linear_algebra_backend&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s">&#39;Epetra&#39;</span>
-
-<span class="c"># create matrix A and vector b in the usual way</span>
-<span class="c"># u is a Function</span>
-
-<span class="c"># Fetch underlying Epetra objects</span>
-<span class="n">A_epetra</span> <span class="o">=</span> <span class="n">down_cast</span><span class="p">(</span><span class="n">A</span><span class="p">)</span><span class="o">.</span><span class="n">mat</span><span class="p">()</span>
-<span class="n">b_epetra</span> <span class="o">=</span> <span class="n">down_cast</span><span class="p">(</span><span class="n">b</span><span class="p">)</span><span class="o">.</span><span class="n">vec</span><span class="p">()</span>
-<span class="n">U_epetra</span> <span class="o">=</span> <span class="n">down_cast</span><span class="p">(</span><span class="n">u</span><span class="o">.</span><span class="n">vector</span><span class="p">())</span><span class="o">.</span><span class="n">vec</span><span class="p">()</span>
-
-<span class="c"># Sets up the parameters for ML using a python dictionary</span>
-<span class="n">ML_param</span> <span class="o">=</span> <span class="p">{</span><span class="s">&quot;max levels&quot;</span>        <span class="p">:</span> <span class="mi">3</span><span class="p">,</span>
-            <span class="s">&quot;output&quot;</span>            <span class="p">:</span> <span class="mi">10</span><span class="p">,</span>
-            <span class="s">&quot;smoother: type&quot;</span>    <span class="p">:</span> <span class="s">&quot;ML symmetric Gauss-Seidel&quot;</span><span class="p">,</span>
-            <span class="s">&quot;aggregation: type&quot;</span> <span class="p">:</span> <span class="s">&quot;Uncoupled&quot;</span><span class="p">,</span>
-            <span class="s">&quot;ML validate parameter list&quot;</span> <span class="p">:</span> <span class="bp">False</span>
-<span class="p">}</span>
-
-<span class="c"># Create the preconditioner</span>
-<span class="n">prec</span> <span class="o">=</span> <span class="n">ML</span><span class="o">.</span><span class="n">MultiLevelPreconditioner</span><span class="p">(</span><span class="n">A_epetra</span><span class="p">,</span> <span class="bp">False</span><span class="p">)</span>
-<span class="n">prec</span><span class="o">.</span><span class="n">SetParameterList</span><span class="p">(</span><span class="n">ML_param</span><span class="p">)</span>
-<span class="n">prec</span><span class="o">.</span><span class="n">ComputePreconditioner</span><span class="p">()</span>
-
-<span class="c"># Create solver and solve system</span>
-<span class="n">solver</span> <span class="o">=</span> <span class="n">AztecOO</span><span class="o">.</span><span class="n">AztecOO</span><span class="p">(</span><span class="n">A_epetra</span><span class="p">,</span> <span class="n">U_epetra</span><span class="p">,</span> <span class="n">b_epetra</span><span class="p">)</span>
-<span class="n">solver</span><span class="o">.</span><span class="n">SetPrecOperator</span><span class="p">(</span><span class="n">prec</span><span class="p">)</span>
-<span class="n">solver</span><span class="o">.</span><span class="n">SetAztecOption</span><span class="p">(</span><span class="n">AztecOO</span><span class="o">.</span><span class="n">AZ_solver</span><span class="p">,</span> <span class="n">AztecOO</span><span class="o">.</span><span class="n">AZ_cg</span><span class="p">)</span>
-<span class="n">solver</span><span class="o">.</span><span class="n">SetAztecOption</span><span class="p">(</span><span class="n">AztecOO</span><span class="o">.</span><span class="n">AZ_output</span><span class="p">,</span> <span class="mi">16</span><span class="p">)</span>
-<span class="n">solver</span><span class="o">.</span><span class="n">Iterate</span><span class="p">(</span><span class="n">MaxIters</span><span class="o">=</span><span class="mi">1550</span><span class="p">,</span> <span class="n">Tolerance</span><span class="o">=</span><span class="mf">1e-5</span><span class="p">)</span>
-
-<span class="n">plot</span><span class="p">(</span><span class="n">u</span><span class="p">)</span>
+<p class="last">but the <code class="docutils literal"><span class="pre">exterior_facet_domain</span></code> argument is no longer legal.
+The text must be updated! The associated code gives wrong results.</p>
+</div>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">A</span> <span class="o">=</span> <span class="n">assemble</span><span class="p">(</span><span class="n">a</span><span class="p">)</span>
+<span class="n">b</span> <span class="o">=</span> <span class="n">assemble</span><span class="p">(</span><span class="n">L</span><span class="p">)</span>
 </pre></div>
 </div>
-</div>
-<div class="section" id="installing-fenics">
-<span id="tut-app-install"></span><h2>Installing FEniCS<a class="headerlink" href="#installing-fenics" title="Permalink to this headline">¶</a></h2>
-<p id="index-14">The FEniCS software components are available for Linux, Windows and Mac OS
-X platforms. Detailed information on how to get FEniCS running on such
-machines are available at the <code class="docutils literal"><span class="pre">fenicsproject.org</span></code> website.
-Here are just some quick descriptions and recommendations by the author.</p>
-<p>To make the installation of FEniCS as painless and reliable as
-possible, I strongly recommend to use Ubuntu Linux.  (Even though Mac
-users now can get FEniCS by a one-click install, I recommend using
-Ubuntu on Mac, unless you have significant experience with compiling
-and linking C++ libraries on Mac OS X.)  Any standard PC can easily be
-equipped with Ubuntu Linux, which may live side by side with either
-Windows or Mac OS X or another Linux installation.</p>
-<p>On Windows you can use the tool <a class="reference external" href="http://www.ubuntu.com/download/desktop/windows-installer">Wubi</a> to
-automatically install Ubuntu in a dual boot fashion.  A very popular
-alternative is to run Ubuntu in a separate window in your existing
-operation system, using a <em>virtual machine</em>.  There are several
-virtual machine solutions to chose among, e.g., the free <a class="reference external" href="https://www.virtualbox.org/">VirtualBoxMesh</a> or the commercial tool <a class="reference external" href="http://www.vmware.com/products/fusion/">VMWare Fusion</a>. VirtualBoxMesh works well for
-many, but there might be hardware integration problems on Mac, so the
-superior VMWare Fusion tool is often worth the investment.  The author
-has a description of <a class="reference external" href="http://hplgit.github.io/teamods/ubuntu/vmware/index.html">how to install Ubuntu in a VMWare Fusion virtual
-machine</a>.</p>
-<p>Once Ubuntu
-is up and running, FEniCS is painlessly installed by</p>
-<div class="highlight-text"><div class="highlight"><pre>sudo apt-get install fenics
+<p>Then essential boundary conditions are enforced, and the system can
+be solved in the usual way:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="k">for</span> <span class="n">bc</span> <span class="ow">in</span> <span class="n">bcs</span><span class="p">:</span>
+    <span class="n">bc</span><span class="o">.</span><span class="n">apply</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="n">b</span><span class="p">)</span>
+<span class="n">u</span> <span class="o">=</span> <span class="n">Function</span><span class="p">(</span><span class="n">V</span><span class="p">)</span>
+<span class="n">U</span> <span class="o">=</span> <span class="n">u</span><span class="o">.</span><span class="n">vector</span><span class="p">()</span>
+<span class="n">solve</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="n">U</span><span class="p">,</span> <span class="n">b</span><span class="p">)</span>
 </pre></div>
 </div>
-<p>Sometimes the FEniCS software in a standard Ubuntu installation
-lacks some recent features and bug fixes. Go to
-<a class="reference external" href="http://fenicsproject.org">fenicsproject.org</a>, click on <em>Download</em>
-and then the Ubuntu logo, move down to <em>Ubuntu PPA</em> and copy a few Unix
-commands to install the newest version of the FEniCS software.</p>
-<p>A different type of virtual machine technology is <a class="reference external" href="http://www.vagrantup.com/">Vagrant</a>, which allows you to download a big file
-with a complete Ubuntu environment and run that environment in a
-terminal window on your Mac or Windows computer. This Ubuntu machine
-is integrated with the file system on your computer. The author has
-made a Vagrant box with most of the scientific computing
-software you need for programming
-with FEniCS, see a preliminary <a class="reference external" href="http://hplgit.github.io/INF5620/doc/web/vagrant_inf5620.html">guide</a>
-for download, installation, and usage.</p>
-<p>The FEniCS installation also features a set of demo programs.
-These are stored in locations depending on the type of operating system.
-For Ubuntu the programs are stored in <code class="docutils literal"><span class="pre">/usr/share/dolfin/demo</span></code>.</p>
-<p>The graphical user interface (GUI) of Ubuntu is quite similar to both
-Windows and Mac OS X, but to be efficient when doing science with
-FEniCS I recommend to run programs in a terminal window and write them
-in a text editor like Emacs or Vim. You can employ an integrated
-development environment such as Eclipse, but intensive FEniCS
-developers and users tend to find terminal windows and plain text
-editors more efficient and user friendly.</p>
-</div>
-<div class="section" id="books-on-the-finite-element-method">
-<span id="tut-appendix-books"></span><h2>Books on the finite element method<a class="headerlink" href="#books-on-the-finite-element-method" title="Permalink to this headline">¶</a></h2>
-<p>There are a large number of books on the finite element method.  The
-books typically fall in either of two categories: the abstract
-mathematical version of the method and the engineering &#8220;structural
-analysis&#8221; formulation. FEniCS builds heavily on concepts in the
-abstract mathematical exposition. The author has in development
-a <a class="reference external" href="http://tinyurl.com/opdfafk/">book</a>
-that explains all details of the finite element method with
-the abstract mathematical formulations that FEniCS employ.</p>
-<p>An easy-to-read book, which
-provides a good general background for using FEniCS, is Gockenbach
-<a class="reference internal" href="._ftut010.html#ref04" id="id1">[Ref04]</a>. The book by Donea and Huerta
-<a class="reference internal" href="._ftut010.html#ref05" id="id2">[Ref05]</a> has a similar style, but aims at readers with
-interest in fluid flow problems. Hughes <a class="reference internal" href="._ftut010.html#ref06" id="id3">[Ref06]</a> is also
-highly recommended, especially for those interested in solid mechanics
-and heat transfer applications.</p>
-<p>Readers with background in the engineering &#8220;structural analysis&#8221;
-version of the finite element method may find Bickford
-<a class="reference internal" href="._ftut010.html#ref07" id="id4">[Ref07]</a> as an attractive bridge over to the abstract
-mathematical formulation that FEniCS builds upon.  Those who have a
-weak background in differential equations in general should consult a
-more fundamental book, and Eriksson {em et
-al}. <a class="reference internal" href="._ftut010.html#ref08" id="id5">[Ref08]</a> is a very good choice.  On the
-other hand, FEniCS users with a strong background in mathematics and
-interest in the mathematical properties of the finite element method,
-will appreciate the texts by Brenner and Scott <a class="reference internal" href="._ftut010.html#ref09" id="id6">[Ref09]</a>,
-Braess <a class="reference internal" href="._ftut010.html#ref10" id="id7">[Ref10]</a>, Ern and Guermond <a class="reference internal" href="._ftut010.html#ref11" id="id8">[Ref11]</a>,
-Quarteroni and Valli <a class="reference internal" href="._ftut010.html#ref12" id="id9">[Ref12]</a>, or Ciarlet <a class="reference internal" href="._ftut010.html#ref13" id="id10">[Ref13]</a>.</p>
-</div>
-<div class="section" id="books-on-python">
-<span id="tut-appendix-pybooks"></span><h2>Books on Python<a class="headerlink" href="#books-on-python" title="Permalink to this headline">¶</a></h2>
-<p>Two very popular introductory books on Python are
-&#8220;Learning Python&#8221;  by Lutz <a class="reference internal" href="._ftut010.html#ref14" id="id11">[Ref14]</a> and
-&#8220;Practical Python&#8221;  by Hetland <a class="reference internal" href="._ftut010.html#ref15" id="id12">[Ref15]</a>.
-More advanced and comprehensive books include
-&#8220;Programming Python&#8221; by Lutz <a class="reference internal" href="._ftut010.html#ref16" id="id13">[Ref16]</a>,
-and &#8220;Python Cookbook&#8221; <a class="reference internal" href="._ftut010.html#ref17" id="id14">[Ref17]</a> and &#8220;Python in a Nutshell&#8221;
-<a class="reference internal" href="._ftut010.html#ref18" id="id15">[Ref18]</a> by Martelli.
-The web page <code class="docutils literal"><span class="pre">http://wiki.python.org/moin/PythonBooks</span></code>
-lists numerous additional books.
-Very few texts teach Python in a mathematical and numerical context,
-but the references <a class="reference internal" href="._ftut010.html#ref19" id="id16">[Ref19]</a> <a class="reference internal" href="._ftut010.html#ref20" id="id17">[Ref20]</a> <a class="reference internal" href="._ftut010.html#ref21" id="id18">[Ref21]</a>
-are exceptions.</p>
-</div>
-<div class="section" id="acknowledgments">
-<h2>Acknowledgments<a class="headerlink" href="#acknowledgments" title="Permalink to this headline">¶</a></h2>
-<p>The author is very thankful to Johan Hake, Anders Logg, Kent-Andre
-Mardal, and Kristian Valen-Sendstad for promptly answering all my
-questions about FEniCS functionality and for implementing all my
-requests.  I will in particular thank Professor Douglas Arnold for
-very valuable feedback on the text. Øystein Sørensen pointed out a lot
-of typos and contributed with many helpful comments.  Many errors and
-typos were also reported by Mauricio Angeles, Ida Drøsdal, Miroslav Kuchta,
-Hans Ekkehard Plesser, Marie Rognes, and Hans Joachim (Achim) Scroll.
-Ekkehard Ellmann as well as two anonymous reviewers
-provided a series of suggestions and improvements.</p>
+<p>The complete code is in the <code class="docutils literal"><span class="pre">dnr_p2D.py</span></code> file in the
+<code class="docutils literal"><span class="pre">stationary/poisson</span></code> directory.</p>
 </div>
 </div>
 
