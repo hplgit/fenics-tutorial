@@ -35,7 +35,7 @@ L = f*v*dx
 # Compute solution
 u = Function(V)
 solve(a == L, u, bc)
-u.rename('u', 'solution field')
+u.rename('u', 'solution field')  # name, label (description)
 
 # Compute gradient
 V_g = VectorFunctionSpace(mesh, 'Lagrange', 1)

@@ -13,10 +13,9 @@ def data():
     u0 = Constant(0)
     u_e = Expression(
         '2*exp(-2*x[0])*sin(2*DOLFIN_PI*x[0])*sin(DOLFIN_PI*x[1])')
-    f = Expression(('-2*exp(-2*x[0])*sin(PI*x[1])*('
-                   '(4-5*pow(PI,2))*sin(2*PI*x[0]) '
-                   ' - 8*PI*cos(2*PI*x[0]))').\
-                   replace('PI', 'DOLFIN_PI'))
+    f = Expression('-2*exp(-2*x[0])*sin(pi*x[1])*('
+                   '(4-5*pow(pi,2))*sin(2*pi*x[0]) '
+                   ' - 8*pi*cos(2*pi*x[0]))', pi=DOLFIN_PI)
     return u0, f, u_e
 
 def test_solver():

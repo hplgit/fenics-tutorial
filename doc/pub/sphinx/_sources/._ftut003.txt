@@ -1,8 +1,3 @@
-
-
-.. |nbsp| unicode:: 0xA0
-   :trim:
-
 .. !split
 
 .. _tut:poisson1:impl:
@@ -918,10 +913,9 @@ Here is the modified code:
             # Define variational problem
             u = TrialFunction(V)
             v = TestFunction(V)
-            f = Expression(('-2*exp(-2*x[0])*sin(PI*x[1])*('
-                           '(4-5*pow(PI,2))*sin(2*PI*x[0]) '
-                           ' - 8*PI*cos(2*PI*x[0]))').\ 
-                           replace('PI', 'DOLFIN_PI'))
+            f = Expression('-2*exp(-2*x[0])*sin(pi*x[1])*('
+                           '(4-5*pow(pi,2))*sin(2*pi*x[0]) '
+                           ' - 8*pi*cos(2*pi*x[0]))', pi=DOLFIN_PI)
             a = inner(nabla_grad(u), nabla_grad(v))*dx
             L = f*v*dx
         
@@ -952,8 +946,8 @@ Here is the modified code:
 
 Note that instead of writing a lot of long ``DOLFIN_PI`` names
 in the expression for ``f``, we simply write the more readable
-``PI`` and do a string replacement of ``PI`` by the required
-``DOLFIN_PI``.
+variable ``pi`` and define ``pi`` as ``DOLFIN_PI`` as an extra
+parameter to ``Expression``.
 
 .. figure:: p2D_fsin.png
    :width: 500
@@ -985,10 +979,9 @@ we need code that is close to what we have in ``test_solver``.
             u0 = Constant(0)
             u_e = Expression(
                 '2*exp(-2*x[0])*sin(2*DOLFIN_PI*x[0])*sin(DOLFIN_PI*x[1])')
-            f = Expression(('-2*exp(-2*x[0])*sin(PI*x[1])*('
-                           '(4-5*pow(PI,2))*sin(2*PI*x[0]) '
-                           ' - 8*PI*cos(2*PI*x[0]))').\ 
-                           replace('PI', 'DOLFIN_PI'))
+            f = Expression('-2*exp(-2*x[0])*sin(pi*x[1])*('
+                           '(4-5*pow(pi,2))*sin(2*pi*x[0]) '
+                           ' - 8*pi*cos(2*pi*x[0]))', pi=DOLFIN_PI)
             return u0, f, u_e
         
         def test_solver():
@@ -1638,18 +1631,8 @@ in the ``stationary/poisson`` directory.
 
 .. _tut:poisson:membrane:
 
-Solving a real physical problem
--------------------------------
-
-.. 2DO
-
-
-.. warning::
-    The program example in this section relies on generating a mesh over
-    a circular disk. This must be done with a preprocessor.
-
-
-
+Deflection of a circular membrane
+---------------------------------
 
 Perhaps you are not particularly amazed by viewing the simple surface
 of :math:`u` in the test problem from the section :ref:`tut:poisson1:impl`.
@@ -1657,6 +1640,9 @@ However, solving a real physical problem
 with a more interesting and amazing solution on the screen is only a
 matter of specifying a more exciting domain, boundary condition,
 and/or right-hand side :math:`f`.
+
+The problem
+~~~~~~~~~~~
 
 One possible physical problem regards the deflection :math:`D(x,y)` of an
 elastic circular membrane with radius :math:`R`, subject to a localized
@@ -1693,103 +1679,118 @@ the Gaussian pressure function, and :math:`\sigma` the "width" of this
 function. The boundary of the membrane has no
 deflection, implying :math:`D=0` as boundary condition.
 
-For scaling and verification it is convenient to simplify the problem
-to find an analytical solution. In the limit :math:`\sigma\rightarrow\infty`,
-:math:`p\rightarrow A/(2\pi\sigma)` (constant pressure throughout :math:`\Omega`),
-which allows us to integrate an axi-symmetric
-version of the equation in the radial coordinate :math:`r\in [0,R]` and
-obtain :math:`D(r)=(r^2-R^2)A/(8\pi\sigma T)`. This result gives
-a rough estimate of the characteristic size of the deflection:
-:math:`|D(0)|=AR^2/(8\pi\sigma T)`, which can be used to scale the deflection.
-With :math:`R` as characteristic length scale, we can derive the equivalent
-dimensionless problem on the unit circle,
+.. For scaling and verification it is convenient to simplify the problem
+
+.. to find an analytical solution. In the limit :math:`\sigma\rightarrow\infty`,
+
+.. :math:`p\rightarrow A/(2\pi\sigma)` (constant pressure throughout :math:`\Omega`),
+
+.. and we can easily find an analytical solution
+
+.. of the problem by integrating the Poisson equation in the
+
+.. radial coordinate: :math:`r\in [0,R]`. The result becomes
+
+.. :math:`D(r)=(r^2-R^2)A/(8\pi\sigma T)`.
+
+Scaling
+~~~~~~~
+
+The localization of the pressure, :math:`(x_0,y_0)`, is for simplicity
+set to :math:`(0, R_0)`.
+There are many physical parameters in this problem, and we can benefit
+from grouping them by means of scaling. Let us introduce dimensionless
+coordinates :math:`\bar x = x/R`, :math:`\bar y = y/R`, and a dimensionless
+deflection :math:`w=D/D_c`, where :math:`D_c` is a characteristic size of the
+deflection. Introducing :math:`\bar R_0=R_0/R`, we get
+
+.. math::
+         \frac{\partial^2 w}{\partial\bar x^2} +
+        \frac{\partial^2 w}{\partial\bar y^2}= \alpha
+        \exp{\left(
+        - \beta^2(\bar x^2
+        + (\bar y-\bar R_0)^2)\right)}\hbox{ for } \bar x^2 + \bar y^2 < 1,
+
+where
+
+.. math::
+         \alpha = \frac{R^2A}{2\pi T D_c\sigma},\quad\beta = \frac{R}{\sqrt{2}\sigma}{\thinspace .}
+
+We may choose :math:`D_c` such that :math:`\alpha=4`. In the case we replace the
+exponential function by 1 and have a constant pressure on the right-hand
+side, the solution is then :math:`w(\bar x,\bar y) = 1-\bar x^2 - \bar y^2`.
+(One can also find the analytical solution in scaled coordinates and show
+that the maximum deflection :math:`D(0,0)` is :math:`D_c`.) With :math:`D_c=AR^2/(8\pi T)`
+and dropping the bars we get the scaled problem
 
 .. _Eq:tut:poisson1:membrane:scaled:eq:
 
 .. math::
 
     \tag{18}
-    -\nabla^2 w = f,
+    \nabla^2w = 4\exp{\left(
+        - \beta^2(x^2
+        + (y-R_0)^2)\right)},
+        
         
 
-with :math:`w=0` on the boundary and with
+to be solved over the unit circle with :math:`w=0` on the boundary.
+Now there are only two parameters to vary: the dimensionless extent
+of the pressure, :math:`\beta`, and the localization of the pressure peak, :math:`R_0\in [0,1]`.
+As :math:`\beta\rightarrow 0`, we
+have a special case with solution :math:`w=1-x^2-y^2`.
 
-.. _Eq:tut:poisson1:membrane:scaled:eq:rhs:
+Given a computed :math:`w`, the physical deflection is given by
 
 .. math::
+         D = \frac{AR^2}{8\pi\sigma T}w{\thinspace .}
 
-    \tag{19}
-    \
-        f(x,y) = 4\exp{\left(
-        - \frac{1}{2}\left( \frac{Rx-x_0}{\sigma}\right)^2
-        - \frac{1}{2}\left( \frac{Ry-y_0}{\sigma}\right)^2
-        \right)}.
-        
+Implementation          (1)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-For notational convenience we have dropped introducing new symbols
-for the scaled
-coordinates in :ref:`(19) <Eq:tut:poisson1:membrane:scaled:eq:rhs>`.
-Now :math:`D` is related to :math:`w` through :math:`D = AR^2w/(8\pi\sigma T)`.
-
-Let us list the modifications of the
-``p2D_func.py`` program that are needed to solve this membrane problem:
-
-  * Initialize :math:`T`, :math:`A`, :math:`R`, :math:`x_0`, :math:`y_0`, and :math:`\sigma`,
-
-  * create a mesh over the unit circle,
-
-  * make an expression object for the scaled pressure function :math:`f`,
-
-  * define the ``a`` and ``L`` formulas in the variational
-    problem for :math:`w` and compute the solution,
-
-  * plot the mesh, :math:`w`, and :math:`f`,
-
-  * write out the maximum real deflection :math:`D`.
-
-Some suitable values of :math:`T`, :math:`A`, :math:`R`, :math:`x_0`, :math:`y_0`, and :math:`\sigma` are
+Very few modifications of the software in
+``p2D_iter.py`` are required. Actually, the ``solver`` function
+can be reused, except that the domain is now a circle and not a
+square. We change the ``solver`` function by letting the mesh be
+an argument ``mesh`` (instead of ``Nx`` and ``Ny``):
 
 .. code-block:: python
 
-        T = 10.0  # tension
-        A = 1.0   # pressure amplitude
-        R = 0.3   # radius of domain
-        theta = 0.2
-        x0 = 0.6*R*cos(theta)
-        y0 = 0.6*R*sin(theta)
-        sigma = 0.025
+        def solver(
+            f, u0, mesh, degree=1,
+            linear_solver='Krylov', # Alt: 'direct'
+            ...):
+            V = FunctionSpace(mesh, 'Lagrange', degree)
+            ...
 
-.. 2DO
-
-
-.. warning::
-    Meshr must be used to create circle mesh.
-
-
-
-
-A mesh over the unit circle can be created by
+A mesh over the unit circle can be created by the ``mshr`` tool in
+FEniCS:
 
 .. code-block:: python
 
-        mesh = CircleMesh(n)
+        from mshr import *
+        domain = Circle(Point(0.0, 0.0), 1.0)
+        mesh = generate_mesh(domain, n)
 
-where ``n`` is the typical number of elements in the radial direction.
+The ``Circle`` shape from ``mshr`` takes the center and radius of the circle
+as the two first arguments, while ``n`` is the resolution, here the
+suggested number of cells per radius.
 
 .. index:: Expresion
 
 .. index:: Expression with parameters
 
-The function :math:`f` is represented by an ``Expression`` object. There
-are many physical parameters in the formula for :math:`f` that enter the
+The right-hand side pressure function
+is represented by an ``Expression`` object. There
+are two physical parameters in the formula for :math:`f` that enter the
 expression string and these parameters must have their values set
 by keyword arguments:
 
 .. code-block:: python
 
-        f = Expression('4*exp(-0.5*(pow((R*x[0] - x0)/sigma, 2)) '
-                       '     - 0.5*(pow((R*x[1] - y0)/sigma, 2)))',
-                       R=R, x0=x0, y0=y0, sigma=sigma)
+        p = Expression(
+            '4*exp(-pow(beta,2)*(pow(x[0], 2) + pow(x[1]-R0, 2)))',
+            beta=beta, R0=R0)
 
 The coordinates in ``Expression`` objects *must* be a vector
 with indices 0, 1, and 2, and with the name ``x``. Otherwise
@@ -1800,128 +1801,107 @@ values modified. For example, we may set
 
 .. code-block:: python
 
-        f.sigma = 50
-        f.x0 = 0.3
+        f.beta = 12
+        f.R0 = 0.3
 
 .. index:: interpolation
 
-It would be of interest to visualize :math:`f` along with :math:`w` so that we can
+It would be of interest to visualize :math:`p` along with :math:`w` so that we can
 examine the pressure force and its response.  We must then transform
 the formula (``Expression``) to a finite element function
 (``Function``).  The most natural approach is to construct a finite
-element function whose degrees of freedom (values at the nodes in this case) are
-calculated from :math:`f`. That is, we interpolate :math:`f` (see
-the section :ref:`tut:poisson1:verify1`):
+element function whose degrees of freedom are
+calculated from :math:`p`. That is, we interpolate :math:`p`:
 
 .. code-block:: python
 
-        f = interpolate(f, V)
+        p = interpolate(p, V)
 
-Calling ``plot(f)`` will produce a plot of :math:`f`. Note that the assignment
-to ``f`` destroys the previous ``Expression`` object ``f``, so if
+Calling ``plot(p)`` will produce a plot of :math:`p`. Note that the assignment
+to ``p`` destroys the previous ``Expression`` object ``p``, so if
 it is of interest to still have access to this object, another name must be used
 for the ``Function`` object returned by ``interpolate``.
 
 We need some evidence that the program works, and to this end we may
-use the analytical solution listed above for the case
-:math:`\sigma\rightarrow\infty`. In scaled coordinates the solution reads
+use the analytical solution listed above for the case :math:`\beta =0`.
 
-.. math::
-         w_{\rm}(x,y) = 1-x^2-y^2 .
-
-Practical values for an infinite :math:`\sigma`
-may be 50 or larger, and in such cases the program will report the
-maximum deviation between the computed :math:`w` and the (approximate) exact
-:math:`{w_{\small\mbox{e}}}`.
-
-.. index:: membrane1.py
-
-Note that the variational formulation remains the same as in the
-program from the section :ref:`tut:poisson1:impl`, except that :math:`u` is
-replaced by :math:`w` and :math:`u_0=0`.
-The final program is found in the file ``membrane1.py``, located
+The final program is found in the file ``membrane.py``, located
 in the ``stationary/poisson`` directory, and also listed below.
-We have inserted capabilities for iterative solution methods and
-hence large meshes (the section :ref:`tut:poisson1:solve:prm`),
-used objects for the variational problem and solver
-(the section :ref:`tut:poisson1:solver:problem`), and made numerical
-comparison of the numerical and (approximate) analytical solution
-(the section :ref:`tut:poisson1:verify1`).
 
 .. code-block:: python
 
         from dolfin import *
-        import numpy
+        from mshr import *
+        import numpy as np
         
-        # This demo needs to be updated for the removal
-        # of CircleMesh from DOLFIN
-        exit(0)
+        def solver(
+            f, u0, mesh, degree=1,
+            linear_solver='Krylov', # Alt: 'direct'
+            abs_tol=1E-5,           # Absolute tolerance in Krylov solver
+            rel_tol=1E-3,           # Relative tolerance in Krylov solver
+            max_iter=1000,          # Max no of iterations in Krylov solver
+            log_level=PROGRESS,     # Amount of solver output
+            dump_parameters=False,  # Write out parameter database?
+            ):
+            """
+            Solve -Laplace(u)=f on given mesh with Lagrange elements
+            of specified degree and u=u0 (Expresssion) on the boundary.
+            """
+            V = FunctionSpace(mesh, 'Lagrange', degree)
         
-        # Set pressure function:
-        T = 10.0  # tension
-        A = 1.0   # pressure amplitude
-        R = 0.3   # radius of domain
-        theta = 0.2
-        x0 = 0.6*R*cos(theta)
-        y0 = 0.6*R*sin(theta)
-        sigma = 0.025
-        #sigma = 50  # large value for verification
-        n = 40   # approx no of elements in radial direction
-        mesh = CircleMesh(Point(0.0, 0.0), 1.0, 1.0/n)
-        V = FunctionSpace(mesh, 'Lagrange', 1)
+            def u0_boundary(x, on_boundary):
+                return on_boundary
         
-        # Define boundary condition w=0
+            bc = DirichletBC(V, u0, u0_boundary)
         
-        def boundary(x, on_boundary):
-            return on_boundary
+            # Define variational problem
+            u = TrialFunction(V)
+            v = TestFunction(V)
+            a = inner(nabla_grad(u), nabla_grad(v))*dx
+            L = f*v*dx
         
-        bc = DirichletBC(V, Constant(0.0), boundary)
+            # Compute solution
+            u = Function(V)
         
-        # Define variational problem
-        w = TrialFunction(V)
-        v = TestFunction(V)
-        a = inner(nabla_grad(w), nabla_grad(v))*dx
-        f = Expression('4*exp(-0.5*(pow((R*x[0] - x0)/sigma, 2)) '
-                             '-0.5*(pow((R*x[1] - y0)/sigma, 2)))',
-                       R=R, x0=x0, y0=y0, sigma=sigma)
-        L = f*v*dx
+            if linear_solver == 'Krylov':
+                prm = parameters['krylov_solver'] # short form
+                prm['absolute_tolerance'] = abs_tol
+                prm['relative_tolerance'] = rel_tol
+                prm['maximum_iterations'] = max_iter
+                print(parameters['linear_algebra_backend'])
+                set_log_level(log_level)
+                if dump_parameters:
+                    info(parameters, True)
+                solver_parameters = {'linear_solver': 'gmres',
+                                     'preconditioner': 'ilu'}
+            else:
+                solver_parameters = {'linear_solver': 'lu'}
         
-        # Compute solution
-        w = Function(V)
-        problem = LinearVariationalProblem(a, L, w, bc)
-        solver  = LinearVariationalSolver(problem)
-        solver.parameters['linear_solver'] = 'cg'
-        solver.parameters['preconditioner'] = 'ilu'
-        solver.solve()
+            solve(a == L, u, bc, solver_parameters=solver_parameters)
+            return u
         
-        # Plot scaled solution, mesh and pressure
-        plot(mesh, title='Mesh over scaled domain')
-        plot(w, title='Scaled deflection')
-        f = interpolate(f, V)
-        plot(f, title='Scaled pressure')
         
-        # Find maximum real deflection
-        max_w = w.vector().array().max()
-        max_D = A*max_w/(8*pi*sigma*T)
-        print('Maximum real deflection is', max_D)
+        def membrane_solve_and_visualize(beta, R0, num_elements_radial_dir):
+            # Scaled pressure function
+            p = Expression(
+                '4*exp(-pow(beta,2)*(pow(x[0], 2) + pow(x[1]-R0, 2)))',
+                beta=beta, R0=R0)
         
-        # Verification for "flat" pressure (large sigma)
-        if sigma >= 50:
-            w_exact = Expression('1 - x[0]*x[0] - x[1]*x[1]')
-            w_e = interpolate(w_exact, V)
-            w_e_array = w_e.vector().array()
-            w_array = w.vector().array()
-            diff_array = numpy.abs(w_e_array - w_array)
-            print('Verification of the solution, max difference is %.4E' % \ 
-                  diff_array.max())
+            # Generate mesh over the unit circle
+            domain = Circle(Point(0.0, 0.0), 1.0)
+            mesh = generate_mesh(domain, num_elements_radial_dir)
         
-            # Create finite element field over V and fill with error values
-            difference = Function(V)
-            difference.vector()[:] = diff_array
-            plot(difference, title='Error field for sigma=%g' % sigma)
+            w = solver(p, Constant(0), mesh, degree=1,
+                       linear_solver='direct')
+            w.rename('w', 'deflection')  # set name and label (description)
         
-        # Should be at the end
-        interactive()
+            # Plot scaled solution, mesh and pressure
+            plot(mesh, title='Mesh over scaled domain')
+            plot(w, title='Scaled ' + w.label())
+            V = w.function_space()
+            p = interpolate(p, V)
+            p.rename('p', 'pressure')
+            plot(p, title='Scaled ' + p.label())
 
 Choosing a small width :math:`\sigma` (say 0.01) and a location :math:`(x_0,y_0)`
 toward the circular boundary (say :math:`(0.6R\cos\theta, 0.6R\sin\theta)`
@@ -1929,7 +1909,7 @@ for any :math:`\theta\in [0,2\pi]`), may produce an exciting visual
 comparison of :math:`w` and :math:`f` that demonstrates the very smoothed elastic
 response to a peak force (or mathematically, the smoothing properties
 of the inverse of the Laplace operator).  One needs to experiment with
-the mesh resolution to get a smooth visual representation of |nbsp| :math:`f`.  You
+the mesh resolution to get a smooth visual representation of :math:`f`.  You
 are strongly encouraged to play around with the plots and different
 mesh resolutions.
 
@@ -1956,12 +1936,12 @@ through program statements.  More advanced and professional
 visualizations are usually better created with advanced tools like
 Mayavi, ParaView, or VisIt.
 
-.. index:: membrane1v.p
+.. index:: membranev.p
 
-We have made a program ``membrane1v.py`` for the membrane deflection
+We have made a program ``membrane.py`` for the membrane deflection
 problem in the section :ref:`tut:poisson:membrane` and added various
 demonstrations of plotting capabilities. You are encouraged to play around with
-``membrane1v.py`` and modify the code as you read about various features.
+``membrane.py`` and modify the code as you read about various features.
 
 .. index:: plot
 
@@ -1972,7 +1952,11 @@ instead of a colored surface plot:
 .. code-block:: python
 
         plot(mesh, title='Finite element mesh')
-        plot(w, wireframe=True, title='solution')
+        plot(w, wireframe=True, title='Solution')
+
+Axes can be turned on by the ``axes=True`` argument, while
+``interactive=True`` makes the program hang at the plot command - you have
+to type ``q`` in the plot window to terminate the plot and continue execution.
 
 The left mouse button is used to rotate the surface, while the right
 button can zoom the image in and out.
@@ -2000,8 +1984,9 @@ The plots created by pressing ``p`` or ``P`` are stored in files with
 names ``dolfin_plot_X.png`` or ``dolfin_plot_X.pdf``,
 where ``X`` is an integer that is increase by one from the last plot
 that was made. The file stem ``dolfin_plot_`` can be set to something
-more suitable through the ``prefix`` keyword argument to ``plot``,
-for instance, ``plot(f, prefix='pressure')``.
+more suitable through the ``hardcopy_prefix`` keyword argument to the
+``plot`` function,
+for instance, ``plot(f, hardcopy_prefix='pressure')``.
 
 .. index:: rotate PDF plots
 
@@ -2009,7 +1994,7 @@ for instance, ``plot(f, prefix='pressure')``.
 
 Plots stored in PDF format need to be rotated 90 degrees before
 inclusion in documents. This can be done by the ``convert -rotate 90``
-command (from the ImageMagick utility), but the resulting file is
+command (from the ImageMagick utility), but the resulting file has
 then no more high-resolution PDF vector graphics. A better solution
 is therefore to use ``pdftk`` to preserve the vector graphics:
 
@@ -2017,37 +2002,21 @@ is therefore to use ``pdftk`` to preserve the vector graphics:
 
         Terminal> pdftk dolfin_plot_1.pdf cat 1-endnorth output out.pdf
 
-The ``plot`` function takes several other keyword arguments:
+For making plots in batch, we can do the following:
 
 .. code-block:: python
 
-        viz_w = plot(w,
-                     wireframe=False,
-                     title='Scaled membrane deflection',
-                     rescale=False,
-                     axes=True,
-                     )
-        
-        viz_w.elevate(-65) # tilt camera -65 degrees (latitude dir)
-        viz_w.set_min_max(0, 0.5*max_w)
-        viz_w.update(w)    # bring settings above into action
-
-Figure :ref:`tut:poisson:2D:fig1` shows the resulting scalar surface.
-
-.. 2DO: needs to be updated, the plot function takes other arguments now
-
-By grabbing the plotting object created by the ``plot`` function we can
-create a PNG and PDF plot in the program:
-
-.. code-block:: python
-
-        viz_w.write_png('membrane_deflection')
-        viz_w.write_pdf('tmp')
+        viz_w = plot(w, interactive=False)
+        viz_w.elevate(-10)  # adjust (lift) camera from the default view
+        viz_w.plot(w)       # bring new settings into action
+        viz_w.write_png('deflection')  # make deflection.png
+        viz_w.write_pdf('deflection')  # make deflection.pdf
         # Rotate pdf file (right) from landscape to portrait
         import os
-        os.system('pdftk tmp.pdf cat 1-endR output membrane_deflection.pdf')
+        os.system('pdftk deflection.pdf cat 1-endnorth output w.pdf')
 
-.. 2DO: make pdf and png plots and pdflatex
+The commands above appear in the ``membrane_solve_and_visualize2``
+function in the ``membrane.py`` file.
 
 .. _tut:poisson:2D:fig1:
 
@@ -2061,6 +2030,8 @@ create a PNG and PDF plot in the program:
 Computing derivatives
 ---------------------
 
+.. index:: projection
+
 In Poisson and many other problems the gradient of the solution is
 of interest. The computation is in principle simple:
 since
@@ -2072,34 +2043,25 @@ since
         
 
 Given the solution variable ``u`` in the program, its gradient is
-obtained by ``grad(u)`` or ``nabla_grad(u)``.
-However, the gradient of a piecewise continuous
-finite element scalar field
-is a discontinuous vector field
-since the :math:`\phi_j` has discontinuous derivatives at the boundaries of
-the cells. For example, using Lagrange elements of degree 1, :math:`u` is
-linear over each cell, and the numerical :math:`\nabla u` becomes a piecewise
-constant vector field. On the contrary,
-the exact gradient is continuous.
-For visualization and data analysis purposes
-we often want the computed
-gradient to be a continuous vector field. Typically,
-we want each component of :math:`\nabla u` to be represented in the same
-way as :math:`u` itself. To this end, we can project the components
-of :math:`\nabla u` onto the
-same function space as we used for :math:`u`.
-This means that we solve :math:`w = \nabla u` approximately by a finite element
-method, using the same elements for the components of
+obtained by ``grad(u)`` or ``nabla_grad(u)``.  However, the gradient of a
+piecewise continuous finite element scalar field is a discontinuous
+vector field since the :math:`\phi_j` has discontinuous derivatives at the
+boundaries of the cells. For example, using Lagrange elements of
+degree 1, :math:`u` is linear over each cell, and the numerical :math:`\nabla u`
+becomes a piecewise constant vector field. On the contrary, the exact
+gradient is continuous.  For visualization and data analysis purposes
+we often want the computed gradient to be a continuous vector
+field. Typically, we want each component of :math:`\nabla u` to be
+represented in the same way as :math:`u` itself. To this end, we can project
+the components of :math:`\nabla u` onto the same function space as we used
+for :math:`u`.  This means that we solve :math:`w = \nabla u` approximately by a
+finite element method, using the same elements for the components of
 :math:`w` as we used for :math:`u`. This process is known as *projection*.
-
-.. index:: projection
-
-Looking at the component :math:`\partial
-u/\partial x` of the gradient, we project the (discrete) derivative
-:math:`\sum_jU_j{\partial \phi_j/\partial x}` onto a function space
-with basis :math:`\phi_1,\phi_2,\ldots` such that the derivative in
-this space is expressed by the standard sum :math:`\sum_j\bar U_j \phi_j`,
-for suitable (new) coefficients :math:`\bar U_j`.
+Looking at the component :math:`\partial u/\partial x` of the gradient, we
+project the (discrete) derivative :math:`\sum_jU_j{\partial \phi_j/\partial
+x}` onto a function space with basis :math:`\phi_1,\phi_2,\ldots` such that
+the derivative in this space is expressed by the standard sum
+:math:`\sum_j\bar U_j \phi_j`, for suitable (new) coefficients :math:`\bar U_j`.
 
 The variational problem for :math:`w` reads: find  :math:`w\in V^{(\mbox{g})}` such that
 
@@ -2107,7 +2069,7 @@ The variational problem for :math:`w` reads: find  :math:`w\in V^{(\mbox{g})}` s
 
 .. math::
 
-    \tag{20}
+    \tag{19}
     a(w, v) = L(v)\quad\forall v\in \hat{V^{(\mbox{g})}},
         
         
@@ -2118,7 +2080,7 @@ where
 
 .. math::
 
-    \tag{21}
+    \tag{20}
     a(w, v) = \int_\Omega w\cdot v {\, \mathrm{d}x},
         
         
@@ -2127,21 +2089,19 @@ where
 
 .. math::
 
-    \tag{22}
+    \tag{21}
     L(v) = \int_\Omega \nabla u\cdot v {\, \mathrm{d}x}{\thinspace .}
         
         
 
-The function spaces :math:`V^{(\mbox{g})}` and :math:`\hat{V^{(\mbox{g})}}` (with the superscript
-g denoting "gradient") are
-vector versions of the function space for :math:`u`, with
-boundary conditions removed (if :math:`V` is the
-space we used for :math:`u`, with no restrictions
-on boundary values, :math:`V^{(\mbox{g})} = \hat{V^{(\mbox{g})}} = [V]^d`, where
-:math:`d` is the number of space dimensions).
-For example, if we used piecewise linear functions on the mesh to
-approximate :math:`u`, the variational problem for :math:`w` corresponds to
-approximating each component field of :math:`w` by piecewise linear functions.
+The function spaces :math:`V^{(\mbox{g})}` and :math:`\hat{V^{(\mbox{g})}}` (with the superscript g
+denoting "gradient") are vector versions of the function space for
+:math:`u`, with boundary conditions removed (if :math:`V` is the space we used for
+:math:`u`, with no restrictions on boundary values, :math:`V^{(\mbox{g})} = \hat{V^{(\mbox{g})}} =
+[V]^d`, where :math:`d` is the number of space dimensions).  For example, if
+we used piecewise linear functions on the mesh to approximate :math:`u`, the
+variational problem for :math:`w` corresponds to approximating each
+component field of :math:`w` by piecewise linear functions.
 
 The variational problem for the vector field
 :math:`w`, called ``grad_u`` in the code, is easy to solve in FEniCS:
@@ -2174,12 +2134,35 @@ example of how such a vector field is visualized.
 
    *Example of visualizing the vector field :math:`\nabla u` by arrows at the nodes*
 
+.. index:: project
+
+.. index:: projection
+
+Projecting some function onto some space is a very common
+operation in finite element programs. The manual steps in this process
+have therefore been collected in a utility function ``project(q, W)``,
+which returns the projection of some ``Function`` or ``Expression`` object
+named ``q`` onto the ``FunctionSpace`` or ``VectorFunctionSpace`` named ``W``.
+Specifically, the previous code for
+projecting each component of ``grad(u)`` onto
+the same space that we use for ``u``, can now be done by a one-line call
+
+.. code-block:: python
+
+        grad_u = project(grad(u), VectorFunctionSpace(mesh, 'Lagrange', 1))
+
+The applications of projection are many, including turning discontinuous
+gradient fields into continuous ones, comparing higher- and lower-order
+function approximations, and transforming a higher-order finite element
+solution down to a piecewise linear field, which is required by many
+visualization packages.
+
 The scalar component fields of the gradient
 can be extracted as separate fields and, e.g., visualized:
 
 .. code-block:: python
 
-        grad_u_x, grad_u_y = grad_u.split(deepcopy=True)  # extract components
+        grad_u_x, grad_u_y = grad_u.split(deepcopy=True)
         plot(grad_u_x, title='x-component of grad(u)')
         plot(grad_u_y, title='y-component of grad(u)')
 
@@ -2211,55 +2194,40 @@ reached by
 
         grad_u_array = grad_u.vector().array()
 
-but this is a flat ``numpy`` array where the degrees of freedom
-for the :math:`x` component of the gradient is stored in the first part, then the
+but this is a flat ``numpy`` array where the degrees of freedom for the
+:math:`x` component of the gradient is stored in the first part, then the
 degrees of freedom of the :math:`y` component, and so on.
 
-.. index:: d5_p2D.py
+.. index:: p2D_iter.py
 
-The program ``d5_p2D.py`` extends the
-code ``d5_p2D.py`` from the section :ref:`tut:poisson1:verify1`
-with computations and visualizations of the gradient.
-Examining the arrays ``grad_u_x_array``
-and ``grad_u_y_array``, or looking at the plots of
-``grad_u_x`` and
-``grad_u_y``, quickly reveals that
-the computed ``grad_u`` field does not equal the exact
-gradient :math:`(2x, 4y)` in this particular test problem where :math:`u=1+x^2+2y^2`.
-There are inaccuracies at the boundaries, arising from the
-approximation problem for :math:`w`. Increasing the mesh resolution shows,
-however, that the components of the gradient vary linearly as
-:math:`2x` and :math:`4y` in
-the interior of the mesh (i.e., as soon as we are one element away from
-the boundary). See the section :ref:`tut:quickviz` for illustrations of
-this phenomenon.
-
-.. index:: project
-
-.. index:: projection
-
-Projecting some function onto some space is a very common
-operation in finite element programs. The manual steps in this process
-have therefore been collected in a utility function ``project(q, W)``,
-which returns the projection of some ``Function`` or ``Expression`` object
-named ``q`` onto the ``FunctionSpace`` or ``VectorFunctionSpace`` named ``W``.
-Specifically, the previous code for
-projecting each component of ``grad(u)`` onto
-the same space that we use for ``u``, can now be done by a one-line call
+The function ``gradient(u)`` in ``p2D_iter.py``
+returns a projected (smoothed) :math:`\nabla u` vector field, given some
+finite element function ``u``:
 
 .. code-block:: python
 
-        grad_u = project(grad(u), VectorFunctionSpace(mesh, 'Lagrange', 1))
+        def gradient(u):
+            """Return grad(u) projected onto same space as u."""
+            V = u.function_space()
+            mesh = V.mesh()
+            V_g = VectorFunctionSpace(mesh, 'Lagrange', 1)
+            grad_u = project(grad(u), V_g)
+            grad_u.rename('grad(u)', 'continuous gradient field')
+            return grad_u
 
-The applications of projection are many, including turning discontinuous
-gradient fields into continuous ones, comparing higher- and lower-order
-function approximations, and transforming a higher-order finite element
-solution down to a piecewise linear field, which is required by many
-visualization packages.
+Examining the arrays with vertex values of ``grad_u_x`` and ``grad_u_y``
+quickly reveals that the computed ``grad_u`` field does not equal the
+exact gradient :math:`(2x, 4y)` in this particular test problem where
+:math:`u=1+x^2+2y^2`.  There are inaccuracies at the boundaries, arising
+from the approximation problem for :math:`w`. Increasing the mesh resolution
+shows, however, that the components of the gradient vary linearly as
+:math:`2x` and :math:`4y` in the interior of the mesh (i.e., as soon as we are one
+element away from the boundary).  The ``application_test_gradient``
+function in ``p2D_iter.py`` performs some experiments.
 
 .. _tut:possion:2D:varcoeff:
 
-A variable-coefficient poisson problem
+A variable-coefficient Poisson problem
 --------------------------------------
 
 .. index:: Poisson's equation with variable coefficient
@@ -2271,7 +2239,7 @@ as in the boundary-value problem
 
 .. math::
 
-    \tag{23}
+    \tag{22}
     - \nabla\cdot \left\lbrack
         p(x,y)\nabla u(x,y)\right\rbrack &= f(x,y) \quad \mbox{in } \Omega,
             \\ 
@@ -2318,7 +2286,7 @@ The weak form :math:`a(u,v)=L(v)` then has
 
 .. math::
 
-    \tag{24}
+    \tag{23}
     a(u,v) = \int_\Omega p\nabla u\cdot\nabla v {\, \mathrm{d}x},
         
         
@@ -2327,7 +2295,7 @@ The weak form :math:`a(u,v)=L(v)` then has
 
 .. math::
 
-    \tag{25}
+    \tag{24}
     L(v) = \int_\Omega fv {\, \mathrm{d}x}{\thinspace .}
         
         
@@ -2369,7 +2337,7 @@ such that
 
 .. math::
 
-    \tag{26}
+    \tag{25}
     a(w, v) = L(v)\quad\forall v\in \hat{V^{(\mbox{g})}},
         
         
@@ -2380,7 +2348,7 @@ where
 
 .. math::
 
-    \tag{27}
+    \tag{26}
     a(w, v) = \int_\Omega w\cdot v {\, \mathrm{d}x},
         
         
@@ -2389,7 +2357,7 @@ where
 
 .. math::
 
-    \tag{28}
+    \tag{27}
     L(v) = \int_\Omega (-p \nabla u)\cdot v {\, \mathrm{d}x}{\thinspace .}
         
         
@@ -2456,7 +2424,7 @@ functionals of :math:`u`, for example,
 
 .. math::
 
-    \tag{29}
+    \tag{28}
     {1\over2}||\nabla u||^2 \equiv {1\over2}\int_\Omega \nabla u\cdot \nabla u {\, \mathrm{d}x},
         
         
@@ -2468,7 +2436,7 @@ Another frequently occurring functional is the error
 
 .. math::
 
-    \tag{30}
+    \tag{29}
     ||{u_{\small\mbox{e}}}-u|| = \left(\int_\Omega ({u_{\small\mbox{e}}}-u)^2 {\, \mathrm{d}x}\right)^{1/2},
         
         
@@ -2482,7 +2450,7 @@ the boundary :math:`\partial\Omega`,
 
 .. math::
 
-    \tag{31}
+    \tag{30}
     F = -\int_\Gamma p\nabla u\cdot\boldsymbol{n} {\, \mathrm{d}s},
         
         
@@ -2498,7 +2466,7 @@ describes how it can be done.
 **Energy Functional.**
 The integrand of the
 energy functional
-:ref:`(29) <Eq:tut:poisson1:functionals:energy>`
+:ref:`(28) <Eq:tut:poisson1:functionals:energy>`
 is described in the UFL language in the same manner as we describe
 weak forms:
 
@@ -2757,7 +2725,7 @@ Checking convergence rates is the next best method for verifying PDE codes
 
 **Flux Functionals.**
 To compute flux integrals like
-:ref:`(31) <Eq:tut:poisson1:functionals:flux>`
+:ref:`(30) <Eq:tut:poisson1:functionals:flux>`
 we need to define the :math:`\boldsymbol{n}` vector, referred to as *facet normal*
 in FEniCS. If :math:`\Gamma` is the complete boundary we can perform
 the flux computation by
@@ -3076,7 +3044,7 @@ The complete boundary-value problem can be written as
 
 .. math::
 
-    \tag{32}
+    \tag{31}
     - \nabla^2 u = f \mbox{ in } \Omega,  
         
         
@@ -3085,7 +3053,7 @@ The complete boundary-value problem can be written as
 
 .. math::
 
-    \tag{33}
+    \tag{32}
     u = u_0 \mbox{ on } \Gamma_D,       
         
         
@@ -3094,7 +3062,7 @@ The complete boundary-value problem can be written as
 
 .. math::
 
-    \tag{34}
+    \tag{33}
     - {\partial u\over\partial n} = g \mbox{ on } \Gamma_N  {\thinspace .}
         
         
@@ -3151,7 +3119,7 @@ The resulting weak form reads
 
 .. math::
 
-    \tag{35}
+    \tag{34}
     \int_{\Omega} \nabla u \cdot \nabla v {\, \mathrm{d}x} +
         \int_{\Gamma_N} gv {\, \mathrm{d}s}
         = \int_{\Omega} fv {\, \mathrm{d}x}{\thinspace .}
@@ -3165,7 +3133,7 @@ in the standard notation :math:`a(u,v)=L(v)` is straightforward with
 
 .. math::
 
-    \tag{36}
+    \tag{35}
     a(u, v) = \int_{\Omega} \nabla u \cdot \nabla v {\, \mathrm{d}x},
         
         
@@ -3174,7 +3142,7 @@ in the standard notation :math:`a(u,v)=L(v)` is straightforward with
 
 .. math::
 
-    \tag{37}
+    \tag{36}
     L(v) = \int_{\Omega} fv {\, \mathrm{d}x} -
         \int_{\Gamma_N} gv {\, \mathrm{d}s}{\thinspace .}  
         
@@ -3410,13 +3378,12 @@ where the entries in :math:`A` and :math:`b` are given by
 
 .. index:: assembly of linear systems
 
-The examples so far have specified the left- and right-hand side
-of the variational formulation and then asked FEniCS to
-assemble the linear system and solve it.
-An alternative to is explicitly call functions for assembling the
-coefficient matrix :math:`A` and the right-side vector :math:`b`, and then solve
-the linear system :math:`AU=b` with respect to the :math:`U` vector.
-Instead of ``solve(a == L, u, b)`` we now write
+The examples so far have specified the left- and right-hand side of
+the variational formulation and then asked FEniCS to assemble the
+linear system and solve it.  An alternative to is explicitly call
+functions for assembling the coefficient matrix :math:`A` and the right-side
+vector :math:`b`, and then solve the linear system :math:`AU=b` with respect to
+the :math:`U` vector.  Instead of ``solve(a == L, u, b)`` we now write
 
 .. code-block:: python
 
@@ -3652,7 +3619,7 @@ Consider the simple model problem
 
 .. math::
 
-    \tag{38}
+    \tag{37}
     u''(x) = 2\hbox{ in }[0,1],\quad u(0)=0,\ u(1)=1,
         
         
@@ -3672,7 +3639,7 @@ then reads
 
 .. math::
 
-    \tag{39}
+    \tag{38}
     \begin{array}{rcll}
             \nabla^2 u  &=  2 &\mbox{in } \Omega, \\ 
             u  &=  0 &\mbox{on } \Gamma_0,\\ 

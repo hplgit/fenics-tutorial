@@ -190,7 +190,39 @@ def test_normalize_solution():
     expected = 1.0
     assert abs(expected - computed) < 1E-15
 
+def gradient(u):
+    """Return grad(u) projected onto same space as u."""
+    V = u.function_space()
+    mesh = V.mesh()
+    V_g = VectorFunctionSpace(mesh, 'Lagrange', 1)
+    grad_u = project(grad(u), V_g)
+    grad_u.rename('grad(u)', 'continuous gradient field')
+    return grad_u
+
+def application_test_gradient(Nx=6, Ny=4):
+    u0 = Expression('1 + x[0]*x[0] + 2*x[1]*x[1]')
+    f = Constant(-6.0)
+    u = solver(f, u0, Nx, Ny, 1, linear_solver='direct')
+    u.rename('u', 'solution')
+    grad_u = gradient(u)
+    grad_u_x, grad_u_y = grad_u.split(deepcopy=True)
+    grad_u_x.rename('grad(u)_x', 'x-component of grad(u)')
+    grad_u_y.rename('grad(u)_y', 'y-component of grad(u)')
+    plot(u, title=u.label())
+    plot(grad_u, title=grad_u.label())
+    plot(grad_u_x, title=grad_u_x.label())
+    plot(grad_u_y, title=grad_u_y.label())
+    coor = u.function_space().mesh().coordinates()
+    if len(coor) < 50:
+        for i, value in enumerate(grad_u_x.compute_vertex_values()):
+            print('vertex %d, %s, u_x=2x=%g=%g' %
+                  (i, tuple(coor[i]), 2*coor[i][0], value))
+        for i, value in enumerate(grad_u_y.compute_vertex_values()):
+            print('vertex %d, %s, u_y=4y=%g=%g' %
+                  (i, tuple(coor[i]), 4*coor[i][1], value))
+
 if __name__ == '__main__':
-    application_test()
+    #application_test()
+    application_test_gradient()
     # Hold plot
     interactive()
