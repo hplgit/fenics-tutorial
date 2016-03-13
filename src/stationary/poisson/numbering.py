@@ -26,7 +26,7 @@ assert coor.shape[0] == u_array.shape[0]
 
 u_at_vertices = u.compute_vertex_values()
 for i, x in enumerate(coor):
-    print('vertex %d: u_at_vertices[%d]=%g u(%s)=%g' %
+    print('vertex %d: u_at_vertices[%d]=%g\tu(%s)=%g' %
           (i, i, u_at_vertices[i], x, u(x)))
 
 # The next two methods shall use the fact that while the ordering of dofs and
@@ -48,6 +48,6 @@ print all(near(u(coor[d2v[i]]), dof, 1E-10) for i, dof in enumerate(u_array))
 
 # We can now tie the methods together and write our own compute_vertex_value
 # function. The idea is to use u_array and the mapping:
-print near(max(u_array[v2d] - u_coor_values), 0)
+print near(max(u_array[v2d] - u_at_vertices), 0)
 # Note that we did not evaluate (expensive)! We simple reoreder the existing
 # degrees of freeom (cheap).

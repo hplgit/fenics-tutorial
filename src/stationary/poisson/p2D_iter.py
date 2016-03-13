@@ -48,7 +48,7 @@ def solver(
     else:
         solver_parameters = {'linear_solver': 'lu'}
 
-    solve(a == L, u, bc, solver_parameters==solver_parameters)
+    solve(a == L, u, bc, solver_parameters=solver_parameters)
     return u
 
 def solver_objects(
@@ -109,7 +109,7 @@ def test_solvers():
     # For higher mesh resolution we also need reduced tolerances.
     # The tol dict maps degree to expected tolerance for the coarse
     # meshes in the test.
-    tol = {'direct': {1: 1E-11, 2: 1E-11, 3: 1E-11}}
+    tol = {'direct': {1: 1E-11, 2: 1E-11, 3: 1E-11},
            'Krylov': {1: 1E-14, 2: 1E-05, 3: 1E-03}}
     u0 = Expression('1 + x[0]*x[0] + 2*x[1]*x[1]')
     f = Constant(-6.0)
@@ -151,6 +151,44 @@ def application_test():
     file << u
     # Plot solution and mesh
     plot(u)
+
+def compare_exact_and_numerical_solution(Nx, Ny, degree=1):
+    u0 = Expression('1 + x[0]*x[0] + 2*x[1]*x[1]')
+    f = Constant(-6.0)
+    u = solver(f, u0, Nx, Ny, degree, linear_solver='direct')
+    # Grab exact and numerical solution at the vertices and compare
+    V = u.function_space()
+    u0_Function = interpolate(u0, V)
+    u0_at_vertices = u0_Function.compute_vertex_values()
+    u_at_vertices = u.compute_vertex_values()
+    coor = V.mesh().coordinates()
+    for i, x in enumerate(coor):
+        print('vertex %2d (%9g,%9g): error=%g'
+              % (i, x[0], x[1],
+                 u0_at_vertices[i] - u_at_vertices[i]))
+        # Could compute u0(x) - u_at_vertices[i] but this
+        # is much more expensive and gives more rounding errors
+    center = (0.5, 0.5)
+    error = u0(center) - u(center)
+    print('numerical error at %s: %g' % (center, error))
+
+def normalize_solution(u):
+    """Normalize u: return u divided by max(u)."""
+    u_array = u.vector().array()
+    u_max = u_array.max()
+    u_array /= u_max
+    u.vector()[:] = u_array
+    u.vector().set_local(u_array)  # alternative
+    return u
+
+def test_normalize_solution():
+    u0 = Expression('1 + x[0]*x[0] + 2*x[1]*x[1]')
+    f = Constant(-6.0)
+    u = solver(f, u0, 4, 2, 1, linear_solver='direct')
+    u = normalize_solution(u)
+    computed = u.vector().array().max()
+    expected = 1.0
+    assert abs(expected - computed) < 1E-15
 
 if __name__ == '__main__':
     application_test()

@@ -213,6 +213,8 @@ program will then read the mesh from file.
 
 .. index:: Lagrange finite element family
 
+.. index:: P1 element
+
 Defining a function space corresponding to a mesh
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -229,12 +231,13 @@ family of elements.  (Some FEniCS programs use ``'CG'``, for Continuous
 Galerkin, as a synonym for ``'Lagrange'``.)  With degree 1, we simply
 get the standard linear Lagrange element, which is a triangle with
 nodes at the three vertices.  Some finite element practitioners refer
-to this element as the "linear triangle".  The computed :math:`u` will be
-continuous and linearly varying in :math:`x` and :math:`y` over each cell in the
-mesh.  Higher-degree polynomial approximations over each cell are
-trivially obtained by increasing the third parameter in
-``FunctionSpace``. Changing the second parameter to ``'DG'`` creates a
-function space for discontinuous Galerkin methods.
+to this element as the "linear triangle" or the P1 element.  The
+computed :math:`u` will be continuous and linearly varying in :math:`x` and :math:`y`
+over each cell in the mesh.  Higher-degree polynomial approximations
+over each cell are trivially obtained by increasing the third
+parameter in ``FunctionSpace``, which will then generate P2, P3, and so
+forth, type of elements. Changing the second parameter to ``'DG'``
+creates a function space for discontinuous Galerkin methods.
 
 .. index:: TestFunction
 
@@ -500,6 +503,8 @@ to :math:`u` at some point in the mesh and the correspondence requires
 knowledge of the numbering of degrees of freedom and the numbering of
 vertices in elements in the mesh, see the section :ref:`tut:poisson1:verify1`
 for details.
+
+.. index:: interpolate
 
 For now, we want to check that the values in ``u_array`` are correct:
 they should equal our ``u0`` function. The most natural approach is
@@ -821,7 +826,7 @@ Solve the following problem
 
     \tag{14}
     \nabla^2 u = 2e^{-2x}\sin(\pi y)((4-5\pi^2)\sin(2\pi x) - 8\pi\cos(2\pi x)),
-         \hbox{ in }\Omega = [0,1]\times [0,1]
+        \quad\hbox{ in }\Omega = [0,1]\times [0,1]
         
         
 
@@ -830,7 +835,7 @@ Solve the following problem
 .. math::
 
     \tag{15}
-    u = 0  \hbox{ on }\partial\Omega
+    u = 0\quad\hbox{ on }\partial\Omega
         
         
 
@@ -844,7 +849,7 @@ Compute the maximum numerical approximation error in a mesh with
 :math:`4(N_x\times N_y)` elements. Show that the doubling the resolution
 reduces the error by a factor 4 when using Lagrange elements of degree one.
 (This is a good verification that the implementation is correct, but
-note that the result requires a certain resolution in the mesh - here
+note that the result requires sufficiently fine mesh - here
 one may start with :math:`N_x=N_y=20`.)
 Make an illustrative plot of the solution too.
 
@@ -992,12 +997,13 @@ we need code that is close to what we have in ``test_solver``.
             Nx = 20
             Ny = Nx
             error = []
+            # Loop over refined meshes
             for i in range(2):
                 Nx *= i+1
                 Ny *= i+1
                 print('solving on 2(%dx%d) mesh' % (Nx, Ny))
                 u = solver(f, u0, Nx, Ny, degree=1)
-                # Make a finite element function of the exact u0
+                # Make a finite element function of the exact u_e
                 V = u.function_space()
                 u_e_array = interpolate(u_e, V).vector().array()
                 max_error = (u_e_array - u.vector().array()).max()  # Linf norm
@@ -1025,6 +1031,13 @@ we need code that is close to what we have in ``test_solver``.
             application()
             # Hold plot
             interactive()
+
+The unit test is embedded in a proper test function ``test_solver``
+for the pytest or
+nose testing frameworks. Visualization of the solution is encapsulated
+in the ``application`` function. Since we need ``u_e``, ``u0``, and ``f``
+in two functions, we place the definitions in a function ``data`` to
+avoid copies of these expressions.
 
 .. --- end solution of exercise ---
 
@@ -1061,17 +1074,17 @@ iterative methods, which are faster and require much less memory.
 Consequently, we must tell you already now how you can take
 advantage of state-of-the-art iterative solution methods in FEniCS.
 
-.. index:: d2_p2D.py
+Setting linear solver parameters
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Preconditioned Krylov solvers is a type of popular iterative methods that are
-easily accessible in FEniCS programs. The Poisson equation results in
-a symmetric, positive definite coefficient matrix, for which the optimal
-Krylov solver is the Conjugate Gradient (CG) method. However, the
-CG method requires boundary conditions to be implemented in a
-symmetric way. This is not the case by default, so then a Krylov solver
-for non-symmetric system, such as GMRES, is a better choice.
-Incomplete
-LU factorization (ILU) is a popular and
+Preconditioned Krylov solvers is a type of popular iterative methods
+that are easily accessible in FEniCS programs. The Poisson equation
+results in a symmetric, positive definite coefficient matrix, for
+which the optimal Krylov solver is the Conjugate Gradient (CG)
+method. However, the CG method requires boundary conditions to be
+implemented in a symmetric way. This is not the case by default, so
+then a Krylov solver for non-symmetric system, such as GMRES, is a
+better choice.  Incomplete LU factorization (ILU) is a popular and
 robust all-round preconditioner, so let us try the GMRES-ILU pair:
 
 .. code-block:: python
@@ -1097,7 +1110,9 @@ Krylov solvers and preconditioners available in FEniCS.
 
 .. index:: uBLAS
 
-[**hpl 3**: This is old stuff that might need update!]
+Linear algebra backend
+~~~~~~~~~~~~~~~~~~~~~~
+
 The actual GMRES and ILU implementations that are brought into action
 depends on the choice of linear algebra package. FEniCS interfaces
 several linear algebra packages, called *linear algebra backends* in
@@ -1133,6 +1148,9 @@ listed by
 
 .. index:: info function
 
+The ``parameters`` database
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
 We will normally like to control the tolerance in the stopping
 criterion and the maximum number of iterations when running an
 iterative method.  Such parameters can be set by accessing the *global
@@ -1141,7 +1159,7 @@ a nested dictionary. Write
 
 .. code-block:: python
 
-        info(parameters, True)
+        info(parameters, verbose=True)
 
 to list all parameters and their default values in the database.
 The nesting of parameter sets is indicated through indentation in the
@@ -1151,7 +1169,7 @@ named ``'krylov_solver'``, and the parameters are set like this:
 
 .. code-block:: python
 
-        prm = parameters['krylov_solver'] # short form
+        prm = parameters['krylov_solver']  # short form
         prm['absolute_tolerance'] = 1E-10
         prm['relative_tolerance'] = 1E-6
         prm['maximum_iterations'] = 1000
@@ -1175,25 +1193,6 @@ iterations arises from specifying the argument ``PROGRESS``, while
 ``DEBUG`` results in more information, including CPU time spent in
 the various parts of the matrix assembly and solve process.
 
-The complete solution process with control of the solver parameters
-now contains the statements
-
-.. code-block:: python
-
-        prm = parameters['krylov_solver'] # short form
-        prm['absolute_tolerance'] = 1E-10
-        prm['relative_tolerance'] = 1E-6
-        prm['maximum_iterations'] = 1000
-        set_log_level(PROGRESS)
-        
-        solve(a == L, u, bc,
-              solver_parameters={'linear_solver': 'gmres',
-                                 'preconditioner': 'ilu'})
-
-The demo program ``p2D_iter.py`` incorporates the above shown
-control of the linear solver and preconditioner, but is otherwise
-similar to the previous ``p2D_func.py`` program.
-
 We remark that default values for the global parameter database can be
 defined in an XML file. To generate such a file from the current set
 of parameters in a program, run
@@ -1215,6 +1214,146 @@ name) manually in the program:
 
 The XML file can also be in gzip'ed form with the extension ``.xml.gz``.
 
+.. index:: p2D_iter.py
+
+An extended solver function
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Let us extend the previous solver function from
+``p2D_func.py`` such that it also offers the GMRES+ILU
+preconditioned Krylov solver.
+
+.. code-block:: python
+
+        from dolfin import *
+        
+        def solver(
+            f, u0, Nx, Ny, degree=1,
+            linear_solver='Krylov', # Alt: 'direct'
+            abs_tol=1E-5,           # Absolute tolerance in Krylov solver
+            rel_tol=1E-3,           # Relative tolerance in Krylov solver
+            max_iter=1000,          # Max no of iterations in Krylov solver
+            log_level=PROGRESS,     # Amount of solver output
+            dump_parameters=False,  # Write out parameter database?
+            ):
+            """
+            Solve -Laplace(u)=f on [0,1]x[0,1] with 2*Nx*Ny Lagrange
+            elements of specified degree and u=u0 (Expresssion) on
+            the boundary.
+            """
+            # Create mesh and define function space
+            mesh = UnitSquareMesh(Nx, Ny)
+            V = FunctionSpace(mesh, 'Lagrange', degree)
+        
+            def u0_boundary(x, on_boundary):
+                return on_boundary
+        
+            bc = DirichletBC(V, u0, u0_boundary)
+        
+            # Define variational problem
+            u = TrialFunction(V)
+            v = TestFunction(V)
+            a = inner(nabla_grad(u), nabla_grad(v))*dx
+            L = f*v*dx
+        
+            # Compute solution
+            u = Function(V)
+        
+            if linear_solver == 'Krylov':
+                prm = parameters['krylov_solver'] # short form
+                prm['absolute_tolerance'] = abs_tol
+                prm['relative_tolerance'] = rel_tol
+                prm['maximum_iterations'] = max_iter
+                print(parameters['linear_algebra_backend'])
+                set_log_level(log_level)
+                if dump_parameters:
+                    info(parameters, True)
+                solver_parameters = {'linear_solver': 'gmres',
+                                     'preconditioner': 'ilu'}
+            else:
+                solver_parameters = {'linear_solver': 'lu'}
+        
+            solve(a == L, u, bc, solver_parameters=solver_parameters)
+            return u
+        
+        def solver_objects(
+            f, u0, Nx, Ny, degree=1,
+            linear_solver='Krylov', # Alt: 'direct'
+            abs_tol=1E-5,           # Absolute tolerance in Krylov solver
+            rel_tol=1E-3,           # Relative tolerance in Krylov solver
+            max_iter=1000,          # Max no of iterations in Krylov solver
+            log_level=PROGRESS,     # Amount of solver output
+            dump_parameters=False,  # Write out parameter database?
+            ):
+            """As solver, but use objects for linear variational problem
+            and solver."""
+            # Create mesh and define function space
+            mesh = UnitSquareMesh(Nx, Ny)
+            V = FunctionSpace(mesh, 'Lagrange', degree)
+        
+            def u0_boundary(x, on_boundary):
+                return on_boundary
+        
+            bc = DirichletBC(V, u0, u0_boundary)
+        
+            # Define variational problem
+            u = TrialFunction(V)
+            v = TestFunction(V)
+            a = inner(nabla_grad(u), nabla_grad(v))*dx
+            L = f*v*dx
+        
+            # Compute solution
+            u = Function(V)
+            problem = LinearVariationalProblem(a, L, u, bc)
+            solver  = LinearVariationalSolver(problem)
+        
+            if linear_solver == 'Krylov':
+                solver.parameters['linear_solver'] = 'gmres'
+                solver.parameters['preconditioner'] = 'ilu'
+                prm = solver.parameters['krylov_solver'] # short form
+                prm['absolute_tolerance'] = abs_tol
+                prm['relative_tolerance'] = rel_tol
+                prm['maximum_iterations'] = max_iter
+                print(parameters['linear_algebra_backend'])
+                set_log_level(log_level)
+                if dump_parameters:
+                    info(parameters, True)
+                solver_parameters = {'linear_solver': 'gmres',
+                                     'preconditioner': 'ilu'}
+            else:
+                solver_parameters = {'linear_solver': 'lu'}
+        
+            solver.solve()
+            return u
+
+This new ``solver`` function, found in the file
+``p2D_iter.py``, replaces the one in ``p2D_func.py``:
+it has all the functionality of the previous ``solver`` function,
+but can also solve the linear system with
+iterative methods and report the progress of such solvers.
+
+Remark regarding unit tests
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Regarding verification of the new ``solver`` function in terms of unit
+tests, it turns out that unit testing in a problem where the
+approximation error vanishes is gets more complicated when we use
+iterative methods. The problem is to keep the error due to iterative
+solution smaller than the tolerance used in the verification
+tests. First of all this means that the tolerances used in the Krylov
+solvers must be smaller than the tolerance used in the ``assert`` test,
+but this is no guarantee to keep the linear solver error this small.
+For linear elements and small meshes, a tolerance of :math:`10^{-11}` works
+well in the case of Krylov solvers too (using a tolerance :math:`10^{-12}`
+in those solvers. However, as soon as we switch to P2 elements, it is
+hard to force the linear solver error below :math:`10^{-6}`. Consequently,
+tolerances in tests depend on the numerical methods. The interested
+reader is referred to the ``test_solver`` function in
+``p2D_iter.py`` for details: this test function tests the
+numerical solution for direct and iterative linear solvers, for
+different meshes, and different degrees of the polynomials in the
+finite element basis functions.
+
 .. _tut:poisson1:solver:problem:
 
 Linear variational problem and solver objects
@@ -1224,7 +1363,7 @@ Linear variational problem and solver objects
 
 .. index:: LinearVariationalSolver
 
-.. index:: d3_p2D.py
+.. index:: p2D_iter.py
 
 The ``solve(a == L, u, bc)`` call is just a compact syntax alternative to a
 slightly more comprehensive specification of the variational equation
@@ -1248,44 +1387,42 @@ like this:
 
 .. code-block:: python
 
-        solver.parameters['linear_solver'] = 'cg'
+        solver.parameters['linear_solver'] = 'gmres'
         solver.parameters['preconditioner'] = 'ilu'
-        cg_prm = solver.parameters['krylov_solver'] # short form
-        cg_prm['absolute_tolerance'] = 1E-7
-        cg_prm['relative_tolerance'] = 1E-4
-        cg_prm['maximum_iterations'] = 1000
+        prm = solver.parameters['krylov_solver'] # short form
+        prm['absolute_tolerance'] = 1E-7
+        prm['relative_tolerance'] = 1E-4
+        prm['maximum_iterations'] = 1000
 
-Calling ``info(solver.parameters, True)`` lists all the available
-parameter sets with default values for each parameter.
 Settings in the global ``parameters`` database are
 propagated to parameter sets in individual objects, with the
 possibility of being overwritten as done above.
 
-The ``d3_p2D.py`` program modifies the ``d2_p2D.py`` file
-to incorporate objects for the variational problem and solver.
+The linear variational problem and solver objects as outlined above
+are incorporated in an alternative solver function, named
+``solver_objects``, in
+``p2D_iter.py``. Otherwise, this function is parallel to the
+previously shown ``solver`` function.
 
 .. _tut:poisson1:verify1:
 
-Examining the discrete solution
--------------------------------
+Writing out the discrete solution
+---------------------------------
 
-.. index:: d4_p2D.py
+We have seen how to grab the degrees of freedom array from a
+finite element function ``u``:
 
-We know that, in the particular boundary-value problem of the section :ref:`tut:poisson1:impl`, the computed solution :math:`u` should equal the
-exact solution at the vertices of the cells.  An important extension
-of our first program is therefore to examine the computed values of
-the solution, which is the focus of the present section.
+.. code-block:: python
 
-.. index:: degree of freedom
+        u_array = `u.vector().array()
 
-We know that we can extract the degrees of freedom of a finite
-element solution ``u`` by ``u.vector().array()``.
-Now, a fundamental question is: What are the coordinates of
-node ``i`` whose value is ``u_array[i]``? To answer this question,
-we need to understand how to get our hands on the coordinates, and
-in particular, the numbering of degrees of freedom and the
-numbering of vertices in the mesh. We start with P1
-(1st order Lagrange) where all the nodes are vertices in the mesh.
+The elements in ``u_array`` correspond to function values of ``u`` at nodes
+in the mesh.  Now, a fundamental question is: What are the
+coordinates of node ``i`` whose value is ``u_array[i]``? To answer this
+question, we need to understand how to get our hands on the
+coordinates, and in particular, the numbering of degrees of freedom
+and the numbering of vertices in the mesh. We start with P1 (1st order
+Lagrange) elements where all the nodes are vertices in the mesh.
 
 The function ``mesh.coordinates()`` returns the coordinates of the
 vertices as a ``numpy`` array with shape :math:`(M,d`), :math:`M` being the number
@@ -1315,8 +1452,9 @@ Next we compute a function ``u`` on this mesh, e.g., the :math:`u=x+y`:
 
 .. code-block:: python
 
-        >>> V = FunctionSpace(mesh, 'CG', 1)
+        >>> V = FunctionSpace(mesh, 'Lagrange', 1)
         >>> u = interpolate(Expression('x[0]+x[1]'), V)
+        >>> plot(u, interactive=True)
         >>> u_array = u.vector().array()
         >>> u_array
         array([ 1. ,  0.5,  1.5,  0. ,  1. ,  2. ,  0.5,  1.5,  1. ])
@@ -1326,7 +1464,22 @@ since this vertex has coordinates :math:`x=y=0`. The numbering of the
 degrees of freedom :math:`U_1,\ldots,U_{N}` is obviously not the same as the
 numbering of the vertices.
 
+In the plot of ``u``, type ``w`` to turn on wireframe instead of fully colored
+surface, ``m`` to show the mesh, and then ``v`` to show the
+numbering of the vertices.
+
+| 
+| 
+
+.. figure:: vertex_numbering.png
+   :width: 500
+
+| 
+| 
+
 .. index:: compute vertex values
+
+.. index:: vertex values
 
 The vertex values of a ``Function`` object can be extracted by
 ``u.compute_vertex_values()``, which returns an array where element ``i``
@@ -1336,17 +1489,17 @@ is the value of ``u`` at vertex ``i``:
 
         >>> u_at_vertices = u.compute_vertex_values()
         >>> for i, x in enumerate(coor):
-        ...     print('vertex %d: u_array[%d]=%g u(%s)=%g' %
+        ...     print('vertex %d: u_at_vertices[%d]=%g\tu(%s)=%g' %
         ...           (i, i, u_at_vertices[i], x, u(x)))
-        vertex 0: u_array[0]=0 u([ 0.  0.])=8.46545e-16
-        vertex 1: u_array[1]=0.5 u([ 0.5  0. ])=0.5
-        vertex 2: u_array[2]=1 u([ 1.  0.])=1
-        vertex 3: u_array[3]=0.5 u([ 0.   0.5])=0.5
-        vertex 4: u_array[4]=1 u([ 0.5  0.5])=1
-        vertex 5: u_array[5]=1.5 u([ 1.   0.5])=1.5
-        vertex 6: u_array[6]=1 u([ 0.  1.])=1
-        vertex 7: u_array[7]=1.5 u([ 0.5  1. ])=1.5
-        vertex 8: u_array[8]=2 u([ 1.  1.])=2
+        vertex 0: u_at_vertices[0]=0	u([ 0.  0.])=8.46545e-16
+        vertex 1: u_at_vertices[1]=0.5	u([ 0.5  0. ])=0.5
+        vertex 2: u_at_vertices[2]=1	u([ 1.  0.])=1
+        vertex 3: u_at_vertices[3]=0.5	u([ 0.   0.5])=0.5
+        vertex 4: u_at_vertices[4]=1	u([ 0.5  0.5])=1
+        vertex 5: u_at_vertices[5]=1.5	u([ 1.   0.5])=1.5
+        vertex 6: u_at_vertices[6]=1	u([ 0.  1.])=1
+        vertex 7: u_at_vertices[7]=1.5	u([ 0.5  1. ])=1.5
+        vertex 8: u_at_vertices[8]=2	u([ 1.  1.])=2
 
 .. index:: vertex to dof map
 
@@ -1370,7 +1523,7 @@ coordinates in the same order as the degrees of freedom.
 
 For Lagrange elements of degree larger than 1, there are degrees of
 freedom (nodes) that do not correspond to vertices.
-[**hpl 4**: Anders, is the following true?] There is no simple way of getting the
+[**hpl 3**: Anders, is the following true?] There is no simple way of getting the
 coordinates associated with the non-vertex degrees of freedom, so
 if we want to write out the values of a finite element solution,
 the following code snippet does the task at the vertices, and this
@@ -1378,60 +1531,46 @@ will work for all kinds of Lagrange elements.
 
 .. code-block:: python
 
-        u_at_vertices = u.compute_vertex_values()
-        for i, x in enumerate(coor):
-            print('u(%8g,%8g) = %g' %
-                  (coor[i][0], coor[i][1], u_at_vertices[i]))
+        def compare_exact_and_numerical_solution(Nx, Ny, degree=1):
+            u0 = Expression('1 + x[0]*x[0] + 2*x[1]*x[1]')
+            f = Constant(-6.0)
+            u = solver(f, u0, Nx, Ny, degree, linear_solver='direct')
+            # Grab exact and numerical solution at the vertices and compare
+            V = u.function_space()
+            u0_Function = interpolate(u0, V)
+            u0_at_vertices = u0_Function.compute_vertex_values()
+            u_at_vertices = u.compute_vertex_values()
+            coor = V.mesh().coordinates()
+            for i, x in enumerate(coor):
+                print('vertex %2d (%9g,%9g): error=%g'
+                      % (i, x[0], x[1],
+                         u0_at_vertices[i] - u_at_vertices[i]))
+                # Could compute u0(x) - u_at_vertices[i] but this
+                # is much more expensive and gives more rounding errors
+            center = (0.5, 0.5)
+            error = u0(center) - u(center)
+            print('numerical error at %s: %g' % (center, error))
 
-The beginning of the output looks like this:
+As expected, the error is either identically zero or about :math:`10^{-15}` or
+:math:`10^{-16}`.
 
-.. code-block:: text
 
-        u(       0,       0) = 1
-        u(0.166667,       0) = 1.02778
-        u(0.333333,       0) = 1.11111
-        u(     0.5,       0) = 1.25
-        u(0.666667,       0) = 1.44444
-        u(0.833333,       0) = 1.69444
-        u(       1,       0) = 2
+.. admonition:: Cheap vs expensive function evaluation
 
-For Lagrange elements of degree higher than one, the vertices do not
-correspond to all the nodal points and the ``if``-test fails.
+   Given a ``Function`` object ``u``, we can evaluate its values in various
+   ways:
+   
+   1. ``u(x)`` for an arbitrary point ``x``
+   
+   2. ``u.vector().array()[i]`` for degree of freedom number ``i``
+   
+   3. ``u.compute_vertex_values()[i]`` at vertex number ``i``
+   
+   The first method, though very flexible, is in general very expensive
+   while the other two are very efficient (but limited to certain points).
 
-For verification purposes we want to compare the values of the
-computed ``u`` at the nodes (given by ``u_array``) with the exact
-solution ``u0`` evaluated at the nodes.  The difference between the
-computed and exact solution should be less than a small tolerance at
-all the nodes. The ``Expression`` object ``u0`` can be evaluated
-at any point ``x`` by calling ``u0(x)``. Specifically,
-``u0(coor[i])`` returns the value of ``u0`` at the vertex or node
-with global number ``i``.
 
-.. index:: interpolation
 
-.. index:: interpolate
-
-Alternatively, we can make a finite element field ``u_e``, representing
-the exact solution, whose values at the nodes are given by the
-``u0`` function. With mathematics, letting :math:`{u_{\small\mbox{e}}}` denote the exact
-solution: :math:`{u_{\small\mbox{e}}} = \sum_{j=1}^N  E_j\phi_j`, where
-:math:`E_j=u_0(x_j,y_j)`, :math:`(x_j,y_j)` being the coordinates of node number :math:`j`.
-This process is known as interpolation.
-FEniCS has a function for performing the operation:
-
-.. code-block:: python
-
-        u_e = interpolate(u0, V)
-
-The maximum error can now be computed as
-
-.. code-block:: python
-
-        u_e_array = u_e.vector().array()
-        print('Max error:', numpy.abs(u_e_array - u_array).max())
-
-The value of the error should be at the level of the machine precision
-(:math:`10^{-16}`).
 
 To demonstrate the use of point evaluations of ``Function`` objects,
 we write out the computed ``u`` at the center point
@@ -1440,35 +1579,39 @@ of the domain and compare it with the exact solution:
 .. code-block:: python
 
         center = (0.5, 0.5)
-        print('numerical u at the center point:',  u(center))
-        print('exact     u at the center point:', u0(center))
+        error = u0(center) - u(center)
+        print('numerical error at %s: %g' % (center, error)
 
-Trying a :math:`3\times 3` mesh, the output from the
+Trying a :math:`2(3\times 3)` mesh, the output from the
 previous snippet becomes
 
 .. code-block:: text
 
-        numerical u at the center point: [ 1.83333333]
-        exact     u at the center point: [ 1.75]
+        numerical error at (0.5, 0.5): -0.0833333
 
 The discrepancy is due to the fact that the center point is not a node
 in this particular mesh, but a point in the interior of a cell,
 and ``u`` varies linearly over the cell while
-``u0`` is a quadratic function.
+``u0`` is a quadratic function. When the center point is a node, as in
+a :math:`2(t\times 2)` or :math:`2(4\times 4)` mesh, the error is of the order
+:math:`10^{-15}`.
 
 We have seen how to extract the nodal values in a ``numpy`` array.
 If desired, we can adjust the nodal values too. Say we want to
 normalize the solution such that :math:`\max_j U_j = 1`. Then we
 must divide all :math:`U_j` values
-by :math:`\max_j U_j`. The following snippet performs the task:
+by :math:`\max_j U_j`. The following function performs the task:
 
 .. code-block:: python
 
-        max_u = u_array.max()
-        u_array /= max_u
-        u.vector()[:] = u_array
-        u.vector().set_local(u_array)  # alternative
-        print(u.vector().array())
+        def normalize_solution(u):
+            """Normalize u: return u divided by max(u)."""
+            u_array = u.vector().array()
+            u_max = u_array.max()
+            u_array /= u_max
+            u.vector()[:] = u_array
+            u.vector().set_local(u_array)  # alternative
+            return u
 
 That is, we manipulate ``u_array`` as desired, and then we insert this
 array into ``u``'s ``Vector`` object.  The ``/=`` operator implies an
@@ -1478,52 +1621,20 @@ Alternatively, one could write ``u_array = u_array/max_u``, which
 implies creating a new array on the right-hand side and assigning this
 array to the name ``u_array``.
 
-A call like ``u.vector().array()`` returns a copy of the data in
-``u.vector()``. One must therefore never perform assignments like
-``u.vector.array()[:] = ...``, but instead extract the ``numpy`` array
-(i.e., a copy), manipulate it, and insert it back with ``u.vector()[:]
-= `` or ``u.set_local(...)``.
-[[[
 
-There is more mesh information to be gathered from a ``mesh`` object:
+.. admonition:: Be careful when manipulating degrees of freedom
 
-  * ``mesh.num_cells()`` returns the number of cells (triangles)
-    in the mesh,
+   A call like ``u.vector().array()`` returns a *copy* of the data in
+   ``u.vector()``. One must therefore never perform assignments like
+   ``u.vector.array()[:] = ...``, but instead extract the ``numpy`` array
+   (i.e., a copy), manipulate it, and insert it back with ``u.vector()[:]
+   = `` or ``u.set_local(...)``.
 
-  * ``mesh.num_vertices()`` returns the number of vertices in
-    the mesh (with our choice of linear Lagrange elements this equals the
-    number of nodes, ``len(u_array)``, or dimension of the space ``V.dim()``),
 
-  * ``mesh.cells()`` returns the vertex numbers of the vertices in
-    each cell as a ``numpy`` array with shape
-    (*number of cells*, *number of vertices in a cell*),
 
-  * ``mesh.hmin()`` returns the minimum cell diameter ("smallest cell"),
 
-  * ``mesh.hmax()`` returns the maximum cell diameter ("largest cell").
-
-Writing ``print(mesh)`` dumps a short, pretty-print description
-of the mesh (``print(mesh)`` actually displays the result of ``str(mesh)``,
-which defines the pretty print):
-
-.. code-block:: text
-
-        <Mesh of topological dimension 2 (triangles) with
-        16 vertices and 18 cells, ordered>
-
-.. index:: pydoc
-
-All mesh objects are of type ``Mesh`` so typing the command
-``pydoc dolfin.Mesh`` in a terminal window will give a list
-of methods (that is, functions in a class)
-that can be called through any ``Mesh`` object. In fact,
-``pydoc dolfin.X`` shows the documentation of any DOLFIN name ``X``.
-
-All the code in this subsection can be found in the file ``d4_p2D.py``
-in the ``stationary/poisson`` directory.  We have commented out the
-plotting statements in this version of the program, but if you want
-plotting to happen, make sure that ``interactive`` is called at the very
-end of the program.
+All the code in this subsection can be found in the file ``p2D_iter.py``
+in the ``stationary/poisson`` directory.
 
 .. _tut:poisson:membrane:
 
@@ -1891,6 +2002,20 @@ where ``X`` is an integer that is increase by one from the last plot
 that was made. The file stem ``dolfin_plot_`` can be set to something
 more suitable through the ``prefix`` keyword argument to ``plot``,
 for instance, ``plot(f, prefix='pressure')``.
+
+.. index:: rotate PDF plots
+
+.. index:: pdftk
+
+Plots stored in PDF format need to be rotated 90 degrees before
+inclusion in documents. This can be done by the ``convert -rotate 90``
+command (from the ImageMagick utility), but the resulting file is
+then no more high-resolution PDF vector graphics. A better solution
+is therefore to use ``pdftk`` to preserve the vector graphics:
+
+.. code-block:: text
+
+        Terminal> pdftk dolfin_plot_1.pdf cat 1-endnorth output out.pdf
 
 The ``plot`` function takes several other keyword arguments:
 

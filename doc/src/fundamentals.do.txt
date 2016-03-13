@@ -757,6 +757,8 @@ knowledge of the numbering of degrees of freedom and the numbering of
 vertices in elements in the mesh, see Section ref{tut:poisson1:verify1}
 for details.
 
+idx{`interpolate`}
+
 For now, we want to check that the values in `u_array` are correct:
 they should equal our `u0` function. The most natural approach is
 to interpolate our `u0` expression onto our space
@@ -1230,7 +1232,7 @@ preconditioned Krylov solver.
 @@@CODE ../../src/stationary/poisson/${prog['p2D_iter']}.py fromto: from dolfin import@def test_solver
 This new `solver` function, found in the file
 `${prog["p2D_iter"]}.py`, replaces the one in `${prog["p2D_func"]}.py`:
-it has all the funcitonality of the previous `solver` function,
+it has all the functionality of the previous `solver` function,
 but can also solve the linear system with
 iterative methods and report the progress of such solvers.
 
@@ -1238,7 +1240,7 @@ iterative methods and report the progress of such solvers.
 
 Regarding verification of the new `solver` function in terms of unit
 tests, it turns out that unit testing in a problem where the
-approximation error vansihes is gets more complicated when we use
+approximation error vanishes is gets more complicated when we use
 iterative methods. The problem is to keep the error due to iterative
 solution smaller than the tolerance used in the verification
 tests. First of all this means that the tolerances used in the Krylov
@@ -1379,17 +1381,17 @@ is the value of `u` at vertex `i`:
 !bc pyshell
 >>> u_at_vertices = u.compute_vertex_values()
 >>> for i, x in enumerate(coor):
-...     print('vertex %d: u_at_vertices[%d]=%g u(%s)=%g' %
+...     print('vertex %d: u_at_vertices[%d]=%g\tu(%s)=%g' %
 ...           (i, i, u_at_vertices[i], x, u(x)))
-vertex 0: u_at_vertices[0]=0 u([ 0.  0.])=8.46545e-16
-vertex 1: u_at_vertices[1]=0.5 u([ 0.5  0. ])=0.5
-vertex 2: u_at_vertices[2]=1 u([ 1.  0.])=1
-vertex 3: u_at_vertices[3]=0.5 u([ 0.   0.5])=0.5
-vertex 4: u_at_vertices[4]=1 u([ 0.5  0.5])=1
-vertex 5: u_at_vertices[5]=1.5 u([ 1.   0.5])=1.5
-vertex 6: u_at_vertices[6]=1 u([ 0.  1.])=1
-vertex 7: u_at_vertices[7]=1.5 u([ 0.5  1. ])=1.5
-vertex 8: u_at_vertices[8]=2 u([ 1.  1.])=2
+vertex 0: u_at_vertices[0]=0	u([ 0.  0.])=8.46545e-16
+vertex 1: u_at_vertices[1]=0.5	u([ 0.5  0. ])=0.5
+vertex 2: u_at_vertices[2]=1	u([ 1.  0.])=1
+vertex 3: u_at_vertices[3]=0.5	u([ 0.   0.5])=0.5
+vertex 4: u_at_vertices[4]=1	u([ 0.5  0.5])=1
+vertex 5: u_at_vertices[5]=1.5	u([ 1.   0.5])=1.5
+vertex 6: u_at_vertices[6]=1	u([ 0.  1.])=1
+vertex 7: u_at_vertices[7]=1.5	u([ 0.5  1. ])=1.5
+vertex 8: u_at_vertices[8]=2	u([ 1.  1.])=2
 !ec
 
 idx{vertex to dof map}
@@ -1418,56 +1420,21 @@ if we want to write out the values of a finite element solution,
 the following code snippet does the task at the vertices, and this
 will work for all kinds of Lagrange elements.
 
-!bc pycod
-u_at_vertices = u.compute_vertex_values()
-for i, x in enumerate(coor):
-    print('u(%8g,%8g) = %g' %
-          (coor[i][0], coor[i][1], u_at_vertices[i]))
-!ec
-The beginning of the output looks like this:
+@@@CODE ../../src/stationary/poisson/${prog['p2D_iter']}.py fromto: def compare_exact@def normalize
+As expected, the error is either identically zero or about $10^{-15}$ or
+$10^{-16}$.
 
-!bc dat
-u(       0,       0) = 1
-u(0.166667,       0) = 1.02778
-u(0.333333,       0) = 1.11111
-u(     0.5,       0) = 1.25
-u(0.666667,       0) = 1.44444
-u(0.833333,       0) = 1.69444
-u(       1,       0) = 2
-!ec
-For Lagrange elements of degree higher than one, the vertices do not
-correspond to all the nodal points and the `if`-test fails.
+!bwarning Cheap vs expensive function evaluation
+Given a `Function` object `u`, we can evaluate its values in various
+ways:
 
-For verification purposes we want to compare the values of the
-computed `u` at the nodes (given by `u_array`) with the exact
-solution `u0` evaluated at the nodes.  The difference between the
-computed and exact solution should be less than a small tolerance at
-all the nodes. The `Expression` object `u0` can be evaluated
-at any point `x` by calling `u0(x)`. Specifically,
-`u0(coor[i])` returns the value of `u0` at the vertex or node
-with global number `i`.
+ o `u(x)` for an arbitrary point `x`
+ o `u.vector().array()[i]` for degree of freedom number `i`
+ o `u.compute_vertex_values()[i]` at vertex number `i`
 
-idx{interpolation} idx{`interpolate`}
-
-Alternatively, we can make a finite element field `u_e`, representing
-the exact solution, whose values at the nodes are given by the
-`u0` function. With mathematics, letting $\uex$ denote the exact
-solution: $\uex = \sum_{j=1}^N  E_j\phi_j$, where
-$E_j=u_0(x_j,y_j)$, $(x_j,y_j)$ being the coordinates of node number $j$.
-This process is known as interpolation.
-FEniCS has a function for performing the operation:
-
-!bc pycod
-u_e = interpolate(u0, V)
-!ec
-The maximum error can now be computed as
-
-!bc pycod
-u_e_array = u_e.vector().array()
-print('Max error:', numpy.abs(u_e_array - u_array).max())
-!ec
-The value of the error should be at the level of the machine precision
-($10^{-16}$).
+The first method, though very flexible, is in general very expensive
+while the other two are very efficient (but limited to certain points).
+!ewarning
 
 To demonstrate the use of point evaluations of `Function` objects,
 we write out the computed `u` at the center point
@@ -1475,34 +1442,29 @@ of the domain and compare it with the exact solution:
 
 !bc pycod
 center = (0.5, 0.5)
-print('numerical u at the center point:',  u(center))
-print('exact     u at the center point:', u0(center))
+error = u0(center) - u(center)
+print('numerical error at %s: %g' % (center, error)
 !ec
-Trying a $3\times 3$ mesh, the output from the
+Trying a $2(3\times 3)$ mesh, the output from the
 previous snippet becomes
 
 !bc dat
-numerical u at the center point: [ 1.83333333]
-exact     u at the center point: [ 1.75]
+numerical error at (0.5, 0.5): -0.0833333
 !ec
 The discrepancy is due to the fact that the center point is not a node
 in this particular mesh, but a point in the interior of a cell,
 and `u` varies linearly over the cell while
-`u0` is a quadratic function.
+`u0` is a quadratic function. When the center point is a node, as in
+a $2(t\times 2)$ or $2(4\times 4)$ mesh, the error is of the order
+$10^{-15}$.
 
 We have seen how to extract the nodal values in a `numpy` array.
 If desired, we can adjust the nodal values too. Say we want to
 normalize the solution such that $\max_j U_j = 1$. Then we
 must divide all $U_j$ values
-by $\max_j U_j$. The following snippet performs the task:
+by $\max_j U_j$. The following function performs the task:
 
-!bc pycod
-max_u = u_array.max()
-u_array /= max_u
-u.vector()[:] = u_array
-u.vector().set_local(u_array)  # alternative
-print(u.vector().array())
-!ec
+@@@CODE ../../src/stationary/poisson/${prog['p2D_iter']}.py fromto: def normalize@def test_normalize
 That is, we manipulate `u_array` as desired, and then we insert this
 array into `u`'s `Vector` object.  The `/=` operator implies an
 in-place modification of the object on the left-hand side: all
@@ -1511,13 +1473,15 @@ Alternatively, one could write `u_array = u_array/max_u`, which
 implies creating a new array on the right-hand side and assigning this
 array to the name `u_array`.
 
-A call like `u.vector().array()` returns a copy of the data in
+!bwarning Be careful when manipulating degrees of freedom
+A call like `u.vector().array()` returns a *copy* of the data in
 `u.vector()`. One must therefore never perform assignments like
 `u.vector.array()[:] = ...`, but instead extract the `numpy` array
 (i.e., a copy), manipulate it, and insert it back with `u.vector()[:]
 = ` or `u.set_local(...)`.
-[[[
+!ewarning
 
+# #ifdef MESH_EXTRA
 There is more mesh information to be gathered from a `mesh` object:
 
   * `mesh.num_cells()` returns the number of cells (triangles)
@@ -1545,12 +1509,10 @@ All mesh objects are of type `Mesh` so typing the command
 of methods (that is, functions in a class)
 that can be called through any `Mesh` object. In fact,
 `pydoc dolfin.X` shows the documentation of any DOLFIN name `X`.
+# #endif
 
-All the code in this subsection can be found in the file `${prog["d4_p2D"]}.py`
-in the `stationary/poisson` directory.  We have commented out the
-plotting statements in this version of the program, but if you want
-plotting to happen, make sure that `interactive` is called at the very
-end of the program.
+All the code in this subsection can be found in the file `${prog["p2D_iter"]}.py`
+in the `stationary/poisson` directory.
 
 
 ===== Solving a real physical problem =====
@@ -2010,7 +1972,7 @@ solution down to a piecewise linear field, which is required by many
 visualization packages.
 
 
-===== A variable-coefficient poisson problem =====
+===== A variable-coefficient Poisson problem =====
 label{tut:possion:2D:varcoeff}
 idx{Poisson's equation with variable coefficient}
 
