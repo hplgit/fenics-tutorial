@@ -221,8 +221,53 @@ def application_test_gradient(Nx=6, Ny=4):
             print('vertex %d, %s, u_y=4y=%g=%g' %
                   (i, tuple(coor[i]), 4*coor[i][1], value))
 
+def efficiency():
+    """Measure CPU time: direct vs Krylov solver."""
+    import time
+    import numpy as np
+    u_exact = Expression('sin(DOLFIN_PI*x[0])*sin(DOLFIN_PI*x[1])')
+    f = Expression('2*pow(DOLFIN_PI,2)*sin(DOLFIN_PI*x[0])*sin(DOLFIN_PI*x[1])')
+    u0 = Constant(0)
+    n = 80
+    for degree in 1, 2, 3:
+        u = solver(f, u0, n, n, degree, linear_solver='direct')
+        u_e = interpolate(u_exact, u.function_space())
+        error = np.abs(u_e.vector().array() - u.vector().array()).max()
+        print('error degree=%d: %g' % (degree, error))
+    return
+    abs_tol = 1E-4
+    rel_tol = 1E-3
+    timings_direct = []
+    timings_Krylov = []
+    for i in range(2):
+        n *= 2
+        # Error goes like 1/n**2, let Krylov tolerances be set
+        # accordingly
+        abs_tol /= 4
+        rel_tol /= 4
+        for degree in 1, 2, 3:
+            print('n=%d, degree=%d, N:' % (n, degree)),
+            t0 = time.clock()
+            u = solver(f, u0, n, n, degree, linear_solver='direct')
+            t1 = time.clock()
+            N = u.function_space().dim()
+            print(N)
+            timings_direct.append((N, t1-t0))
+            t0 = time.clock()
+            u = solver(f, u0, n, n, degree, linear_solver='Krylov',
+                       abs_tol=abs_tol, rel_tol=rel_tol)
+            t1 = time.clock()
+            timings_Krylov.append((N, t1-t0))
+    for i in range(len(timings_direct)):
+        print('LU decomp N=%d: %g' %
+              (timings_direct[i][0], timings_direct[i][1]))
+        print('GMRES+ILU N=%d: %g' %
+              (timings_Krylov[i][0], timings_Krylov[i][1]))
+
+
 if __name__ == '__main__':
     #application_test()
-    application_test_gradient()
+    #application_test_gradient()
+    efficiency()
     # Hold plot
     interactive()

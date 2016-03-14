@@ -138,6 +138,6 @@ def application2(
     viz_p.write_pdf('pressure')
 
 if __name__ == '__main__':
-    membrane_solve_and_visualize2(8, 0.6, 20)
+    application2(8, 0.6, 20)
     # Should be at the end
     interactive()
