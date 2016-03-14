@@ -56,7 +56,7 @@ def solver(
     return u
 
 
-def membrane_solve_and_visualize(beta, R0, num_elements_radial_dir):
+def application(beta, R0, num_elements_radial_dir):
     # Scaled pressure function
     p = Expression(
         '4*exp(-pow(beta,2)*(pow(x[0], 2) + pow(x[1]-R0, 2)))',
@@ -100,7 +100,7 @@ def test_membrane():
         print('Max error: %.16E' % diff_array.max())
         assert diff_array.max() < 9.61E-03
 
-def membrane_solve_and_visualize2(
+def application2(
     beta, R0, num_elements_radial_dir):
     # Scaled pressure function
     p = Expression(
