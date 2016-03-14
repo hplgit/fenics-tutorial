@@ -2038,7 +2038,7 @@ Computing derivatives
 
 .. index:: projection
 
-In Poisson and many other problems the gradient of the solution is
+In Poisson and many other problems, the gradient of the solution is
 of interest. The computation is in principle simple:
 since
 :math:`u = \sum_{j=1}^N U_j \phi_j`, we have that
@@ -2063,75 +2063,30 @@ the components of :math:`\nabla u` onto the same function space as we used
 for :math:`u`.  This means that we solve :math:`w = \nabla u` approximately by a
 finite element method, using the same elements for the components of
 :math:`w` as we used for :math:`u`. This process is known as *projection*.
-Looking at the component :math:`\partial u/\partial x` of the gradient, we
-project the (discrete) derivative :math:`\sum_jU_j{\partial \phi_j/\partial
-x}` onto a function space with basis :math:`\phi_1,\phi_2,\ldots` such that
-the derivative in this space is expressed by the standard sum
-:math:`\sum_j\bar U_j \phi_j`, for suitable (new) coefficients :math:`\bar U_j`.
 
-The variational problem for :math:`w` reads: find  :math:`w\in V^{(\mbox{g})}` such that
+.. index:: project
 
-.. _Eq:_auto7:
+.. index:: projection
 
-.. math::
-
-    \tag{19}
-    a(w, v) = L(v)\quad\forall v\in \hat{V^{(\mbox{g})}},
-        
-        
-
-where
-
-.. _Eq:_auto8:
-
-.. math::
-
-    \tag{20}
-    a(w, v) = \int_\Omega w\cdot v {\, \mathrm{d}x},
-        
-        
-
-.. _Eq:_auto9:
-
-.. math::
-
-    \tag{21}
-    L(v) = \int_\Omega \nabla u\cdot v {\, \mathrm{d}x}{\thinspace .}
-        
-        
-
-The function spaces :math:`V^{(\mbox{g})}` and :math:`\hat{V^{(\mbox{g})}}` (with the superscript g
-denoting "gradient") are vector versions of the function space for
-:math:`u`, with boundary conditions removed (if :math:`V` is the space we used for
-:math:`u`, with no restrictions on boundary values, :math:`V^{(\mbox{g})} = \hat{V^{(\mbox{g})}} =
-[V]^d`, where :math:`d` is the number of space dimensions).  For example, if
-we used piecewise linear functions on the mesh to approximate :math:`u`, the
-variational problem for :math:`w` corresponds to approximating each
-component field of :math:`w` by piecewise linear functions.
-
-The variational problem for the vector field
-:math:`w`, called ``grad_u`` in the code, is easy to solve in FEniCS:
+Not surprisingly, projection is a so common operation in finite
+element programs that FEniCS has a function for doing the task:
+``project(q, W)``, which returns the projection of some ``Function`` or
+``Expression`` object named ``q`` onto the ``FunctionSpace`` (if ``q`` is
+scalar) or ``VectorFunctionSpace`` (if ``q`` is vector-valued) named ``W``.
+Specifically, in our case where ``u`` is computed and we want to project
+the vector-valued ``grad(u)`` onto the ``VectorFunctionSpace`` where each
+component has the same ``Function`` space as ``u``:
 
 .. code-block:: python
 
-        V_g = VectorFunctionSpace(mesh, 'Lagrange', 1)
-        w = TrialFunction(V_g)
-        v = TestFunction(V_g)
+        V = u.function_space()
+        degree = u.ufl_element().degree()
+        W = VectorFunctionSpace(V.mesh(), 'Lagrange', degree)
         
-        a = inner(w, v)*dx
-        L = inner(grad(u), v)*dx
-        grad_u = Function(V_g)
-        solve(a == L, grad_u)
-        
-        plot(grad_u, title='grad(u)')
+        grad_u = project(grad(u), W)
 
-The boundary condition argument to ``solve`` is dropped since there are
-no essential boundary conditions in this problem.
-The new thing is basically that we work with a ``VectorFunctionSpace``,
-since the unknown is now a vector field, instead of the
-``FunctionSpace`` object for scalar fields.
 Figure :ref:`tut:poisson:2D:fig:ex1:gradu` shows
-example of how such a vector field is visualized.
+example of how such a smoothed ``gradu(u)`` vector field is visualized.
 
 .. _tut:poisson:2D:fig:ex1:gradu:
 
@@ -2139,23 +2094,6 @@ example of how such a vector field is visualized.
    :width: 480
 
    *Example of visualizing the vector field :math:`\nabla u` by arrows at the nodes*
-
-.. index:: project
-
-.. index:: projection
-
-Projecting some function onto some space is a very common
-operation in finite element programs. The manual steps in this process
-have therefore been collected in a utility function ``project(q, W)``,
-which returns the projection of some ``Function`` or ``Expression`` object
-named ``q`` onto the ``FunctionSpace`` or ``VectorFunctionSpace`` named ``W``.
-Specifically, the previous code for
-projecting each component of ``grad(u)`` onto
-the same space that we use for ``u``, can now be done by a one-line call
-
-.. code-block:: python
-
-        grad_u = project(grad(u), VectorFunctionSpace(mesh, 'Lagrange', 1))
 
 The applications of projection are many, including turning discontinuous
 gradient fields into continuous ones, comparing higher- and lower-order
@@ -2202,7 +2140,8 @@ reached by
 
 but this is a flat ``numpy`` array where the degrees of freedom for the
 :math:`x` component of the gradient is stored in the first part, then the
-degrees of freedom of the :math:`y` component, and so on.
+degrees of freedom of the :math:`y` component, and so on. This is less convenient
+to work with.
 
 .. index:: p2D_iter.py
 
@@ -2231,12 +2170,92 @@ shows, however, that the components of the gradient vary linearly as
 element away from the boundary).  The ``application_test_gradient``
 function in ``p2D_iter.py`` performs some experiments.
 
+
+.. admonition:: Detour: Manual projection
+
+   Although you will always use ``project`` to project a finite element
+   function, it can be constructive this point in the tutorial to formulate the
+   projection mathematically and implement its steps manually in FEniCS.
+   
+   Looking at the component :math:`\partial u/\partial x` of the gradient, we
+   project the (discrete) derivative :math:`\sum_jU_j{\partial \phi_j/\partial
+   x}` onto a function space with basis :math:`\phi_1,\phi_2,\ldots` such that
+   the derivative in this space is expressed by the standard sum
+   :math:`\sum_j\bar U_j \phi_j`, for suitable (new) coefficients :math:`\bar U_j`.
+   
+   The variational problem for :math:`w` reads: find  :math:`w\in V^{(\mbox{g})}` such that
+   
+   .. _Eq:_auto7:
+
+.. math::
+
+    \tag{19}
+    a(w, v) = L(v)\quad\forall v\in \hat{V^{(\mbox{g})}},
+           
+           
+   
+   where
+   
+   .. _Eq:_auto8:
+
+.. math::
+
+    \tag{20}
+    a(w, v) = \int_\Omega w\cdot v {\, \mathrm{d}x},
+           
+           
+   
+   .. _Eq:_auto9:
+
+.. math::
+
+    \tag{21}
+    L(v) = \int_\Omega \nabla u\cdot v {\, \mathrm{d}x}{\thinspace .}
+           
+           
+   
+   The function spaces :math:`V^{(\mbox{g})}` and :math:`\hat{V^{(\mbox{g})}}` (with the superscript g
+   denoting "gradient") are vector versions of the function space for
+   :math:`u`, with boundary conditions removed (if :math:`V` is the space we used for
+   :math:`u`, with no restrictions on boundary values, :math:`V^{(\mbox{g})} = \hat{V^{(\mbox{g})}} =
+   [V]^d`, where :math:`d` is the number of space dimensions).  For example, if
+   we used piecewise linear functions on the mesh to approximate :math:`u`, the
+   variational problem for :math:`w` corresponds to approximating each
+   component field of :math:`w` by piecewise linear functions.
+   
+   The variational problem for the vector field
+   :math:`w`, called ``grad_u`` in the code, is easy to solve in FEniCS:
+   
+   .. code-block:: python
+   
+           V_g = VectorFunctionSpace(mesh, 'Lagrange', 1)
+           w = TrialFunction(V_g)
+           v = TestFunction(V_g)
+           
+           a = inner(w, v)*dx
+           L = inner(grad(u), v)*dx
+           grad_u = Function(V_g)
+           solve(a == L, grad_u)
+           
+           plot(grad_u, title='grad(u)')
+   
+   The boundary condition argument to ``solve`` is dropped since there are
+   no essential boundary conditions in this problem.
+   The new thing is basically that we work with a ``VectorFunctionSpace``,
+   since the unknown is now a vector field, instead of the
+   ``FunctionSpace`` object for scalar fields.
+
+
+
+
 .. _tut:possion:2D:varcoeff:
 
 A variable-coefficient Poisson problem
 --------------------------------------
 
 .. index:: Poisson's equation with variable coefficient
+
+.. index:: p2D_vc.py
 
 Suppose we have a variable coefficient :math:`p(x,y)` in the Laplace operator,
 as in the boundary-value problem
@@ -2256,20 +2275,28 @@ as in the boundary-value problem
 We shall quickly demonstrate that this simple extension of our model
 problem only requires an equally simple extension of the FEniCS program.
 
+Test problem
+~~~~~~~~~~~~
+
 Let us continue to use our favorite solution :math:`u(x,y)=1+x^2+2y^2` and
 then prescribe :math:`p(x,y)=x+y`. It follows that
 :math:`u_0(x,y) = 1 + x^2 + 2y^2` and :math:`f(x,y)=-8x-10y`.
 
-.. index:: vcp2D.py
+Modifications of the PDE solver
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-What are the modifications we need to do in the ``d4_p2D.py`` program
+What are the modifications we need to do in the previously shown codes
+to incorporate the variable coefficient :math:`p`?
 from the section :ref:`tut:poisson1:verify1`?
 
-  * ``f`` must be an ``Expression`` since it is no longer a constant,
+  * ``solver`` must take ``p`` as argument,
+
+  * ``f`` in our test problem
+    must be an ``Expression`` since it is no longer a constant,
 
   * a new ``Expression p`` must be defined for the variable coefficient,
 
-  * the variational problem is slightly changed.
+  * the formula for :math:`a(u,v)` in the variational problem is slightly changed.
 
 First we address the modified variational problem. Multiplying
 the PDE by a test function :math:`v` and
@@ -2306,7 +2333,7 @@ The weak form :math:`a(u,v)=L(v)` then has
         
         
 
-In the code from the section :ref:`tut:poisson1:impl` we must replace
+In the code for solving :math:`-\nabla^2u=f` we must replace
 
 .. code-block:: python
 
@@ -2318,17 +2345,25 @@ by
 
         a = p*inner(nabla_grad(u), nabla_grad(v))*dx
 
-The definitions of ``p`` and ``f`` read
+to solve :math:`-\nabla\cdot(p\nabla u)=f`. Moreover,
+the definitions of ``p`` and ``f`` in the test problem read
 
 .. code-block:: python
 
         p = Expression('x[0] + x[1]')
         f = Expression('-8*x[0] - 10*x[1]')
 
-No additional modifications are necessary. The complete code can be
-found in the file ``vcp2D.py`` (variable-coefficient Poisson problem in 2D).
+No additional modifications are necessary. The file
+``p2D_vc.py`` (variable-coefficient Poisson problem in 2D)
+is a copy of ``p2D_iter.py`` with the mentioned changes
+incorporated. Observe that :math:`p=1` recovers the original problem in
+``p2D_iter.py``.
+
 You can run it and confirm
 that it recovers the exact :math:`u` at the nodes.
+
+Modifications of the flux computations
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 The flux :math:`-p\nabla u` may be of particular interest in
 variable-coefficient Poisson problems as it often has an interesting
@@ -2371,25 +2406,26 @@ where
 This problem is identical to the one in the section :ref:`tut:poisson:gradu`,
 except that :math:`p` enters the integral in :math:`L`.
 
-The relevant Python statements for computing the flux field take the form
-
-.. code-block:: python
-
-        V_g = VectorFunctionSpace(mesh, 'Lagrange', 1)
-        w = TrialFunction(V_g)
-        v = TestFunction(V_g)
-        
-        a = inner(w, v)*dx
-        L = inner(-p*grad(u), v)*dx
-        flux = Function(V_g)
-        solve(a == L, flux)
-
-The following call to ``project`` is equivalent to the above statements:
+The relevant Python statement for computing the flux field take the form
 
 .. code-block:: python
 
         flux = project(-p*grad(u),
-                       VectorFunctionSpace(mesh, 'Lagrange', 1))
+                       VectorFunctionSpace(mesh, 'Lagrange', degreee))
+
+An appropriate function for computing the flux based on ``u`` and ``p`` is
+
+.. code-block:: python
+
+        def flux(u, p):
+            """Return p*grad(u) projected onto same space as u."""
+            V = u.function_space()
+            mesh = V.mesh()
+            degree = u.ufl_element().degree()
+            V_g = VectorFunctionSpace(mesh, 'Lagrange', degree)
+            grad_u = project(-p*grad(u), V_g)
+            grad_u.rename('flux(u)', 'continuous flux field')
+            return grad_u
 
 Plotting the flux vector field is naturally as easy as plotting
 the gradient (see the section :ref:`tut:poisson:gradu`):
@@ -2403,14 +2439,17 @@ the gradient (see the section :ref:`tut:poisson:gradu`):
         plot(flux_y, title='y-component of flux (-p*grad(u))')
 
 For data analysis of the nodal values of the flux field we can
-grab the underlying ``numpy`` arrays:
+grab the underlying ``numpy`` arrays (demands a ``deepcopy=True``
+in the split of ``flux``):
 
 .. code-block:: python
 
         flux_x_array = flux_x.vector().array()
         flux_y_array = flux_y.vector().array()
 
-The program ``vcp2D.py`` contains in addition some plots,
+[**hpl 5**: The following is not done properly in the revised version.]
+The function ``application_test_gradient`` in the
+program ``p2D_vc.py`` contains in addition some plots,
 including a curve plot
 comparing ``flux_x`` and the exact counterpart along the line :math:`y=1/2`.
 The associated programming details related to this visualization
@@ -2501,7 +2540,7 @@ the elastic energy
         
 
 in the membrane problem from the section :ref:`tut:poisson:membrane`.
-[**hpl 5**: Check dimensions!]
+[**hpl 6**: Check dimensions!]
 
 .. index:: error functional
 
@@ -2771,6 +2810,8 @@ Visualization of structured mesh data
 
 .. index:: scitools
 
+[**hpl 7**: Make the box field software local to this tutorial. Do basic MATLAB plotting with Matplotlib or Mayavi.]
+
 When finite element computations are done on a structured rectangular
 mesh, maybe with uniform partitioning, VTK-based tools for completely
 unstructured 2D/3D meshes are not required.  Instead we can use
@@ -2823,7 +2864,7 @@ Such transformations to linear finite element fields
 are very often needed when calling up plotting packages or data analysis tools.
 The ``u.ufl_element()`` method returns an object holding the element
 type, and this object has a method ``degree()`` for returning the
-element degree as an integer.
+element degree as an integer. [**hpl 8**: Has been used many times yet in the software...]
 The parameters ``nx`` and ``ny`` are the number of divisions in each space
 direction that were used when calling ``UnitSquareMesh`` to make the
 ``mesh`` object.

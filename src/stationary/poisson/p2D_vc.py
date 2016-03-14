@@ -1,9 +1,9 @@
-"""As p2D_func.py, but iterative linear solver."""
+"""As p2D_iter.py, but the PDE is -div(p*grad(u)=f."""
 from __future__ import print_function
 from dolfin import *
 
 def solver(
-    f, u0, Nx, Ny, degree=1,
+    p, f, u0, Nx, Ny, degree=1,
     linear_solver='Krylov', # Alt: 'direct'
     abs_tol=1E-5,           # Absolute tolerance in Krylov solver
     rel_tol=1E-3,           # Relative tolerance in Krylov solver
@@ -12,7 +12,7 @@ def solver(
     dump_parameters=False,  # Write out parameter database?
     ):
     """
-    Solve -Laplace(u)=f on [0,1]x[0,1] with 2*Nx*Ny Lagrange
+    Solve -div(p*grad(u)=f on [0,1]x[0,1] with 2*Nx*Ny Lagrange
     elements of specified degree and u=u0 (Expresssion) on
     the boundary.
     """
@@ -28,7 +28,7 @@ def solver(
     # Define variational problem
     u = TrialFunction(V)
     v = TestFunction(V)
-    a = inner(nabla_grad(u), nabla_grad(v))*dx
+    a = inner(p*nabla_grad(u), nabla_grad(v))*dx
     L = f*v*dx
 
     # Compute solution
@@ -52,7 +52,7 @@ def solver(
     return u
 
 def solver_objects(
-    f, u0, Nx, Ny, degree=1,
+    p, f, u0, Nx, Ny, degree=1,
     linear_solver='Krylov', # Alt: 'direct'
     abs_tol=1E-5,           # Absolute tolerance in Krylov solver
     rel_tol=1E-3,           # Relative tolerance in Krylov solver
@@ -74,7 +74,7 @@ def solver_objects(
     # Define variational problem
     u = TrialFunction(V)
     v = TestFunction(V)
-    a = inner(nabla_grad(u), nabla_grad(v))*dx
+    a = inner(p*nabla_grad(u), nabla_grad(v))*dx
     L = f*v*dx
 
     # Compute solution
@@ -112,7 +112,8 @@ def test_solvers():
     tol = {'direct': {1: 1E-11, 2: 1E-11, 3: 1E-11},
            'Krylov': {1: 1E-14, 2: 1E-05, 3: 1E-03}}
     u0 = Expression('1 + x[0]*x[0] + 2*x[1]*x[1]')
-    f = Constant(-6.0)
+    p = Expression('x[0] + x[1]')
+    f = Expression('-8*x[0] - 10*x[1]')
     for Nx, Ny in [(3,3), (3,5), (5,3)]:
         for degree in 1, 2, 3:
             for linear_solver in 'direct', 'Krylov':
@@ -124,7 +125,7 @@ def test_solvers():
                     # Important: Krylov solver error must be smaller
                     # than tol!
                     u = solver_func(
-                         f, u0, Nx, Ny, degree,
+                         p, f, u0, Nx, Ny, degree,
                          linear_solver=linear_solver,
                          abs_tol=0.1*tol[linear_solver][degree],
                          rel_tol=0.1*tol[linear_solver][degree])
@@ -144,8 +145,9 @@ def test_solvers():
 def application_test():
     """Plot the solution in the test problem."""
     u0 = Expression('1 + x[0]*x[0] + 2*x[1]*x[1]')
-    f = Constant(-6.0)
-    u = solver(f, u0, 6, 4, 1)
+    p = Expression('x[0] + x[1]')
+    f = Expression('-8*x[0] - 10*x[1]')
+    u = solver(p, f, u0, 6, 4, 1)
     # Dump solution to file in VTK format
     file = File("poisson.pvd")
     file << u
@@ -154,8 +156,9 @@ def application_test():
 
 def compare_exact_and_numerical_solution(Nx, Ny, degree=1):
     u0 = Expression('1 + x[0]*x[0] + 2*x[1]*x[1]')
-    f = Constant(-6.0)
-    u = solver(f, u0, Nx, Ny, degree, linear_solver='direct')
+    p = Expression('x[0] + x[1]')
+    f = Expression('-8*x[0] - 10*x[1]')
+    u = solver(p, f, u0, Nx, Ny, degree, linear_solver='direct')
     # Grab exact and numerical solution at the vertices and compare
     V = u.function_space()
     u0_Function = interpolate(u0, V)
@@ -190,96 +193,57 @@ def test_normalize_solution():
     expected = 1.0
     assert abs(expected - computed) < 1E-15
 
-def gradient(u):
-    """Return grad(u) projected onto same space as u."""
+def flux(u, p):
+    """Return p*grad(u) projected onto same space as u."""
     V = u.function_space()
     mesh = V.mesh()
-    V_g = VectorFunctionSpace(mesh, 'Lagrange', 1)
-    grad_u = project(grad(u), V_g)
-    grad_u.rename('grad(u)', 'continuous gradient field')
+    degree = u.ufl_element().degree()
+    V_g = VectorFunctionSpace(mesh, 'Lagrange', degree)
+    grad_u = project(-p*grad(u), V_g)
+    grad_u.rename('flux(u)', 'continuous flux field')
     return grad_u
 
 def application_test_gradient(Nx=6, Ny=4):
     u0 = Expression('1 + x[0]*x[0] + 2*x[1]*x[1]')
-    f = Constant(-6.0)
-    u = solver(f, u0, Nx, Ny, 1, linear_solver='direct')
+    p = Expression('x[0] + x[1]')
+    f = Expression('-8*x[0] - 10*x[1]')
+    u = solver(p, f, u0, Nx, Ny, 1, linear_solver='direct')
     u.rename('u', 'solution')
-    grad_u = gradient(u)
+    flux_u = flux(u, p)
     # Grab each component as a scalar field
-    grad_u_x, grad_u_y = grad_u.split(deepcopy=True)
-    grad_u_x.rename('grad(u)_x', 'x-component of grad(u)')
-    grad_u_y.rename('grad(u)_y', 'y-component of grad(u)')
+    flux_u_x, flux_u_y = flux_u.split(deepcopy=True)
+    flux_u_x.rename('flux(u)_x', 'x-component of flux(u)')
+    flux_u_y.rename('flux(u)_y', 'y-component of flux(u)')
     plot(u, title=u.label())
-    plot(grad_u,   title=grad_u.label())
-    plot(grad_u_x, title=grad_u_x.label())
-    plot(grad_u_y, title=grad_u_y.label())
+    plot(flux_u,   title=flux_u.label())
+    plot(flux_u_x, title=flux_u_x.label())
+    plot(flux_u_y, title=flux_u_y.label())
+
+    u_exact = lambda x, y: 1 + x**2 + 2*y**2
+    flux_x_exact = lambda x, y: -(x+y)*2*x
+    flux_y_exact = lambda x, y: -(x+y)*4*y
 
     coor = u.function_space().mesh().coordinates()
     if len(coor) < 50:
-        for i, value in enumerate(grad_u_x.compute_vertex_values()):
-            print('vertex %d, %s, u_x=%g (2x), error=%g' %
-                  (i, tuple(coor[i]), value, 2*coor[i][0] - value))
-        for i, value in enumerate(grad_u_y.compute_vertex_values()):
-            print('vertex %d, %s, u_y=%g (4y), error=%g' %
-                  (i, tuple(coor[i]), value, 4*coor[i][1] - value))
-
-def efficiency():
-    """Measure CPU time: direct vs Krylov solver."""
-    import time
-    import numpy as np
-    # This solution is an eigenfunction, CG may have superlinear
-    # convergence in such cases but GMRES is seemingly not affected
-    u_exact = Expression('sin(DOLFIN_PI*x[0])*sin(DOLFIN_PI*x[1])')
-    f = Expression('2*pow(DOLFIN_PI,2)*sin(DOLFIN_PI*x[0])*sin(DOLFIN_PI*x[1])')
-    u0 = Constant(0)
-
-    # Establish what the errors for P1, P2 and P3 elements are,
-    # because initial tolerances for Krylov solvers must be lower
-    # than these errors.
-    # For finer meshes, we let the Krylov solver tolerances be
-    # reduced in the same manner as the error, i.e., as
-    # h**(-(degree+1)). With h halved, we get a reduction factor
-    # 2**(degree+1).
-    n = 80
-    tol = {}
-    for degree in 1, 2, 3:
-        u = solver(f, u0, n, n, degree, linear_solver='direct')
-        u_e = interpolate(u_exact, u.function_space())
-        error = np.abs(u_e.vector().array() - u.vector().array()).max()
-        print('error degree=%d: %g' % (degree, error))
-        tol[degree] = 0.1*error  # suitable Krylov solver tolerance
-    timings_direct = []
-    timings_Krylov = []
-    for i in range(2):
-        n *= 2
-        for degree in 1, 2, 3:
-            # Run direct solver
-            print('n=%d, degree=%d, N:' % (n, degree)),
-            t0 = time.clock()
-            u = solver(f, u0, n, n, degree, linear_solver='direct')
-            t1 = time.clock()
-            N = u.function_space().dim()
-            print(N),
-            timings_direct.append((N, t1-t0))
-            # Run Krylov solver
-            # (with tolerance reduced as the error)
-            tol[degree] /= 2.0**(degree+1)
-            print(' tol=%E' % tol[degree])
-            t0 = time.clock()
-            u = solver(f, u0, n, n, degree, linear_solver='Krylov',
-                       abs_tol=tol[degree], rel_tol=tol[degree])
-            t1 = time.clock()
-            timings_Krylov.append((N, t1-t0))
-    for i in range(len(timings_direct)):
-        print('LU decomp N=%d: %g' %
-              (timings_direct[i][0], timings_direct[i][1]))
-        print('GMRES+ILU N=%d: %g' %
-              (timings_Krylov[i][0], timings_Krylov[i][1]))
+        # Quite large errors for coarse meshes, but the error
+        # decreases with increasing resolution
+        for i, value in enumerate(flux_u_x.compute_vertex_values()):
+            print('vertex %d, %s, -p*u_x=%g, error=%g' %
+                  (i, tuple(coor[i]), value,
+                   flux_x_exact(*coor[i]) - value))
+        for i, value in enumerate(flux_u_y.compute_vertex_values()):
+            print('vertex %d, %s, -p*u_y=%g, error=%g' %
+                  (i, tuple(coor[i]), value,
+                   flux_y_exact(*coor[i]) - value))
+    else:
+        # Compute integrated L2 error of the flux components
+        # (Will this work for unstructured mesh? Need to think about that)
+        xv = coor.T[0]
+        yv = coor.T[1]
 
 
 if __name__ == '__main__':
     #application_test()
-    #application_test_gradient()
-    efficiency()
+    application_test_gradient(Nx=20, Ny=20)
     # Hold plot
     interactive()

@@ -1774,7 +1774,7 @@ label{tut:poisson:gradu}
 
 idx{projection}
 
-In Poisson and many other problems the gradient of the solution is
+In Poisson and many other problems, the gradient of the solution is
 of interest. The computation is in principle simple:
 since
 $u = \sum_{j=1}^N U_j \phi_j$, we have that
@@ -1799,6 +1799,97 @@ the components of $\nabla u$ onto the same function space as we used
 for $u$.  This means that we solve $w = \nabla u$ approximately by a
 finite element method, using the same elements for the components of
 $w$ as we used for $u$. This process is known as *projection*.
+
+idx{`project`} idx{projection}
+
+Not surprisingly, projection is a so common operation in finite
+element programs that FEniCS has a function for doing the task:
+`project(q, W)`, which returns the projection of some `Function` or
+`Expression` object named `q` onto the `FunctionSpace` (if `q` is
+scalar) or `VectorFunctionSpace` (if `q` is vector-valued) named `W`.
+Specifically, in our case where `u` is computed and we want to project
+the vector-valued `grad(u)` onto the `VectorFunctionSpace` where each
+component has the same `Function` space as `u`:
+
+!bc pycod
+V = u.function_space()
+degree = u.ufl_element().degree()
+W = VectorFunctionSpace(V.mesh(), 'Lagrange', degree)
+
+grad_u = project(grad(u), W)
+!ec
+Figure ref{tut:poisson:2D:fig:ex1:gradu} shows
+example of how such a smoothed `gradu(u)` vector field is visualized.
+
+FIGURE:[fig/ex1_gradu, width=480] Example of visualizing the vector field $\nabla u$ by arrows at the nodes. label{tut:poisson:2D:fig:ex1:gradu}
+
+The applications of projection are many, including turning discontinuous
+gradient fields into continuous ones, comparing higher- and lower-order
+function approximations, and transforming a higher-order finite element
+solution down to a piecewise linear field, which is required by many
+visualization packages.
+
+
+The scalar component fields of the gradient
+can be extracted as separate fields and, e.g., visualized:
+
+!bc pycod
+grad_u_x, grad_u_y = grad_u.split(deepcopy=True)
+plot(grad_u_x, title='x-component of grad(u)')
+plot(grad_u_y, title='y-component of grad(u)')
+!ec
+The `deepcopy=True` argument signifies a *deep copy*, which is
+a general term in computer science implying that a copy of the data is
+returned. (The opposite, `deepcopy=False`,
+means a *shallow copy*, where
+the returned objects are just pointers to the original data.)
+
+idx{degrees of freedom array}
+idx{nodal values array}
+idx{degrees of freedom array (vector field)}
+
+The `grad_u_x` and `grad_u_y` variables behave as
+`Function` objects. In particular, we can extract the underlying
+arrays of nodal values by
+
+!bc pycod
+grad_u_x_array = grad_u_x.vector().array()
+grad_u_y_array = grad_u_y.vector().array()
+!ec
+The degrees of freedom of the `grad_u` vector field can also be
+reached by
+
+!bc pycod
+grad_u_array = grad_u.vector().array()
+!ec
+but this is a flat `numpy` array where the degrees of freedom for the
+$x$ component of the gradient is stored in the first part, then the
+degrees of freedom of the $y$ component, and so on. This is less convenient
+to work with.
+
+idx{`${prog["p2D_iter"]}.py`}
+
+The function `gradient(u)` in `${prog["p2D_iter"]}.py`
+returns a projected (smoothed) $\nabla u$ vector field, given some
+finite element function `u`:
+
+@@@CODE ../../src/stationary/poisson/${prog['p2D_iter']}.py fromto: def gradient@def application_test_gradient
+
+Examining the arrays with vertex values of `grad_u_x` and `grad_u_y`
+quickly reveals that the computed `grad_u` field does not equal the
+exact gradient $(2x, 4y)$ in this particular test problem where
+$u=1+x^2+2y^2$.  There are inaccuracies at the boundaries, arising
+from the approximation problem for $w$. Increasing the mesh resolution
+shows, however, that the components of the gradient vary linearly as
+$2x$ and $4y$ in the interior of the mesh (i.e., as soon as we are one
+element away from the boundary).  The `application_test_gradient`
+function in `${prog["p2D_iter"]}.py` performs some experiments.
+
+!bnotice Detour: Manual projection.
+Although you will always use `project` to project a finite element
+function, it can be constructive this point in the tutorial to formulate the
+projection mathematically and implement its steps manually in FEniCS.
+
 Looking at the component $\partial u/\partial x$ of the gradient, we
 project the (discrete) derivative $\sum_jU_j{\partial \phi_j/\partial
 x}$ onto a function space with basis $\phi_1,\phi_2,\ldots$ such that
@@ -1849,89 +1940,13 @@ no essential boundary conditions in this problem.
 The new thing is basically that we work with a `VectorFunctionSpace`,
 since the unknown is now a vector field, instead of the
 `FunctionSpace` object for scalar fields.
-Figure ref{tut:poisson:2D:fig:ex1:gradu} shows
-example of how such a vector field is visualized.
-
-FIGURE:[fig/ex1_gradu, width=480] Example of visualizing the vector field $\nabla u$ by arrows at the nodes. label{tut:poisson:2D:fig:ex1:gradu}
-
-idx{`project`} idx{projection}
-
-Projecting some function onto some space is a very common
-operation in finite element programs. The manual steps in this process
-have therefore been collected in a utility function `project(q, W)`,
-which returns the projection of some `Function` or `Expression` object
-named `q` onto the `FunctionSpace` or `VectorFunctionSpace` named `W`.
-Specifically, the previous code for
-projecting each component of `grad(u)` onto
-the same space that we use for `u`, can now be done by a one-line call
-
-!bc pycod
-grad_u = project(grad(u), VectorFunctionSpace(mesh, 'Lagrange', 1))
-!ec
-The applications of projection are many, including turning discontinuous
-gradient fields into continuous ones, comparing higher- and lower-order
-function approximations, and transforming a higher-order finite element
-solution down to a piecewise linear field, which is required by many
-visualization packages.
-
-The scalar component fields of the gradient
-can be extracted as separate fields and, e.g., visualized:
-
-!bc pycod
-grad_u_x, grad_u_y = grad_u.split(deepcopy=True)
-plot(grad_u_x, title='x-component of grad(u)')
-plot(grad_u_y, title='y-component of grad(u)')
-!ec
-The `deepcopy=True` argument signifies a *deep copy*, which is
-a general term in computer science implying that a copy of the data is
-returned. (The opposite, `deepcopy=False`,
-means a *shallow copy*, where
-the returned objects are just pointers to the original data.)
-
-idx{degrees of freedom array}
-idx{nodal values array}
-idx{degrees of freedom array (vector field)}
-
-The `grad_u_x` and `grad_u_y` variables behave as
-`Function` objects. In particular, we can extract the underlying
-arrays of nodal values by
-
-!bc pycod
-grad_u_x_array = grad_u_x.vector().array()
-grad_u_y_array = grad_u_y.vector().array()
-!ec
-The degrees of freedom of the `grad_u` vector field can also be
-reached by
-
-!bc pycod
-grad_u_array = grad_u.vector().array()
-!ec
-but this is a flat `numpy` array where the degrees of freedom for the
-$x$ component of the gradient is stored in the first part, then the
-degrees of freedom of the $y$ component, and so on.
-
-idx{`${prog["p2D_iter"]}.py`}
-
-The function `gradient(u)` in `${prog["p2D_iter"]}.py`
-returns a projected (smoothed) $\nabla u$ vector field, given some
-finite element function `u`:
-
-@@@CODE ../../src/stationary/poisson/${prog['p2D_iter']}.py fromto: def gradient@def application_test_gradient
-
-Examining the arrays with vertex values of `grad_u_x` and `grad_u_y`
-quickly reveals that the computed `grad_u` field does not equal the
-exact gradient $(2x, 4y)$ in this particular test problem where
-$u=1+x^2+2y^2$.  There are inaccuracies at the boundaries, arising
-from the approximation problem for $w$. Increasing the mesh resolution
-shows, however, that the components of the gradient vary linearly as
-$2x$ and $4y$ in the interior of the mesh (i.e., as soon as we are one
-element away from the boundary).  The `application_test_gradient`
-function in `${prog["p2D_iter"]}.py` performs some experiments.
+!enotice
 
 
 ===== A variable-coefficient Poisson problem =====
 label{tut:possion:2D:varcoeff}
 idx{Poisson's equation with variable coefficient}
+idx{`${prog["p2D_vc"]}.py`}
 
 Suppose we have a variable coefficient $p(x,y)$ in the Laplace operator,
 as in the boundary-value problem
@@ -1949,18 +1964,23 @@ p(x,y)\nabla u(x,y)\right\rbrack &= f(x,y) \quad \mbox{in } \Omega,
 We shall quickly demonstrate that this simple extension of our model
 problem only requires an equally simple extension of the FEniCS program.
 
+=== Test problem ===
+
 Let us continue to use our favorite solution $u(x,y)=1+x^2+2y^2$ and
 then prescribe $p(x,y)=x+y$. It follows that
 $u_0(x,y) = 1 + x^2 + 2y^2$ and $f(x,y)=-8x-10y$.
 
-idx{`${prog["vcp2D"]}.py`}
+=== Modifications of the PDE solver ===
 
-What are the modifications we need to do in the `${prog["d4_p2D"]}.py` program
+What are the modifications we need to do in the previously shown codes
+to incorporate the variable coefficient $p$?
 from Section ref{tut:poisson1:verify1}?
 
-  * `f` must be an `Expression` since it is no longer a constant,
+  * `solver` must take `p` as argument,
+  * `f` in our test problem
+    must be an `Expression` since it is no longer a constant,
   * a new `Expression p` must be defined for the variable coefficient,
-  * the variational problem is slightly changed.
+  * the formula for $a(u,v)$ in the variational problem is slightly changed.
 
 First we address the modified variational problem. Multiplying
 the PDE by a test function $v$ and
@@ -1985,7 +2005,7 @@ a(u,v) &= \int_\Omega p\nabla u\cdot\nabla v \dx,\\
 L(v) &= \int_\Omega fv \dx\tp
 \end{align}
 !et
-In the code from Section ref{tut:poisson1:impl} we must replace
+In the code for solving $-\nabla^2u=f$ we must replace
 
 !bc pycod
 a = inner(nabla_grad(u), nabla_grad(v))*dx
@@ -1995,16 +2015,23 @@ by
 !bc pycod
 a = p*inner(nabla_grad(u), nabla_grad(v))*dx
 !ec
-The definitions of `p` and `f` read
+to solve $-\nabla\cdot(p\nabla u)=f$. Moreover,
+the definitions of `p` and `f` in the test problem read
 
 !bc pycod
 p = Expression('x[0] + x[1]')
 f = Expression('-8*x[0] - 10*x[1]')
 !ec
-No additional modifications are necessary. The complete code can be
-found in the file `${prog["vcp2D"]}.py` (variable-coefficient Poisson problem in 2D).
+No additional modifications are necessary. The file
+`${prog["p2D_vc"]}.py` (variable-coefficient Poisson problem in 2D)
+is a copy of `${prog["p2D_iter"]}.py` with the mentioned changes
+incorporated. Observe that $p=1$ recovers the original problem in
+`${prog["p2D_iter"]}.py`.
+
 You can run it and confirm
 that it recovers the exact $u$ at the nodes.
+
+=== Modifications of the flux computations ===
 
 The flux $-p\nabla u$ may be of particular interest in
 variable-coefficient Poisson problems as it often has an interesting
@@ -2031,24 +2058,16 @@ L(v) &= \int_\Omega (-p \nabla u)\cdot v \dx\tp
 This problem is identical to the one in Section ref{tut:poisson:gradu},
 except that $p$ enters the integral in $L$.
 
-The relevant Python statements for computing the flux field take the form
-
-!bc pycod
-V_g = VectorFunctionSpace(mesh, 'Lagrange', 1)
-w = TrialFunction(V_g)
-v = TestFunction(V_g)
-
-a = inner(w, v)*dx
-L = inner(-p*grad(u), v)*dx
-flux = Function(V_g)
-solve(a == L, flux)
-!ec
-The following call to `project` is equivalent to the above statements:
+The relevant Python statement for computing the flux field take the form
 
 !bc pycod
 flux = project(-p*grad(u),
-               VectorFunctionSpace(mesh, 'Lagrange', 1))
+               VectorFunctionSpace(mesh, 'Lagrange', degreee))
 !ec
+An appropriate function for computing the flux based on `u` and `p` is
+
+@@@CODE ../../src/stationary/poisson/${prog['p2D_vc']}.py fromto: def flux@def application_test_gradient
+
 
 Plotting the flux vector field is naturally as easy as plotting
 the gradient (see Section ref{tut:poisson:gradu}):
@@ -2062,14 +2081,17 @@ plot(flux_y, title='y-component of flux (-p*grad(u))')
 !ec
 
 For data analysis of the nodal values of the flux field we can
-grab the underlying `numpy` arrays:
+grab the underlying `numpy` arrays (demands a `deepcopy=True`
+in the split of `flux`):
 
 !bc pycod
 flux_x_array = flux_x.vector().array()
 flux_y_array = flux_y.vector().array()
 !ec
 
-The program `${prog["vcp2D"]}.py` contains in addition some plots,
+[hpl: The following is not done properly in the revised version.]
+The function `application_test_gradient` in the
+program `${prog["p2D_vc"]}.py` contains in addition some plots,
 including a curve plot
 comparing `flux_x` and the exact counterpart along the line $y=1/2$.
 The associated programming details related to this visualization
@@ -2395,6 +2417,9 @@ idx{structured mesh}
 idx{visualization, structured mesh}
 idx{`scitools`}
 
+[hpl: Make the box field software local to this tutorial. Do basic
+MATLAB plotting with Matplotlib or Mayavi.]
+
 When finite element computations are done on a structured rectangular
 mesh, maybe with uniform partitioning, VTK-based tools for completely
 unstructured 2D/3D meshes are not required.  Instead we can use
@@ -2444,12 +2469,13 @@ Such transformations to linear finite element fields
 are very often needed when calling up plotting packages or data analysis tools.
 The `u.ufl_element()` method returns an object holding the element
 type, and this object has a method `degree()` for returning the
-element degree as an integer.
+element degree as an integer. [hpl: Has been used many times yet in
+the software...]
 The parameters `nx` and `ny` are the number of divisions in each space
 direction that were used when calling `UnitSquareMesh` to make the
 `mesh` object.
 The result `u_box` is a `BoxField`
-object that supports "finite difference" indexing and an underlying
+object that supports ``finite difference'' indexing and an underlying
 grid suitable for `numpy` operations on 2D data.
 Also 1D and 3D meshes (with linear elements) can be turned
 into `BoxField` objects.
