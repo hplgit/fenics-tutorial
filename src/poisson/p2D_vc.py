@@ -241,9 +241,254 @@ def application_test_gradient(Nx=6, Ny=4):
         xv = coor.T[0]
         yv = coor.T[1]
 
+def compute_errors(u, u_exact):
+    """Compute various measures of the error u - u_exact, where
+    u is a finite element Function and u_exact is an Expression."""
+
+    # Compute error norm (for very small errors, the value can be
+    # negative so we run abs(assemble(error)) to avoid failure in sqrt
+
+    V = u.function_space()
+
+    # Function - Expression
+    error = (u - u_exact)**2*dx
+    E1 = sqrt(abs(assemble(error)))
+
+    # Explicit interpolation of u_e onto the same space as u:
+    u_e = interpolate(u_exact, V)
+    error = (u - u_e)**2*dx
+    E2 = sqrt(abs(assemble(error)))
+
+    # Explicit interpolation of u_exact to higher-order elements,
+    # u will also be interpolated to the space Ve before integration
+    Ve = FunctionSpace(V.mesh(), 'Lagrange', 5)  # mesh here: BUG, module mesh in dolfin...make warning box
+    u_e = interpolate(u_exact, Ve)
+    error = (u - u_e)**2*dx
+    E3 = sqrt(abs(assemble(error)))
+
+    # dolfin.errornorm interpolates u and u_e to a space with
+    # given degree, and creates the error field by subtracting
+    # the degrees of freedom, then the error field is integrated
+    # TEMPORARY BUG - doesn't accept Expression for u_e
+    #E4 = errornorm(u_e, u, normtype='l2', degree=3)
+    # Manual implementation errornorm to get around the bug:
+    def errornorm(u_exact, u, Ve):
+        u_Ve = interpolate(u, Ve)
+        u_e_Ve = interpolate(u_exact, Ve)
+        e_Ve = Function(Ve)
+        # Subtract degrees of freedom for the error field
+        e_Ve.vector()[:] = u_e_Ve.vector().array() - u_Ve.vector().array()
+        # More efficient computation (avoids the rhs array result above)
+        #e_Ve.assign(u_e_Ve)                      # e_Ve = u_e_Ve
+        #e_Ve.vector().axpy(-1.0, u_Ve.vector())  # e_Ve += -1.0*u_Ve
+        error = e_Ve**2*dx(Ve.mesh())
+        return sqrt(abs(assemble(error))), e_Ve
+    E4, e_Ve = errornorm(u_exact, u, Ve)
+
+    # Infinity norm based on nodal values
+    u_e = interpolate(u_exact, V)
+    E5 = abs(u_e.vector().array() - u.vector().array()).max()
+
+    # H1 seminorm
+    error = inner(grad(e_Ve), grad(e_Ve))*dx
+    E6 = sqrt(abs(assemble(error)))
+
+    # Collect error measures in a dictionary with self-explanatory keys
+    errors = {'u - u_exact': E1,
+              'u - interpolate(u_exact,V)': E2,
+              'interpolate(u,Ve) - interpolate(u_exact,Ve)': E3,
+              'errornorm': E4,
+              'infinity norm (of dofs)': E5,
+              'grad(error) H1 seminorm': E6}
+
+    return errors
+
+def convergence_rate(u_exact, f, u0, p, degrees,
+                     n=[2**(k+3) for k in range(5)]):
+    """
+    Compute convergence rates for various error norms for a
+    sequence of meshes with Nx=Ny=b and P1, P2, ...,
+    Pdegrees elements. Return rates for two consecutive meshes:
+    rates[degree][error_type] = r0, r1, r2, ...
+    """
+
+    h = {}  # Discretization parameter, h[degree][experiment]
+    E = {}  # Error measure(s), E[degree][experiment][error_type]
+    P_degrees = 1,2,3,4
+    num_meshes = 5
+
+    # Perform experiments with meshes and element types
+    for degree in P_degrees:
+        n = 4   # Coarsest mesh division
+        h[degree] = []
+        E[degree] = []
+        for i in range(num_meshes):
+            n *= 2
+            h[degree].append(1.0/n)
+            u = solver(p, f, u0, n, n, degree,
+                       linear_solver='direct')
+            errors = compute_errors(u, u_exact)
+            E[degree].append(errors)
+            print('2*(%dx%d) P%d mesh, %d unknowns, E1=%g' %
+                  (n, n, degree, u.function_space().dim(),
+                   errors['u - u_exact']))
+    # Convergence rates
+    from math import log as ln  # log is a dolfin name too
+    error_types = list(E[1][0].keys())
+    rates = {}
+    for degree in P_degrees:
+        rates[degree] = {}
+        for error_type in sorted(error_types):
+            rates[degree][error_type] = []
+            for i in range(num_meshes):
+                Ei   = E[degree][i][error_type]
+                Eim1 = E[degree][i-1][error_type]
+                r = ln(Ei/Eim1)/ln(h[degree][i]/h[degree][i-1])
+                rates[degree][error_type].append(round(r,2))
+    return rates
+
+def convergence_rate_sin():
+    """Compute convergence rates for u=sin(x)*sin(y) solution."""
+    omega = 1.0
+    u_exact = Expression('sin(omega*pi*x[0])*sin(omega*pi*x[1])',
+                         omega=omega)
+    f = 2*omega**2*pi**2*u_exact
+    u0 = Constant(0)
+    p = Constant(1)
+    # Note: P4 for n>=128 seems to break down
+    rates = convergence_rates(u_exact, f, u0, p, degrees=4,
+                              n=[2**(k+3) for k in range(5)])
+    # Print rates
+    print('\n\n')
+    for error_type in error_types:
+        print(error_type)
+        for degree in P_degrees:
+            print('P%d: %s' %
+                  (degree, str(rates[degree][error_type])[1:-1]))
+
+def structured_mesh(u, divisions):
+    """Represent u on a structured mesh."""
+    # u must have P1 elements, otherwise interpolate to P1 elements
+    u2 = u if u.ufl_element().degree() == 1 else \
+         interpolate(u, FunctionSpace(mesh, 'Lagrange', 1))
+    mesh = u.function_space().mesh()
+    from BoxField import dolfin_function2BoxField
+    u_box = dolfin_function2BoxField(
+        u2, mesh, divisions, uniform_mesh=True)
+    return u_box
+
+def application_structured_mesh(model_problem=1):
+    if model_problem == 1:
+        # Numerical solution is exact
+        u0 = Expression('1 + x[0]*x[0] + 2*x[1]*x[1]')
+        p = Expression('x[0] + x[1]')
+        f = Expression('-8*x[0] - 10*x[1]')
+        flux_u_x_exact = lambda x, y: -(x + y)*2*x
+        nx = 6;  ny = 4
+    elif model_problem == 2:
+        # Mexican hat solution
+        from sympy import exp, sin, pi  # for use in math formulas
+        import sympy as sym
+        H = lambda x: exp(-16*(x-0.5)**2)*sin(3*pi*x)
+        x, y = sym.symbols('x[0], x[1]')
+        u = H(x)*H(y)
+        u_c = sym.printing.ccode(u)
+        # '-exp(-16*pow(x - 0.5, 2) - 16*pow(y - 0.5, 2))*'
+        # 'sin(3*M_PI*x)*sin(3*M_PI*y)'
+        u_c = u_c.replace('M_PI', 'DOLFIN_PI')
+        print('u in C:', u_c)
+        u0 = Expression(u_c)
+
+        p = 1  # Don't use Constant(1) here (!)
+        f = sym.diff(-p*sym.diff(u, x), x) + \
+            sym.diff(-p*sym.diff(u, y), y)
+        f = sym.simplify(f)
+        f_c = sym.printing.ccode(f)
+        f_c = f_c.replace('M_PI', 'DOLFIN_PI')
+        f = Expression(f_c)
+        flux_u_x_exact = sym.lambdify([x, y], -p*sym.diff(u, x),
+                                      modules='numpy')
+        print('f in C:', f_c)
+        p = Constant(1)
+        nx = 22;  ny = 22
+
+    u = solver(p, f, u0, nx, ny, 1, linear_solver='direct')
+    u_box = structured_mesh(u, (nx, ny))
+    u_ = u_box.values  # numpy array
+    X = 0;  Y = 1      # for indexing in x and y direction
+
+    # Iterate over 2D mesh points (i,j)
+    print('u_ is defined on a structured mesh with %s points'
+          % str(u_.shape))
+    if u.function_space().dim() < 100:
+        for j in range(u_.shape[1]):
+            for i in range(u_.shape[0]):
+                print('u[%d,%d]=u(%g,%g)=%g' %
+                      (i, j,
+                       u_box.grid.coor[X][i], u_box.grid.coor[X][j],
+                       u_[i,j]))
+
+    # Make surface plot
+    import matplotlib.pyplot as plt
+    from mpl_toolkits.mplot3d import Axes3D
+    from matplotlib import cm
+    fig = plt.figure()
+    ax = fig.gca(projection='3d')
+    cv = u_box.grid.coorv  # vectorized mesh coordinates
+    ax.plot_surface(cv[X], cv[Y], u_, cmap=cm.coolwarm,
+                    rstride=1, cstride=1)
+    plt.title('Surface plot of solution')
+    plt.savefig('tmp0.png'); plt.savefig('tmp0.pdf')
+
+    # Make contour plot
+    fig = plt.figure()
+    ax = fig.gca()
+    cs = ax.contour(cv[X], cv[Y], u_, 7)  # 7 levels
+    plt.clabel(cs)  # add labels to contour lines
+    plt.axis('equal')
+    plt.title('Contour plot of solution')
+    plt.savefig('tmp1.png'); plt.savefig('tmp1.pdf')
+
+    # Plot u along a line y=const and compare with exact solution
+    start = (0, 0.4)
+    x, u_val, y_fixed, snapped = u_box.gridline(start, direction=X)
+    u_e_val = [u0((x_, y_fixed)) for x_ in x]
+
+    plt.figure()
+    plt.plot(x, u_val, 'r-')
+    plt.plot(x, u_e_val, 'bo')
+    plt.legend(['P1 elements', 'exact'], loc='best')
+    plt.title('Solution along line y=%g' % y_fixed)
+    plt.xlabel('x');  plt.ylabel('u')
+    plt.savefig('tmp2.png'); plt.savefig('tmp2.pdf')
+
+    flux_u = flux(u, p)
+    flux_u_x, flux_u_y = flux_u.split(deepcopy=True)
+
+    # Plot the numerical and exact flux along the same line
+    flux2_x = flux_u_x if flux_u_x.ufl_element().degree() == 1 \
+              else interpolate(flux_x,
+                   FunctionSpace(u.function_space().mesh(),
+                                 'Lagrange', 1))
+    flux_u_x_box = structured_mesh(flux_u_x, (nx,ny))
+    x, flux_u_val, y_fixed, snapped = \
+       flux_u_x_box.gridline(start, direction=X)
+    y = y_fixed
+
+    plt.figure()
+    plt.plot(x, flux_u_val, 'r-')
+    plt.plot(x, flux_u_x_exact(x, y_fixed), 'bo')
+    plt.legend(['P1 elements', 'exact'], loc='best')
+    plt.title('Flux along line y=%g' % y_fixed)
+    plt.xlabel('x');  plt.ylabel('u')
+    plt.savefig('tmp3.png'); plt.savefig('tmp3.pdf')
+
+    plt.show()
 
 if __name__ == '__main__':
     #application_test()
-    application_test_gradient(Nx=20, Ny=20)
+    #application_test_gradient(Nx=20, Ny=20)
+    #convergence_rate()
+    application_structured_mesh(2)
     # Hold plot
     interactive()

@@ -97,8 +97,8 @@ choices of :math:`u_0`, :math:`f`, and :math:`\Omega` may look as follows:
         # Hold plot
         interactive()
 
-The complete code can be found in the file `p2D_plain.py <https://github.com/hplgit/fenics-tutorial/blob/master/src/stationary/poisson/p2D_plain.py>`__ in the
-directory `src/stationary/poisson <https://github.com/hplgit/fenics-tutorial/blob/master/src/stationary/poisson>`__.
+The complete code can be found in the file `p2D_plain.py <https://github.com/hplgit/fenics-tutorial/blob/master/src/poisson/p2D_plain.py>`__ in the
+directory `src/poisson <https://github.com/hplgit/fenics-tutorial/blob/master/src/poisson>`__.
 
 .. _tut:poisson1:impl:run:
 
@@ -679,7 +679,7 @@ test problem is placed in an
 Make a module!
 ~~~~~~~~~~~~~~
 
-The refactored code is put in a file `p2D_func.py <https://github.com/hplgit/fenics-tutorial/blob/master/src/stationary/poisson/p2D_func.py>`__. We should make
+The refactored code is put in a file `p2D_func.py <https://github.com/hplgit/fenics-tutorial/blob/master/src/poisson/p2D_func.py>`__. We should make
 sure that such a file can be imported (and hence reused) in other programs.
 Then all statements in the main program should appear with a test
 ``if __name__ == '__main__':``. This test is true if the file is executed
@@ -944,10 +944,12 @@ Here is the modified code:
         # Hold plot
         interactive()
 
-Note that instead of writing a lot of long ``DOLFIN_PI`` names
-in the expression for ``f``, we simply write the more readable
-variable ``pi`` and define ``pi`` as ``DOLFIN_PI`` as an extra
-parameter to ``Expression``.
+The number :math:`\pi` has the symbol ``M_PI`` in C and C++, but in FEniCS C++
+expressions the symbol ``DOLFIN_PI`` must be used. Above, we introduce
+the variable ``pi`` in the expression for ``f``, since we find it more
+readable, and then we define ``pi`` as ``DOLFIN_PI`` as an extra parameter
+to ``Expression``. The alternative of using ``DOLFIN_PI`` inside the
+string ``f`` gives a more difficult-to-read expression.
 
 .. figure:: p2D_fsin.png
    :width: 500
@@ -1627,7 +1629,7 @@ array to the name ``u_array``.
 
 
 All the code in this subsection can be found in the file ``p2D_iter.py``
-in the ``stationary/poisson`` directory.
+in the ``poisson`` directory.
 
 .. _tut:poisson:membrane:
 
@@ -1716,11 +1718,16 @@ where
 .. math::
          \alpha = \frac{R^2A}{2\pi T D_c\sigma},\quad\beta = \frac{R}{\sqrt{2}\sigma}{\thinspace .}
 
-We may choose :math:`D_c` such that :math:`\alpha=4`. In the case we replace the
-exponential function by 1 and have a constant pressure on the right-hand
-side, the solution is then :math:`w(\bar x,\bar y) = 1-\bar x^2 - \bar y^2`.
+With an appropriate scaling, :math:`\bar w` and its derivatives are of size
+unity, so the left-hand side of the scaled PDE is about unity in size,
+while the right-hand side has :math:`\alpha` as its characteristic size.
+This suggest choosing :math:`\alpha` to be unity, or around unit.
+We shall in particular choose :math:`\alpha=4`. With this value,
+the solution is :math:`w(\bar x,\bar y) = 1-\bar x^2 - \bar y^2`.
 (One can also find the analytical solution in scaled coordinates and show
-that the maximum deflection :math:`D(0,0)` is :math:`D_c`.) With :math:`D_c=AR^2/(8\pi\sigma T)`
+that the maximum deflection :math:`D(0,0)` is :math:`D_c` if we choose :math:`\alpha=4`
+to determine :math:`D_c`.)
+With :math:`D_c=AR^2/(8\pi\sigma T)`
 and dropping the bars we get the scaled problem
 
 .. _Eq:tut:poisson1:membrane:scaled:eq:
@@ -1826,7 +1833,7 @@ We need some evidence that the program works, and to this end we may
 use the analytical solution listed above for the case :math:`\beta =0`.
 
 The final program is found in the file ``membrane.py``, located
-in the ``stationary/poisson`` directory. The key function to simulate
+in the ``poisson`` directory. The key function to simulate
 membrane deflection is named ``application``.
 
 .. code-block:: python
@@ -2275,8 +2282,8 @@ as in the boundary-value problem
 We shall quickly demonstrate that this simple extension of our model
 problem only requires an equally simple extension of the FEniCS program.
 
-Test problem
-~~~~~~~~~~~~
+Test problem          (1)
+~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Let us continue to use our favorite solution :math:`u(x,y)=1+x^2+2y^2` and
 then prescribe :math:`p(x,y)=x+y`. It follows that
@@ -2508,7 +2515,9 @@ describes how it can be done.
 
 .. index:: energy functional
 
-**Energy Functional.**
+Energy functional
+~~~~~~~~~~~~~~~~~
+
 The integrand of the
 energy functional
 :ref:`(28) <Eq:tut:poisson1:functionals:energy>`
@@ -2525,83 +2534,111 @@ It is possible to restrict the integration to subdomains, or parts
 of the boundary, by using
 a mesh function to mark the subdomains as explained in
 the section :ref:`tut:poisson:mat:neumann`.
-The function ``energy`` in ``membrane.py`` carries out the computation of
-the elastic energy
-
-.. index:: membrane.py
-
-.. math::
-        
-        {1\over2}||T\nabla D||^2 = {1\over2}\left(\frac{TD_c}{R}\right)^2
-        ||\bar\nabla w||^2 =
-        {1\over2}\left({AR\over 8\pi\sigma}\right)^2
-        ||\nabla w||^2 =
-        \left(\frac{A}{8\pi}\right)^2\beta^2||\nabla w||^2
-        
-
-in the membrane problem from the section :ref:`tut:poisson:membrane`.
-[**hpl 6**: Check dimensions!]
 
 .. index:: error functional
 
-**Convergence Estimation.**
-To illustrate error computations and convergence of finite element
-solutions, we modify the ``d5_p2D.py`` program from
-the section :ref:`tut:poisson:gradu` and specify a more complicated solution,
+Error functional
+~~~~~~~~~~~~~~~~
 
-.. math::
-        
-        u(x,y) = \sin(\omega\pi x)\sin(\omega\pi y)
-        
-
-on the unit square.
-This choice implies :math:`f(x,y)=2\omega^2\pi^2 u(x,y)`.
-With :math:`\omega` restricted to an integer
-it follows that :math:`u_0=0`.
-
-.. index:: d6_p2D.py
-
-We need to define the
-appropriate boundary conditions, the exact solution, and the :math:`f` function
-in the code:
+Computation of :ref:`(29) <Eq:tut:poisson1:functionals:error>` is typically done
+by
 
 .. code-block:: python
 
-        def boundary(x, on_boundary):
-            return on_boundary
-        
-        bc = DirichletBC(V, Constant(0.0), boundary)
-        
-        omega = 1.0
-        u_e = Expression('sin(omega*pi*x[0])*sin(omega*pi*x[1])',
-                         omega=omega)
-        
-        f = 2*pi**2*omega**2*u_e
+        error = (u - u_exact)**2*dx
+        E = sqrt(abs(assemble(error)))
 
-The computation of
-:math:`\left(\int_\Omega (u_e-u)^2 {\, \mathrm{d}x}\right)^{1/2}`
-can be done by
+The exact solution :math:`{u_{\small\mbox{e}}}` is here in a ``Function`` or
+``Expression`` object ``u_exact``, while ``u`` is the
+finite element approximation.
+(Sometimes, for very small error values, the result of
+``assemble(error)`` can be a (very small) negative number, so we have
+used ``abs`` in the expression for ``E`` above to ensure a positive value
+for the ``sqrt`` function.)
+
+As will be explained and demonstrate in the section :ref:`tut:poisson1:convrates`, the integration of ``(u - u_exact)**2*dx``
+can result in too optimistic convergence rates unless one is careful
+how ``u_exact`` is transferred onto a mesh. The general recommendation
+for reliable error computation is to use the ``errornorm`` function
+(see ``pydoc dolfin.errornorm`` and the section :ref:`tut:poisson1:convrates`
+for more information):
+
+.. code-block:: python
+
+        E = errornorm(u_exact, u)
+
+.. index:: flux functional
+
+Flux Functionals
+~~~~~~~~~~~~~~~~
+
+To compute flux integrals like :math:`F = -\int_\Gamma p\nabla
+u\cdot\boldsymbol{n} {\, \mathrm{d}s}` we need to define the :math:`\boldsymbol{n}` vector,
+referred to as *facet normal* in FEniCS. If the surface domain
+:math:`\Gamma` in the flux integral is the complete
+boundary we can perform the flux computation by
+
+.. code-block:: python
+
+        n = FacetNormal(mesh)
+        flux = -p*dot(nabla_grad(u), n)*ds
+        total_flux = assemble(flux)
+
+Although ``nabla_grad(u)`` and ``grad(u)`` are interchangeable
+in the above expression when ``u`` is a scalar function, we have
+chosen to write ``nabla_grad(u)`` because this is
+the right expression if we generalize the underlying equation
+to a vector Laplace/Poisson PDE. With ``grad(u)`` we must in that
+case write ``dot(n, grad(u))``.
+
+It is possible to restrict the integration to a part of the boundary
+using a mesh function to mark the relevant part, as
+explained in the section :ref:`tut:poisson:mat:neumann`. Assuming that the
+part corresponds to subdomain number ``i``, the relevant syntax for
+the variational formulation of the
+flux is ``-p*inner(grad(u), n)*ds(i)``.
+
+.. _tut:poisson1:convrates:
+
+Computing convergence rates
+---------------------------
+
+To illustrate error computations and convergence of finite element
+solutions, we have included a function ``convergence_rate`` in
+the ``p2D_vc.py`` program. This is a tool that is very
+handy when verifying finite element codes and will therefore be explained in
+detail here.
+
+The :math:`L^2` norm of the error in a finite element approximation :math:`u`,
+:math:`{u_{\small\mbox{e}}}` being the exact solution, is given by
+
+Various ways of computing the error
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+.. math::
+         E = \left(\int_\Omega (u_e-u)^2 {\, \mathrm{d}x}\right)^{1/2},
+
+and implemented in FEniCS by
 
 .. code-block:: python
 
         error = (u - u_e)**2*dx
         E = sqrt(abs(assemble(error)))
 
-Here, ``u_e`` will be interpolated onto
-the function space ``V``. This implies that the exact solution used in
-the integral will vary linearly over
-the cells, and not as a sine function,
-if ``V`` corresponds to linear Lagrange elements.
-This situation may yield a smaller error ``u - u_e`` than what is actually true.
+Sometimes, for very small error values, the result of
+``assemble(error)`` can be a (very small) negative number, so we have
+used ``abs`` in the expression for ``E`` above to ensure a positive value
+for the ``sqrt`` function.
 
-Sometimes, for very small error values, the result of ``assemble(error)``
-can be a (very small) negative number,
-so we have used ``abs`` in the expression for ``E`` above to ensure a positive
-value for the ``sqrt`` function.
-
-More accurate representation of the exact solution is easily achieved
-by interpolating the formula onto a space defined by
-higher-order elements, say of third degree:
+We remark that ``u_e`` will, in the expression
+above, be interpolated onto the function space ``V`` before ``assemble``
+can perform the integration over the domain. This implies that the
+exact solution used in the integral will vary linearly over the cells,
+and not as a sine function, if ``V`` corresponds to linear Lagrange
+elements.  This situation may yield a smaller error ``u - u_e`` than
+what is actually true.  More accurate representation of the exact
+solution is easily achieved by interpolating the formula onto a space
+defined by higher-order elements, say of third degree:
 
 .. code-block:: python
 
@@ -2610,34 +2647,34 @@ higher-order elements, say of third degree:
         error = (u - u_e_Ve)**2*dx
         E = sqrt(assemble(error))
 
-To achieve complete mathematical
-control of which function space the computations are carried out in,
-we can explicitly interpolate ``u`` to the same space:
+To achieve complete mathematical control of which function space the
+computations are carried out in, we can explicitly interpolate ``u`` to
+the same space:
 
 .. code-block:: python
 
         u_Ve = interpolate(u, Ve)
         error = (u_Ve - u_e_Ve)**2*dx
 
-The square in the expression for ``error`` will be expanded and lead
-to a lot of terms that almost cancel when the error is small, with the
-potential of introducing significant round-off errors.
-The function ``errornorm`` is available for avoiding this effect
-by first interpolating ``u`` and ``u_e`` to a space with
-higher-order elements, then subtracting the degrees of freedom, and
-then performing the integration of the error field. The usage is simple:
+The square in the expression for ``error`` will be expanded and lead to
+a lot of terms that almost cancel when the error is small, with the
+potential of introducing significant rounding errors.  The function
+``errornorm`` is available for avoiding this effect by first
+interpolating ``u`` and ``u_exact`` to a space with higher-order elements,
+then subtracting the degrees of freedom, and then performing the
+integration of the error field. The usage is simple:
 
 .. code-block:: python
 
-        E = errornorm(u_e, u, normtype='L2', degree=3)
+        E = errornorm(u_exact, u, normtype='L2', degree=3)
 
 It is illustrative to look at the short implementation of ``errornorm``:
 
 .. code-block:: python
 
-        def errornorm(u_e, u, Ve):
+        def errornorm(u_exact, u, Ve):
             u_Ve = interpolate(u, Ve)
-            u_e_Ve = interpolate(u_e, Ve)
+            u_e_Ve = interpolate(u_exact, Ve)
             e_Ve = Function(Ve)
             # Subtract degrees of freedom for the error field
             e_Ve.vector()[:] = u_e_Ve.vector().array() - \ 
@@ -2658,28 +2695,86 @@ Given the error field ``e_Ve`` above, we simply write
 
         H1seminorm = sqrt(assemble(inner(grad(e_Ve), grad(e_Ve))*dx))
 
-Finally, we remove all ``plot`` calls and printouts of :math:`u` values
-in the original program, and
-collect the computations in a function:
+All the various types of error computations here are placed in a
+function ``compute_errors`` in ``p2D_vc.py``:
+[**hpl 6**: Necessary to repeat code? New info is essentiall the return dict.]
+[**hpl 7**: Anders, I (in 2010...) ran into problems with ``dolfin.errornorm``, see comments in the code below, and made the version below. We should check out these problems again and adjust ``dolfin.errornorm`` if necessary.]
 
 .. code-block:: python
 
-        def compute(nx, ny, degree):
-            mesh = UnitSquareMesh(nx, ny)
-            V = FunctionSpace(mesh, 'Lagrange', degree=degree)
-            ...
-            Ve = FunctionSpace(mesh, 'Lagrange', degree=5)
-            E = errornorm(u_e, u, Ve)
-            return E
+        def compute_errors(u, u_exact):
+            """Compute various measures of the error u - u_exact, where
+            u is a finite element Function and u_exact is an Expression."""
+        
+            # Compute error norm (for very small errors, the value can be
+            # negative so we run abs(assemble(error)) to avoid failure in sqrt
+        
+            V = u.function_space()
+        
+            # Function - Expression
+            error = (u - u_exact)**2*dx
+            E1 = sqrt(abs(assemble(error)))
+        
+            # Explicit interpolation of u_e onto the same space as u:
+            u_e = interpolate(u_exact, V)
+            error = (u - u_e)**2*dx
+            E2 = sqrt(abs(assemble(error)))
+        
+            # Explicit interpolation of u_exact to higher-order elements,
+            # u will also be interpolated to the space Ve before integration
+            Ve = FunctionSpace(V.mesh(), 'Lagrange', 5)  # mesh here: BUG, module mesh in dolfin...make warning box
+            u_e = interpolate(u_exact, Ve)
+            error = (u - u_e)**2*dx
+            E3 = sqrt(abs(assemble(error)))
+        
+            # dolfin.errornorm interpolates u and u_e to a space with
+            # given degree, and creates the error field by subtracting
+            # the degrees of freedom, then the error field is integrated
+            # TEMPORARY BUG - doesn't accept Expression for u_e
+            #E4 = errornorm(u_e, u, normtype='l2', degree=3)
+            # Manual implementation errornorm to get around the bug:
+            def errornorm(u_exact, u, Ve):
+                u_Ve = interpolate(u, Ve)
+                u_e_Ve = interpolate(u_exact, Ve)
+                e_Ve = Function(Ve)
+                # Subtract degrees of freedom for the error field
+                e_Ve.vector()[:] = u_e_Ve.vector().array() - u_Ve.vector().array()
+                # More efficient computation (avoids the rhs array result above)
+                #e_Ve.assign(u_e_Ve)                      # e_Ve = u_e_Ve
+                #e_Ve.vector().axpy(-1.0, u_Ve.vector())  # e_Ve += -1.0*u_Ve
+                error = e_Ve**2*dx(Ve.mesh())
+                return sqrt(abs(assemble(error))), e_Ve
+            E4, e_Ve = errornorm(u_exact, u, Ve)
+        
+            # Infinity norm based on nodal values
+            u_e = interpolate(u_exact, V)
+            E5 = abs(u_e.vector().array() - u.vector().array()).max()
+        
+            # H1 seminorm
+            error = inner(grad(e_Ve), grad(e_Ve))*dx
+            E6 = sqrt(abs(assemble(error)))
+        
+            # Collect error measures in a dictionary with self-explanatory keys
+            errors = {'u - u_exact': E1,
+                      'u - interpolate(u_exact,V)': E2,
+                      'interpolate(u,Ve) - interpolate(u_exact,Ve)': E3,
+                      'errornorm': E4,
+                      'infinity norm (of dofs)': E5,
+                      'grad(error) H1 seminorm': E6}
+        
+            return errors
 
-Calling ``compute`` for finer and finer meshes enables us to
-study the convergence rate. Define the element size
-:math:`h=1/n`, where :math:`n` is the number of divisions in :math:`x` and :math:`y` direction
-(``nx=ny`` in the code). We perform experiments with :math:`h_0>h_1>h_2\cdots`
-and compute the corresponding errors :math:`E_0, E_1, E_3` and so forth.
-Assuming :math:`E_i=Ch_i^r` for unknown constants :math:`C` and :math:`r`, we can compare
-two consecutive experiments, :math:`E_i=Ch_i^r` and :math:`E_{i-1}=Ch_{i-1}^r`,
-and solve for :math:`r`:
+Computing convergence rates empirically
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Calling the ``solver`` function for finer and finer meshes enables us to
+study the convergence rate. Define the element size :math:`h=1/n`, where :math:`n`
+is the number of cell divisions in :math:`x` and :math:`y` direction (``n=Nx=Ny`` in
+the code). We perform experiments with :math:`h_0>h_1>h_2\cdots` and compute
+the corresponding errors :math:`E_0, E_1, E_3` and so forth.  Assuming
+:math:`E_i=Ch_i^r` for unknown constants :math:`C` and :math:`r`, we can compare two
+consecutive experiments, :math:`E_i=Ch_i^r` and :math:`E_{i-1}=Ch_{i-1}^r`, and
+solve for :math:`r`:
 
 .. math::
         
@@ -2689,114 +2784,171 @@ and solve for :math:`r`:
 The :math:`r` values should approach the expected convergence
 rate ``degree+1`` as :math:`i` increases.
 
-The procedure above can easily be turned into Python code:
+The procedure above can easily be turned into Python code. Here
+we run through a different types of elements (P1, P2, P3, and P4),
+perform experiments over a series of refined meshes, and for
+each experiment report the six error types as returned by ``compute_errors``:
 
 .. code-block:: python
 
-        import sys
-        degree = int(sys.argv[1])  # read degree as 1st command-line arg
-        h = []  # element sizes
-        E = []  # errors
-        for nx in [4, 8, 16, 32, 64, 128, 264]:
-            h.append(1.0/nx)
-            E.append(compute(nx, nx, degree))
+        def convergence_rate(u_exact, f, u0, p, degrees,
+                             n=[2**(k+3) for k in range(5)]):
+            """
+            Compute convergence rates for various error norms for a
+            sequence of meshes with Nx=Ny=b and P1, P2, ...,
+            Pdegrees elements. Return rates for two consecutive meshes:
+            rates[degree][error_type] = r0, r1, r2, ...
+            """
         
-        # Convergence rates
-        from math import log as ln  # (log is a dolfin name too - and logg :-)
-        for i in range(1, len(E)):
-            r = ln(E[i]/E[i-1])/ln(h[i]/h[i-1])
-            print('h=%10.2E r=.2f' % (h[i], r))
+            h = {}  # Discretization parameter, h[degree][experiment]
+            E = {}  # Error measure(s), E[degree][experiment][error_type]
+            P_degrees = 1,2,3,4
+            num_meshes = 5
+        
+            # Perform experiments with meshes and element types
+            for degree in P_degrees:
+                n = 4   # Coarsest mesh division
+                h[degree] = []
+                E[degree] = []
+                for i in range(num_meshes):
+                    n *= 2
+                    h[degree].append(1.0/n)
+                    u = solver(p, f, u0, n, n, degree,
+                               linear_solver='direct')
+                    errors = compute_errors(u, u_exact)
+                    E[degree].append(errors)
+                    print('2*(%dx%d) P%d mesh, %d unknowns, E1=%g' %
+                          (n, n, degree, u.function_space().dim(),
+                           errors['u - u_exact']))
+            # Convergence rates
+            from math import log as ln  # log is a dolfin name too
+            error_types = list(E[1][0].keys())
+            rates = {}
+            for degree in P_degrees:
+                rates[degree] = {}
+                for error_type in sorted(error_types):
+                    rates[degree][error_type] = []
+                    for i in range(num_meshes):
+                        Ei   = E[degree][i][error_type]
+                        Eim1 = E[degree][i-1][error_type]
+                        r = ln(Ei/Eim1)/ln(h[degree][i]/h[degree][i-1])
+                        rates[degree][error_type].append(round(r,2))
+            return rates
+        
+        def convergence_rate_sin():
+            """Compute convergence rates for u=sin(x)*sin(y) solution."""
+            omega = 1.0
+            u_exact = Expression('sin(omega*pi*x[0])*sin(omega*pi*x[1])',
+                                 omega=omega)
+            f = 2*omega**2*pi**2*u_exact
+            u0 = Constant(0)
+            p = Constant(1)
+            # Note: P4 for n>=128 seems to break down
+            rates = convergence_rates(u_exact, f, u0, p, degrees=4,
+                                      n=[2**(k+3) for k in range(5)])
+            # Print rates
+            print('\n\n')
+            for error_type in error_types:
+                print(error_type)
+                for degree in P_degrees:
+                    print('P%d: %s' %
+                          (degree, str(rates[degree][error_type])[1:-1]))
 
-The resulting program has the name ``d6_p2D.py``
-and computes error norms in various ways. Running this
-program for elements of first degree and :math:`\omega=1` yields the output
+Note how make a complete general function ``convergence_rate``, aimed at
+any 2D Poisson problem in the class we now can solve, and then call
+this general function in ``convergence_rate_sin`` for a special test
+case.
 
-.. code-block:: text
+Test problem          (2)
+~~~~~~~~~~~~~~~~~~~~~~~~~
 
-        h=1.25E-01 E=3.25E-02 r=1.83
-        h=6.25E-02 E=8.37E-03 r=1.96
-        h=3.12E-02 E=2.11E-03 r=1.99
-        h=1.56E-02 E=5.29E-04 r=2.00
-        h=7.81E-03 E=1.32E-04 r=2.00
-        h=3.79E-03 E=3.11E-05 r=2.00
+The section :ref:`tut:poisson:gradu` and specify a more complicated solution,
 
-That is, we approach the expected second-order convergence of linear
-Lagrange elements as the meshes become sufficiently fine.
+.. math::
+        
+        u(x,y) = \sin(\omega\pi x)\sin(\omega\pi y)
+        
 
-Running the program for second-degree elements results in the expected
-value :math:`r=3`,
+on the unit square.
+This choice implies :math:`f(x,y)=2\omega^2\pi^2 u(x,y)`.
+With :math:`\omega` restricted to an integer
+it follows that :math:`u_0=0`.
 
-.. code-block:: text
+We need to define the
+appropriate boundary conditions, the exact solution, and the :math:`f` function
+in the code:
 
-        h=1.25E-01 E=5.66E-04 r=3.09
-        h=6.25E-02 E=6.93E-05 r=3.03
-        h=3.12E-02 E=8.62E-06 r=3.01
-        h=1.56E-02 E=1.08E-06 r=3.00
-        h=7.81E-03 E=1.34E-07 r=3.00
-        h=3.79E-03 E=1.53E-08 r=3.00
+.. code-block:: python
 
-However, using ``(u - u_e)**2`` for the error computation, which
-implies interpolating ``u_e`` onto the same space as ``u``,
-results in :math:`r=4` (!). This is an example where it is important to
-interpolate ``u_e`` to a higher-order space (polynomials of
-degree 3 are sufficient here) to avoid computing a too optimistic
-convergence rate.
+        def boundary(x, on_boundary):
+            return on_boundary
+        
+        bc = DirichletBC(V, Constant(0.0), boundary)
+        
+        omega = 1.0
+        u_e = Expression('sin(omega*pi*x[0])*sin(omega*pi*x[1])',
+                         omega=omega)
+        
+        f = 2*pi**2*omega**2*u_e
 
-.. #Dropped these comments in the FEniCS book due to confusion#
+Experiments
+~~~~~~~~~~~
 
-.. Looking at the error in the degrees of
+Calling ``convergence_rate_sin()`` gives some interesting results.
+Using the error measure ``E5`` based on the infinity norm of the
+difference of the degrees of freedom, we have
 
-.. freedom (``u.vector().array()``) reveals a convergence rate of :math:`r=4`
+=======  ===========  ============  ============  ============  =============  
+element  :math:`n=8`  :math:`n=16`  :math:`n=32`  :math:`n=64`  :math:`n=128`  
+=======  ===========  ============  ============  ============  =============  
+P1              1.99          1.97          1.99           2.0            2.0  
+P2              3.99          3.96          3.99           4.0           3.99  
+P3              3.96          3.89          3.96          3.99            4.0  
+P4              3.75          4.99           5.0           5.0                 
+=======  ===========  ============  ============  ============  =============  
 
-.. for second-degree elements. For elements of polynomial degree 3
+The computations with P4 elements on a :math:`128\times 128` with a
+direct solver (UMFPACK) on a small laptop broke down.
+Otherwise we achieve expected results: the error goes like
+:math:`h^{d+1}` for elements of degree :math:`d`. Also :math:`L^2` norms based
+on the ``errornorm`` gives the expected :math:`h^{d+1}` rate for
+:math:`u` and :math:`h^d` for :math:`\nabla u`.
 
-.. all the rates are
+However, using ``(u - u_exact)**2`` for the error computation, which implies
+interpolating ``u_exact`` onto the same space as ``u``, results in :math:`h^4`
+convergence for P2 elements.
 
-.. :math:`r=4`, regardless of whether we choose a "fine" space
+=======  ===========  ============  ============  ============  =============  
+element  :math:`n=8`  :math:`n=16`  :math:`n=32`  :math:`n=64`  :math:`n=128`  
+=======  ===========  ============  ============  ============  =============  
+P1              1.98          1.94          1.98           2.0            2.0  
+P2              3.98          3.95          3.99          3.99           3.99  
+P3              3.69          4.03          4.01          3.95           2.77  
+=======  ===========  ============  ============  ============  =============  
 
-.. ``Ve`` with polynomials of degree 3 or 5.
+This is an example where it is important to interpolate ``u_exact`` to a
+higher-order space (polynomials of degree 3 are sufficient here) to
+avoid computing a too optimistic convergence rate.
 
-Running the program for third-degree elements results in the
-expected value :math:`r=4`:
+.. Problems with interpolate(u,Ve) - interpolate(u_exact,Ve) for
 
-.. code-block:: text
+.. high degree and large meshes. Rounding errors? errornorm is the
 
-        h=  1.25E-01 r=4.09
-        h=  6.25E-02 r=4.03
-        h=  3.12E-02 r=4.01
-        h=  1.56E-02 r=4.00
-        h=  7.81E-03 r=4.00
+.. remedy?
+
+.. interpolate(u,Ve) - interpolate(u_exact,Ve)
+
+.. P1: 1.98, 1.96, 1.99, 2.0, 2.0
+
+.. P2: 3.01, 3.03, 3.01, 3.0, 3.02
+
+.. P3: 2.7, 4.02, 4.0, 2.63, 0.17
+
+.. P4: 1.54, 5.11, 0.91, 0.15, -0.01
 
 Checking convergence rates is the next best method for verifying PDE codes
-(the best being exact recovery of a solution as in the section :ref:`tut:poisson1:verify1` and many other places in this tutorial).
-
-.. index:: flux functional
-
-**Flux Functionals.**
-To compute flux integrals like
-:ref:`(30) <Eq:tut:poisson1:functionals:flux>`
-we need to define the :math:`\boldsymbol{n}` vector, referred to as *facet normal*
-in FEniCS. If :math:`\Gamma` is the complete boundary we can perform
-the flux computation by
-
-.. code-block:: python
-
-        n = FacetNormal(mesh)
-        flux = -p*dot(nabla_grad(u), n)*ds
-        total_flux = assemble(flux)
-
-Although ``nabla_grad(u)`` and ``grad(u)`` are interchangeable
-in the above expression when ``u`` is a scalar function, we have
-chosen to write ``nabla_grad(u)`` because this is
-the right expression if we generalize the underlying equation
-to a vector Laplace/Poisson PDE. With ``grad(u)`` we must in that
-case write ``dot(n, grad(u))``.
-
-It is possible to restrict the integration to a part of the boundary
-using a mesh function to mark the relevant part, as
-explained in the section :ref:`tut:poisson:mat:neumann`. Assuming that the
-part corresponds to subdomain number ``i``, the relevant form for the
-flux is ``-p*inner(grad(u), n)*ds(i)``.
+(the best being a numerical solution without approximation errors
+as in the section :ref:`tut:poisson1:verify1` and many other places in this tutorial).
 
 .. _tut:structviz:
 
@@ -2810,8 +2962,6 @@ Visualization of structured mesh data
 
 .. index:: scitools
 
-[**hpl 7**: Make the box field software local to this tutorial. Do basic MATLAB plotting with Matplotlib or Mayavi.]
-
 When finite element computations are done on a structured rectangular
 mesh, maybe with uniform partitioning, VTK-based tools for completely
 unstructured 2D/3D meshes are not required.  Instead we can use
@@ -2823,244 +2973,325 @@ the collection of tools to choose among is much larger.  We shall
 demonstrate the potential of such tools and how they allow for
 tailored and flexible visualization and data analysis.
 
-.. index:: UniformBoxMeshGrid
-
 .. index:: BoxField
 
 A necessary first step is to transform our ``mesh`` object to an object
-representing a rectangle with equally-shaped *rectangular* cells.  The
-Python package ``scitools`` (`<https://github.com/hplgit/scitools>`_) has this
-type of structure, called a ``UniformBoxMeshGrid``. The second step is to
+representing a rectangle with equally-shaped *rectangular* cells.
+The second step is to
 transform the one-dimensional array of nodal values to a
 two-dimensional array holding the values at the corners of the cells
-in the structured grid. In such grids, we want to access a value by
+in the structured mesh. We want to access a value by
 its :math:`i` and :math:`j` indices, :math:`i` counting cells in the :math:`x` direction, and
 :math:`j` counting cells in the :math:`y` direction.  This transformation is in
 principle straightforward, yet it frequently leads to obscure indexing
-errors. The ``BoxField`` object in ``scitools`` takes conveniently care of
-the details of the transformation.  With a ``BoxField`` defined on a
-``UniformBoxMeshGrid`` it is very easy to call up more standard plotting
-packages to visualize the solution along lines in the domain or as 2D
-contours or lifted surfaces.
+errors, so using software tools to ease the work is advantageous.
 
-Let us go back to the ``vcp2D.py`` code from
-the section :ref:`tut:possion:2D:varcoeff` and map ``u`` onto a
-``BoxField`` object:
+In the directory ``src/modules``, associated with this booklet,
+we have included a Python module ``BoxField`` that can take a finite
+element function ``u`` computed by a FEniCS software and represent
+it on a structured box-shaped mesh and assign or extract values by
+multi-dimensional indexing: ``[i]`` in 1D, ``[i,j]`` in 2D, and
+``[i,j,k]`` in 3D. Given a finite element function ``u``,
+the following function returns a ``BoxField`` object that represents
+``u`` on a structured mesh:
 
 .. code-block:: python
 
-        import scitools.BoxField
-        u2 = u if u.ufl_element().degree() == 1 else \ 
-             interpolate(u, FunctionSpace(mesh, 'Lagrange', 1))
-        u_box = scitools.BoxField.dolfin_function2BoxField(
-                u2, mesh, (nx,ny), uniform_mesh=True)
+        def structured_mesh(u, divisions):
+            """Represent u on a structured mesh."""
+            # u must have P1 elements, otherwise interpolate to P1 elements
+            u2 = u if u.ufl_element().degree() == 1 else \ 
+                 interpolate(u, FunctionSpace(mesh, 'Lagrange', 1))
+            mesh = u.function_space().mesh()
+            from BoxField import dolfin_function2BoxField
+            u_box = dolfin_function2BoxField(
+                u2, mesh, divisions, uniform_mesh=True)
+            return u_box
 
-The function ``dolfin_function2BoxField`` can only work with
-finite element fields with *linear* (degree 1) elements, so for
-higher-degree elements we here simply interpolate the solution onto
-a mesh with linear elements. We could also
-interpolate/project onto a finer mesh in the higher-degree case.
-Such transformations to linear finite element fields
-are very often needed when calling up plotting packages or data analysis tools.
-The ``u.ufl_element()`` method returns an object holding the element
-type, and this object has a method ``degree()`` for returning the
-element degree as an integer. [**hpl 8**: Has been used many times yet in the software...]
-The parameters ``nx`` and ``ny`` are the number of divisions in each space
-direction that were used when calling ``UnitSquareMesh`` to make the
-``mesh`` object.
-The result ``u_box`` is a ``BoxField``
-object that supports "finite difference" indexing and an underlying
-grid suitable for ``numpy`` operations on 2D data.
-Also 1D and 3D meshes (with linear elements) can be turned
-into ``BoxField`` objects.
+Note that we can only turn functions on meshes with P1 elements into
+``BoxField`` objects, so if ``u`` is based on another element type, we first
+interpolate the scalar field onto a mesh with P1 elements. Also note
+that to use the
+function, we need to know the divisions into cells in the various
+spatial directions (``divisions``).
+
+The ``u_box`` object contains several useful data structures:
+
+ * ``u_box.grid``: object for the structured mesh
+
+ * ``u_box.grid.coor[X]``: grid coordinates in ``X=0`` direction
+
+ * ``u_box.grid.coor[Y]``: grid coordinates in ``Y=1`` direction
+
+ * ``u_box.grid.coor[Z]``: grid coordinates in ``Z=2`` direction
+
+ * ``u_box.grid.coorv[X]``: vectorized version of ``u_box.grid.coor[X]``
+   (for vectorized computations or surface plotting)
+
+ * ``u_box.grid.coorv[Y]``: vectorized version of ``u_box.grid.coor[Y]``
+
+ * ``u_box.grid.coorv[Z]``: vectorized version of ``u_box.grid.coor[Z]``
+
+ * ``u_box.values``: ``numpy`` array holding the ``u`` values;
+   ``u_box.values[i,j]`` holds ``u`` at the mesh point with coordinates 
+
+|    ``(u_box.grid.coor[X], u_box.grid.coor[Y])``
+
+Iterating over points and values
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Let us go back to the ``solver`` function in the
+``p2D_vc.py`` code from
+the section :ref:`tut:possion:2D:varcoeff`, compute ``u``, map it onto a
+``BoxField`` object for a structured mesh representation, and
+write out the coordinates and function values at all mesh points:
+
+.. code-block:: python
+
+        u = solver(p, f, u0, nx, ny, 1, linear_solver='direct')
+        u_box = structured_mesh(u, (nx, ny))
+        u_ = u_box.values       # numpy array
+        X = 0;  Y = 1           # for indexing in x and y direction
+        
+        # Iterate over 2D mesh points (i,j)
+        print('u_ is defined on a structured mesh with %s points' %
+              str(u_.shape))
+        for j in range(u_.shape[1]):
+            for i in range(u_.shape[0]):
+                print('u[%d,%d]=u(%g,%g)=%g' %
+                      (i, j,
+                       u_box.grid.coor[X][i], u_box.grid.coor[X][j],
+                       u_[i,j]))
+
+Finite difference approximations
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Note that with ``u_``, we can easily express finite difference approximation
+of derivatives:
+
+.. code-block:: python
+
+        x = u_box.grid.coor[X]
+        dx = x[1] - x[0]
+        u_xx = (u_[i-1,j] - 2*u_[i,j] + u_[i+1,j])/dx**2
+
+.. index:: surface plot (structured mesh)
+
+Surface plot
+~~~~~~~~~~~~
 
 The ability to access a finite element field in the way one can access
 a finite difference-type of field is handy in many occasions, including
 visualization and data analysis.
-Here is an example of writing out the coordinates and the field value
-at a grid point with indices ``i`` and ``j`` (going from 0 to
-``nx`` and ``ny``, respectively, from lower left to upper right corner):
+With Matplotlib we can create a surface plot, see
+Figure :ref:`tut:structviz:fig1` (upper left):
 
 .. code-block:: python
 
-        X = 0; Y = 1; Z = 0  # convenient indices
-        
-        i = nx; j = ny   # upper right corner
-        print('u(%g,%g)=%g' % (u_box.grid.coor[X][i],
-                               u_box.grid.coor[Y][j],
-                               u_box.values[i,j]))
+        import matplotlib.pyplot as plt
+        from mpl_toolkits.mplot3d import Axes3D
+        from matplotlib import cm
+        fig = plt.figure()
+        ax = fig.gca(projection='3d')
+        cv = u_box.grid.coorv  # vectorized mesh coordinates
+        ax.plot_surface(cv[X], cv[Y], u_, cmap=cm.coolwarm,
+                        rstride=1, cstride=1)
+        plt.title('Surface plot of solution')
 
-For instance,
-the :math:`x` coordinates are reached by ``u_box.grid.coor[X]``.
-The ``grid`` attribute is an instance of class ``UniformBoxMeshGrid``.
+The key issue is to know that the coordinates needed for the surface
+plot is in ``u_box.grid.coorv`` and that the values are in ``u_``.
 
-Many plotting programs can be used to visualize the data in ``u_box``.
-Matplotlib is now a very popular plotting program in the Python world
-and could be used to make contour plots of ``u_box``. However, other
-programs like Gnuplot, VTK, and MATLAB have better support for surface
-plots at the time of this writing. Our choice in this tutorial is to
-use the Python package ``scitools.easyviz``, which offers a uniform
-MATLAB-like syntax as interface to various plotting packages such as
-Gnuplot, Matplotlib, VTK, OpenDX, MATLAB, and others. With
-``scitools.easyviz`` we write one set of statements, close to what one
-would do in MATLAB or Octave, and then it is easy to switch between
-different plotting programs, at a later stage, through a command-line
-option, a line in a configuration file, or an import statement in the
-program.
+.. _tut:structviz:fig1:
 
-.. By default, ``scitools.easyviz`` employs Gnuplot as plotting program,
+.. figure:: p2D_vc_structmesh2.png
+   :width: 800
 
-.. and this is a highly relevant choice for scalar fields over two-dimensional,
-
-.. structured meshes, or for curve plots along lines through the domain.
+   *Various plots of the solution on a structured mesh*
 
 .. index:: contour plot
 
-A contour plot is made by the following ``scitools.easyviz`` command:
+Contour plot
+~~~~~~~~~~~~
+
+A contour plot can also be made by Matplotlib:
 
 .. code-block:: python
 
-        import scitools.easyviz as ev
-        ev.contour(u_box.grid.coorv[X], u_box.grid.coorv[Y], u_box.values,
-                   5, clabels='on')
-        evtitle('Contour plot of u')
-        ev.savefig('u_contours.pdf')
-        
-        # or more compact syntax:
-        ev.contour(u_box.grid.coorv[X], u_box.grid.coorv[Y], u_box.values,
-                   5, clabels='on',
-                   savefig='u_contours.pdf', title='Contour plot of u')
+        fig = plt.figure()
+        ax = fig.gca()
+        levels = [1.5, 2.0, 2.5, 3.5]
+        cs = ax.contour(cv[X], cv[Y], u_, levels=levels)
+        plt.clabel(cs)  # add labels to contour lines
+        plt.axis('equal')
+        plt.title('Contour plot of solution')
 
-The resulting plot can be viewed in
-Figure :ref:`tut:poisson:2D:fig2` (left).
-The ``contour`` function needs arrays with the :math:`x` and :math:`y` coordinates
-expanded to 2D arrays (in the same way as demanded when
-making vectorized
-``numpy`` calculations of arithmetic expressions over all grid points).
-The correctly expanded arrays are stored in ``grid.coorv``.
-The above call to
-``contour`` creates 5 equally spaced contour lines, and with
-``clabels='on'`` the contour values can be seen in the plot.
+The result appears in Figure :ref:`tut:structviz:fig1` (upper right).
 
-Other functions for visualizing 2D scalar fields are ``surf`` and
-``mesh`` as known from MATLAB:
+Curve plot through the mesh
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+A handy feature of ``BoxField`` objects is the ability to give a start
+point in the grid and a direction, and then extract the field and
+corresponding coordinates along the nearest line of mesh points. In 3D fields
+one can also extract data in a plane.  Say we want to plot :math:`u` along
+the line :math:`y=0.4`. The mesh points, ``x``, and the :math:`u` values
+along this line, ``u_val``, are extracted by
 
 .. code-block:: python
 
-        import scitools.easyviz as ev
-        ev.figure()
-        ev.surf(u_box.grid.coorv[X], u_box.grid.coorv[Y], u_box.values,
-                shading='interp', colorbar='on',
-                title='surf plot of u', savefig='u_surf.pdf')
-        
-        ev.figure()
-        ev.mesh(u_box.grid.coorv[X], u_box.grid.coorv[Y], u_box.values,
-                title='mesh plot of u', savefig='u_mesh.pdf')
-
-Figure :ref:`tut:poisson:2D:fig3` exemplifies
-the surfaces arising from
-the two plotting commands above.
-You can type
-``pydoc scitools.easyviz`` in a terminal window
-to get a full tutorial.
-Note that ``scitools.easyviz`` offers function names like
-``plot`` and ``mesh``, which clash with ``plot`` from ``dolfin``
-and the ``mesh`` variable in our programs. Therefore, we recommend the
-``ev`` prefix.
-
-A handy feature of ``BoxField`` is the ability to give a start point
-in the grid and a direction, and then extract the field and corresponding
-coordinates along the nearest grid
-line. In 3D fields
-one can also extract data in a plane.
-Say we
-want to plot :math:`u` along the line :math:`y=1/2` in the grid. The grid points,
-``x``, and the
-:math:`u` values along this line, ``uval``, are extracted by
-
-.. code-block:: python
-
-        start = (0, 0.5)
-        x, uval, y_fixed, snapped = u_box.gridline(start, direction=X)
+        start = (0, 0.4)
+        X = 0
+        x, u_val, y_fixed, snapped = u_box.gridline(start, direction=X)
 
 The variable ``snapped`` is true if the line had to be snapped onto a
 gridline and in that case ``y_fixed`` holds the snapped
-(altered) :math:`y` value.
-Plotting :math:`u` versus the :math:`x` coordinate along this line, using
-``scitools.easyviz``, is now a matter of
+(altered) :math:`y` value. To avoid interpolation in the structured mesh,
+``snapped`` is in fact *always* true.
+
+A comparison of the numerical and exact solution along the line
+:math:`y=0.5` (snapped from :math:`y=0.4`) is made by the following code:
 
 .. code-block:: python
 
-        ev.figure()  # new plot window
-        ev.plot(x, uval, 'r-')  # 'r-: red solid line
-        ev.title('Solution')
-        ev.legend('finite element solution')
+        start = (0, 0.4)
+        x, u_val, y_fixed, snapped = u_box.gridline(start, direction=X)
+        u_e_val = [u0((x_, y_fixed)) for x_ in x]
         
-        # or more compactly:
-        ev.plot(x, uval, 'r-', title='Solution',
-                legend='finite element solution')
+        plt.figure()
+        plt.plot(x, u_val, 'r-')
+        plt.plot(x, u_e_val, 'bo')
+        plt.legend(['P1 elements', 'exact'], loc='upper left')
+        plt.title('Solution along line y=%g' % y_fixed)
+        plt.xlabel('x');  plt.ylabel('u')
 
-A more exciting plot compares the projected numerical flux in
-:math:`x` direction along the
-line :math:`y=1/2` with the exact flux:
+See Figure :ref:`tut:structviz:fig1` (lower left) for the resulting curve plot.
+
+Curve plot of the flux
+~~~~~~~~~~~~~~~~~~~~~~
+
+Let us also compare the numerical and
+exact flux :math:`-p\partial u/\partial x` along the same line as above:
 
 .. code-block:: python
 
-        ev.figure()
-        flux2_x = flux_x if flux_x.ufl_element().degree() == 1 else \ 
-                  interpolate(flux_x, FunctionSpace(mesh, 'Lagrange', 1))
-        flux_x_box = scitools.BoxField.dolfin_function2BoxField(
-                  flux2_x, mesh, (nx,ny), uniform_mesh=True)
-        x, fluxval, y_fixed, snapped = \ 
-                  flux_x_box.gridline(start, direction=X)
+        flux_u = flux(u, p)
+        flux_u_x, flux_u_y = flux_u.split(deepcopy=True)
+        
+        # Plot the numerical and exact flux along the same line
+        flux2_x = flux_u_x if flux_u_x.ufl_element().degree() == 1 \ 
+                  else interpolate(flux_x,
+                       FunctionSpace(u.function_space().mesh(),
+                                     'Lagrange', 1))
+        flux_u_x_box = structured_mesh(flux_u_x, (nx,ny))
+        x, flux_u_val, y_fixed, snapped = \ 
+           flux_u_x_box.gridline(start, direction=X)
         y = y_fixed
-        flux_x_exact = -(x + y)*2*x
-        ev.plot(x, fluxval, 'r-',
-                x, flux_x_exact, 'b-',
-                legend=('numerical (projected) flux', 'exact flux'),
-                title='Flux in x-direction (at y=%g)' % y_fixed,
-                savefig='flux.pdf')
+        
+        plt.figure()
+        plt.plot(x, flux_u_val, 'r-')
+        plt.plot(x, flux_u_x_exact(x, y_fixed), 'bo')
+        plt.legend(['P1 elements', 'exact'], loc='upper right')
+        plt.title('Flux along line y=%g' % y_fixed)
+        plt.xlabel('x');  plt.ylabel('u')
 
-As seen from
-Figure :ref:`tut:poisson:2D:fig2` (right),
-the numerical flux
-is accurate except in the boundary elements.
+The second ``plt.plot`` command
+requires a Python function ``flux_u_x_exact(x,y)`` to be
+available for the exact flux expression.
 
-The visualization constructions shown above and used to generate the
-figures are found in the program ``vcp2D.py`` in the
-``stationary/poisson`` directory.
+Note that Matplotlib is one choice of plotting package. With the unified
+interface in the `SciTools package <https://github.com/hplgit/scitools>`__ one
+can access Matplotlib, Gnuplot, MATLAB, OpenDX, VisIt, and other plotting
+engines through the same API.
 
-.. _tut:poisson:2D:fig2:
+.. index:: sympy
 
-.. figure:: Poisson2D_Dvc.png
-   :width: 800
+Test problem          (3)
+~~~~~~~~~~~~~~~~~~~~~~~~~
 
-   *Finite element function on a structured 2D grid: contour plot of the solution (left) and curve plot of the exact flux and the projected numerical flux (right)*
+The graphics referred to in Figure :ref:`tut:structviz:fig1` correspond to
+a test problem with prescribed solution :math:`{u_{\small\mbox{e}}} = H(x)H(y)`, where
 
-.. _tut:poisson:2D:fig3:
+.. math::
+         H(x) = e^{-16(x-\frac{1}{2})^2}\sin(3\pi x){\thinspace .}
 
-.. figure:: Poisson2D_Dvc_surfmesh1.png
-   :width: 480
+We just fit a function :math:`f(x,y)` in the PDE (can choose :math:`p=1`),
+and notice that :math:`u=0` along the
+boundary of the unit square. Although it is easy to carry out the
+differentiation of :math:`f` by hand and hardcode the resulting expressions
+in an ``Expression`` object, a more reliable habit is to use Python's
+symbolic computing engine, ``sympy``, to perform mathematics and
+automatically turn formulas into C++ syntax for ``Expression`` objects.
+The following text assumes some familiarity with ``sympy`` and illustrates
+how FEniCS programmers may take advantage of symbolic computing.
 
-   *Finite element function on a structured 2D grid: surface plot of the solution (left) and lifted mesh plot of the solution (right)*
+We start out with defining the exact solution in ``sympy``:
 
-It should be easy with the information above to transform a finite
-element field over a uniform rectangular or box-shaped mesh to the
-corresponding ``BoxField`` object and perform MATLAB-style
-visualizations of the whole field or the field over planes or along
-lines through the domain.  By the transformation to a regular grid we
-have some more flexibility than what the ``plot`` command in DOLFIN
-offers. However, we remark
-that comprehensive tools like VisIt, MayaVi2, or ParaView also have
-the possibility for plotting fields along lines and extracting planes
-in 3D geometries, though usually with less degree of control compared
-to Gnuplot, MATLAB, and Matplotlib.  For example, in investigations of
-numerical accuracy or numerical artifacts one is often interested in
-studying curve plots where only the nodal values sampled. This is
-straightforward with a structured mesh data structure, but more
-difficult in visualization packages utilizing unstructured grids, as
-hitting exactly then nodes when sampling a function along a line
-through the grid might be non-trivial.
+.. code-block:: python
+
+        from sympy import exp, sin, pi  # for use in math formulas
+        import sympy as sym
+        H = lambda x: exp(-16*(x-0.5)**2)*sin(3*pi*x)
+        x, y = sym.symbols('x[0], x[1]')
+        u = H(x)*H(y)
+
+
+.. admonition:: Define symbolic coordinates as required in ``Expression`` objects
+
+   Note that we would normally write ``x, y = sym.symbols('x y')``, but
+   if we want the resulting expressions to be have valid syntax for
+   ``Expression`` objects, and then :math:`x` reads ``x[0]`` and :math:`y` must be ``x[1]``.
+   This is easily accomplished with ``sympy`` by defining the names of ``x`` and
+   ``y`` as ``x[0]`` and ``x[1]``: ``x, y = sym.symbols('x[0] x[1]')``.
+
+
+
+
+Turning the expression for ``u`` into C or C++ syntax for ``Expression`` objects
+needs two steps. First we ask for the C code of the expression,
+
+.. code-block:: python
+
+        u_c = sym.printing.ccode(u)
+
+Then we do some editing of ``u_c`` to match the required syntax of
+``Expression`` objects. Printing ``u_c`` gives (here manually broken up as
+two lines)
+
+.. code-block:: text
+
+        -exp(-16*pow(x[0] - 0.5, 2) - 16*pow(x[1] - 0.5, 2))*
+        sin(3*M_PI*x[0])*sin(3*M_PI*x[1])
+
+The necessary syntax adjustment is replacing
+the symbol ``M_PI`` for :math:`\pi` in C/C++ by ``DOLFIN_PI``:
+
+.. code-block:: python
+
+        u_c = u_c.replace('M_PI', 'DOLFIN_PI')
+        u0 = Expression(u_c)
+
+Thereafter, we can progress with the computation of :math:`f = -\nabla\cdot(p\nabla u)`:
+
+.. code-block:: python
+
+        p = 1
+        f = sym.diff(-p*sym.diff(u, x), x) + sym.diff(-p*sym.diff(u, y), y)
+        f = sym.simplify(f)
+        f_c = sym.printing.ccode(f)
+        f_c = f_c.replace('M_PI', 'DOLFIN_PI')
+        f = Expression(f_c)
+
+We also need a Python function for the exact flux :math:`-p\partial u/\partial x`:
+
+.. code-block:: python
+
+        flux_u_x_exact = sym.lambdify([x, y], -p*sym.diff(u, x),
+                                      modules='numpy')
+
+It remains to define ``p = Constant(1)`` and set ``nx`` and ``ny`` before calling
+``solver`` to compute the finite element solution of this problem.
+
+.. FIGURE: [fig/p2D_vc_structmesh, width=800 frac=1] Various plots of the solution on a structured mesh.
 
 .. _tut:poisson1:DN:
 
@@ -3068,11 +3299,10 @@ Combining Dirichlet and Neumann conditions
 ------------------------------------------
 
 Let us make a slight extension of our two-dimensional Poisson problem
-from the section :ref:`tut:poisson1:bvp`
-and add a Neumann boundary condition. The domain is still
-the unit square, but now we set the Dirichlet condition
-:math:`u=u_0` at the left and right sides,
-:math:`x=0` and :math:`x=1`, while the Neumann condition
+from the section :ref:`tut:poisson1:bvp` and add a Neumann boundary
+condition. The domain is still the unit square, but now we set the
+Dirichlet condition :math:`u=u_0` at the left and right sides, :math:`x=0` and
+:math:`x=1`, while the Neumann condition
 
 .. math::
         
@@ -3086,10 +3316,9 @@ The Neumann condition is also known as a *natural boundary condition*
 
 .. index:: Neumann boundary conditions
 
-Let :math:`\Gamma_D` and :math:`\Gamma_N`
-denote the parts of :math:`\partial\Omega` where the Dirichlet and Neumann
-conditions apply, respectively.
-The complete boundary-value problem can be written as
+Let :math:`\Gamma_D` and :math:`\Gamma_N` denote the parts of :math:`\partial\Omega`
+where the Dirichlet and Neumann conditions apply, respectively.  The
+complete boundary-value problem can be written as
 
 .. _Eq:_auto15:
 
@@ -3254,7 +3483,7 @@ The ``ds`` variable implies a boundary integral, while ``dx``
 implies an integral over the domain :math:`\Omega`.
 No more modifications are necessary.
 
-The file ``dn1_p2D.py`` in the ``stationary/poisson`` directory
+The file ``dn1_p2D.py`` in the ``poisson`` directory
 implements this problem. Running the program verifies the implementation:
 :math:`u` equals the exact solution at all the nodes,
 regardless of how many elements we use.
@@ -3556,7 +3785,7 @@ for a demo).
 
 A complete code where the linear system :math:`AU=b` is explicitly assembled and
 solved is found in the file ``dn3_p2D.py`` in the directory
-``stationary/poisson``. This code solves the same problem as in
+``poisson``. This code solves the same problem as in
 ``dn2_p2D.py``
 (the section :ref:`tut:poisson:multiple:Dirichlet`).  For small
 linear systems, the program writes out ``A`` and ``b`` before and
@@ -3652,7 +3881,7 @@ Parameterizing the number of space dimensions
 FEniCS makes it is easy to write a unified simulation code that can
 operate in 1D, 2D, and 3D. We will conveniently make use of this
 feature in forthcoming examples.  As an appetizer, go back to the
-introductory programs ``p2D_plain.py`` or ``p2D_func.py`` in the ``stationary/poisson`` directory
+introductory programs ``p2D_plain.py`` or ``p2D_func.py`` in the ``poisson`` directory
 and change the mesh construction from ``UnitSquareMesh(6, 4)`` to
 ``UnitCubeMesh(6, 4, 5)``. Now the domain is the unit cube partitioned into
 :math:`6\times 4\times 5` boxes, and each box is divided into six
