@@ -3320,7 +3320,7 @@ symmetry.
 The function `application_linalg` runs a test problem on sequence of
 meshes and solves the problem with symmetric and non-symmetric modification
 of the coefficient matrix. One can monitor the number of Krylov
-method iteration and realize that that with a symmetric coefficient matrix,
+method iteration and realize that with a symmetric coefficient matrix,
 the Conjugate Gradient method requires slightly fewer iterations than
 GMRES in the non-symmetric case. Taking into account that the Conjugate
 Gradient method has less work per iteration, there is some efficiency to
@@ -3374,80 +3374,33 @@ idx{dimension-independent code}
 FEniCS makes it is easy to write a unified simulation code that can
 operate in 1D, 2D, and 3D. We will conveniently make use of this
 feature in forthcoming examples.  As an appetizer, go back to the
-introductory programs `${prog["p2D_plain"]}.py` or `${prog["p2D_func"]}.py` in the `poisson` directory
-and change the mesh construction from `UnitSquareMesh(6, 4)` to
-`UnitCubeMesh(6, 4, 5)`. Now the domain is the unit cube partitioned into
-$6\times 4\times 5$|$6x4x5$ boxes, and each box is divided into six
-tetrahedra-shaped finite elements for computations.  Run the program
-and observe that we can solve a 3D problem without any other
-modifications (!). The visualization allows you to rotate the cube and
-observe the function values as colors on the boundary.
+introductory programs `${prog["p2D_plain"]}.py` or
+`${prog["p2D_func"]}.py` in the `poisson` directory and change the
+mesh construction from `UnitSquareMesh(6, 4)` to `UnitCubeMesh(6, 4,
+5)`. Now the domain is the unit cube partitioned into $6\times 4\times
+5$|$6x4x5$ boxes, and each box is divided into six tetrahedra-shaped
+finite elements for computations.  Run the program and observe that we
+can solve a 3D problem without any other modifications (!). The
+visualization allows you to rotate the cube and observe the function
+values as colors on the boundary.
 
-The forthcoming material introduces some convenient
-technicalities such that the same program can run in 1D, 2D, or 3D
-without any modifications.
-Consider the simple model problem
 
-!bt
-\begin{equation}
-u''(x) = 2\hbox{ in }[0,1],\quad u(0)=0,\ u(1)=1,
-\end{equation}
-!et
-with exact solution $u(x)=x^2$. Our aim is to formulate and solve this
-problem in a 2D and a 3D domain as well.
-We may generalize the domain $[0,1]$ to a rectangle or box of any size
-in the $y$ and $z$ directions and pose homogeneous Neumann
-conditions $\partial u/\partial n = 0$ at all additional boundaries
-$y=\mbox{const}$ and $z=\mbox{const}$ to ensure that $u$ only varies with
-$x$. For example, let us choose
-a unit hypercube as domain: $\Omega = [0,1]^d$, where $d$ is the number
-of space dimensions. The generalized $d$-dimensional Poisson problem
-then reads
+=== Generating a hypercube ===
 
-!bt
-\begin{equation} label{tut:poisson1:ddim}
-  \begin{array}{rcll}
-    \nabla^2 u &=& 2 &\mbox{in } \Omega, \\
-    u &=& 0 &\mbox{on } \Gamma_0,\\
-    u &=& 1 &\mbox{on } \Gamma_1,\\
-{\partial u\over\partial n} &=& 0 &\mbox{on } \partial\Omega\backslash\left(
-\Gamma_0\cup\Gamma_1\right),
-  \end{array}
-\end{equation}
-!et
-where $\Gamma_0$ is the side of the hypercube where $x=0$, and
-where $\Gamma_1$ is the side where $x=1$.
-
-idx{`${prog["paD"]}.py`}
-
-Implementing a PDE for any $d$ is no more
-complicated than solving a problem with a specific number of dimensions.
-The only non-trivial part of the code is actually to define the mesh.
-We use the command line for the user-input to the program. The first argument
-can be the degree of the polynomial in the finite element basis functions.
-Thereafter, we supply the
-cell divisions in the various spatial directions. The number of
-command-line arguments will then imply the number of space dimensions.
-For example, writing `3 10 3 4` on the command line means that
-we want to approximate $u$ by piecewise polynomials of degree 3,
-and that the domain is a three-dimensional cube with $10\times 3\times 4$
-divisions in the $x$, $y$, and $z$ directions, respectively.
-#Each of the $10\times 3\times 4 = 120$ boxes will
-#be divided into six tetrahedra.
-The Python code can be quite compact:
+The syntax for generating a unit interval, square, or box is different,
+so we need to encapsulate this part of the code. Given a list or
+tuple with the divisions into cells in the various spatial direction,
+the following function returns the mesh in a $d$-dimensional problem:
 
 !bc pycod
-degree = int(sys.argv[1])
-divisions = [int(arg) for arg in sys.argv[2:]]
-d = len(divisions)
-domain_type = [UnitIntervalMesh, UnitSquareMesh, UnitCubeMesh]
-mesh = domain_type[d-1](*divisions)
-V = FunctionSpace(mesh, 'Lagrange', degree)
+def unit_hypercube(divisions, degree):
+    mesh_classes = [UnitIntervalMesh, UnitSquareMesh, UnitCubeMesh]
+    d = len(divisions)
+    mesh = mesh_classes[d-1](*divisions)
+    V = FunctionSpace(mesh, 'Lagrange', degree)
+    return V, mesh
 !ec
-First note that although `sys.argv[2:]` holds the divisions of
-the mesh, all elements of the list `sys.argv[2:]` are string objects,
-so we need to explicitly convert each element to an integer.
-The construction `domain_type[d-1]` will pick the right name of the
+The construction `mesh_class[d-1]` will pick the right name of the
 object used to define the domain and generate the mesh.
 Moreover, the argument `*divisions`
 sends all the component of the list `divisions` as separate
@@ -3455,7 +3408,7 @@ arguments. For example, in a 2D problem where `divisions` has
 two elements, the statement
 
 !bc pycod
-mesh = domain_type[d-1](*divisions)
+mesh = mesh_classes[d-1](*divisions)
 !ec
 is equivalent to
 
@@ -3463,45 +3416,11 @@ is equivalent to
 mesh = UnitSquareMesh(divisions[0], divisions[1])
 !ec
 
-The next part of the program is to set up the boundary conditions.
-Since the Neumann conditions have $\partial u/\partial n=0$ we can
-omit the boundary integral from the weak form. We then only
-need to take care of Dirichlet conditions at two sides:
+Replacing the `Nx` and `Ny` parameters by `divisions` and calling
+`unit_hypercube` to create the mesh are the two modifications that
+we need in any of the previously shown `solver` functions to turn
+them into solvers for $d$-dimensional problems!
 
-!bc pycod
-tol = 1E-14   # tolerance for coordinate comparisons
-def Dirichlet_boundary0(x, on_boundary):
-    return on_boundary and abs(x[0]) < tol
-
-def Dirichlet_boundary1(x, on_boundary):
-    return on_boundary and abs(x[0] - 1) < tol
-
-bc0 = DirichletBC(V, Constant(0), Dirichlet_boundary0)
-bc1 = DirichletBC(V, Constant(1), Dirichlet_boundary1)
-bcs = [bc0, bc1]
-!ec
-Note that this code is independent of the number of space dimensions.
-So are the statements defining and solving
-the variational problem:
-
-!bc pycod
-u = TrialFunction(V)
-v = TestFunction(V)
-f = Constant(-2)
-a = inner(nabla_grad(u), nabla_grad(v))*dx
-L = f*v*dx
-
-u = Function(V)
-solve(a == L, u, bcs)
-!ec
-The complete code is found in the file `${prog["paD"]}.py` (Poisson problem in "anyD").
-
-
-If we want to parameterize the direction in which $u$ varies, say by
-the space direction number `e`, we only need to replace `x[0]` in the
-code by `x[e]`. The parameter `e` could be given as a second
-command-line argument.  The reader is encouraged to perform this
-modification.
 
 ===== Handy methods in key FEniCS objects =====
 

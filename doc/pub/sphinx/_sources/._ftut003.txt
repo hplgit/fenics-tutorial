@@ -2,8 +2,8 @@
 
 .. _tut:poisson1:impl:
 
-Implementation of a Poisson solver
-==================================
+Basic building blocks in a Poisson solver
+=========================================
 
 .. index:: d1_p2D.py
 
@@ -3316,6 +3316,9 @@ The Neumann condition is also known as a *natural boundary condition*
 
 .. index:: Neumann boundary conditions
 
+PDE problem
+~~~~~~~~~~~
+
 Let :math:`\Gamma_D` and :math:`\Gamma_N` denote the parts of :math:`\partial\Omega`
 where the Dirichlet and Neumann conditions apply, respectively.  The
 complete boundary-value problem can be written as
@@ -3368,6 +3371,9 @@ of :math:`\Omega` such that :math:`g` takes on the right values at :math:`y=0` a
         
         g(x,y) = -4y{\thinspace .}
         
+
+Variational formulation          (2)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 The first task is to derive the variational problem. This time we cannot
 omit the boundary term arising from the integration by parts, because
@@ -3427,11 +3433,14 @@ in the standard notation :math:`a(u,v)=L(v)` is straightforward with
         \int_{\Gamma_N} gv {\, \mathrm{d}s}{\thinspace .}  
         
 
-.. index:: dn1_p2D.py
+Implementation          (2)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 How does the Neumann condition impact the implementation?
-Starting with any of the previous files ``d*_p2D.py``, say
-``d4_p2D.py``, we realize that the statements remain almost the same.
+Let us go back to the very simplest file,
+``p2D_plain.py``, from
+the section :ref:`tut:poisson1:impl:code`,
+we realize that the statements remain almost the same.
 Only two adjustments are necessary:
 
   * The function describing the boundary where Dirichlet conditions
@@ -3439,7 +3448,7 @@ Only two adjustments are necessary:
 
   * The new boundary term must be added to the expression in ``L``.
 
-Step 1 can be coded as
+The first adjustment can be coded as
 
 .. code-block:: python
 
@@ -3459,9 +3468,55 @@ A more compact implementation reads
         def Dirichlet_boundary(x, on_boundary):
             return on_boundary and (x[0] == 0 or x[0] == 1)
 
-As pointed out already in the section :ref:`tut:poisson1:impl`,
-testing for an exact match of real numbers is
-not good programming practice so we introduce a tolerance in the test:
+
+.. admonition:: Never use ``==`` for comparing real numbers
+
+   A list like ``x[0] == 1`` should never be used if ``x[0]`` is a real number,
+   because rounding errors in ``x[0]`` may make the test fail even when it is
+   mathematically correct. Consider
+   
+   .. code-block:: python
+   
+           >>> 0.1 + 0.2 == 0.3
+           False
+           >>> 0.1 + 0.2
+           0.30000000000000004
+   
+   Comparison of real numbers need to use tolerances! The values of the
+   tolerances depend on the size of the numbers involved in arithmetic
+   operations:
+   
+   .. code-block:: python
+   
+           >>> abs(0.1+0.2 - 0.3)
+           5.551115123125783e-17
+           >>> abs(1.1+1.2 - 2.3)
+           0.0
+           >>> abs(10.1+10.2 - 20.3)
+           3.552713678800501e-15
+           >>> abs(100.1+100.2 - 200.3)
+           0.0
+           >>> abs(1000.1+1000.2 - 2000.3)
+           2.2737367544323206e-13
+           >>> abs(10000.1+10000.2 - 20000.3)
+           3.637978807091713e-12
+   
+   For numbers around unity, tolerances as low as :math:`3\cdot 10^{-16}` can be used
+   (in fact, this tolerance is known as ``DOLFIN_EPS`` in the ``dolfin`` package),
+   otherwise an appropriate tolerance must be found.
+   
+   Testing for ``x[0] == 1`` should therefore be implemented as
+   
+   .. code-block:: python
+   
+           tol = 1E-14
+           if abs(x[0] - 1) < tol:
+               ...
+
+
+
+
+Here is a new boundary function using tolerances in the test:
 
 .. code-block:: python
 
@@ -3483,11 +3538,6 @@ The ``ds`` variable implies a boundary integral, while ``dx``
 implies an integral over the domain :math:`\Omega`.
 No more modifications are necessary.
 
-The file ``dn1_p2D.py`` in the ``poisson`` directory
-implements this problem. Running the program verifies the implementation:
-:math:`u` equals the exact solution at all the nodes,
-regardless of how many elements we use.
-
 .. _tut:poisson:multiple:Dirichlet:
 
 Multiple Dirichlet conditions
@@ -3501,12 +3551,8 @@ setting Dirichlet conditions on :math:`m` parts of the boundary.
 The purpose of this section is to explain how such multiple conditions
 are treated in FEniCS programs.
 
-.. index:: dn2_p2D.py
-
-Let us
-return to the case from the section :ref:`tut:poisson1:DN`
-and define two separate functions for
-the two Dirichlet conditions:
+Let us return to the case from the section :ref:`tut:poisson1:DN` and define
+two separate functions for the two Dirichlet conditions:
 
 .. math::
         
@@ -3516,14 +3562,16 @@ the two Dirichlet conditions:
             - {\partial u\over\partial n} &= g \mbox{ on } \Gamma_N {\thinspace .}
         
 
-Here, :math:`\Gamma_0` is the boundary :math:`x=0`, while
-:math:`\Gamma_1` corresponds to the boundary :math:`x=1`.
-We have that :math:`u_L = 1 + 2y^2`, :math:`u_R = 2 + 2y^2`, and :math:`g=-4y`.
-For the left boundary :math:`\Gamma_0` we
-define
-the usual triple of a function for the boundary value,
-a function for defining
-the boundary of interest, and a ``DirichletBC`` object:
+Here, :math:`\Gamma_0` is the boundary :math:`x=0`, while :math:`\Gamma_1` corresponds
+to the boundary :math:`x=1`.  We have that :math:`u_L = 1 + 2y^2`, :math:`u_R = 2 +
+2y^2`, and :math:`g=-4y`.
+
+Functions for marking Dirichlet boundaries
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+For the left boundary :math:`\Gamma_0` we define the
+usual triple of a function for the boundary value, a function for
+defining the boundary of interest, and a ``DirichletBC`` object:
 
 .. code-block:: python
 
@@ -3564,13 +3612,36 @@ In other problems, where the :math:`u` values are constant at a part of the
 boundary, we may use a simple ``Constant`` object instead of an
 ``Expression`` object.
 
+Classes for marking Dirichlet boundaries
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Instead of using a function like ``left_boundary(x, on_boundary)`` to
+mark a boundary, we can alternatively use a class, which allows
+for more flexibility in more complicated problems. The class for marking
+a boundary is derived from class ``SubDomain`` and has a method ``inside(self, x, on_boundary)`` for the code that returns whether the ``point`` is on the
+boundary in question or not. Our previous ``left_boundary`` function
+takes this form in its class version:
+
+.. code-block:: python
+
+        class LeftBoundary(SubDomain):
+            def inside(self, x, on_boundary):
+                tol = 1E-14   # tolerance for coordinate comparisons
+                return on_boundary and abs(x[0]) < tol
+        
+        left_boundary = LeftBoundary()
+        Gamma_0 = DirichletBC(V, u_L, left_boundary)
+
+Debugging Dirichlet conditions
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
 Debugging of PDE solvers very often faces the question of whether the
 boundary conditions are set correctly or not. To check which Dirichlet
 conditions that are actually set in the present problem, we can call
 the ``get_boundary_values`` method in the ``DirichletBC`` objects. This
 method returns a dictionary with degrees of freedom as keys and
-corresponding  essential conditions as values. In the present
-problem we can write
+corresponding essential conditions as values. In the present problem
+we can write
 
 .. code-block:: python
 
@@ -3619,7 +3690,7 @@ The file ``dn2_p2D.py`` contains a complete program which
 demonstrates the constructions above.
 An extended example with multiple Neumann conditions would have
 been quite natural now, but this requires marking various parts
-of the boundary using the mesh function concept and is therefore
+of the boundary using the *mesh function* concept and is therefore
 left to the section :ref:`tut:poisson:mat:neumann`.
 
 .. _tut:poisson1:linalg:
@@ -3660,7 +3731,7 @@ where the entries in :math:`A` and :math:`b` are given by
 
 The examples so far have specified the left- and right-hand side of
 the variational formulation and then asked FEniCS to assemble the
-linear system and solve it.  An alternative to is explicitly call
+linear system and solve it.  An alternative is to explicitly call
 functions for assembling the coefficient matrix :math:`A` and the right-side
 vector :math:`b`, and then solve the linear system :math:`AU=b` with respect to
 the :math:`U` vector.  Instead of ``solve(a == L, u, b)`` we now write
@@ -3675,7 +3746,7 @@ the :math:`U` vector.  Instead of ``solve(a == L, u, b)`` we now write
         solve(A, U, b)
 
 The variables ``a`` and ``L`` are as before. That is, ``a`` refers to the
-bilinear form involving a ``TrialFunction`` object (say ``u``)
+bilinear form involving a ``TrialFunction`` object (e.g., ``u``)
 and a ``TestFunction`` object (``v``), and ``L`` involves a
 ``TestFunction`` object (``v``). From ``a`` and ``L``,
 the ``assemble`` function can
@@ -3781,18 +3852,25 @@ eigenvalues of large, sparse matrices of the type encountered in PDE
 problems (see ``demo/la/eigenvalue`` in the DOLFIN source code tree
 for a demo).
 
-.. index:: dn3_p2D.py
+.. A complete code where the linear system :math:`AU=b` is explicitly assembled and
 
-A complete code where the linear system :math:`AU=b` is explicitly assembled and
-solved is found in the file ``dn3_p2D.py`` in the directory
-``poisson``. This code solves the same problem as in
-``dn2_p2D.py``
-(the section :ref:`tut:poisson:multiple:Dirichlet`).  For small
-linear systems, the program writes out ``A`` and ``b`` before and
-after incorporation of essential boundary conditions and illustrates
-the difference between ``assemble`` and ``assemble_system``.
-The reader is encouraged to run the code for a :math:`2\times 1`
-mesh (``UnitSquareMesh(2, 1)`` and study the output of ``A``.
+.. solved is found in the file ``dn3_p2D.py`` in the directory
+
+.. ``poisson``. This code solves the same problem as in
+
+.. ``dn2_p2D.py``
+
+.. (the section :ref:`tut:poisson:multiple:Dirichlet`).  For small
+
+.. linear systems, the program writes out ``A`` and ``b`` before and
+
+.. after incorporation of essential boundary conditions and illustrates
+
+.. the difference between ``assemble`` and ``assemble_system``.
+
+.. The reader is encouraged to run the code for a :math:`2\times 1`
+
+.. mesh (``UnitSquareMesh(2, 1)`` and study the output of ``A``.
 
 By default, ``solve(A, U, b)`` applies sparse LU decomposition
 as solver. Specification of an iterative solver and preconditioner
@@ -3807,8 +3885,6 @@ the section :ref:`tut:app:solver:prec`.
 
 .. index:: KrylovSolver
 
-.. index:: d4_p2D.py
-
 To control tolerances in the stopping criterion and the maximum
 number of iterations, one can explicitly form a ``KrylovSolver`` object
 and set items in its ``parameters`` attribute
@@ -3817,16 +3893,30 @@ and set items in its ``parameters`` attribute
 .. code-block:: python
 
         solver = KrylovSolver('cg', 'ilu')
-        solver.parameters['absolute_tolerance'] = 1E-7
-        solver.parameters['relative_tolerance'] = 1E-4
-        solver.parameters['maximum_iterations'] = 1000
+        prm = solver.parameters
+        prm['absolute_tolerance'] = 1E-7
+        prm['relative_tolerance'] = 1E-4
+        prm['maximum_iterations'] = 1000
         u = Function(V)
         U = u.vector()
         set_log_level(DEBUG)
         solver.solve(A, U, b)
 
-The program ``dn4_p2D.py`` is a modification of ``dn3_p2D.py``
-illustrating this latter approach.
+The function ``solver_linalg`` in the
+program file ``p2D_vc.py`` implements a solver function where
+the user can choose between different types of assembly: the variational
+(``solve(a == L, u, bc)``), assembling the matrix and right-hand side separately, and assembling the system such that the coefficient matrix preserves
+symmetry.
+The function ``application_linalg`` runs a test problem on sequence of
+meshes and solves the problem with symmetric and non-symmetric modification
+of the coefficient matrix. One can monitor the number of Krylov
+method iteration and realize that with a symmetric coefficient matrix,
+the Conjugate Gradient method requires slightly fewer iterations than
+GMRES in the non-symmetric case. Taking into account that the Conjugate
+Gradient method has less work per iteration, there is some efficiency to
+be gained by using ``assemble_system``.
+
+[**hpl 8**: Running ``application_linalg``, the results are strange: Why does the ``solve(a==L,...)`` method need many more iterations when we use the same Krylov parameter settings? Something wrong with the settings?]
 
 .. index:: random start vector (linear systems)
 
@@ -3845,7 +3935,6 @@ with random numbers in the interval :math:`[-100,100]` can be computed as
 
 Note that we must turn off the default behavior of setting the start
 vector ("initial guess") to zero.
-A random start vector is included in the ``dn4_p2D.py`` code.
 
 Creating the linear system explicitly in a program can have some
 advantages in more advanced problem settings. For example, :math:`A` may
@@ -3881,91 +3970,34 @@ Parameterizing the number of space dimensions
 FEniCS makes it is easy to write a unified simulation code that can
 operate in 1D, 2D, and 3D. We will conveniently make use of this
 feature in forthcoming examples.  As an appetizer, go back to the
-introductory programs ``p2D_plain.py`` or ``p2D_func.py`` in the ``poisson`` directory
-and change the mesh construction from ``UnitSquareMesh(6, 4)`` to
-``UnitCubeMesh(6, 4, 5)``. Now the domain is the unit cube partitioned into
-:math:`6\times 4\times 5` boxes, and each box is divided into six
-tetrahedra-shaped finite elements for computations.  Run the program
-and observe that we can solve a 3D problem without any other
-modifications (!). The visualization allows you to rotate the cube and
-observe the function values as colors on the boundary.
+introductory programs ``p2D_plain.py`` or
+``p2D_func.py`` in the ``poisson`` directory and change the
+mesh construction from ``UnitSquareMesh(6, 4)`` to ``UnitCubeMesh(6, 4,
+5)``. Now the domain is the unit cube partitioned into :math:`6\times 4\times
+5` boxes, and each box is divided into six tetrahedra-shaped
+finite elements for computations.  Run the program and observe that we
+can solve a 3D problem without any other modifications (!). The
+visualization allows you to rotate the cube and observe the function
+values as colors on the boundary.
 
-The forthcoming material introduces some convenient
-technicalities such that the same program can run in 1D, 2D, or 3D
-without any modifications.
-Consider the simple model problem
+Generating a hypercube
+~~~~~~~~~~~~~~~~~~~~~~
 
-.. _Eq:_auto18:
-
-.. math::
-
-    \tag{37}
-    u''(x) = 2\hbox{ in }[0,1],\quad u(0)=0,\ u(1)=1,
-        
-        
-
-with exact solution :math:`u(x)=x^2`. Our aim is to formulate and solve this
-problem in a 2D and a 3D domain as well.
-We may generalize the domain :math:`[0,1]` to a rectangle or box of any size
-in the :math:`y` and :math:`z` directions and pose homogeneous Neumann
-conditions :math:`\partial u/\partial n = 0` at all additional boundaries
-:math:`y=\mbox{const}` and :math:`z=\mbox{const}` to ensure that :math:`u` only varies with
-:math:`x`. For example, let us choose
-a unit hypercube as domain: :math:`\Omega = [0,1]^d`, where :math:`d` is the number
-of space dimensions. The generalized :math:`d`-dimensional Poisson problem
-then reads
-
-.. _Eq:tut:poisson1:ddim:
-
-.. math::
-
-    \tag{38}
-    \begin{array}{rcll}
-            \nabla^2 u  &=  2 &\mbox{in } \Omega, \\ 
-            u  &=  0 &\mbox{on } \Gamma_0,\\ 
-            u  &=  1 &\mbox{on } \Gamma_1,\\ 
-        {\partial u\over\partial n}  &=  0 &\mbox{on } \partial\Omega\backslash\left(
-        \Gamma_0\cup\Gamma_1\right),
-          \end{array}
-        
-
-where :math:`\Gamma_0` is the side of the hypercube where :math:`x=0`, and
-where :math:`\Gamma_1` is the side where :math:`x=1`.
-
-.. index:: paD.py
-
-Implementing a PDE for any :math:`d` is no more
-complicated than solving a problem with a specific number of dimensions.
-The only non-trivial part of the code is actually to define the mesh.
-We use the command line for the user-input to the program. The first argument
-can be the degree of the polynomial in the finite element basis functions.
-Thereafter, we supply the
-cell divisions in the various spatial directions. The number of
-command-line arguments will then imply the number of space dimensions.
-For example, writing ``3 10 3 4`` on the command line means that
-we want to approximate :math:`u` by piecewise polynomials of degree 3,
-and that the domain is a three-dimensional cube with :math:`10\times 3\times 4`
-divisions in the :math:`x`, :math:`y`, and :math:`z` directions, respectively.
-
-.. Each of the :math:`10\times 3\times 4 = 120` boxes will
-
-.. be divided into six tetrahedra.
-
-The Python code can be quite compact:
+The syntax for generating a unit interval, square, or box is different,
+so we need to encapsulate this part of the code. Given a list or
+tuple with the divisions into cells in the various spatial direction,
+the following function returns the mesh in a :math:`d`-dimensional problem:
 
 .. code-block:: python
 
-        degree = int(sys.argv[1])
-        divisions = [int(arg) for arg in sys.argv[2:]]
-        d = len(divisions)
-        domain_type = [UnitIntervalMesh, UnitSquareMesh, UnitCubeMesh]
-        mesh = domain_type[d-1](*divisions)
-        V = FunctionSpace(mesh, 'Lagrange', degree)
+        def unit_hypercube(divisions, degree):
+            mesh_classes = [UnitIntervalMesh, UnitSquareMesh, UnitCubeMesh]
+            d = len(divisions)
+            mesh = mesh_classes[d-1](*divisions)
+            V = FunctionSpace(mesh, 'Lagrange', degree)
+            return V, mesh
 
-First note that although ``sys.argv[2:]`` holds the divisions of
-the mesh, all elements of the list ``sys.argv[2:]`` are string objects,
-so we need to explicitly convert each element to an integer.
-The construction ``domain_type[d-1]`` will pick the right name of the
+The construction ``mesh_class[d-1]`` will pick the right name of the
 object used to define the domain and generate the mesh.
 Moreover, the argument ``*divisions``
 sends all the component of the list ``divisions`` as separate
@@ -3974,7 +4006,7 @@ two elements, the statement
 
 .. code-block:: python
 
-        mesh = domain_type[d-1](*divisions)
+        mesh = mesh_classes[d-1](*divisions)
 
 is equivalent to
 
@@ -3982,46 +4014,10 @@ is equivalent to
 
         mesh = UnitSquareMesh(divisions[0], divisions[1])
 
-The next part of the program is to set up the boundary conditions.
-Since the Neumann conditions have :math:`\partial u/\partial n=0` we can
-omit the boundary integral from the weak form. We then only
-need to take care of Dirichlet conditions at two sides:
-
-.. code-block:: python
-
-        tol = 1E-14   # tolerance for coordinate comparisons
-        def Dirichlet_boundary0(x, on_boundary):
-            return on_boundary and abs(x[0]) < tol
-        
-        def Dirichlet_boundary1(x, on_boundary):
-            return on_boundary and abs(x[0] - 1) < tol
-        
-        bc0 = DirichletBC(V, Constant(0), Dirichlet_boundary0)
-        bc1 = DirichletBC(V, Constant(1), Dirichlet_boundary1)
-        bcs = [bc0, bc1]
-
-Note that this code is independent of the number of space dimensions.
-So are the statements defining and solving
-the variational problem:
-
-.. code-block:: python
-
-        u = TrialFunction(V)
-        v = TestFunction(V)
-        f = Constant(-2)
-        a = inner(nabla_grad(u), nabla_grad(v))*dx
-        L = f*v*dx
-        
-        u = Function(V)
-        solve(a == L, u, bcs)
-
-The complete code is found in the file ``paD.py`` (Poisson problem in "anyD").
-
-If we want to parameterize the direction in which :math:`u` varies, say by
-the space direction number ``e``, we only need to replace ``x[0]`` in the
-code by ``x[e]``. The parameter ``e`` could be given as a second
-command-line argument.  The reader is encouraged to perform this
-modification.
+Replacing the ``Nx`` and ``Ny`` parameters by ``divisions`` and calling
+``unit_hypercube`` to create the mesh are the two modifications that
+we need in any of the previously shown ``solver`` functions to turn
+them into solvers for :math:`d`-dimensional problems!
 
 Handy methods in key FEniCS objects
 -----------------------------------
