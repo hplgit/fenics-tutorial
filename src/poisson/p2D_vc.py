@@ -485,10 +485,113 @@ def application_structured_mesh(model_problem=1):
 
     plt.show()
 
+def solver_linalg(
+    p, f, u0, Nx, Ny, degree=1,
+    linear_solver='Krylov', # Alt: 'direct'
+    abs_tol=1E-5,           # Absolute tolerance in Krylov solver
+    rel_tol=1E-3,           # Relative tolerance in Krylov solver
+    max_iter=1000,          # Max no of iterations in Krylov solver
+    log_level=PROGRESS,     # Amount of solver output
+    dump_parameters=False,  # Write out parameter database?
+    assembly='variational', # or 'matvec' or 'system'
+    start_vector='zero',    # or 'random'
+    ):
+    """
+    Solve -div(p*grad(u)=f on [0,1]x[0,1] with 2*Nx*Ny Lagrange
+    elements of specified degree and u=u0 (Expresssion) on
+    the boundary.
+    """
+    # Create mesh and define function space
+    mesh = UnitSquareMesh(Nx, Ny)
+    V = FunctionSpace(mesh, 'Lagrange', degree)
+
+    def u0_boundary(x, on_boundary):
+        return on_boundary
+
+    bc = DirichletBC(V, u0, u0_boundary)
+
+    # Define variational problem
+    u = TrialFunction(V)
+    v = TestFunction(V)
+    a = inner(p*nabla_grad(u), nabla_grad(v))*dx
+    L = f*v*dx
+
+    # Compute solution
+    u = Function(V)
+    U = u.vector()
+    if initial_guess == 'random':
+        import numpy as np
+        np.random.seed(10)  # for testing
+        U[:] = numpy.random.uniform(-100, 100, n)
+
+    if assembly == 'variational':
+        if linear_solver == 'Krylov':
+            prm = parameters['krylov_solver'] # short form
+            prm['absolute_tolerance'] = abs_tol
+            prm['relative_tolerance'] = rel_tol
+            prm['maximum_iterations'] = max_iter
+            prm['nonzero_initial_guess'] = True
+            print(parameters['linear_algebra_backend'])
+            set_log_level(log_level)
+            if dump_parameters:
+                info(parameters, True)
+            solver_parameters = {'linear_solver': 'gmres',
+                                 'preconditioner': 'ilu'}
+        else:
+            solver_parameters = {'linear_solver': 'lu'}
+
+        solve(a == L, u, bc, solver_parameters=solver_parameters)
+        A = None # Cannot return cofficient matrix
+    else:
+        if assembly == 'matvec':
+            A = assemble(a)
+            b = assemble(L)
+            bc.apply(A, b)
+            if linear_solver == 'direct':
+                solve(A, U, b)
+            else:
+                solver = KrylovSolver('gmres', 'ilu')
+                prm = solver.parameters
+                prm['absolute_tolerance'] = abs_tol
+                prm['relative_tolerance'] = rel_tol
+                prm['maximum_iterations'] = max_iter
+                prm['nonzero_initial_guess'] = True
+                solver.solve(A, U, b)
+        elif assembly == 'system':
+            A, b = assemble_system(a, L, [bc])
+            if linear_solver == 'direct':
+                solve(A, U, b)
+            else:
+                solver = KrylovSolver('cg', 'ilu')
+                prm = solver.parameters
+                prm['absolute_tolerance'] = abs_tol
+                prm['relative_tolerance'] = rel_tol
+                prm['maximum_iterations'] = max_iter
+                prm['nonzero_initial_guess'] = True
+                solver.solve(A, U, b)
+    return u, A
+
+def application_linalg():
+    u0 = Expression('1 + x[0]*x[0] + 2*x[1]*x[1]')
+    p = Expression('x[0] + x[1]')
+    f = Expression('-8*x[0] - 10*x[1]')
+    meshes = [2, 8, 32, 128]
+    for n in meshes:
+        for assembly in 'variational', 'matvec', 'system':
+            print('--- %dx%d mesh, %s assembly ---' % (n, n, assembly))
+            u, A = solver_linalg(
+                p, f, u0, n, n, linear_solver='Krylov',
+                assembly=assembly)
+            if A is not None and u.function_space().dim() < 10:
+                import numpy as np
+                np.set_printoptions(precision=2)
+                print('A: %s assembly\n' % assembly, A.array())
+
 if __name__ == '__main__':
     #application_test()
     #application_test_gradient(Nx=20, Ny=20)
     #convergence_rate()
-    application_structured_mesh(2)
+    #application_structured_mesh(2)
+    application_linalg()
     # Hold plot
     interactive()

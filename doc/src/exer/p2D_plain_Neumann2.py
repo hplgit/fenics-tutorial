@@ -25,12 +25,11 @@ V = FunctionSpace(mesh, 'Lagrange', 1)
 
 u_L = Expression('1 + 2*x[1]*x[1]')
 
-class LeftBoundary(SubDomain):
-    def inside(self, x, on_boundary):
-        tol = 1E-14   # tolerance for coordinate comparisons
-        return on_boundary and abs(x[0]) < tol
+def left_boundary(x, on_boundary):
+    tol = 1E-14   # tolerance for coordinate comparisons
+    return on_boundary and abs(x[0]) < tol
 
-Gamma_0 = DirichletBC(V, u_L, LeftBoundary())
+Gamma_0 = DirichletBC(V, u_L, left_boundary)
 
 # Define Dirichlet conditions for x=1 boundary
 
@@ -76,14 +75,6 @@ Solution of the Poisson problem -Laplace(u) = f,
 with u = u0 on x=0,1 and -du/dn = g at y=0,1.
 %s
 """ % mesh)
-
-# Dump solution to the screen
-u_nodal_values = u.vector()
-u_array = u_nodal_values.array()
-coor = mesh.coordinates()
-for i in range(len(u_array)):
-    print('u(%8g,%8g) = %g' % (coor[i][0], coor[i][1], u_array[i]))
-
 
 # Exact solution:
 u_exact = Expression('1 + x[0]*x[0] + 2*x[1]*x[1]')

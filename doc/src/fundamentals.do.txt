@@ -346,7 +346,7 @@ we must first perform two steps:
     specifying the mesh and type of finite elements.
 
 
-======= Implementation of a Poisson solver =======
+======= Basic building blocks in a Poisson solver =======
 label{tut:poisson1:impl}
 
 idx{`${prog["d1_p2D"]}.py`}
@@ -2800,6 +2800,8 @@ The Neumann condition is also known as a *natural boundary condition*
 
 idx{Neumann boundary conditions}
 
+=== PDE problem ===
+
 Let $\Gamma_D$ and $\Gamma_N$ denote the parts of $\partial\Omega$
 where the Dirichlet and Neumann conditions apply, respectively.  The
 complete boundary-value problem can be written as
@@ -2833,6 +2835,8 @@ $y=1$. One possible extension is
 g(x,y) = -4y\tp
 \end{equation*}
 !et
+
+=== Variational formulation ===
 
 The first task is to derive the variational problem. This time we cannot
 omit the boundary term arising from the integration by parts, because
@@ -2880,18 +2884,20 @@ L(v) &= \int_{\Omega} fv \dx -
 \end{align}
 !et
 
-idx{`${prog["dn1_p2D"]}.py`}
+=== Implementation ===
 
 How does the Neumann condition impact the implementation?
-Starting with any of the previous files `d*_p2D.py`, say
-`${prog["d4_p2D"]}.py`, we realize that the statements remain almost the same.
+Let us go back to the very simplest file,
+`${prog["p2D_plain"]}.py`, from
+Section ref{tut:poisson1:impl:code},
+we realize that the statements remain almost the same.
 Only two adjustments are necessary:
 
   * The function describing the boundary where Dirichlet conditions
     apply must be modified.
   * The new boundary term must be added to the expression in `L`.
 
-Step 1 can be coded as
+The first adjustment can be coded as
 
 !bc pycod
 def Dirichlet_boundary(x, on_boundary):
@@ -2909,9 +2915,51 @@ A more compact implementation reads
 def Dirichlet_boundary(x, on_boundary):
     return on_boundary and (x[0] == 0 or x[0] == 1)
 !ec
-As pointed out already in Section ref{tut:poisson1:impl},
-testing for an exact match of real numbers is
-not good programming practice so we introduce a tolerance in the test:
+
+!bwarning Never use `==` for comparing real numbers!
+A list like `x[0] == 1` should never be used if `x[0]` is a real number,
+because rounding errors in `x[0]` may make the test fail even when it is
+mathematically correct. Consider
+
+!bc pycod
+>>> 0.1 + 0.2 == 0.3
+False
+>>> 0.1 + 0.2
+0.30000000000000004
+!ec
+
+Comparison of real numbers need to use tolerances! The values of the
+tolerances depend on the size of the numbers involved in arithmetic
+operations:
+
+!bc pycod
+>>> abs(0.1+0.2 - 0.3)
+5.551115123125783e-17
+>>> abs(1.1+1.2 - 2.3)
+0.0
+>>> abs(10.1+10.2 - 20.3)
+3.552713678800501e-15
+>>> abs(100.1+100.2 - 200.3)
+0.0
+>>> abs(1000.1+1000.2 - 2000.3)
+2.2737367544323206e-13
+>>> abs(10000.1+10000.2 - 20000.3)
+3.637978807091713e-12
+!ec
+For numbers around unity, tolerances as low as $3\cdot 10^{-16}$ can be used
+(in fact, this tolerance is known as `DOLFIN_EPS` in the `dolfin` package),
+otherwise an appropriate tolerance must be found.
+
+Testing for `x[0] == 1` should therefore be implemented as
+
+!bc pycod
+tol = 1E-14
+if abs(x[0] - 1) < tol:
+    ...
+!ec
+!ewarning
+
+Here is a new boundary function using tolerances in the test:
 
 !bc pycod
 def Dirichlet_boundary(x, on_boundary):
@@ -2932,11 +2980,6 @@ The `ds` variable implies a boundary integral, while `dx`
 implies an integral over the domain $\Omega$.
 No more modifications are necessary.
 
-The file `${prog["dn1_p2D"]}.py` in the `poisson` directory
-implements this problem. Running the program verifies the implementation:
-$u$ equals the exact solution at all the nodes,
-regardless of how many elements we use.
-
 
 ===== Multiple Dirichlet conditions =====
 label{tut:poisson:multiple:Dirichlet}
@@ -2949,12 +2992,8 @@ setting Dirichlet conditions on $m$ parts of the boundary.
 The purpose of this section is to explain how such multiple conditions
 are treated in FEniCS programs.
 
-idx{`${prog["dn2_p2D"]}.py`}
-
-Let us
-return to the case from Section ref{tut:poisson1:DN}
-and define two separate functions for
-the two Dirichlet conditions:
+Let us return to the case from Section ref{tut:poisson1:DN} and define
+two separate functions for the two Dirichlet conditions:
 
 !bt
 \begin{align*}
@@ -2964,14 +3003,15 @@ the two Dirichlet conditions:
     - {\partial u\over\partial n} &= g \mbox{ on } \Gamma_N \tp
 \end{align*}
 !et
-Here, $\Gamma_0$ is the boundary $x=0$, while
-$\Gamma_1$ corresponds to the boundary $x=1$.
-We have that $u_L = 1 + 2y^2$, $u_R = 2 + 2y^2$, and $g=-4y$.
-For the left boundary $\Gamma_0$ we
-define
-the usual triple of a function for the boundary value,
-a function for defining
-the boundary of interest, and a `DirichletBC` object:
+Here, $\Gamma_0$ is the boundary $x=0$, while $\Gamma_1$ corresponds
+to the boundary $x=1$.  We have that $u_L = 1 + 2y^2$, $u_R = 2 +
+2y^2$, and $g=-4y$.
+
+=== Functions for marking Dirichlet boundaries ===
+
+For the left boundary $\Gamma_0$ we define the
+usual triple of a function for the boundary value, a function for
+defining the boundary of interest, and a `DirichletBC` object:
 
 !bc pycod
 u_L = Expression('1 + 2*x[1]*x[1]')
@@ -3010,13 +3050,35 @@ In other problems, where the $u$ values are constant at a part of the
 boundary, we may use a simple `Constant` object instead of an
 `Expression` object.
 
+=== Classes for marking Dirichlet boundaries ===
+
+Instead of using a function like `left_boundary(x, on_boundary)` to
+mark a boundary, we can alternatively use a class, which allows
+for more flexibility in more complicated problems. The class for marking
+a boundary is derived from class `SubDomain` and has a method `inside(self, x, on_boundary)` for the code that returns whether the `point` is on the
+boundary in question or not. Our previous `left_boundary` function
+takes this form in its class version:
+
+!bc pycod
+class LeftBoundary(SubDomain):
+    def inside(self, x, on_boundary):
+        tol = 1E-14   # tolerance for coordinate comparisons
+        return on_boundary and abs(x[0]) < tol
+
+left_boundary = LeftBoundary()
+Gamma_0 = DirichletBC(V, u_L, left_boundary)
+!ec
+
+
+=== Debugging Dirichlet conditions ===
+
 Debugging of PDE solvers very often faces the question of whether the
 boundary conditions are set correctly or not. To check which Dirichlet
 conditions that are actually set in the present problem, we can call
 the `get_boundary_values` method in the `DirichletBC` objects. This
 method returns a dictionary with degrees of freedom as keys and
-corresponding  essential conditions as values. In the present
-problem we can write
+corresponding essential conditions as values. In the present problem
+we can write
 
 !bc pycod
 coor = mesh.coordinates()
@@ -3062,7 +3124,7 @@ The file `${prog["dn2_p2D"]}.py` contains a complete program which
 demonstrates the constructions above.
 An extended example with multiple Neumann conditions would have
 been quite natural now, but this requires marking various parts
-of the boundary using the mesh function concept and is therefore
+of the boundary using the *mesh function* concept and is therefore
 left to Section ref{tut:poisson:mat:neumann}.
 
 
@@ -3101,7 +3163,7 @@ idx{assembly of linear systems}
 
 The examples so far have specified the left- and right-hand side of
 the variational formulation and then asked FEniCS to assemble the
-linear system and solve it.  An alternative to is explicitly call
+linear system and solve it.  An alternative is to explicitly call
 functions for assembling the coefficient matrix $A$ and the right-side
 vector $b$, and then solve the linear system $AU=b$ with respect to
 the $U$ vector.  Instead of `solve(a == L, u, b)` we now write
@@ -3115,7 +3177,7 @@ U = u.vector()
 solve(A, U, b)
 !ec
 The variables `a` and `L` are as before. That is, `a` refers to the
-bilinear form involving a `TrialFunction` object (say `u`)
+bilinear form involving a `TrialFunction` object (e.g., `u`)
 and a `TestFunction` object (`v`), and `L` involves a
 `TestFunction` object (`v`). From `a` and `L`,
 the `assemble` function can
@@ -3210,18 +3272,17 @@ eigenvalues of large, sparse matrices of the type encountered in PDE
 problems (see `demo/la/eigenvalue` in the DOLFIN source code tree
 for a demo).
 
-idx{`${prog["dn3_p2D"]}.py`}
 
-A complete code where the linear system $AU=b$ is explicitly assembled and
-solved is found in the file `${prog["dn3_p2D"]}.py` in the directory
-`poisson`. This code solves the same problem as in
-`${prog["dn2_p2D"]}.py`
-(Section ref{tut:poisson:multiple:Dirichlet}).  For small
-linear systems, the program writes out `A` and `b` before and
-after incorporation of essential boundary conditions and illustrates
-the difference between `assemble` and `assemble_system`.
-The reader is encouraged to run the code for a $2\times 1$
-mesh (`UnitSquareMesh(2, 1)` and study the output of `A`.
+#A complete code where the linear system $AU=b$ is explicitly assembled and
+#solved is found in the file `${prog["dn3_p2D"]}.py` in the directory
+#`poisson`. This code solves the same problem as in
+#`${prog["dn2_p2D"]}.py`
+#(Section ref{tut:poisson:multiple:Dirichlet}).  For small
+#linear systems, the program writes out `A` and `b` before and
+#after incorporation of essential boundary conditions and illustrates
+#the difference between `assemble` and `assemble_system`.
+#The reader is encouraged to run the code for a $2\times 1$
+#mesh (`UnitSquareMesh(2, 1)` and study the output of `A`.
 
 By default, `solve(A, U, b)` applies sparse LU decomposition
 as solver. Specification of an iterative solver and preconditioner
@@ -3234,7 +3295,6 @@ Appropriate names of solvers and preconditioners are found in
 Section ref{tut:app:solver:prec}.
 
 idx{KrylovSolver}
-idx{`${prog["d4_p2D"]}.py`}
 
 To control tolerances in the stopping criterion and the maximum
 number of iterations, one can explicitly form a `KrylovSolver` object
@@ -3243,16 +3303,32 @@ and set items in its `parameters` attribute
 
 !bc pycod
 solver = KrylovSolver('cg', 'ilu')
-solver.parameters['absolute_tolerance'] = 1E-7
-solver.parameters['relative_tolerance'] = 1E-4
-solver.parameters['maximum_iterations'] = 1000
+prm = solver.parameters
+prm['absolute_tolerance'] = 1E-7
+prm['relative_tolerance'] = 1E-4
+prm['maximum_iterations'] = 1000
 u = Function(V)
 U = u.vector()
 set_log_level(DEBUG)
 solver.solve(A, U, b)
 !ec
-The program `${prog["dn4_p2D"]}.py` is a modification of `${prog["dn3_p2D"]}.py`
-illustrating this latter approach.
+The function `solver_linalg` in the
+program file `${prog["p2D_vc"]}.py` implements a solver function where
+the user can choose between different types of assembly: the variational
+(`solve(a == L, u, bc)`), assembling the matrix and right-hand side separately, and assembling the system such that the coefficient matrix preserves
+symmetry.
+The function `application_linalg` runs a test problem on sequence of
+meshes and solves the problem with symmetric and non-symmetric modification
+of the coefficient matrix. One can monitor the number of Krylov
+method iteration and realize that that with a symmetric coefficient matrix,
+the Conjugate Gradient method requires slightly fewer iterations than
+GMRES in the non-symmetric case. Taking into account that the Conjugate
+Gradient method has less work per iteration, there is some efficiency to
+be gained by using `assemble_system`.
+
+[hpl: Running `application_linalg`, the results are strange: Why does
+the `solve(a==L,...)` method need many more iterations when we use
+the same Krylov parameter settings? Something wrong with the settings?]
 
 idx{random start vector (linear systems)}
 
@@ -3269,8 +3345,7 @@ solver.parameters['nonzero_initial_guess'] = True
 solver.solve(A, U, b)
 !ec
 Note that we must turn off the default behavior of setting the start
-vector ("initial guess") to zero.
-A random start vector is included in the `${prog["dn4_p2D"]}.py` code.
+vector (``initial guess'') to zero.
 
 Creating the linear system explicitly in a program can have some
 advantages in more advanced problem settings. For example, $A$ may

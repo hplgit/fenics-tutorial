@@ -20,14 +20,12 @@ V = FunctionSpace(mesh, 'Lagrange', 1)
 # Define Dirichlet boundary conditions
 u0 = Expression('1 + x[0]*x[0] + 2*x[1]*x[1]')
 
-class DirichletBoundary(SubDomain):
-    def inside(self, x, on_boundary):
-        tol = 1E-14   # tolerance for coordinate comparisons
-        return on_boundary and \
-               (abs(x[0]) < tol or abs(x[0] - 1) < tol)
+def Dirichlet_boundary(x, on_boundary):
+    tol = 1E-14   # tolerance for coordinate comparisons
+    return on_boundary and \
+           (abs(x[0]) < tol or abs(x[0] - 1) < tol)
 
-u0_boundary = DirichletBoundary()
-bc = DirichletBC(V, u0, u0_boundary)
+bc = DirichletBC(V, u0, Dirichlet_boundary)
 
 # Define variational problem
 u = TrialFunction(V)
@@ -48,14 +46,6 @@ Solution of the Poisson problem -Laplace(u) = f,
 with u = u0 on x=0,1 and -du/dn = g at y=0,1.
 %s
 """ % mesh)
-
-# Dump solution to the screen
-coor = mesh.coordinates()
-u_at_vertices = u.compute_vertex_values()
-for i, x in enumerate(coor):
-    print('u(%8g,%8g) = %g' %
-          (coor[i][0], coor[i][1], u_at_vertices[i]))
-
 
 # Verification
 u_e = interpolate(u0, V)
