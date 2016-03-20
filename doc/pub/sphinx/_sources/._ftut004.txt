@@ -1,1071 +1,1332 @@
 .. !split
 
-.. _tut:timedep:
-
-Time-dependent problems
-=======================
-
-The examples in the section :ref:`tut:fundamentals` illustrate that solving
-linear, stationary PDE problems with the aid of FEniCS is easy and
-requires little programming.  FEniCS clearly automates the spatial
-discretization by the finite element method. One can use a separate,
-one-dimensional finite element method in the domain as well, but very
-often, it is easier to just use a finite difference method, or to
-formulate the problem as an ODE system and leave the time-stepping to
-an ODE solver.
-
-.. The solution of
-
-.. nonlinear problems, as we showed in Section
-
-.. :ref:`tut:poisson:nonlinear`, can also be automated (cf. Section
-
-.. :ref:`tut:nonlinear:Newton:auto`), but many scientists will prefer to
-
-.. code the solution strategy of the nonlinear problem themselves and
-
-.. experiment with various combinations of strategies in difficult
-
-.. problems. Time-dependent problems are somewhat similar in this
-
-.. respect: we have to add a time discretization scheme, which is often
-
-.. quite simple, making it natural to explicitly code the details of the
-
-.. scheme so that the programmer has full control.
-
-.. We shall explain how
-
-.. easily this is accomplished through examples.
-
-[**hpl 9**: Should exemplify all three approaches? With emphasis on simple finite differences?]
-
-.. _tut:timedep:diffusion1:
-
-A diffusion problem and its discretization
-------------------------------------------
-
-.. index:: time-dependent PDEs
-
-Our time-dependent
-model problem for teaching purposes is naturally the simplest
-extension of the Poisson problem into the time domain, i.e.,
-the diffusion problem
-
-.. _Eq:tut:diffusion:pde1:
-
-.. math::
-
-    \tag{37}
-    {\partial u\over\partial t} = \nabla^2 u + f \mbox{ in } \Omega, \hbox{ for } t>0,
-        
-        
-
-.. _Eq:tut:diffusion:pde1:bc:
-
-.. math::
-
-    \tag{38}
-    u = u_0 \mbox{ on } \partial \Omega,\hbox{ for } t>0,
-        
-        
-
-.. _Eq:tut:diffusion:pde1:ic:
-
-.. math::
-
-    \tag{39}
-    u = I   \mbox{ at } t=0{\thinspace .}
-        
-        
-
-Here, :math:`u` varies with space and time, e.g., :math:`u=u(x,y,t)` if the spatial
-domain :math:`\Omega` is two-dimensional. The source function :math:`f` and the
-boundary values :math:`u_0` may also vary with space and time.
-The initial condition :math:`I` is a function of space only.
-
-A straightforward approach to solving time-dependent
-PDEs by the finite element method is to first discretize the
-time derivative by a finite difference approximation, which yields
-a recursive set of stationary problems, and then turn each stationary
-problem into a variational formulation.
-
-Let superscript :math:`k` denote
-a quantity at time :math:`t_k`,
-where :math:`k` is an integer counting time levels. For example, :math:`u^k` means
-:math:`u` at time level :math:`k`.
-A finite difference discretization in time first consists in
-sampling the PDE at some time level, say :math:`k`:
-
-.. _Eq:tut:diffusion:pde1:tk:
-
-.. math::
-
-    \tag{40}
-    {\partial \over\partial t}u^k = \nabla^2 u^k + f^k{\thinspace .}
-        
-        
-
-The time-derivative can be approximated by a finite difference.
-For simplicity and stability reasons we choose a
-simple backward difference:
-
-.. _Eq:tut:diffusion:BE:
-
-.. math::
-
-    \tag{41}
-    {\partial \over\partial t}u^k\approx {u^k - u^{k-1}\over{{\Delta t}}},
-        
-        
-
-where :math:`{\Delta t}` is the time discretization parameter.
-Inserting :ref:`(41) <Eq:tut:diffusion:BE>` in :ref:`(40) <Eq:tut:diffusion:pde1:tk>` yields
-
-.. _Eq:tut:diffusion:pde1:BE:
-
-.. math::
-
-    \tag{42}
-    {u^k - u^{k-1}\over{{\Delta t}}} = \nabla^2 u^k + f^k{\thinspace .}
-        
-        
-
-This is our time-discrete version of the diffusion PDE
-:ref:`(37) <Eq:tut:diffusion:pde1>`.
-Reordering :ref:`(42) <Eq:tut:diffusion:pde1:BE>`
-so that :math:`u^k` appears
-on the left-hand side only,
-shows that :ref:`(42) <Eq:tut:diffusion:pde1:BE>` is
-a recursive set of
-spatial (stationary) problems for :math:`u^k` (assuming :math:`u^{k-1}` is known from
-computations at the previous time level):
-
-.. _Eq:tut:diffusion:pde1:u0:
-
-.. math::
-
-    \tag{43}
-    u^0 = I, 
-        
-
-.. _Eq:tut:diffusion:pde1:uk:
-
-.. math::
-
-    \tag{44}
-    u^k - {{\Delta t}}\nabla^2 u^k =  u^{k-1} + {{\Delta t}} f^k,\quad k=1,2,\ldots
-        
-        
-
-Given :math:`I`, we can solve for :math:`u^0`, :math:`u^1`, :math:`u^2`, and so on.
-
-We use a finite element method
-to solve the
-equations :ref:`(43) <Eq:tut:diffusion:pde1:u0>` and :ref:`(44) <Eq:tut:diffusion:pde1:uk>`.
-This requires turning the equations into weak forms.
-As usual, we multiply by a test function :math:`v\in \hat V` and integrate
-second-derivatives by parts. Introducing the symbol :math:`u` for :math:`u^k`
-(which is natural in the program too), the resulting weak
-form can be conveniently written in the standard notation:
-:math:`a_0(u,v)=L_0(v)` for :ref:`(43) <Eq:tut:diffusion:pde1:u0>`
-and :math:`a(u,v)=L(v)` for :ref:`(44) <Eq:tut:diffusion:pde1:uk>`, where
-
-.. _Eq:tut:diffusion:pde1:a0:
-
-.. math::
-
-    \tag{45}
-    a_0(u,v) = \int_\Omega uv {\, \mathrm{d}x}, 
-        
-
-.. _Eq:tut:diffusion:pde1:L0:
-
-.. math::
-
-    \tag{46}
-    L_0(v) = \int_\Omega Iv {\, \mathrm{d}x}, 
-        
-
-.. _Eq:tut:diffusion:pde1:a:
-
-.. math::
-
-    \tag{47}
-    a(u,v) = \int_\Omega\left( uv + {{\Delta t}}
-        \nabla u\cdot \nabla v\right) {\, \mathrm{d}x}, 
-        
-
-.. _Eq:tut:diffusion:pde1:L:
-
-.. math::
-
-    \tag{48}
-    L(v) = \int_\Omega \left(u^{k-1} + {{\Delta t}}  f^k\right)v {\, \mathrm{d}x}{\thinspace .}
-        
-        
-
-The continuous variational problem is to find
-:math:`u^0\in V` such that :math:`a_0(u^0,v)=L_0(v)` holds for all :math:`v\in\hat V`,
-and then find :math:`u^k\in V`
-such that :math:`a(u^k,v)=L(v)` for all :math:`v\in\hat V`,
-:math:`k=1,2,\ldots`.
-
-Approximate solutions in space
-are found by
-restricting the functional spaces :math:`V` and :math:`\hat V`
-to finite-dimensional spaces,
-exactly as we have done in the Poisson problems.
-We shall use the symbol :math:`u` for the finite element
-approximation at time :math:`t_k`. In case we need to distinguish this
-space-time discrete approximation from the exact solution of
-the continuous diffusion problem, we use :math:`{u_{\small\mbox{e}}}` for the latter.
-By :math:`u^{k-1}` we mean the finite element approximation
-of the solution at time :math:`t_{k-1}`.
-
-Note that the forms :math:`a_0` and :math:`L_0` are identical to the forms
-met in the section :ref:`tut:poisson:gradu`, except that the test and trial
-functions are now
-scalar fields and not vector fields.
-Instead of solving
-:ref:`(43) <Eq:tut:diffusion:pde1:u0>`
-by a finite
-element method, i.e., projecting :math:`I` onto :math:`V` via
-the problem :math:`a_0(u,v)=L_0(v)`, we could simply interpolate :math:`u^0` from
-:math:`I`. That is, if :math:`u^0=\sum_{j=1}^N U^0_j\phi_j`, we
-simply set :math:`U_j=I(x_j,y_j)`, where :math:`(x_j,y_j)` are the coordinates of
-node number :math:`j`. We refer to these two strategies as computing
-the initial condition by either projecting :math:`I` or interpolating :math:`I`.
-Both operations are easy to compute through one statement, using either
-the ``project`` or ``interpolate`` function.
-
-.. _tut:timedep:diffusion1:impl:
-
-Implementation          (3)
----------------------------
-
-Our program needs to perform the time stepping explicitly, but can
-rely on FEniCS to easily compute :math:`a_0`, :math:`L_0`, :math:`a`, and :math:`L`, and solve
-the linear systems for the unknowns.  We realize that :math:`a` does not
-depend on time, which means that its associated matrix also will be
-time independent. Therefore, it is wise to explicitly create matrices
-and vectors as in the section :ref:`tut:poisson1:linalg`.  The matrix :math:`A`
-arising from :math:`a` can be computed prior to the time stepping, so that
-we only need to compute the right-hand side :math:`b`, corresponding to :math:`L`,
-in each pass in the time loop. Let us express the solution procedure
-in algorithmic form, writing :math:`u` for the unknown spatial function at
-the new time level (:math:`u^k`) and :math:`u_1` for the spatial solution at one
-earlier time level (:math:`u^{k-1}`):
-
- * define Dirichlet boundary condition (:math:`u_0`, Dirichlet boundary, etc.)
-
- * if :math:`u_1` is to be computed by projecting :math:`I`:
-
-   * define :math:`a_0` and :math:`L_0`
-
-   * assemble matrix :math:`M` from :math:`a_0` and vector :math:`b` from :math:`L_0`
-
-   * solve :math:`MU=b` and store :math:`U` in :math:`u_1`
-
- * else:  (interpolation)
-
-   * let :math:`u_1` interpolate :math:`I`
-
- * define :math:`a` and :math:`L`
-
- * assemble matrix :math:`A` from :math:`a`
-
- * set some stopping time :math:`T`
-
- * :math:`t={{\Delta t}}`
-
- * while :math:`t\leq T`
-
-   * assemble vector :math:`b` from :math:`L`
-
-   * apply essential boundary conditions
-
-   * solve :math:`AU=b` for :math:`U` and store in :math:`u`
-
-   * :math:`t\leftarrow t + {{\Delta t}}`
-
-   * :math:`u_1 \leftarrow u` (be ready for next step)
-
-Before starting the coding, we shall construct a problem where it is
-easy to determine if the calculations are correct. The simple backward
-time difference is exact for linear functions, so we decide to have
-a linear variation in time. Combining a second-degree polynomial in space
-with a linear term in time,
-
-.. _Eq:tut:diffusion:pde1:u0test:
-
-.. math::
-
-    \tag{49}
-    u = 1 + x^2 + \alpha y^2 + \beta t,
-        
-        
-
-yields a function whose computed values at the nodes may be exact,
-regardless of the size of the elements and :math:`{\Delta t}`, as long as the
-mesh is uniformly partitioned.
-By inserting :ref:`(49) <Eq:tut:diffusion:pde1:u0test>` in the PDE problem
-:ref:`(37) <Eq:tut:diffusion:pde1>`, it follows
-that :math:`u_0` must be given as
-:ref:`(49) <Eq:tut:diffusion:pde1:u0test>` and that :math:`f(x,y,t)=\beta - 2 - 2\alpha`
-and :math:`I(x,y)=1+x^2+\alpha y^2`.
-
-.. index:: d1_d2D.py
-
-A new programming issue is how to deal with functions that vary in
-space *and time*, such as the boundary condition
-:math:`u_0` given by :ref:`(49) <Eq:tut:diffusion:pde1:u0test>`.
-A natural solution is
-to apply an ``Expression`` object with time :math:`t` as a parameter,
-in addition to the parameters :math:`\alpha` and :math:`\beta` (see
-the section :ref:`tut:poisson:membrane` for ``Expression``
-objects with parameters):
+Useful extensions
+=================
+
+.. _tut:poisson1:solve:prm:
+
+Controlling the solution process
+--------------------------------
+
+Sparse LU decomposition (Gaussian elimination) is used by default to
+solve linear systems of equations in FEniCS programs.  This is a very
+robust and recommended method for a few thousand unknowns in the
+equation system, and may hence be the method of choice in many 2D and
+smaller 3D problems. However, sparse LU decomposition becomes slow and
+memory demanding in large problems.  This fact forces the use of
+iterative methods, which are faster and require much less memory.
+Consequently, we must tell you already now how you can take
+advantage of state-of-the-art iterative solution methods in FEniCS.
+
+Setting linear solver parameters
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Preconditioned Krylov solvers is a type of popular iterative methods
+that are easily accessible in FEniCS programs. The Poisson equation
+results in a symmetric, positive definite coefficient matrix, for
+which the optimal Krylov solver is the Conjugate Gradient (CG)
+method. However, the CG method requires boundary conditions to be
+implemented in a symmetric way. This is not the case by default, so
+then a Krylov solver for non-symmetric system, such as GMRES, is a
+better choice.  Incomplete LU factorization (ILU) is a popular and
+robust all-round preconditioner, so let us try the GMRES-ILU pair:
 
 .. code-block:: python
 
-        alpha = 3; beta = 1.2
-        u0 = Expression('1 + x[0]*x[0] + alpha*x[1]*x[1] + beta*t',
-                        alpha=alpha, beta=beta, t=0)
+        solve(a == L, u, bc)
+              solver_parameters={'linear_solver': 'gmres',
+                                 'preconditioner': 'ilu'})
+        # Alternative syntax
+        solve(a == L, u, bc,
+              solver_parameters=dict(linear_solver='gmres',
+                                     preconditioner='ilu'))
 
-The time parameter can later be updated by assigning values to ``u0.t``.
+the section :ref:`tut:app:solver:prec` lists the most popular choices of
+Krylov solvers and preconditioners available in FEniCS.
 
-Given a ``mesh`` and an associated function space ``V``, we
-can specify the :math:`u_0` function as
+.. index:: linear algebra backend
 
-.. code-block:: python
+.. index:: PETSc
 
-        alpha = 3; beta = 1.2
-        u0 = Expression('1 + x[0]*x[0] + alpha*x[1]*x[1] + beta*t',
-                        {'alpha': alpha, 'beta': beta})
-        u0.t = 0
+.. index:: Trilinos
 
-This function expression has the components of ``x`` as independent
-variables, while ``alpha``, ``beta``, and ``t`` are parameters.
-The parameters can either be set through a dictionary at construction time,
-as demonstrated for ``alpha`` and ``beta``, or anytime through
-attributes in the function
-object, as shown for the ``t`` parameter.
+.. index:: MTL4
 
-The essential boundary conditions, along the whole boundary in this case,
-are set in the usual way,
+.. index:: uBLAS
 
-.. code-block:: python
+Linear algebra backend
+~~~~~~~~~~~~~~~~~~~~~~
 
-        def boundary(x, on_boundary):  # define the Dirichlet boundary
-            return on_boundary
-        
-        bc = DirichletBC(V, u0, boundary)
-
-We shall use ``u`` for the unknown :math:`u` at the new time level and
-``u_1`` for :math:`u` at the previous time level.  The initial value of
-``u_1``, implied by the initial condition on :math:`u`, can be computed
-by either projecting or interpolating :math:`I`.
-The :math:`I(x,y)` function is available in the program through
-``u0``,
-as long as ``u0.t`` is zero.
-We can then do
+The actual GMRES and ILU implementations that are brought into action
+depends on the choice of linear algebra package. FEniCS interfaces
+several linear algebra packages, called *linear algebra backends* in
+FEniCS terminology.  PETSc is the default choice if DOLFIN is compiled
+with PETSc, otherwise uBLAS.  Epetra (Trilinos), Eigen, MTL4 are other
+supported backends.  Which backend to apply can be controlled by
+setting
 
 .. code-block:: python
 
-        u_1 = interpolate(u0, V)
+        parameters['linear_algebra_backend'] = backendname
+
+where ``backendname`` is a string, either ``'Eigen'``, ``'PETSc'``, ``'uBLAS'``,
+``'Epetra'``, or ``'MTL4'``.  All these backends offer high-quality
+implementations of both iterative and direct solvers for linear systems
+of equations.
+
+.. index:: UMFPACK
+
+A common platform for FEniCS users is Ubuntu Linux.  The FEniCS
+distribution for Ubuntu contains PETSc, making this package the
+default linear algebra backend.  The default solver is sparse LU
+decomposition (``'lu'``), and the actual software that is called is then
+the sparse LU solver from UMFPACK (which PETSc has an interface
+to). The available linear algebra backends in a FEniCS installation is
+listed by
+
+.. code-block:: python
+
+        list_linear_algebra_backends()
+
+.. index:: parameters database
+
+.. index:: info function
+
+The ``parameters`` database
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+We will normally like to control the tolerance in the stopping
+criterion and the maximum number of iterations when running an
+iterative method.  Such parameters can be set by accessing the *global
+parameter database*, which is called ``parameters`` and which behaves as
+a nested dictionary. Write
+
+.. code-block:: python
+
+        info(parameters, verbose=True)
+
+to list all parameters and their default values in the database.
+The nesting of parameter sets is indicated through indentation in the
+output from ``info``.
+According to this output, the relevant parameter set is
+named ``'krylov_solver'``, and the parameters are set like this:
+
+.. code-block:: python
+
+        prm = parameters['krylov_solver']  # short form
+        prm['absolute_tolerance'] = 1E-10
+        prm['relative_tolerance'] = 1E-6
+        prm['maximum_iterations'] = 1000
+
+Stopping criteria for Krylov solvers usually involve the norm of
+the residual, which must be smaller than the absolute tolerance
+parameter *or* smaller than the relative tolerance parameter times
+the initial residual.
+
+To get a printout of the number of actual iterations to reach the
+stopping criterion, we can insert
+
+.. code-block:: python
+
+        set_log_level(PROGRESS)
         # or
-        u_1 = project(u0, V)
+        set_log_level(DEBUG)
 
-Note that we could, as an equivalent alternative to using ``project``, define
-:math:`a_0` and :math:`L_0` as we did in the section :ref:`tut:poisson:gradu` and form
-the associated variational problem.
-To actually recover the exact solution
-:ref:`(49) <Eq:tut:diffusion:pde1:u0test>`
-to machine precision,
-it is important not to compute the discrete initial condition by
-projecting :math:`I`, but by interpolating :math:`I` so that the nodal values are
-exact at :math:`t=0` (projection results in approximative values at the nodes).
+A message with the equation system size, solver type, and number of
+iterations arises from specifying the argument ``PROGRESS``, while
+``DEBUG`` results in more information, including CPU time spent in
+the various parts of the matrix assembly and solve process.
 
-The definition of :math:`a` and :math:`L` goes as follows:
+We remark that default values for the global parameter database can be
+defined in an XML file. To generate such a file from the current set
+of parameters in a program, run
 
 .. code-block:: python
 
-        dt = 0.3      # time step
-        
-        u = TrialFunction(V)
-        v = TestFunction(V)
-        f = Constant(beta - 2 - 2*alpha)
-        
-        a = u*v*dx + dt*inner(nabla_grad(u), nabla_grad(v))*dx
-        L = (u_1 + dt*f)*v*dx
-        
-        A = assemble(a)   # assemble only once, before the time stepping
+        File('dolfin_parameters.xml') << parameters
 
-Finally, we perform the time stepping in a loop:
+If a ``dolfin_parameters.xml`` file is found in the directory where a
+FEniCS program is run, this file is read and used to initialize the
+``parameters`` object. Otherwise, the file
+``.config/fenics/dolfin_parameters.xml`` in the user's home directory is
+read, if it exists.  Another alternative is to load the XML (with any
+name) manually in the program:
 
 .. code-block:: python
 
-        u = Function(V)   # the unknown at a new time level
-        T = 2             # total simulation time
-        t = dt
-        
-        while t <= T:
-            b = assemble(L)
-            u0.t = t
-            bc.apply(A, b)
-            solve(A, u.vector(), b)
-        
-            t += dt
-            u_1.assign(u)
+        File('dolfin_parameters.xml') >> parameters
 
-Observe that ``u0.t`` must be updated before the ``bc.apply``
-statement, to enforce computation of Dirichlet conditions at the
-current time level.
+The XML file can also be in gzip'ed form with the extension ``.xml.gz``.
 
-The time loop above does not contain any comparison of the numerical
-and the exact solution, which we must include in order to verify the
-implementation.  As in many previous examples, we compute the
-difference between the array of nodal values of ``u`` and the array of
-the interpolated exact solution.  The following code is to be included
-inside the loop, after ``u`` is found:
+.. index:: p2D_iter.py
 
-.. code-block:: python
+An extended solver function
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-        u_e = interpolate(u0, V)
-        maxdiff = numpy.abs(u_e.vector().array()-u.vector().array()).max()
-        print('Max error, t=%.2f: %-10.3f' % (t, maxdiff))
-
-.. index:: assemble
-
-The right-hand side vector ``b`` must obviously
-be recomputed at each time level.
-With the construction ``b = assemble(L)``, a new
-vector for ``b`` is allocated in memory in every pass of the time loop.
-It would be much more memory friendly to reuse the storage of the ``b``
-we already have.
-This is easily accomplished by
-
-.. code-block:: python
-
-            b = assemble(L, tensor=b)
-
-That is, we send in our previous ``b``, which is then filled with new values
-and returned from ``assemble``. Now there will be only a single
-memory allocation of the right-hand side vector. Before the time loop
-we set ``b = None`` such that ``b`` is defined in the first call to
-``assemble``.
-
-The complete program code for this time-dependent case goes as follows:
+Let us extend the previous solver function from
+``p2D_func.py`` such that it also offers the GMRES+ILU
+preconditioned Krylov solver.
 
 .. code-block:: python
 
         from dolfin import *
-        import numpy
         
-        # Create mesh and define function space
-        nx = ny = 2
-        mesh = UnitSquareMesh(nx, ny)
-        V = FunctionSpace(mesh, 'Lagrange', 1)
+        def solver(
+            f, u0, Nx, Ny, degree=1,
+            linear_solver='Krylov', # Alt: 'direct'
+            abs_tol=1E-5,           # Absolute tolerance in Krylov solver
+            rel_tol=1E-3,           # Relative tolerance in Krylov solver
+            max_iter=1000,          # Max no of iterations in Krylov solver
+            log_level=PROGRESS,     # Amount of solver output
+            dump_parameters=False,  # Write out parameter database?
+            ):
+            """
+            Solve -Laplace(u)=f on [0,1]x[0,1] with 2*Nx*Ny Lagrange
+            elements of specified degree and u=u0 (Expresssion) on
+            the boundary.
+            """
+            # Create mesh and define function space
+            mesh = UnitSquareMesh(Nx, Ny)
+            V = FunctionSpace(mesh, 'Lagrange', degree)
         
-        # Define boundary conditions
-        alpha = 3; beta = 1.2
-        u0 = Expression('1 + x[0]*x[0] + alpha*x[1]*x[1] + beta*t',
-                        alpha=alpha, beta=beta, t=0)
-        
-        class Boundary(SubDomain):  # define the Dirichlet boundary
-            def inside(self, x, on_boundary):
+            def u0_boundary(x, on_boundary):
                 return on_boundary
         
-        boundary = Boundary()
-        bc = DirichletBC(V, u0, boundary)
+            bc = DirichletBC(V, u0, u0_boundary)
         
-        # Initial condition
-        u_1 = interpolate(u0, V)
-        #u_1 = project(u0, V)  # will not result in exact solution!
+            # Define variational problem
+            u = TrialFunction(V)
+            v = TestFunction(V)
+            a = inner(nabla_grad(u), nabla_grad(v))*dx
+            L = f*v*dx
         
-        dt = 0.3      # time step
+            # Compute solution
+            u = Function(V)
         
-        # Define variational problem
-        u = TrialFunction(V)
-        v = TestFunction(V)
-        f = Constant(beta - 2 - 2*alpha)
-        a = u*v*dx + dt*inner(nabla_grad(u), nabla_grad(v))*dx
-        L = (u_1 + dt*f)*v*dx
+            if linear_solver == 'Krylov':
+                prm = parameters['krylov_solver'] # short form
+                prm['absolute_tolerance'] = abs_tol
+                prm['relative_tolerance'] = rel_tol
+                prm['maximum_iterations'] = max_iter
+                print(parameters['linear_algebra_backend'])
+                set_log_level(log_level)
+                if dump_parameters:
+                    info(parameters, True)
+                solver_parameters = {'linear_solver': 'gmres',
+                                     'preconditioner': 'ilu'}
+            else:
+                solver_parameters = {'linear_solver': 'lu'}
         
-        A = assemble(a)   # assemble only once, before the time stepping
-        b = None          # necessary for memory saving assemeble call
+            solve(a == L, u, bc, solver_parameters=solver_parameters)
+            return u
         
-        # Compute solution
-        u = Function(V)   # the unknown at a new time level
-        T = 1.9           # total simulation time
-        t = dt
-        while t <= T:
-            print('time =', t)
-            b = assemble(L, tensor=b)
-            u0.t = t
-            bc.apply(A, b)
-            solve(A, u.vector(), b)
+        def solver_objects(
+            f, u0, Nx, Ny, degree=1,
+            linear_solver='Krylov', # Alt: 'direct'
+            abs_tol=1E-5,           # Absolute tolerance in Krylov solver
+            rel_tol=1E-3,           # Relative tolerance in Krylov solver
+            max_iter=1000,          # Max no of iterations in Krylov solver
+            log_level=PROGRESS,     # Amount of solver output
+            dump_parameters=False,  # Write out parameter database?
+            ):
+            """As solver, but use objects for linear variational problem
+            and solver."""
+            # Create mesh and define function space
+            mesh = UnitSquareMesh(Nx, Ny)
+            V = FunctionSpace(mesh, 'Lagrange', degree)
         
-            # Verify
-            u_e = interpolate(u0, V)
-            maxdiff = numpy.abs(u_e.vector().array() - u.vector().array()).max()
-            print('Max error, t=%.2f: %-10.3f' % (t, maxdiff))
+            def u0_boundary(x, on_boundary):
+                return on_boundary
         
-            t += dt
-            u_1.assign(u)
-
-The code
-is available in the
-file `d1_d2D.py <https://github.com/hplgit/fenics-tutorial/blob/master/src/diffusion/d1_d2D.py>`__
-in the directory `diffusion <https://github.com/hplgit/fenics-tutorial/blob/master/src/diffusion>`__.
-
-.. _tut:timedep:diffusion1:noassemble:
-
-Avoiding assembly
------------------
-
-.. index::
-   single: assembly, increasing efficiency
-
-The purpose of this section is to present a technique for speeding
-up FEniCS simulators for time-dependent problems where it is
-possible to perform all assembly operations prior to the time loop.
-There are two costly operations in the time loop: assembly of the
-right-hand side :math:`b` and solution of the linear system via the
-``solve`` call. The assembly process involves work proportional to
-the number of degrees of freedom :math:`N`, while the solve operation
-has a work estimate of :math:`\mathcal{O}( N^{\alpha})`, for some :math:`\alpha\geq 1`. As
-:math:`N\rightarrow\infty`, the solve operation will dominate for :math:`\alpha>1`,
-but for the values of :math:`N` typically used on smaller computers, the
-assembly step may still
-represent a considerable part of the total work at each
-time level. Avoiding repeated assembly can therefore contribute to a
-significant speed-up of a finite element code in time-dependent problems.
-
-To see how repeated assembly can be avoided, we look at the :math:`L(v)`
-form in  :ref:`(48) <Eq:tut:diffusion:pde1:L>`,
-which in general varies with
-time through :math:`u^{k-1}`, :math:`f^k`, and possibly also with :math:`{\Delta t}`
-if the time step is adjusted during the simulation.
-The technique for avoiding repeated assembly consists in
-expanding the finite element functions in sums over the basis functions
-:math:`\phi_i`, as explained
-in the section :ref:`tut:poisson1:linalg`, to identify matrix-vector
-products that build up the complete system. We have
-:math:`u^{k-1}=\sum_{j=1}^NU^{k-1}_j\phi_j`, and we can expand :math:`f^k` as
-:math:`f^{k}=\sum_{j=1}^NF^{k}_j\phi_j`. Inserting these expressions in :math:`L(v)`
-and using
-:math:`v=\hat\phi_i` result in
-
-.. math::
+            bc = DirichletBC(V, u0, u0_boundary)
         
-        \int_\Omega \left(u^{k-1} + {{\Delta t}}f^k\right)v {\, \mathrm{d}x} &=
-        \int_\Omega \left(\sum_{j=1}^N U^{k-1}_j\phi_j + {{\Delta t}}\sum_{j=1}^N F^{k}_j\phi_j\right)\hat\phi_i {\, \mathrm{d}x},\\ 
-        &=\sum_{j=1}^N\left(\int_\Omega \hat\phi_i\phi_j {\, \mathrm{d}x}\right)U^{k-1}_j
-         + {{\Delta t}}\sum_{j=1}^N\left(\int_\Omega \hat\phi_i\phi_j {\, \mathrm{d}x}\right)F^{k}_j{\thinspace .}
+            # Define variational problem
+            u = TrialFunction(V)
+            v = TestFunction(V)
+            a = inner(nabla_grad(u), nabla_grad(v))*dx
+            L = f*v*dx
         
-
-Introducing :math:`M_{ij} = \int_\Omega \hat\phi_i\phi_j {\, \mathrm{d}x}`, we see that
-the last expression can be written
-
-.. math::
+            # Compute solution
+            u = Function(V)
+            problem = LinearVariationalProblem(a, L, u, bc)
+            solver  = LinearVariationalSolver(problem)
         
-        \sum_{j=1}^NM_{ij}U^{k-1}_j + {{\Delta t}} \sum_{j=1}^NM_{ij}F^{k}_j,
+            if linear_solver == 'Krylov':
+                solver.parameters['linear_solver'] = 'gmres'
+                solver.parameters['preconditioner'] = 'ilu'
+                prm = solver.parameters['krylov_solver'] # short form
+                prm['absolute_tolerance'] = abs_tol
+                prm['relative_tolerance'] = rel_tol
+                prm['maximum_iterations'] = max_iter
+                print(parameters['linear_algebra_backend'])
+                set_log_level(log_level)
+                if dump_parameters:
+                    info(parameters, True)
+                solver_parameters = {'linear_solver': 'gmres',
+                                     'preconditioner': 'ilu'}
+            else:
+                solver_parameters = {'linear_solver': 'lu'}
         
+            solver.solve()
+            return u
 
-which is nothing but two matrix-vector products,
+This new ``solver`` function, found in the file
+``p2D_iter.py``, replaces the one in ``p2D_func.py``:
+it has all the functionality of the previous ``solver`` function,
+but can also solve the linear system with
+iterative methods and report the progress of such solvers.
 
-.. math::
-        
-        MU^{k-1} + {{\Delta t}} MF^k,
-        
+Remark regarding unit tests
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-if :math:`M` is the matrix with entries :math:`M_{ij}`,
+Regarding verification of the new ``solver`` function in terms of unit
+tests, it turns out that unit testing in a problem where the
+approximation error vanishes is gets more complicated when we use
+iterative methods. The problem is to keep the error due to iterative
+solution smaller than the tolerance used in the verification
+tests. First of all this means that the tolerances used in the Krylov
+solvers must be smaller than the tolerance used in the ``assert`` test,
+but this is no guarantee to keep the linear solver error this small.
+For linear elements and small meshes, a tolerance of :math:`10^{-11}` works
+well in the case of Krylov solvers too (using a tolerance :math:`10^{-12}`
+in those solvers. However, as soon as we switch to P2 elements, it is
+hard to force the linear solver error below :math:`10^{-6}`. Consequently,
+tolerances in tests depend on the numerical methods. The interested
+reader is referred to the ``test_solver`` function in
+``p2D_iter.py`` for details: this test function tests the
+numerical solution for direct and iterative linear solvers, for
+different meshes, and different degrees of the polynomials in the
+finite element basis functions.
 
-.. math::
-        
-        U^{k-1}=(U^{k-1}_1,\ldots,U^{k-1}_N)^T,
-        
+.. _tut:poisson1:solver:problem:
 
-and
+Linear variational problem and solver objects
+---------------------------------------------
 
-.. math::
-        
-        F^k=(F^{k}_1,\ldots,F^{k}_N)^T{\thinspace .}
-        
+.. index:: LinearVariationalProblem
 
-We have immediate access to :math:`U^{k-1}`
-in the program since that is the vector
-in the ``u_1`` function. The :math:`F^k` vector can easily be
-computed by interpolating the prescribed :math:`f` function (at each time level if
-:math:`f` varies with time). Given :math:`M`, :math:`U^{k-1}`, and :math:`F^k`, the right-hand side
-:math:`b` can be calculated as
+.. index:: LinearVariationalSolver
 
-.. math::
-        
-        b = MU^{k-1} + {{\Delta t}} MF^k {\thinspace .}
-        
+.. index:: p2D_iter.py
 
-That is, no assembly is necessary to compute :math:`b`.
-
-The coefficient matrix :math:`A` can also be split into two terms.
-We insert :math:`v=\hat\phi_i` and :math:`u^k = \sum_{j=1}^N U^k_j\phi_j` in
-the expression :ref:`(47) <Eq:tut:diffusion:pde1:a>` to get
-
-.. math::
-        
-        \sum_{j=1}^N \left(\int_\Omega \hat\phi_i\phi_j {\, \mathrm{d}x}\right)U^k_j + {{\Delta t}}
-        \sum_{j=1}^N \left(\int_\Omega \nabla\hat\phi_i\cdot\nabla\phi_j {\, \mathrm{d}x}\right)U^k_j,
-        
-
-which can be written as a sum of matrix-vector products,
-
-.. math::
-        
-        MU^k + {{\Delta t}} KU^k = (M + {{\Delta t}} K)U^k,
-        
-
-if we identify the matrix :math:`M` with entries :math:`M_{ij}` as above and
-the matrix :math:`K` with entries
-
-.. _Eq:_auto18:
-
-.. math::
-
-    \tag{50}
-    K_{ij} = \int_\Omega \nabla\hat\phi_i\cdot\nabla\phi_j {\, \mathrm{d}x}{\thinspace .}
-        
-        
-
-The matrix :math:`M` is often called the "mass matrix" while "stiffness matrix"
-is a common nickname for :math:`K`. The associated bilinear forms for these
-matrices, as we need them for the assembly process in a FEniCS
-program, become
-
-.. _Eq:tut:diffusion:pde1:aK:
-
-.. math::
-
-    \tag{51}
-    a_K(u,v) = \int_\Omega\nabla u\cdot\nabla v {\, \mathrm{d}x},
-        
-        
-
-.. _Eq:tut:diffusion:pde1:aM:
-
-.. math::
-
-    \tag{52}
-    a_M(u,v) = \int_\Omega uv {\, \mathrm{d}x} {\thinspace .}
-        
-
-The linear system at each time level, written as :math:`AU^k=b`,
-can now be computed by first computing :math:`M` and :math:`K`, and then forming
-:math:`A=M+{{\Delta t}} K` at :math:`t=0`, while :math:`b` is computed as
-:math:`b=MU^{k-1} + {{\Delta t}}MF^k` at each time level.
-
-.. index:: d2_d2D.py
-
-The following modifications are needed in the ``d1_d2D.py``
-program from the previous section in order to implement the new
-strategy of avoiding assembly at each time level:
-
-  * Define separate forms :math:`a_M` and :math:`a_K`
-
-  * Assemble :math:`a_M` to :math:`M` and :math:`a_K` to :math:`K`
-
-  * Compute :math:`A=M+{{\Delta t}}`, :math:`K`
-
-  * Define :math:`f` as an ``Expression``
-
-  * Interpolate the formula for :math:`f` to a finite element function :math:`F^k`
-
-  * Compute :math:`b=MU^{k-1} + {{\Delta t}}MF^k`
-
-The relevant code segments become
+The ``solve(a == L, u, bc)`` call is just a compact syntax alternative to a
+slightly more comprehensive specification of the variational equation
+and the solution of the associated linear system.  This alternative
+syntax is used in a lot of FEniCS applications and will also be
+used later in this tutorial, so we show it already now:
 
 .. code-block:: python
 
-        # 1.
-        a_K = inner(nabla_grad(u), nabla_grad(v))*dx
-        a_M = u*v*dx
-        
-        # 2. and 3.
-        M = assemble(a_M)
-        K = assemble(a_K)
-        A = M + dt*K
-        
-        # 4.
-        f = Expression('beta - 2 - 2*alpha', beta=beta, alpha=alpha)
-        
-        # 5. and 6.
-        while t <= T:
-            f_k = interpolate(f, V)
-            F_k = f_k.vector()
-            b = M*u_1.vector() + dt*M*F_k
+        u = Function(V)
+        problem = LinearVariationalProblem(a, L, u, bc)
+        solver  = LinearVariationalSolver(problem)
+        solver.solve()
 
-The complete program appears in the file ``d2_d2D.py``.
+Many objects have an attribute ``parameters`` corresponding to
+a parameter set in the global ``parameters`` database,
+but local to the object. Here, ``solver.parameters`` play that
+role. Setting the CG method with ILU preconditioning as solution
+method and specifying solver-specific parameters can be done
+like this:
 
-.. _tut:timedep:diffusion2:sin:
+.. code-block:: python
 
-A physical example
-------------------
+        solver.parameters['linear_solver'] = 'gmres'
+        solver.parameters['preconditioner'] = 'ilu'
+        prm = solver.parameters['krylov_solver'] # short form
+        prm['absolute_tolerance'] = 1E-7
+        prm['relative_tolerance'] = 1E-4
+        prm['maximum_iterations'] = 1000
 
-.. index:: sin_daD.py
+Settings in the global ``parameters`` database are
+propagated to parameter sets in individual objects, with the
+possibility of being overwritten as done above.
 
-With the basic programming techniques for time-dependent problems from
-the sections :ref:`tut:timedep:diffusion1:noassemble`
-and :ref:`tut:timedep:diffusion1:impl`
-we are ready to attack more physically realistic examples.
-The next example concerns the question: How is the temperature in the
-ground affected by day and night variations at the earth's surface?
-We consider some box-shaped domain :math:`\Omega` in :math:`d` dimensions with
-coordinates :math:`x_0,\ldots,x_{d-1}` (the problem is meaningful in 1D, 2D, and 3D).
-At the top of the domain, :math:`x_{d-1}=0`, we have an oscillating
-temperature
+The linear variational problem and solver objects as outlined above
+are incorporated in an alternative solver function, named
+``solver_objects``, in
+``p2D_iter.py``. Otherwise, this function is parallel to the
+previously shown ``solver`` function.
+
+.. _tut:poisson1:verify1:
+
+Writing out the discrete solution
+---------------------------------
+
+We have seen how to grab the degrees of freedom array from a
+finite element function ``u``:
+
+.. code-block:: python
+
+        u_array = `u.vector().array()
+
+The elements in ``u_array`` correspond to function values of ``u`` at nodes
+in the mesh.  Now, a fundamental question is: What are the
+coordinates of node ``i`` whose value is ``u_array[i]``? To answer this
+question, we need to understand how to get our hands on the
+coordinates, and in particular, the numbering of degrees of freedom
+and the numbering of vertices in the mesh. We start with P1 (1st order
+Lagrange) elements where all the nodes are vertices in the mesh.
+
+The function ``mesh.coordinates()`` returns the coordinates of the
+vertices as a ``numpy`` array with shape :math:`(M,d`), :math:`M` being the number
+of vertices in the mesh and :math:`d` being the number of space dimensions:
+
+.. code-block:: python
+
+        >>> from dolfin import *
+        >>>
+        >>> mesh = UnitSquareMesh(2, 2)
+        >>> coor = mesh.coordinates()
+        >>> coor
+        array([[ 0. ,  0. ],
+               [ 0.5,  0. ],
+               [ 1. ,  0. ],
+               [ 0. ,  0.5],
+               [ 0.5,  0.5],
+               [ 1. ,  0.5],
+               [ 0. ,  1. ],
+               [ 0.5,  1. ],
+               [ 1. ,  1. ]])
+
+We see from this output that vertices are first numbered along :math:`y=0`
+with increasing :math:`x` coordinate, then along :math:`y=0.5`, and so on.
+
+Next we compute a function ``u`` on this mesh, e.g., the :math:`u=x+y`:
+
+.. code-block:: python
+
+        >>> V = FunctionSpace(mesh, 'Lagrange', 1)
+        >>> u = interpolate(Expression('x[0]+x[1]'), V)
+        >>> plot(u, interactive=True)
+        >>> u_array = u.vector().array()
+        >>> u_array
+        array([ 1. ,  0.5,  1.5,  0. ,  1. ,  2. ,  0.5,  1.5,  1. ])
+
+We observe that ``u_array[0]`` is *not* the value of :math:`x+y` at vertex number 0,
+since this vertex has coordinates :math:`x=y=0`. The numbering of the
+degrees of freedom :math:`U_1,\ldots,U_{N}` is obviously not the same as the
+numbering of the vertices.
+
+In the plot of ``u``, type ``w`` to turn on wireframe instead of fully colored
+surface, ``m`` to show the mesh, and then ``v`` to show the
+numbering of the vertices.
+
+| 
+| 
+
+.. figure:: vertex_numbering.png
+   :width: 500
+
+| 
+| 
+
+.. index:: compute vertex values
+
+.. index:: vertex values
+
+The vertex values of a ``Function`` object can be extracted by
+``u.compute_vertex_values()``, which returns an array where element ``i``
+is the value of ``u`` at vertex ``i``:
+
+.. code-block:: python
+
+        >>> u_at_vertices = u.compute_vertex_values()
+        >>> for i, x in enumerate(coor):
+        ...     print('vertex %d: u_at_vertices[%d]=%g\tu(%s)=%g' %
+        ...           (i, i, u_at_vertices[i], x, u(x)))
+        vertex 0: u_at_vertices[0]=0	u([ 0.  0.])=8.46545e-16
+        vertex 1: u_at_vertices[1]=0.5	u([ 0.5  0. ])=0.5
+        vertex 2: u_at_vertices[2]=1	u([ 1.  0.])=1
+        vertex 3: u_at_vertices[3]=0.5	u([ 0.   0.5])=0.5
+        vertex 4: u_at_vertices[4]=1	u([ 0.5  0.5])=1
+        vertex 5: u_at_vertices[5]=1.5	u([ 1.   0.5])=1.5
+        vertex 6: u_at_vertices[6]=1	u([ 0.  1.])=1
+        vertex 7: u_at_vertices[7]=1.5	u([ 0.5  1. ])=1.5
+        vertex 8: u_at_vertices[8]=2	u([ 1.  1.])=2
+
+.. index:: vertex to dof map
+
+.. index:: dof to vertex map
+
+Alternatively, we can ask for the mapping from vertex numbering to degrees
+of freedom numbering in the space :math:`V`:
+
+.. code-block:: text
+
+        v2d = vertex_to_dof_map(V)
+
+Now, ``u_array[v2d[i]]`` will give us the value of the
+degree of freedom in ``u`` corresponding
+to vertex ``i`` (``v2d[i]``). In particular, ``u_array[v2d]`` is an array
+with all the elements in the same (vertex numbered) order as ``coor``.
+The inverse map, from degrees of freedom
+number to vertex number is given by ``dof_to_vertex_map(V)``, so
+``coor[dof_to_vertex_map(V)]`` results in an array of all the
+coordinates in the same order as the degrees of freedom.
+
+For Lagrange elements of degree larger than 1, there are degrees of
+freedom (nodes) that do not correspond to vertices.
+[**hpl 4**: Anders, is the following true?] There is no simple way of getting the
+coordinates associated with the non-vertex degrees of freedom, so
+if we want to write out the values of a finite element solution,
+the following code snippet does the task at the vertices, and this
+will work for all kinds of Lagrange elements.
+
+.. code-block:: python
+
+        def compare_exact_and_numerical_solution(Nx, Ny, degree=1):
+            u0 = Expression('1 + x[0]*x[0] + 2*x[1]*x[1]')
+            f = Constant(-6.0)
+            u = solver(f, u0, Nx, Ny, degree, linear_solver='direct')
+            # Grab exact and numerical solution at the vertices and compare
+            V = u.function_space()
+            u0_Function = interpolate(u0, V)
+            u0_at_vertices = u0_Function.compute_vertex_values()
+            u_at_vertices = u.compute_vertex_values()
+            coor = V.mesh().coordinates()
+            for i, x in enumerate(coor):
+                print('vertex %2d (%9g,%9g): error=%g'
+                      % (i, x[0], x[1],
+                         u0_at_vertices[i] - u_at_vertices[i]))
+                # Could compute u0(x) - u_at_vertices[i] but this
+                # is much more expensive and gives more rounding errors
+            center = (0.5, 0.5)
+            error = u0(center) - u(center)
+            print('numerical error at %s: %g' % (center, error))
+
+As expected, the error is either identically zero or about :math:`10^{-15}` or
+:math:`10^{-16}`.
+
+
+.. admonition:: Cheap vs expensive function evaluation
+
+   Given a ``Function`` object ``u``, we can evaluate its values in various
+   ways:
+   
+   1. ``u(x)`` for an arbitrary point ``x``
+   
+   2. ``u.vector().array()[i]`` for degree of freedom number ``i``
+   
+   3. ``u.compute_vertex_values()[i]`` at vertex number ``i``
+   
+   The first method, though very flexible, is in general very expensive
+   while the other two are very efficient (but limited to certain points).
+
+
+
+
+To demonstrate the use of point evaluations of ``Function`` objects,
+we write out the computed ``u`` at the center point
+of the domain and compare it with the exact solution:
+
+.. code-block:: python
+
+        center = (0.5, 0.5)
+        error = u0(center) - u(center)
+        print('numerical error at %s: %g' % (center, error)
+
+Trying a :math:`2(3\times 3)` mesh, the output from the
+previous snippet becomes
+
+.. code-block:: text
+
+        numerical error at (0.5, 0.5): -0.0833333
+
+The discrepancy is due to the fact that the center point is not a node
+in this particular mesh, but a point in the interior of a cell,
+and ``u`` varies linearly over the cell while
+``u0`` is a quadratic function. When the center point is a node, as in
+a :math:`2(t\times 2)` or :math:`2(4\times 4)` mesh, the error is of the order
+:math:`10^{-15}`.
+
+We have seen how to extract the nodal values in a ``numpy`` array.
+If desired, we can adjust the nodal values too. Say we want to
+normalize the solution such that :math:`\max_j U_j = 1`. Then we
+must divide all :math:`U_j` values
+by :math:`\max_j U_j`. The following function performs the task:
+
+.. code-block:: python
+
+        def normalize_solution(u):
+            """Normalize u: return u divided by max(u)."""
+            u_array = u.vector().array()
+            u_max = u_array.max()
+            u_array /= u_max
+            u.vector()[:] = u_array
+            u.vector().set_local(u_array)  # alternative
+            return u
+
+That is, we manipulate ``u_array`` as desired, and then we insert this
+array into ``u``'s ``Vector`` object.  The ``/=`` operator implies an
+in-place modification of the object on the left-hand side: all
+elements of the ``u_array`` are divided by the value ``max_u``.
+Alternatively, one could write ``u_array = u_array/max_u``, which
+implies creating a new array on the right-hand side and assigning this
+array to the name ``u_array``.
+
+
+.. admonition:: Be careful when manipulating degrees of freedom
+
+   A call like ``u.vector().array()`` returns a *copy* of the data in
+   ``u.vector()``. One must therefore never perform assignments like
+   ``u.vector.array()[:] = ...``, but instead extract the ``numpy`` array
+   (i.e., a copy), manipulate it, and insert it back with ``u.vector()[:]
+   = `` or ``u.set_local(...)``.
+
+
+
+
+All the code in this subsection can be found in the file ``p2D_iter.py``
+in the ``poisson`` directory.
+
+.. _tut:poisson:nD:
+
+Parameterizing the number of space dimensions
+---------------------------------------------
+
+.. index:: dimension-independent code
+
+FEniCS makes it is easy to write a unified simulation code that can
+operate in 1D, 2D, and 3D. We will conveniently make use of this
+feature in forthcoming examples.  As an appetizer, go back to the
+introductory programs ``p2D_plain.py`` or
+``p2D_func.py`` in the ``poisson`` directory and change the
+mesh construction from ``UnitSquareMesh(6, 4)`` to ``UnitCubeMesh(6, 4,
+5)``. Now the domain is the unit cube partitioned into :math:`6\times 4\times
+5` boxes, and each box is divided into six tetrahedra-shaped
+finite elements for computations.  Run the program and observe that we
+can solve a 3D problem without any other modifications (!). The
+visualization allows you to rotate the cube and observe the function
+values as colors on the boundary.
+
+Generating a hypercube
+~~~~~~~~~~~~~~~~~~~~~~
+
+The syntax for generating a unit interval, square, or box is different,
+so we need to encapsulate this part of the code. Given a list or
+tuple with the divisions into cells in the various spatial direction,
+the following function returns the mesh in a :math:`d`-dimensional problem:
+
+.. code-block:: python
+
+        def unit_hypercube(divisions, degree):
+            mesh_classes = [UnitIntervalMesh, UnitSquareMesh, UnitCubeMesh]
+            d = len(divisions)
+            mesh = mesh_classes[d-1](*divisions)
+            V = FunctionSpace(mesh, 'Lagrange', degree)
+            return V, mesh
+
+The construction ``mesh_class[d-1]`` will pick the right name of the
+object used to define the domain and generate the mesh.
+Moreover, the argument ``*divisions``
+sends all the component of the list ``divisions`` as separate
+arguments. For example, in a 2D problem where ``divisions`` has
+two elements, the statement
+
+.. code-block:: python
+
+        mesh = mesh_classes[d-1](*divisions)
+
+is equivalent to
+
+.. code-block:: python
+
+        mesh = UnitSquareMesh(divisions[0], divisions[1])
+
+Replacing the ``Nx`` and ``Ny`` parameters by ``divisions`` and calling
+``unit_hypercube`` to create the mesh are the two modifications that
+we need in any of the previously shown ``solver`` functions to turn
+them into solvers for :math:`d`-dimensional problems!
+
+.. _tut:poisson:gradu:
+
+Computing derivatives
+---------------------
+
+.. index:: projection
+
+In Poisson and many other problems, the gradient of the solution is
+of interest. The computation is in principle simple:
+since
+:math:`u = \sum_{j=1}^N U_j \phi_j`, we have that
 
 .. math::
         
-        T_0(t) = T_R + T_A\sin (\omega t),
+        \nabla u = \sum_{j=1}^N U_j \nabla \phi_j{\thinspace .}
         
 
-where :math:`T_R` is some reference temperature, :math:`T_A` is the amplitude of
-the temperature variations at the surface, and :math:`\omega` is the frequency
-of the temperature oscillations.
-At all other boundaries we assume
-that the temperature does not change anymore when we move away from
-the boundary, i.e., the normal derivative is zero.
-Initially, the temperature can be taken as :math:`T_R` everywhere.
-The heat conductivity properties of the soil in the
-ground may vary with space so
-we introduce a variable coefficient :math:`\kappa` reflecting this property.
-Figure :ref:`tut:timedep:diffusion2:sin:fig1` shows a sketch of the
-problem, with a small region where the heat conductivity is much lower.
+Given the solution variable ``u`` in the program, its gradient is
+obtained by ``grad(u)`` or ``nabla_grad(u)``.  However, the gradient of a
+piecewise continuous finite element scalar field is a discontinuous
+vector field since the :math:`\phi_j` has discontinuous derivatives at the
+boundaries of the cells. For example, using Lagrange elements of
+degree 1, :math:`u` is linear over each cell, and the numerical :math:`\nabla u`
+becomes a piecewise constant vector field. On the contrary, the exact
+gradient is continuous.  For visualization and data analysis purposes
+we often want the computed gradient to be a continuous vector
+field. Typically, we want each component of :math:`\nabla u` to be
+represented in the same way as :math:`u` itself. To this end, we can project
+the components of :math:`\nabla u` onto the same function space as we used
+for :math:`u`.  This means that we solve :math:`w = \nabla u` approximately by a
+finite element method, using the same elements for the components of
+:math:`w` as we used for :math:`u`. This process is known as *projection*.
 
-.. _tut:timedep:diffusion2:sin:fig1:
+.. index:: project
 
-.. figure:: daynight.png
+.. index:: projection
+
+Not surprisingly, projection is a so common operation in finite
+element programs that FEniCS has a function for doing the task:
+``project(q, W)``, which returns the projection of some ``Function`` or
+``Expression`` object named ``q`` onto the ``FunctionSpace`` (if ``q`` is
+scalar) or ``VectorFunctionSpace`` (if ``q`` is vector-valued) named ``W``.
+Specifically, in our case where ``u`` is computed and we want to project
+the vector-valued ``grad(u)`` onto the ``VectorFunctionSpace`` where each
+component has the same ``Function`` space as ``u``:
+
+.. code-block:: python
+
+        V = u.function_space()
+        degree = u.ufl_element().degree()
+        W = VectorFunctionSpace(V.mesh(), 'Lagrange', degree)
+        
+        grad_u = project(grad(u), W)
+
+Figure :ref:`tut:poisson:2D:fig:ex1:gradu` shows
+example of how such a smoothed ``gradu(u)`` vector field is visualized.
+
+.. _tut:poisson:2D:fig:ex1:gradu:
+
+.. figure:: ex1_gradu.png
    :width: 480
 
-   *Sketch of a (2D) problem involving heating and cooling of the ground due to an oscillating surface temperature*
+   *Example of visualizing the vector field :math:`\nabla u` by arrows at the nodes*
 
-The initial-boundary value problem for this problem reads
+The applications of projection are many, including turning discontinuous
+gradient fields into continuous ones, comparing higher- and lower-order
+function approximations, and transforming a higher-order finite element
+solution down to a piecewise linear field, which is required by many
+visualization packages.
 
-.. _Eq:_auto19:
-
-.. math::
-
-    \tag{53}
-    \varrho c{\partial T\over\partial t} = \nabla\cdot\left( \kappa\nabla T\right)\hbox{ in }\Omega\times (0,t_{\hbox{stop}}],
-        
-        
-
-.. _Eq:_auto20:
-
-.. math::
-
-    \tag{54}
-    T = T_0(t)\hbox{ on }\Gamma_0,
-        
-        
-
-.. _Eq:_auto21:
-
-.. math::
-
-    \tag{55}
-    {\partial T\over\partial n} = 0\hbox{ on }\partial\Omega\backslash\Gamma_0,
-        
-        
-
-.. _Eq:_auto22:
-
-.. math::
-
-    \tag{56}
-    T = T_R\hbox{ at }t =0{\thinspace .}
-        
-        
-
-Here, :math:`\varrho` is the density of the soil, :math:`c` is the
-heat capacity, :math:`\kappa` is the thermal conductivity
-(heat conduction coefficient)
-in the soil, and :math:`\Gamma_0` is the surface boundary :math:`x_{d-1}=0`.
-
-We use a :math:`\theta`-scheme in time, i.e., the evolution equation
-:math:`\partial P/\partial t=Q(t)` is discretized as
-
-.. math::
-        
-        {P^k - P^{k-1}\over{{\Delta t}}} = \theta Q^k + (1-\theta )Q^{k-1},
-        
-
-where :math:`\theta\in[0,1]` is a weighting factor: :math:`\theta =1` corresponds
-to the backward difference scheme, :math:`\theta =1/2` to the Crank-Nicolson
-scheme, and :math:`\theta =0` to a forward difference scheme.
-The :math:`\theta`-scheme applied to our PDE results in
-
-.. math::
-        
-        \varrho c{T^k-T^{k-1}\over{{\Delta t}}} =
-        \theta \nabla\cdot\left( \kappa\nabla T^k\right)
-        + (1-\theta) \nabla\cdot\left( k\nabla T^{k-1}\right){\thinspace .}
-        
-
-Bringing this time-discrete PDE into weak form follows the technique shown
-many times earlier in this tutorial. In the standard notation
-:math:`a(T,v)=L(v)` the weak form has
-
-.. _Eq:_auto23:
-
-.. math::
-
-    \tag{57}
-    a(T,v) = \int_\Omega
-        \left( \varrho c Tv + \theta{{\Delta t}} \kappa\nabla T\cdot \nabla v\right) {\, \mathrm{d}x},
-        
-        
-
-.. _Eq:_auto24:
-
-.. math::
-
-    \tag{58}
-    L(v) = \int_\Omega \left( \varrho c T^{k-1}v - (1-\theta){{\Delta t}}
-        \kappa\nabla T^{k-1}\cdot \nabla v\right) {\, \mathrm{d}x}{\thinspace .}
-        
-        
-
-Observe that boundary integrals vanish because of the Neumann boundary
-conditions.
-
-.. index:: heterogeneous medium
-
-.. index:: multi-material domain
-
-The size of a 3D box is taken as :math:`W\times W\times D`, where :math:`D` is
-the depth and :math:`W=D/2` is the width.
-We give the degree of the basis functions at the command line, then :math:`D`,
-and then the divisions of the domain in the various directions.
-To make a box, rectangle, or interval of arbitrary (not unit) size,
-we have the DOLFIN classes ``BoxMesh``, ``RectangleMesh``, and
-``IntervalMesh`` at our disposal. The mesh and the function space
-can be created by the following code:
+The scalar component fields of the gradient
+can be extracted as separate fields and, e.g., visualized:
 
 .. code-block:: python
 
-        degree = int(sys.argv[1])
-        D = float(sys.argv[2])
-        W = D/2.0
-        divisions = [int(arg) for arg in sys.argv[3:]]
-        d = len(divisions)  # no of space dimensions
-        if d == 1:
-            mesh = IntervalMesh(divisions[0], -D, 0)
-        elif d == 2:
-            mesh = RectangleMesh(-W/2, -D, W/2, 0, divisions[0], divisions[1])
-        elif d == 3:
-            mesh = BoxMesh(-W/2, -W/2, -D, W/2, W/2, 0,
-                       divisions[0], divisions[1], divisions[2])
-        V = FunctionSpace(mesh, 'Lagrange', degree)
+        grad_u_x, grad_u_y = grad_u.split(deepcopy=True)
+        plot(grad_u_x, title='x-component of grad(u)')
+        plot(grad_u_y, title='y-component of grad(u)')
 
-The ``RectangleMesh`` and ``BoxMesh`` objects are defined by the coordinates
-of the "minimum" and "maximum" corners.
+The ``deepcopy=True`` argument signifies a *deep copy*, which is
+a general term in computer science implying that a copy of the data is
+returned. (The opposite, ``deepcopy=False``,
+means a *shallow copy*, where
+the returned objects are just pointers to the original data.)
 
-Setting Dirichlet conditions at the upper boundary can be done by
+.. index:: degrees of freedom array
+
+.. index:: nodal values array
+
+.. index:: degrees of freedom array (vector field)
+
+The ``grad_u_x`` and ``grad_u_y`` variables behave as
+``Function`` objects. In particular, we can extract the underlying
+arrays of nodal values by
 
 .. code-block:: python
 
-        T_R = 0; T_A = 1.0; omega = 2*pi
-        
-        T_0 = Expression('T_R + T_A*sin(omega*t)',
-                         T_R=T_R, T_A=T_A, omega=omega, t=0.0)
-        
-        def surface(x, on_boundary):
-            return on_boundary and abs(x[d-1]) < 1E-14
-        
-        bc = DirichletBC(V, T_0, surface)
+        grad_u_x_array = grad_u_x.vector().array()
+        grad_u_y_array = grad_u_y.vector().array()
 
-The :math:`\kappa` function can be defined as a constant :math:`\kappa_1` inside
-the particular rectangular area with a special soil composition, as
-indicated in Figure :ref:`tut:timedep:diffusion2:sin:fig1`. Outside
-this area :math:`\kappa` is a constant :math:`\kappa_0`.
-The domain of the rectangular area is taken as
+The degrees of freedom of the ``grad_u`` vector field can also be
+reached by
+
+.. code-block:: python
+
+        grad_u_array = grad_u.vector().array()
+
+but this is a flat ``numpy`` array where the degrees of freedom for the
+:math:`x` component of the gradient is stored in the first part, then the
+degrees of freedom of the :math:`y` component, and so on. This is less convenient
+to work with.
+
+.. index:: p2D_iter.py
+
+The function ``gradient(u)`` in ``p2D_iter.py``
+returns a projected (smoothed) :math:`\nabla u` vector field, given some
+finite element function ``u``:
+
+.. code-block:: python
+
+        def gradient(u):
+            """Return grad(u) projected onto same space as u."""
+            V = u.function_space()
+            mesh = V.mesh()
+            V_g = VectorFunctionSpace(mesh, 'Lagrange', 1)
+            grad_u = project(grad(u), V_g)
+            grad_u.rename('grad(u)', 'continuous gradient field')
+            return grad_u
+
+Examining the arrays with vertex values of ``grad_u_x`` and ``grad_u_y``
+quickly reveals that the computed ``grad_u`` field does not equal the
+exact gradient :math:`(2x, 4y)` in this particular test problem where
+:math:`u=1+x^2+2y^2`.  There are inaccuracies at the boundaries, arising
+from the approximation problem for :math:`w`. Increasing the mesh resolution
+shows, however, that the components of the gradient vary linearly as
+:math:`2x` and :math:`4y` in the interior of the mesh (i.e., as soon as we are one
+element away from the boundary).  The ``application_test_gradient``
+function in ``p2D_iter.py`` performs some experiments.
+
+
+.. admonition:: Detour: Manual projection
+
+   Although you will always use ``project`` to project a finite element
+   function, it can be constructive this point in the tutorial to formulate the
+   projection mathematically and implement its steps manually in FEniCS.
+   
+   Looking at the component :math:`\partial u/\partial x` of the gradient, we
+   project the (discrete) derivative :math:`\sum_jU_j{\partial \phi_j/\partial
+   x}` onto a function space with basis :math:`\phi_1,\phi_2,\ldots` such that
+   the derivative in this space is expressed by the standard sum
+   :math:`\sum_j\bar U_j \phi_j`, for suitable (new) coefficients :math:`\bar U_j`.
+   
+   The variational problem for :math:`w` reads: find  :math:`w\in V^{(\mbox{g})}` such that
+   
+   .. _Eq:_auto5:
+
+.. math::
+
+    \tag{16}
+    a(w, v) = L(v)\quad\forall v\in \hat{V^{(\mbox{g})}},
+           
+           
+   
+   where
+   
+   .. _Eq:_auto6:
+
+.. math::
+
+    \tag{17}
+    a(w, v) = \int_\Omega w\cdot v {\, \mathrm{d}x},
+           
+           
+   
+   .. _Eq:_auto7:
+
+.. math::
+
+    \tag{18}
+    L(v) = \int_\Omega \nabla u\cdot v {\, \mathrm{d}x}{\thinspace .}
+           
+           
+   
+   The function spaces :math:`V^{(\mbox{g})}` and :math:`\hat{V^{(\mbox{g})}}` (with the superscript g
+   denoting "gradient") are vector versions of the function space for
+   :math:`u`, with boundary conditions removed (if :math:`V` is the space we used for
+   :math:`u`, with no restrictions on boundary values, :math:`V^{(\mbox{g})} = \hat{V^{(\mbox{g})}} =
+   [V]^d`, where :math:`d` is the number of space dimensions).  For example, if
+   we used piecewise linear functions on the mesh to approximate :math:`u`, the
+   variational problem for :math:`w` corresponds to approximating each
+   component field of :math:`w` by piecewise linear functions.
+   
+   The variational problem for the vector field
+   :math:`w`, called ``grad_u`` in the code, is easy to solve in FEniCS:
+   
+   .. code-block:: python
+   
+           V_g = VectorFunctionSpace(mesh, 'Lagrange', 1)
+           w = TrialFunction(V_g)
+           v = TestFunction(V_g)
+           
+           a = inner(w, v)*dx
+           L = inner(grad(u), v)*dx
+           grad_u = Function(V_g)
+           solve(a == L, grad_u)
+           
+           plot(grad_u, title='grad(u)')
+   
+   The boundary condition argument to ``solve`` is dropped since there are
+   no essential boundary conditions in this problem.
+   The new thing is basically that we work with a ``VectorFunctionSpace``,
+   since the unknown is now a vector field, instead of the
+   ``FunctionSpace`` object for scalar fields.
+
+
+
+
+.. _tut:possion:2D:varcoeff:
+
+A variable-coefficient Poisson problem
+--------------------------------------
+
+.. index:: Poisson's equation with variable coefficient
+
+.. index:: p2D_vc.py
+
+Suppose we have a variable coefficient :math:`p(x,y)` in the Laplace operator,
+as in the boundary-value problem
+
+.. _Eq:tut:poisson:2D:varcoeff:
+
+.. math::
+
+    \tag{19}
+    - \nabla\cdot \left\lbrack
+        p(x,y)\nabla u(x,y)\right\rbrack &= f(x,y) \quad \mbox{in } \Omega,
+            \\ 
+            u(x,y) &= u_0(x,y) \quad \mbox{on}\  \partial\Omega{\thinspace .}
+          
+        
+
+We shall quickly demonstrate that this simple extension of our model
+problem only requires an equally simple extension of the FEniCS program.
+
+Test problem          (1)
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Let us continue to use our favorite solution :math:`u(x,y)=1+x^2+2y^2` and
+then prescribe :math:`p(x,y)=x+y`. It follows that
+:math:`u_0(x,y) = 1 + x^2 + 2y^2` and :math:`f(x,y)=-8x-10y`.
+
+Modifications of the PDE solver
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+What are the modifications we need to do in the previously shown codes
+to incorporate the variable coefficient :math:`p`?
+from the section :ref:`tut:poisson1:verify1`?
+
+  * ``solver`` must take ``p`` as argument,
+
+  * ``f`` in our test problem
+    must be an ``Expression`` since it is no longer a constant,
+
+  * a new ``Expression p`` must be defined for the variable coefficient,
+
+  * the formula for :math:`a(u,v)` in the variational problem is slightly changed.
+
+First we address the modified variational problem. Multiplying
+the PDE by a test function :math:`v` and
+integrating by parts now results
+in
 
 .. math::
         
-        [-W/4, W/4]\times [-W/4, W/4]\times [-D/2, -D/2 + D/4]
+        \int_\Omega p\nabla u\cdot\nabla v {\, \mathrm{d}x} -
+        \int_{\partial\Omega} p{\partial u\over
+        \partial n}v {\, \mathrm{d}s} = \int_\Omega fv {\, \mathrm{d}x}{\thinspace .}
         
 
-in 3D, with :math:`[-W/4, W/4]\times [-D/2, -D/2 + D/4]` in 2D and
-:math:`[-D/2, -D/2 + D/4]` in 1D.
-Since we need some testing in the definition of the :math:`\kappa(\boldsymbol{x})`
-function, the most straightforward approach is to define a subclass
-of ``Expression``, where we can use a full Python method instead of
-just a C++ string formula for specifying a function.
-The method that defines the function is called ``eval``:
+The function spaces for :math:`u` and :math:`v` are the same as in
+the section :ref:`tut:poisson1:varform`, implying that the boundary integral
+vanishes since :math:`v=0` on :math:`\partial\Omega` where we have Dirichlet conditions.
+The weak form :math:`a(u,v)=L(v)` then has
+
+.. _Eq:_auto8:
+
+.. math::
+
+    \tag{20}
+    a(u,v) = \int_\Omega p\nabla u\cdot\nabla v {\, \mathrm{d}x},
+        
+        
+
+.. _Eq:_auto9:
+
+.. math::
+
+    \tag{21}
+    L(v) = \int_\Omega fv {\, \mathrm{d}x}{\thinspace .}
+        
+        
+
+In the code for solving :math:`-\nabla^2u=f` we must replace
 
 .. code-block:: python
 
-        class Kappa(Expression):
-            def eval(self, value, x):
-                """x: spatial point, value[0]: function value."""
-                d = len(x)  # no of space dimensions
-                material = 0  # 0: outside, 1: inside
-                if d == 1:
-                    if -D/2. < x[d-1] < -D/2. + D/4.:
-                        material = 1
-                elif d == 2:
-                    if -D/2. < x[d-1] < -D/2. + D/4. and \ 
-                       -W/4. < x[0] < W/4.:
-                        material = 1
-                elif d == 3:
-                    if -D/2. < x[d-1] < -D/2. + D/4. and \ 
-                       -W/4. < x[0] < W/4. and -W/4. < x[1] < W/4.:
-                        material = 1
-                value[0] = kappa_0 if material == 0 else kappa_1
+        a = inner(nabla_grad(u), nabla_grad(v))*dx
 
-The ``eval`` method gives great flexibility in defining functions,
-but a downside is that C++ calls up ``eval`` in Python for
-each point ``x``, which is a slow process, and the number of calls
-is proportional to the number of nodes in the mesh.
-Function expressions in terms of strings are compiled to efficient
-C++ functions, being called from C++, so we should try to express functions
-as string expressions if possible. (The ``eval`` method can also be
-defined through C++ code, but this is much
-more complicated and not covered here.)
-Using inline if-tests in C++, we can make string expressions for
-:math:`\kappa`:
+by
 
 .. code-block:: python
 
-        kappa_str = {}
-        kappa_str[1] = 'x[0] > -D/2 && x[0] < -D/2 + D/4 ? kappa_1 : kappa_0'
-        kappa_str[2] = 'x[0] > -W/4 && x[0] < W/4 '\ 
-                       '&& x[1] > -D/2 && x[1] < -D/2 + D/4 ? '\ 
-                       'kappa_1 : kappa_0'
-        kappa_str[3] = 'x[0] > -W/4 && x[0] < W/4 '\ 
-                       'x[1] > -W/4 && x[1] < W/4 '\ 
-                       '&& x[2] > -D/2 && x[2] < -D/2 + D/4 ?'\ 
-                       'kappa_1 : kappa_0'
-        
-        kappa = Expression(kappa_str[d],
-                           D=D, W=W, kappa_0=kappa_0, kappa_1=kappa_1)
+        a = p*inner(nabla_grad(u), nabla_grad(v))*dx
 
-Let ``T`` denote the unknown spatial temperature function at the
-current time level, and let ``T_1`` be the corresponding function
-at one earlier time level.
-We are now ready to define the initial condition and the
-``a`` and ``L`` forms of our problem:
+to solve :math:`-\nabla\cdot(p\nabla u)=f`. Moreover,
+the definitions of ``p`` and ``f`` in the test problem read
 
 .. code-block:: python
 
-        T_prev = interpolate(Constant(T_R), V)
+        p = Expression('x[0] + x[1]')
+        f = Expression('-8*x[0] - 10*x[1]')
+
+No additional modifications are necessary. The file
+``p2D_vc.py`` (variable-coefficient Poisson problem in 2D)
+is a copy of ``p2D_iter.py`` with the mentioned changes
+incorporated. Observe that :math:`p=1` recovers the original problem in
+``p2D_iter.py``.
+
+You can run it and confirm
+that it recovers the exact :math:`u` at the nodes.
+
+Modifications of the flux computations
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The flux :math:`-p\nabla u` may be of particular interest in
+variable-coefficient Poisson problems as it often has an interesting
+physical significance. As explained in the section :ref:`tut:poisson:gradu`,
+we normally want the piecewise discontinuous flux or gradient to be
+approximated by a continuous vector field, using the same elements as
+used for the numerical solution :math:`u`. The approximation now consists of
+solving :math:`w = -p\nabla u` by a finite element method: find :math:`w\in V^{(\mbox{g})}`
+such that
+
+.. _Eq:_auto10:
+
+.. math::
+
+    \tag{22}
+    a(w, v) = L(v)\quad\forall v\in \hat{V^{(\mbox{g})}},
         
-        rho = 1
-        c = 1
-        period = 2*pi/omega
-        t_stop = 5*period
-        dt = period/20  # 20 time steps per period
-        theta = 1
         
-        T = TrialFunction(V)
-        v = TestFunction(V)
-        f = Constant(0)
-        a = rho*c*T*v*dx + theta*dt*kappa*\ 
-            inner(nabla_grad(T), nabla_grad(v))*dx
-        L = (rho*c*T_prev*v + dt*f*v -
-             (1-theta)*dt*kappa*inner(nabla_grad(T_1), nabla_grad(v)))*dx
+
+where
+
+.. _Eq:_auto11:
+
+.. math::
+
+    \tag{23}
+    a(w, v) = \int_\Omega w\cdot v {\, \mathrm{d}x},
         
+        
+
+.. _Eq:_auto12:
+
+.. math::
+
+    \tag{24}
+    L(v) = \int_\Omega (-p \nabla u)\cdot v {\, \mathrm{d}x}{\thinspace .}
+        
+        
+
+This problem is identical to the one in the section :ref:`tut:poisson:gradu`,
+except that :math:`p` enters the integral in :math:`L`.
+
+The relevant Python statement for computing the flux field take the form
+
+.. code-block:: python
+
+        flux = project(-p*grad(u),
+                       VectorFunctionSpace(mesh, 'Lagrange', degreee))
+
+An appropriate function for computing the flux based on ``u`` and ``p`` is
+
+.. code-block:: python
+
+        def flux(u, p):
+            """Return p*grad(u) projected onto same space as u."""
+            V = u.function_space()
+            mesh = V.mesh()
+            degree = u.ufl_element().degree()
+            V_g = VectorFunctionSpace(mesh, 'Lagrange', degree)
+            grad_u = project(-p*grad(u), V_g)
+            grad_u.rename('flux(u)', 'continuous flux field')
+            return grad_u
+
+Plotting the flux vector field is naturally as easy as plotting
+the gradient (see the section :ref:`tut:poisson:gradu`):
+
+.. code-block:: python
+
+        plot(flux, title='flux field')
+        
+        flux_x, flux_y = flux.split(deepcopy=True)  # extract components
+        plot(flux_x, title='x-component of flux (-p*grad(u))')
+        plot(flux_y, title='y-component of flux (-p*grad(u))')
+
+For data analysis of the nodal values of the flux field we can
+grab the underlying ``numpy`` arrays (demands a ``deepcopy=True``
+in the split of ``flux``):
+
+.. code-block:: python
+
+        flux_x_array = flux_x.vector().array()
+        flux_y_array = flux_y.vector().array()
+
+[**hpl 5**: The following is not done properly in the revised version.]
+The function ``application_test_gradient`` in the
+program ``p2D_vc.py`` contains in addition some plots,
+including a curve plot
+comparing ``flux_x`` and the exact counterpart along the line :math:`y=1/2`.
+The associated programming details related to this visualization
+are explained in the section :ref:`tut:structviz`.
+
+.. _tut:poisson1:linalg:
+
+Creating the linear system explicitly
+-------------------------------------
+
+Given :math:`a(u,v)=L(v)`, the discrete solution :math:`u` is computed by
+inserting :math:`u=\sum_{j=1}^N U_j \phi_j` into :math:`a(u,v)` and demanding
+:math:`a(u,v)=L(v)` to be fulfilled for :math:`N` test functions
+:math:`\hat\phi_1,\ldots,\hat\phi_N`. This implies
+
+.. math::
+        
+        \sum_{j=1}^N a(\phi_j,\hat\phi_i) U_j = L(\hat\phi_i),\quad i=1,\ldots,N,
+        
+
+which is nothing but a linear system,
+
+.. math::
+        
+          AU = b,
+        
+
+where the entries in :math:`A` and :math:`b` are given by
+
+.. math::
+        
+          A_{ij} &= a(\phi_j, \hat{\phi}_i), \\ 
+          b_i &= L(\hat\phi_i){\thinspace .}
+        
+
+.. index:: assemble
+
+.. index:: linear systems (in FEniCS)
+
+.. index:: assembly of linear systems
+
+The examples so far have specified the left- and right-hand side of
+the variational formulation and then asked FEniCS to assemble the
+linear system and solve it.  An alternative is to explicitly call
+functions for assembling the coefficient matrix :math:`A` and the right-side
+vector :math:`b`, and then solve the linear system :math:`AU=b` with respect to
+the :math:`U` vector.  Instead of ``solve(a == L, u, b)`` we now write
+
+.. code-block:: python
+
         A = assemble(a)
-        b = None  # variable used for memory savings in assemble calls
-        T = Function(V)   # unknown at the current time level
+        b = assemble(L)
+        bc.apply(A, b)
+        u = Function(V)
+        U = u.vector()
+        solve(A, U, b)
 
-We could, alternatively, break ``a`` and ``L`` up in subexpressions
-and assemble a mass matrix and stiffness matrix, as exemplified in
-the section :ref:`tut:timedep:diffusion1:noassemble`, to avoid
-assembly of ``b`` at every time level. This modification is
-straightforward and left as an exercise. The speed-up can be significant
-in 3D problems.
+The variables ``a`` and ``L`` are as before. That is, ``a`` refers to the
+bilinear form involving a ``TrialFunction`` object (e.g., ``u``)
+and a ``TestFunction`` object (``v``), and ``L`` involves a
+``TestFunction`` object (``v``). From ``a`` and ``L``,
+the ``assemble`` function can
+compute :math:`A` and :math:`b`.
 
-The time loop is very similar to what we have displayed in
-the section :ref:`tut:timedep:diffusion1:impl`:
+The matrix :math:`A` and vector :math:`b` are first assembled without incorporating
+essential (Dirichlet) boundary conditions. Thereafter, the
+call ``bc.apply(A, b)`` performs the necessary modifications of
+the linear system such that ``u`` is guaranteed to equal the prescribed
+boundary values.
+When we have multiple Dirichlet conditions stored in a list ``bcs``,
+as explained in the section :ref:`tut:poisson:multiple:Dirichlet`, we must apply
+each condition in ``bcs`` to the system:
 
 .. code-block:: python
 
-        T = Function(V)   # unknown at the current time level
-        t = dt
-        while t <= t_stop:
-            b = assemble(L, tensor=b)
-            T_0.t = t
+        # bcs is a list of DirichletBC objects
+        for bc in bcs:
             bc.apply(A, b)
-            solve(A, T.vector(), b)
-            # visualization statements
-            t += dt
-            T_prev.assign(T)
 
-The complete code in ``sin_daD.py`` contains several
-statements related to visualization and animation of the solution, both as a
-finite element field (``plot`` calls) and as a curve in the
-vertical direction. The code also plots the exact analytical solution,
+.. index:: assemble_system
 
-.. math::
-        
-        T(x,t) = T_R + T_Ae^{ax}\sin (\omega t + ax),\quad a =\sqrt{\omega\varrho c\over 2\kappa},
-        
-
-which is valid when :math:`\kappa = \kappa_0=\kappa_1`.
-
-Implementing this analytical solution as a Python function
-taking scalars and numpy arrays as arguments requires a word of caution.
-A straightforward function like
+There is an alternative function ``assemble_system``, which can
+assemble the system and take boundary conditions into account in one call:
 
 .. code-block:: python
 
-        def T_exact(x):
-            a = sqrt(omega*rho*c/(2*kappa_0))
-            return T_R + T_A*exp(a*x)*sin(omega*t + a*x)
+        A, b = assemble_system(a, L, bcs)
 
-will not work and result in an error message from UFL. The reason is that
-the names ``exp`` and ``sin`` are those imported
-by the ``from dolfin import *`` statement, and these names
-come from UFL and are aimed at being used in variational forms.
-In the ``T_exact`` function where ``x`` may be a scalar or a
-``numpy`` array, we therefore need to explicitly specify
-``numpy.exp`` and ``numpy.sin``:
+The ``assemble_system`` function incorporates the boundary conditions
+in the element matrices and vectors, prior to assembly.
+The conditions are also incorporated in a symmetric way to preserve
+eventual symmetry of the coefficient matrix.
+
+.. That is, for each degree of freedom
+
+.. that is known, the corresponding row and column is zero'ed out and 1
+
+.. is placed on the main diagonal, and the right-hand side ``b`` is
+
+.. modified by subtracting the column in ``A`` times the value of the
+
+.. degree of, and then the corresponding entry in ``b`` is replaced by the
+
+.. known value of the degree of freedom.
+
+With ``bc.apply(A, b)`` the
+matrix ``A`` is modified in an nonsymmetric way.
+
+.. : The row is zero'ed out
+
+.. and 1 is placed on the main diagonal, and the degree of freedom value
+
+.. is inserted in ``b``.
+
+Note that the solution ``u`` is, as before, a ``Function`` object.
+The degrees of freedom, :math:`U=A^{-1}b`, are filled
+into ``u``'s ``Vector`` object (``u.vector()``)
+by the ``solve`` function.
+
+The object ``A`` is of type ``Matrix``, while ``b`` and
+``u.vector()`` are of type ``Vector``. We may convert the
+matrix and vector data to ``numpy`` arrays by calling the
+``array()`` method as shown before. If you wonder how essential
+boundary conditions are incorporated in the linear system, you can
+print out ``A`` and ``b`` before and after the
+``bc.apply(A, b)`` call:
 
 .. code-block:: python
 
-        def T_exact(x):
-            a = sqrt(omega*rho*c/(2*kappa_0))
-            return T_R + T_A*numpy.exp(a*x)*numpy.sin(omega*t + a*x)
+        A = assemble(a)
+        b = assemble(L)
+        if mesh.num_cells() < 16:  # print for small meshes only
+            print(A.array())
+            print(b.array())
+        bc.apply(A, b)
+        if mesh.num_cells() < 16:
+            print(A.array())
+            print(b.array())
 
-The complete code is found in the file
-The reader
-is encouraged to play around with the code and test out various parameter
-sets:
+With access to the elements in ``A`` through a ``numpy`` array we can easily
+perform computations on this matrix, such as computing the eigenvalues
+(using the ``eig`` function in ``numpy.linalg``). We can alternatively dump
+``A.array()`` and ``b.array()`` to file in MATLAB format and invoke
+MATLAB or Octave to analyze the linear system.
+Dumping the arrays to MATLAB format is done by
 
- 1. :math:`T_R=0`, :math:`T_A=1`, :math:`\kappa_0 = \kappa_1=0.2`, :math:`\varrho = c = 1`, :math:`\omega = 2\pi`
+.. code-block:: python
 
- 2. :math:`T_R=0`, :math:`T_A=1`, :math:`\kappa_0=0.2`, :math:`\kappa_1=0.01`, :math:`\varrho = c = 1`, :math:`\omega = 2\pi`
+        import scipy.io
+        scipy.io.savemat('Ab.mat', {'A': A.array(), 'b': b.array()})
 
- 3. :math:`T_R=0`, :math:`T_A=1`, :math:`\kappa_0=0.2`, :math:`\kappa_1=0.001`, :math:`\varrho = c = 1`, :math:`\omega = 2\pi`
+Writing ``load Ab.mat`` in MATLAB or Octave will then make
+the array variables ``A`` and ``b`` available for computations.
 
- 4. :math:`T_R=10` C, :math:`T_A=10` C, :math:`\kappa_0= 2.3 \hbox{ K}^{-1}\hbox{Ns}^{-1}`,
-    :math:`\kappa_1= 100 \hbox{ K}^{-1}\hbox{Ns}^{-1}`,
-    :math:`\varrho = 1500\hbox{ kg/m}^3`,
-    :math:`c = 1480\hbox{ Nm}\cdot\hbox{kg}^{-1}\hbox{K}^{-1}`,
-    :math:`\omega = 2\pi/24` 1/h  :math:`= 7.27\cdot 10^{-5}` 1/s, :math:`D=1.5` m
+.. index:: SLEPc
 
- 5. As above, but :math:`\kappa_0= 12.3 \hbox{ K}^{-1}\hbox{Ns}^{-1}` and
-    :math:`\kappa_1= 10^4 \hbox{ K}^{-1}\hbox{Ns}^{-1}`
+Matrix processing in Python or MATLAB/Octave is only feasible for
+small PDE problems since the ``numpy`` arrays or matrices in MATLAB
+file format are dense matrices. DOLFIN also has an interface to the
+eigensolver package SLEPc, which is a preferred tool for computing the
+eigenvalues of large, sparse matrices of the type encountered in PDE
+problems (see ``demo/la/eigenvalue`` in the DOLFIN source code tree
+for a demo).
 
-Data set number 4 is relevant for real temperature variations in
-the ground (not necessarily the large value of :math:`\kappa_1`),
-while data set number 5
-exaggerates the effect of a large heat conduction contrast so that
-it becomes clearly visible in an animation.
+.. A complete code where the linear system :math:`AU=b` is explicitly assembled and
 
-.. kappa_1 = 1.1, varrho_1 = 1200, c_1 = 1000 => 9.17E-7
+.. solved is found in the file ``dn3_p2D.py`` in the directory
 
-.. kappa_0 = 2.3, varrho_0 = 1800, c_0 = 1500 => 8.52E-7
+.. ``poisson``. This code solves the same problem as in
+
+.. ``dn2_p2D.py``
+
+.. (the section :ref:`tut:poisson:multiple:Dirichlet`).  For small
+
+.. linear systems, the program writes out ``A`` and ``b`` before and
+
+.. after incorporation of essential boundary conditions and illustrates
+
+.. the difference between ``assemble`` and ``assemble_system``.
+
+.. The reader is encouraged to run the code for a :math:`2\times 1`
+
+.. mesh (``UnitSquareMesh(2, 1)`` and study the output of ``A``.
+
+By default, ``solve(A, U, b)`` applies sparse LU decomposition
+as solver. Specification of an iterative solver and preconditioner
+is done through two optional arguments:
+
+.. code-block:: python
+
+        solve(A, U, b, 'cg', 'ilu')
+
+Appropriate names of solvers and preconditioners are found in
+the section :ref:`tut:app:solver:prec`.
+
+.. index:: KrylovSolver
+
+To control tolerances in the stopping criterion and the maximum
+number of iterations, one can explicitly form a ``KrylovSolver`` object
+and set items in its ``parameters`` attribute
+(see also the section :ref:`tut:poisson1:solver:problem`):
+
+.. code-block:: python
+
+        solver = KrylovSolver('cg', 'ilu')
+        prm = solver.parameters
+        prm['absolute_tolerance'] = 1E-7
+        prm['relative_tolerance'] = 1E-4
+        prm['maximum_iterations'] = 1000
+        u = Function(V)
+        U = u.vector()
+        set_log_level(DEBUG)
+        solver.solve(A, U, b)
+
+The function ``solver_linalg`` in the
+program file ``p2D_vc.py`` implements a solver function where
+the user can choose between different types of assembly: the variational
+(``solve(a == L, u, bc)``), assembling the matrix and right-hand side separately, and assembling the system such that the coefficient matrix preserves
+symmetry.
+The function ``application_linalg`` runs a test problem on sequence of
+meshes and solves the problem with symmetric and non-symmetric modification
+of the coefficient matrix. One can monitor the number of Krylov
+method iteration and realize that with a symmetric coefficient matrix,
+the Conjugate Gradient method requires slightly fewer iterations than
+GMRES in the non-symmetric case. Taking into account that the Conjugate
+Gradient method has less work per iteration, there is some efficiency to
+be gained by using ``assemble_system``.
+
+[**hpl 6**: Running ``application_linalg``, the results are strange: Why does the ``solve(a==L,...)`` method need many more iterations than ``solve(A, U, b, ...)`` when we use the same Krylov parameter settings? Something wrong with the settings?]
+
+.. index:: random start vector (linear systems)
+
+The choice of start vector for the iterations in a linear solver is often
+important. With the ``solver.solve(A, U, b)`` call the default start vector
+is the zero vector. A start vector
+with random numbers in the interval :math:`[-100,100]` can be computed as
+
+.. code-block:: python
+
+        n = u.vector().array().size
+        U = u.vector()
+        U[:] = numpy.random.uniform(-100, 100, n)
+        solver.parameters['nonzero_initial_guess'] = True
+        solver.solve(A, U, b)
+
+Note that we must turn off the default behavior of setting the start
+vector ("initial guess") to zero.
+
+Creating the linear system explicitly in a program can have some
+advantages in more advanced problem settings. For example, :math:`A` may
+be constant throughout a time-dependent simulation, so we can avoid
+recalculating :math:`A` at every time level and save a significant amount
+of simulation time.  The sections :ref:`tut:timedep:diffusion1:impl`
+and :ref:`tut:timedep:diffusion1:noassemble` deal with this topic
+in detail.
+
+.. In other problems, we may divide the variational
+
+.. problem and linear system into different terms, say :math:`A=M + {{\Delta t}} K`,
+
+.. where :math:`M` is a matrix arising from a term like :math:`\partial u/\partial t`,
+
+.. :math:`K` is a term corresponding to a Laplace operator, and :math:`{\Delta t}` is
+
+.. a time discretization parameter. When :math:`{\Delta t}` is changed in time,
+
+.. we can efficiently recompute :math:`A = M + {{\Delta t}} K` without
+
+.. reassembling the constant matrices :math:`M` and :math:`K`. This strategy may
+
+.. speed up simulations significantly.
 

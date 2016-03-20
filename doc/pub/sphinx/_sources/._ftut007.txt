@@ -1,477 +1,336 @@
 .. !split
 
-Handling domains with different materials
-=========================================
+Multiple domain and boundaries
+==============================
 
-.. index:: heterogeneous media
+.. _tut:poisson1:DN:
 
-.. index:: multi-material domain
+Combining Dirichlet and Neumann conditions
+------------------------------------------
 
-Solving PDEs in domains made up of different materials is a frequently
-encountered task. In FEniCS, these kind of problems are handled by
-defining subdomains inside the domain. The subdomains may represent the
-various materials. We can thereafter define material properties through
-functions, known in FEniCS as *mesh functions*,
-that are piecewise constant in each subdomain.
-A simple example with
-two materials (subdomains) in 2D will
-demonstrate the basic steps in the process.
-
-.. Later, a multi-material
-
-.. problem in :math:`d` space dimensions is addressed.
-
-.. _tut:possion:2D:2mat:problem:
-
-Working with two subdomains
----------------------------
-
-.. _tut:possion:2D:2mat:fig1:
-
-.. figure:: layered_medium_2.png
-   :width: 400
-
-   *Medium with discontinuous material properties*
-
-Suppose we want to solve
-
-.. _Eq:tut:poisson:2D:2mat:varcoeff2:
-
-.. math::
-
-    \tag{87}
-    \nabla\cdot \left\lbrack k(x,y)\nabla u(x,y)\right\rbrack = 0,
-        
-
-in a domain :math:`\Omega` consisting of two subdomains where :math:`k` takes on
-a different value in each subdomain.
-For simplicity, yet without loss of generality, we choose for the current
-implementation
-the domain :math:`\Omega = [0,1]\times [0,1]` and divide it into two equal
-subdomains,
-as depicted in Figure :ref:`tut:possion:2D:2mat:fig1`,
+Let us make a slight extension of our two-dimensional Poisson problem
+from the section :ref:`tut:poisson1:bvp` and add a Neumann boundary
+condition. The domain is still the unit square, but now we set the
+Dirichlet condition :math:`u=u_0` at the left and right sides, :math:`x=0` and
+:math:`x=1`, while the Neumann condition
 
 .. math::
         
-        \Omega_0 = [0, 1]\times [0,1/2],\quad
-        \Omega_1 = [0, 1]\times (1/2,1]{\thinspace .}
+        -{\partial u\over\partial n}=g
         
 
-We define :math:`k(x,y)=k_0` in :math:`\Omega_0` and :math:`k(x,y)=k_1` in :math:`\Omega_1`,
-where :math:`k_0>0` and :math:`k_1>0` are given constants.
-As boundary conditions, we choose :math:`u=0` at :math:`y=0`, :math:`u=1` at :math:`y=1`,
-and :math:`\partial u/\partial n=0` at :math:`x=0` and :math:`x=1`.
-One can show that the exact solution is now given by
-
-.. _Eq:_auto41:
-
-.. math::
-
-    \tag{88}
-    u(x, y) = \left\lbrace\begin{array}{ll}
-        {2yk_1\over k_0+k_1}, & y \leq 1/2\\ 
-        {(2y-1)k_0 + k_1\over k_0+k_1}, & y \geq 1/2
-        \end{array}\right.
-        
-        
-
-As long as the element boundaries coincide with the internal boundary
-:math:`y=1/2`, this piecewise linear solution should be exactly recovered
-by Lagrange elements of any degree. We use this property to verify
-the implementation.
-
-Physically, the present problem may correspond to heat conduction, where
-the heat conduction in :math:`\Omega_1` is ten times more efficient than
-in :math:`\Omega_0`. An alternative interpretation is flow in porous media
-with two geological layers, where the layers' ability to transport
-the fluid differs by a factor of 10.
-
-.. _tut:possion:2D:2mat:impl:
-
-Implementation          (4)
----------------------------
-
-.. index:: boundary specification (class)
-
-.. index:: mat2_p2D.py
-
-The new functionality in this subsection regards how to define the
-subdomains :math:`\Omega_0` and :math:`\Omega_1`. For this purpose we need to use
-subclasses of class ``SubDomain``, not only plain functions as we have
-used so far for specifying boundaries. Consider the boundary function
-
-.. code-block:: python
-
-        def boundary(x, on_boundary):
-            tol = 1E-14
-            return on_boundary and abs(x[0]) < tol
-
-for defining the boundary :math:`x=0`. Instead of using such a stand-alone
-function, we can create an instance (or object)
-of a subclass of ``SubDomain``,
-which implements the ``inside`` method as an alternative to the
-``boundary`` function:
-
-.. code-block:: python
-
-        class Boundary(SubDomain):
-            def inside(self, x, on_boundary):
-                tol = 1E-14
-                return on_boundary and abs(x[0]) < tol
-        
-        boundary = Boundary()
-        bc = DirichletBC(V, Constant(0), boundary)
-
-A word about computer science terminology may be used here:
-The term *instance*
-means a Python object of a particular type (such as ``SubDomain``,
-``Function``
-``FunctionSpace``, etc.).
-Many use *instance* and *object*
-as interchangeable terms. In other computer programming languages one may
-also use the term *variable* for the same thing.
-We mostly use the well-known  term *object* in this text.
-
-A subclass of ``SubDomain`` with an ``inside`` method offers
-functionality for marking parts of the domain or
-the boundary. Now we need to define one class for the
-subdomain :math:`\Omega_0`
-where :math:`y\leq 1/2` and another for the subdomain :math:`\Omega_1` where :math:`y\geq 1/2`:
-
-.. code-block:: python
-
-        class Omega0(SubDomain):
-            def inside(self, x, on_boundary):
-                return True if x[1] <= 0.5 else False
-        
-        class Omega1(SubDomain):
-            def inside(self, x, on_boundary):
-                return True if x[1] >= 0.5 else False
-
-Notice the use of ``<=`` and ``>=`` in both tests. For a cell to
-belong to, e.g., :math:`\Omega_1`, the ``inside`` method must return
-``True`` for all the vertices ``x`` of the cell. So to make the
-cells at the internal boundary :math:`y=1/2` belong to :math:`\Omega_1`, we need
-the test ``x[1] >= 0.5``.
-
-The next task is to use a ``MeshFunction`` to mark all
-cells in :math:`\Omega_0` with the subdomain number 0 and all cells in :math:`\Omega_1`
-with the subdomain number 1.
-Our convention is to number subdomains as :math:`0,1,2,\ldots`.
-
-A ``MeshFunction`` is a discrete function that can be evaluated at a set
-of so-called *mesh entities*. Examples of mesh entities are
-cells, facets, and vertices. A ``MeshFunction`` over cells is suitable to
-represent subdomains (materials), while a ``MeshFunction`` over
-facets is used to represent pieces of external or internal boundaries.
-Mesh functions over vertices can be used to describe continuous fields.
-
-Since we need to define subdomains of :math:`\Omega`
-in the present example, we must make use
-of a ``MeshFunction`` over cells. The
-``MeshFunction`` constructor is fed with three arguments: 1) the type
-of value: ``'int'`` for integers, ``'uint'`` for positive
-(unsigned) integers, ``'double'`` for real numbers, and
-``'bool'`` for logical values; 2) a ``Mesh`` object, and 3)
-the topological dimension of the mesh entity in question: cells
-have topological dimension equal to the number of space dimensions in
-the PDE problem, and facets have one dimension lower.
-Alternatively, the constructor can take just a filename
-and initialize the ``MeshFunction`` from data in a file.
-
-We start with creating a ``MeshFunction`` whose
-values are non-negative integers (``'uint'``)
-for numbering the subdomains.
-The mesh entities of interest are the cells, which have dimension 2
-in a two-dimensional problem (1 in 1D, 3 in 3D). The appropriate code for
-defining the ``MeshFunction`` for two subdomains then reads
-
-.. code-block:: python
-
-        subdomains = MeshFunction('uint', mesh, 2)
-        # Mark subdomains with numbers 0 and 1
-        subdomain0 = Omega0()
-        subdomain0.mark(subdomains, 0)
-        subdomain1 = Omega1()
-        subdomain1.mark(subdomains, 1)
-
-Calling ``subdomains.array()`` returns a ``numpy`` array of the
-subdomain values. That is, ``subdomain.array()[i]`` is
-the subdomain value of cell number ``i``. This array is used to
-look up the subdomain or material number of a specific element.
-
-We need a function ``k`` that is constant in
-each subdomain :math:`\Omega_0` and :math:`\Omega_1`. Since we want ``k``
-to be a finite element function, it is natural to choose
-a space of functions that are constant over each element.
-The family of discontinuous Galerkin methods, in FEniCS
-denoted by ``'DG'``, is suitable for this purpose. Since we
-want functions that are piecewise constant, the value of
-the degree parameter is zero:
-
-.. code-block:: python
-
-        V0 = FunctionSpace(mesh, 'DG', 0)
-        k  = Function(V0)
-
-To fill ``k`` with the right values in each element, we loop over
-all cells (i.e., indices in ``subdomain.array()``),
-extract the corresponding subdomain number of a cell,
-and assign the corresponding :math:`k` value to the ``k.vector()`` array:
-
-.. code-block:: python
-
-        k_values = [1.5, 50]  # values of k in the two subdomains
-        for cell_no in range(len(subdomains.array())):
-            subdomain_no = subdomains.array()[cell_no]
-            k.vector()[cell_no] = k_values[subdomain_no]
-
-Long loops in Python are known to be slow, so for large meshes
-it is preferable to avoid such loops and instead use *vectorized code*.
-Normally this implies that the loop must be replaced by
-calls to functions from the ``numpy`` library that operate on complete
-arrays (in efficient C code). The functionality we want in the present
-case is to compute an array of the same size as
-``subdomain.array()``, but where the value ``i`` of an entry
-in ``subdomain.array()`` is replaced by ``k_values[i]``.
-Such an operation is carried out by the ``numpy`` function ``choose``:
-
-.. code-block:: python
-
-        help = numpy.asarray(subdomains.array(), dtype=numpy.int32)
-        k.vector()[:] = numpy.choose(help, k_values)
-
-The ``help`` array is required since ``choose`` cannot work with
-``subdomain.array()`` because this array has elements of
-type ``uint32``. We must therefore transform this array to an array
-``help`` with standard ``int32`` integers.
-
-Having the ``k`` function ready for finite element computations, we
-can proceed in the normal manner with defining essential boundary
-conditions, as in the section :ref:`tut:poisson:multiple:Dirichlet`,
-and the :math:`a(u,v)` and :math:`L(v)` forms, as in
-the section :ref:`tut:possion:2D:varcoeff`.
-All the details can be found in the file ``mat2_p2D.py``.
-
-.. _tut:poisson:mat:neumann:
-
-Multiple Neumann, Robin, and Dirichlet condition
-------------------------------------------------
-
-.. index:: Dirichlet boundary conditions
+is applied to the remaining
+sides :math:`y=0` and :math:`y=1`.
+The Neumann condition is also known as a *natural boundary condition*
+(in contrast to an essential boundary condition).
 
 .. index:: Neumann boundary conditions
 
-.. index:: Robin boundary conditions
+PDE problem
+~~~~~~~~~~~
 
-.. index:: boundary conditions
+Let :math:`\Gamma_D` and :math:`\Gamma_N` denote the parts of :math:`\partial\Omega`
+where the Dirichlet and Neumann conditions apply, respectively.  The
+complete boundary-value problem can be written as
 
-Let us go back to the model problem from
-the section :ref:`tut:poisson:multiple:Dirichlet`
-where we had both Dirichlet and Neumann conditions.
-The term ``v*g*ds`` in the expression for ``L`` implies a
-boundary integral over the complete boundary, or in FEniCS terms,
-an integral over all exterior facets.
-However, the contributions from the parts of the boundary where we have
-Dirichlet conditions are erased when the linear system is modified by
-the Dirichlet conditions.
-We would like, from an efficiency point of view, to integrate ``v*g*ds``
-only over the parts of the boundary where we actually have Neumann conditions.
-And more importantly,
-in other problems one may have different Neumann conditions or
-other conditions like the Robin type condition.
-With the mesh function concept we can mark
-different parts of the boundary and integrate over specific parts.
-The same concept can also be used to treat multiple Dirichlet conditions.
-The forthcoming text illustrates how this is done.
-
-Essentially, we still stick to the model problem from
-the section :ref:`tut:poisson:multiple:Dirichlet`, but replace the
-Neumann condition at :math:`y=0` by a *Robin condition*:
-
-.. math::
-        
-        -{\partial u\over\partial n} = p(u-q),
-        
-
-where :math:`p` and :math:`q` are specified functions.
-The Robin condition is
-most often used to model heat transfer to the surroundings and arise
-naturally from Newton's cooling law.
-
-Since we have prescribed a simple solution in our model problem,
-:math:`u=1+x^2+2y^2`, we adjust :math:`p` and :math:`q` such that the condition holds
-at :math:`y=0`. This implies that :math:`q=1+x^2+2y^2` and :math:`p` can be arbitrary
-(the normal derivative at :math:`y=0`: :math:`\partial u/\partial n = -\partial u/\partial y = -4y=0`).
-
-Now we have four parts of the boundary: :math:`\Gamma_N` which corresponds to
-the upper side :math:`y=1`, :math:`\Gamma_R` which corresponds to the lower part
-:math:`y=0`, :math:`\Gamma_0` which corresponds to the left part :math:`x=0`, and
-:math:`\Gamma_1` which corresponds to the right part :math:`x=1`. The
-complete boundary-value problem reads
-
-.. _Eq:tut:poisson:2D:DN3:
+.. _Eq:_auto15:
 
 .. math::
 
-    \tag{89}
-    - \nabla^2 u = -6 \mbox{ in } \Omega, 
+    \tag{31}
+    - \nabla^2 u = f \mbox{ in } \Omega,  
+        
         
 
-.. _Eq:tut:poisson:2D:DN3:bc1:
+.. _Eq:_auto16:
 
 .. math::
 
-    \tag{90}
-    u = u_L \mbox{ on } \Gamma_0, 
+    \tag{32}
+    u = u_0 \mbox{ on } \Gamma_D,       
+        
         
 
-.. _Eq:tut:poisson:2D:DN3:bc2:
+.. _Eq:_auto17:
 
 .. math::
 
-    \tag{91}
-    u = u_R \mbox{ on } \Gamma_1, 
-        
-
-.. _Eq:tut:poisson:2D:DN3:bc3:
-
-.. math::
-
-    \tag{92}
-    - {\partial u\over\partial n} = p(u-q) \mbox{ on } \Gamma_R,
+    \tag{33}
+    - {\partial u\over\partial n} = g \mbox{ on } \Gamma_N  {\thinspace .}
         
         
 
-.. _Eq:tut:poisson:2D:DN3:bc4:
-
-.. math::
-
-    \tag{93}
-    - {\partial u\over\partial n} = g \mbox{ on } \Gamma_N{\thinspace .}
-        
-        
-
-The involved prescribed functions are :math:`u_L= 1 + 2y^2`,
-:math:`u_R = 2 + 2y^2`, :math:`q=1+x^2+2y^2`, :math:`p` is arbitrary, and :math:`g=-4y`.
-
-Integration by parts of :math:`-\int_\Omega v\nabla^2 u {\, \mathrm{d}x}` becomes
-as usual
+Again we choose :math:`u=1+x^2 + 2y^2` as the exact solution and adjust :math:`f`, :math:`g`, and
+:math:`u_0` accordingly:
 
 .. math::
         
-         -\int_\Omega v\nabla^2 u {\, \mathrm{d}x}
-        = \int_\Omega\nabla u\cdot \nabla v {\, \mathrm{d}x} - \int_{\partial\Omega}{\partial u\over
-        \partial n}v {\, \mathrm{d}s}{\thinspace .}
+        f &= -6,\\ 
+        g &= \left\lbrace\begin{array}{ll}
+        -4, & y=1\\ 
+        0,  & y=0
+        \end{array}\right.\\ 
+        u_0 &= 1 + x^2 + 2y^2{\thinspace .}
         
 
-The boundary integral vanishes on :math:`\Gamma_0\cup\Gamma_1`, and
-we split the parts over :math:`\Gamma_N` and :math:`\Gamma_R` since we have
-different conditions at those parts:
+For ease of programming we may introduce a :math:`g` function defined over the whole
+of :math:`\Omega` such that :math:`g` takes on the right values at :math:`y=0` and
+:math:`y=1`. One possible extension is
 
 .. math::
         
-        - \int_{\partial\Omega}v{\partial u\over\partial n} {\, \mathrm{d}s}
+        g(x,y) = -4y{\thinspace .}
+        
+
+Variational formulation          (2)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The first task is to derive the variational problem. This time we cannot
+omit the boundary term arising from the integration by parts, because
+:math:`v` is only zero on :math:`\Gamma_D`. We have
+
+.. math::
+        
+         -\int_\Omega (\nabla^2 u)v {\, \mathrm{d}x}
+        = \int_\Omega\nabla u\cdot\nabla v {\, \mathrm{d}x} - \int_{\partial\Omega}{\partial u\over
+        \partial n}v {\, \mathrm{d}s},
+        
+
+and since :math:`v=0` on :math:`\Gamma_D`,
+
+.. math::
+        
+        - \int_{\partial\Omega}{\partial u\over
+        \partial n}v {\, \mathrm{d}s}
         =
-        -\int_{\Gamma_N}v{\partial u\over\partial n} {\, \mathrm{d}s} -
-        \int_{\Gamma_R}v{\partial u\over\partial n} {\, \mathrm{d}s}
-        = \int_{\Gamma_N}vg {\, \mathrm{d}s} +
-        \int_{\Gamma_R}vp(u-q) {\, \mathrm{d}s}{\thinspace .}
+        - \int_{\Gamma_N}{\partial u\over
+        \partial n}v {\, \mathrm{d}s}
+        = \int_{\Gamma_N}gv {\, \mathrm{d}s},
         
 
-The weak form then becomes
+by applying the boundary condition on :math:`\Gamma_N`.
+The resulting weak form reads
 
-.. math::
-        
-        \int_{\Omega} \nabla u\cdot \nabla v {\, \mathrm{d}x} +
-        \int_{\Gamma_N} gv {\, \mathrm{d}s} + \int_{\Gamma_R}p(u-q)v {\, \mathrm{d}s}
-        = \int_{\Omega} fv {\, \mathrm{d}x},
-        
-
-We want to write this weak form in the standard
-notation :math:`a(u,v)=L(v)`, which
-requires that we identify all integrals with *both* :math:`u` and :math:`v`,
-and collect these in :math:`a(u,v)`, while the remaining integrals with
-:math:`v` and not :math:`u` go
-into :math:`L(v)`.
-The integral from the Robin condition must of this reason be split in two
-parts:
-
-.. math::
-         \int_{\Gamma_R}p(u-q)v {\, \mathrm{d}s}
-        = \int_{\Gamma_R}puv {\, \mathrm{d}s} - \int_{\Gamma_R}pqv {\, \mathrm{d}s}{\thinspace .}
-        
-
-We then have
-
-.. _Eq:tut:poisson:2D:DN3:var:a:
+.. _Eq:tut:poisson:2D:DN:weak:
 
 .. math::
 
-    \tag{94}
-    a(u, v) = \int_{\Omega} \nabla u\cdot \nabla v {\, \mathrm{d}x}
-        + \int_{\Gamma_R}puv {\, \mathrm{d}s},
+    \tag{34}
+    \int_{\Omega} \nabla u \cdot \nabla v {\, \mathrm{d}x} +
+        \int_{\Gamma_N} gv {\, \mathrm{d}s}
+        = \int_{\Omega} fv {\, \mathrm{d}x}{\thinspace .}
         
         
 
-.. _Eq:tut:poisson:2D:DN3:var:L:
+Expressing this equation
+in the standard notation :math:`a(u,v)=L(v)` is straightforward with
+
+.. _Eq:tut:poisson2:vard:a:
 
 .. math::
 
-    \tag{95}
+    \tag{35}
+    a(u, v) = \int_{\Omega} \nabla u \cdot \nabla v {\, \mathrm{d}x},
+        
+        
+
+.. _Eq:tut:poisson2:vard:L:
+
+.. math::
+
+    \tag{36}
     L(v) = \int_{\Omega} fv {\, \mathrm{d}x} -
-        \int_{\Gamma_N} g v {\, \mathrm{d}s} + \int_{\Gamma_R}pqv {\, \mathrm{d}s}{\thinspace .}
+        \int_{\Gamma_N} gv {\, \mathrm{d}s}{\thinspace .}  
         
-        
 
-.. index:: dnr_p2D.py
+Implementation          (2)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-A natural starting point for implementation is the ``dn2_p2D.py``
-program in the directory ``poisson``. The new aspects are
+How does the Neumann condition impact the implementation?
+Let us go back to the very simplest file,
+``p2D_plain.py``, from
+the section :ref:`tut:poisson1:impl:code`,
+we realize that the statements remain almost the same.
+Only two adjustments are necessary:
 
- 1. definition of a mesh function over the boundary,
+  * The function describing the boundary where Dirichlet conditions
+    apply must be modified.
 
- 2. marking each side as a subdomain, using the mesh function,
+  * The new boundary term must be added to the expression in ``L``.
 
- 3. splitting a boundary integral into parts.
-
-Task 1 makes use of the ``MeshFunction`` object, but contrary to
-the section :ref:`tut:possion:2D:2mat:impl`, this is not a function over
-cells, but a function over cell facets. The topological dimension of
-cell facets is one lower than the cell interiors, so in a two-dimensional
-problem the dimension
-becomes 1. In general, the facet dimension
-is given as ``mesh.topology().dim()-1``,
-which we use in the code for ease of direct reuse in other problems.
-The construction of a ``MeshFunction`` object to mark boundary parts
-now reads
+The first adjustment can be coded as
 
 .. code-block:: python
 
-        boundary_parts = \ 
-          MeshFunction('size_t', mesh, mesh.topology().dim()-1)
+        def Dirichlet_boundary(x, on_boundary):
+            if on_boundary:
+                if x[0] == 0 or x[0] == 1:
+                    return True
+                else:
+                    return False
+            else:
+                return False
 
-As in the section :ref:`tut:possion:2D:2mat:impl` we
-use a subclass of ``SubDomain`` to identify the various parts
-of the mesh function. Problems with domains of more complicated geometries may
-set the mesh function for marking boundaries as part of the mesh
-generation.
-In our case, the :math:`y=0` boundary can be marked by
+A more compact implementation reads
 
 .. code-block:: python
 
-        class LowerRobinBoundary(SubDomain):
-            def inside(self, x, on_boundary):
-                tol = 1E-14   # tolerance for coordinate comparisons
-                return on_boundary and abs(x[1]) < tol
+        def Dirichlet_boundary(x, on_boundary):
+            return on_boundary and (x[0] == 0 or x[0] == 1)
+
+
+.. admonition:: Never use ``==`` for comparing real numbers
+
+   A list like ``x[0] == 1`` should never be used if ``x[0]`` is a real number,
+   because rounding errors in ``x[0]`` may make the test fail even when it is
+   mathematically correct. Consider
+   
+   .. code-block:: python
+   
+           >>> 0.1 + 0.2 == 0.3
+           False
+           >>> 0.1 + 0.2
+           0.30000000000000004
+   
+   Comparison of real numbers need to use tolerances! The values of the
+   tolerances depend on the size of the numbers involved in arithmetic
+   operations:
+   
+   .. code-block:: python
+   
+           >>> abs(0.1+0.2 - 0.3)
+           5.551115123125783e-17
+           >>> abs(1.1+1.2 - 2.3)
+           0.0
+           >>> abs(10.1+10.2 - 20.3)
+           3.552713678800501e-15
+           >>> abs(100.1+100.2 - 200.3)
+           0.0
+           >>> abs(1000.1+1000.2 - 2000.3)
+           2.2737367544323206e-13
+           >>> abs(10000.1+10000.2 - 20000.3)
+           3.637978807091713e-12
+   
+   For numbers around unity, tolerances as low as :math:`3\cdot 10^{-16}` can be used
+   (in fact, this tolerance is known as ``DOLFIN_EPS`` in the ``dolfin`` package),
+   otherwise an appropriate tolerance must be found.
+   
+   Testing for ``x[0] == 1`` should therefore be implemented as
+   
+   .. code-block:: python
+   
+           tol = 1E-14
+           if abs(x[0] - 1) < tol:
+               ...
+
+
+
+
+Here is a new boundary function using tolerances in the test:
+
+.. code-block:: python
+
+        def Dirichlet_boundary(x, on_boundary):
+            tol = 1E-14   # tolerance for coordinate comparisons
+            return on_boundary and \ 
+                   (abs(x[0]) < tol or abs(x[0] - 1) < tol)
+
+The second adjustment of our program concerns the definition of ``L``,
+where we have to add a boundary integral and a definition of the :math:`g`
+function to be integrated:
+
+.. code-block:: python
+
+        g = Expression('-4*x[1]')
+        L = f*v*dx - g*v*ds
+
+The ``ds`` variable implies a boundary integral, while ``dx``
+implies an integral over the domain :math:`\Omega`.
+No more modifications are necessary.
+
+.. _tut:poisson:multiple:Dirichlet:
+
+Multiple Dirichlet conditions
+-----------------------------
+
+The PDE problem from the previous section applies a function :math:`u_0(x,y)`
+for setting Dirichlet conditions at two parts of the boundary.
+Having a single function to set multiple Dirichlet conditions is
+seldom possible. The more general case is to have :math:`m` functions for
+setting Dirichlet conditions on :math:`m` parts of the boundary.
+The purpose of this section is to explain how such multiple conditions
+are treated in FEniCS programs.
+
+Let us return to the case from the section :ref:`tut:poisson1:DN` and define
+two separate functions for the two Dirichlet conditions:
+
+.. math::
         
-        Gamma_R = LowerRobinBoundary()
-        Gamma_R.mark(boundary_parts, 0)
+            - \nabla^2 u &= -6 \mbox{ in } \Omega, \\ 
+            u &= u_L \mbox{ on } \Gamma_0, \\ 
+            u &= u_R \mbox{ on } \Gamma_1, \\ 
+            - {\partial u\over\partial n} &= g \mbox{ on } \Gamma_N {\thinspace .}
+        
 
-The code for the :math:`y=1` boundary is similar and is seen in
-``dnr_p2D.py``.
+Here, :math:`\Gamma_0` is the boundary :math:`x=0`, while :math:`\Gamma_1` corresponds
+to the boundary :math:`x=1`.  We have that :math:`u_L = 1 + 2y^2`, :math:`u_R = 2 +
+2y^2`, and :math:`g=-4y`.
 
-The Dirichlet boundaries are marked similarly, using subdomain number 2 for :math:`\Gamma_0` and 3 for :math:`\Gamma_1`:
+Functions for marking Dirichlet boundaries
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+For the left boundary :math:`\Gamma_0` we define the
+usual triple of a function for the boundary value, a function for
+defining the boundary of interest, and a ``DirichletBC`` object:
+
+.. code-block:: python
+
+        u_L = Expression('1 + 2*x[1]*x[1]')
+        
+        def left_boundary(x, on_boundary):
+            tol = 1E-14   # tolerance for coordinate comparisons
+            return on_boundary and abs(x[0]) < tol
+        
+        Gamma_0 = DirichletBC(V, u_L, left_boundary)
+
+For the boundary :math:`x=1` we write a similar code snippet:
+
+.. code-block:: python
+
+        u_R = Expression('2 + 2*x[1]*x[1]')
+        
+        def right_boundary(x, on_boundary):
+            tol = 1E-14   # tolerance for coordinate comparisons
+            return on_boundary and abs(x[0] - 1) < tol
+        
+        Gamma_1 = DirichletBC(V, u_R, right_boundary)
+
+The various essential conditions are then collected in a list
+and used in the solution process:
+
+.. code-block:: python
+
+        bcs = [Gamma_0, Gamma_1]
+        ...
+        solve(a == L, u, bcs)
+        # or
+        problem = LinearVariationalProblem(a, L, u, bcs)
+        solver  = LinearVariationalSolver(problem)
+        solver.solve()
+
+In other problems, where the :math:`u` values are constant at a part of the
+boundary, we may use a simple ``Constant`` object instead of an
+``Expression`` object.
+
+Classes for marking Dirichlet boundaries
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Instead of using a function like ``left_boundary(x, on_boundary)`` to
+mark a boundary, we can alternatively use a class, which allows
+for more flexibility in more complicated problems. The class for marking
+a boundary is derived from class ``SubDomain`` and has a method ``inside(self, x, on_boundary)`` for the code that returns whether the ``point`` is on the
+boundary in question or not. Our previous ``left_boundary`` function
+takes this form in its class version:
 
 .. code-block:: python
 
@@ -480,95 +339,135 @@ The Dirichlet boundaries are marked similarly, using subdomain number 2 for :mat
                 tol = 1E-14   # tolerance for coordinate comparisons
                 return on_boundary and abs(x[0]) < tol
         
-        Gamma_0 = LeftBoundary()
-        Gamma_0.mark(boundary_parts, 2)
-        
-        class RightBoundary(SubDomain):
-            def inside(self, x, on_boundary):
-                tol = 1E-14   # tolerance for coordinate comparisons
-                return on_boundary and abs(x[0] - 1) < tol
-        
-        Gamma_1 = RightBoundary()
-        Gamma_1.mark(boundary_parts, 3)
+        left_boundary = LeftBoundary()
+        Gamma_0 = DirichletBC(V, u_L, left_boundary)
 
-Specifying the ``DirichletBC`` objects may now make use of
-the mesh function (instead of a ``SubDomain`` subclass object)
-and an indicator for which subdomain each condition
-should be applied to:
+Debugging Dirichlet conditions
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Debugging of PDE solvers very often faces the question of whether the
+boundary conditions are set correctly or not. To check which Dirichlet
+conditions that are actually set in the present problem, we can call
+the ``get_boundary_values`` method in the ``DirichletBC`` objects. This
+method returns a dictionary with degrees of freedom as keys and
+corresponding essential conditions as values. In the present problem
+we can write
 
 .. code-block:: python
 
-        u_L = Expression('1 + 2*x[1]*x[1]')
-        u_R = Expression('2 + 2*x[1]*x[1]')
-        bcs = [DirichletBC(V, u_L, boundary_parts, 2),
-               DirichletBC(V, u_R, boundary_parts, 3)]
-
-Some functions need to be defined before we can go on with the
-``a`` and ``L`` of the variational problem:
-
-.. code-block:: python
-
-        g = Expression('-4*x[1]')
-        q = Expression('1 + x[0]*x[0] + 2*x[1]*x[1]')
-        p = Constant(100)  # arbitrary function can go here
-        u = TrialFunction(V)
-        v = TestFunction(V)
-        f = Constant(-6.0)
-
-The new aspect of the variational problem is the two distinct
-boundary integrals.
-Having a mesh function over exterior cell facets (our
-``boundary_parts`` object), where subdomains (boundary parts) are
-numbered as :math:`0,1,2,\ldots`, the special symbol ``ds(0)``
-implies integration over subdomain (part) 0, ``ds(1)`` denotes
-integration over subdomain (part) 1, and so on.
-The idea of multiple ``ds``-type objects generalizes to volume
-integrals too: ``dx(0)``, ``dx(1)``, etc., are used to
-integrate over subdomain 0, 1, etc.,  inside :math:`\Omega`.
-
-The variational problem can be defined as
-
-.. code-block:: python
-
-        a = inner(nabla_grad(u), nabla_grad(v))*dx + p*u*v*ds(0)
-        L = f*v*dx - g*v*ds(1) + p*q*v*ds(0)
-
-For the ``ds(0)`` and ``ds(1)`` symbols to work we must obviously
-connect them (or ``a`` and ``L``) to the mesh function marking
-parts of the boundary. This is done by a certain keyword argument
-to the ``assemble`` function:
-
-
-.. warning::
-    The old code looked like
-    
-    .. code-block:: python
-    
-            A = assemble(a, exterior_facet_domains=boundary_parts)
-            b = assemble(L, exterior_facet_domains=boundary_parts)
-    
-    but the ``exterior_facet_domain`` argument is no longer legal.
-    The text must be updated! The associated code gives wrong results.
-
-
-
-
-.. code-block:: python
-
-        A = assemble(a)
-        b = assemble(L)
-
-Then essential boundary conditions are enforced, and the system can
-be solved in the usual way:
-
-.. code-block:: python
-
+        coor = mesh.coordinates()
+        d2v = dof_to_vertex_map(V)
         for bc in bcs:
-            bc.apply(A, b)
-        u = Function(V)
-        U = u.vector()
-        solve(A, U, b)
+            bc_dict = bc.get_boundary_values()
+            for dof in bc_dict:
+                print('dof %2d: u=%g\t at point %s' %
+                      (dof, bc_dict[dof],
+        	      str(tuple(coor[d2v[dof]].tolist()))))
 
-The complete code is in the ``dnr_p2D.py`` file in the
-``poisson`` directory.
+The printing of coordinates for each degree of freedom (node here)
+is only appropriate when degrees of freedom coincide with function
+values at the vertices of the mesh, which is the case for linear
+Lagrange elements only. One should therefore make somewhat
+more robust code that prints out the coordinates (for convenience
+when checking boundary values) only in the case of first-order
+Lagrange elements:
+
+.. code-block:: python
+
+        Lagrange_1st_order = V.ufl_element().degree() == 1
+        if Lagrange_1st_order:
+            coor = mesh.coordinates()
+            d2v = dof_to_vertex_map(V)
+            for bc in bcs:
+                bc_dict = bc.get_boundary_values()
+                for dof in bc_dict:
+                    print('dof %2d: u=%g' % (dof, bc_dict[dof])),
+                    print('\t at point %s' %
+                          (str(tuple(coor[d2v[dof]].tolist()))))
+
+The output for a mesh made by ``UnitSquareMesh(3, 2)`` becomes
+
+.. code-block:: text
+
+        dof  0: u=1 	 at point (0.0, 0.0)
+        dof  8: u=3 	 at point (0.0, 1.0)
+        dof  4: u=1.5 	 at point (0.0, 0.5)
+        dof  3: u=2 	 at point (1.0, 0.0)
+        dof 11: u=4 	 at point (1.0, 1.0)
+        dof  7: u=2.5 	 at point (1.0, 0.5)
+
+.. The file ``dn2_p2D.py`` contains a complete program which
+
+.. demonstrates the constructions above.
+
+An extended example with multiple Neumann conditions would have
+been quite natural now, but this requires marking various parts
+of the boundary using the *mesh function* concept and is therefore
+left to the section :ref:`tut:poisson:mat:neumann`.
+
+Handy methods in key FEniCS objects
+-----------------------------------
+
+.. index:: pydoc
+
+In general,
+``pydoc dolfin.X`` shows the documentation of any DOLFIN name ``X``
+and lists all the methods (i.e.g, functions in the class) that
+can be called. Below, we list just a few, but very useful, methods
+in the most central FEniCS classes.
+
+Mesh
+~~~~
+
+Let ``mesh`` be a ``Mesh`` object.
+
+  * ``mesh.coordinates()`` returns an array of the coordinates of
+     the vertices in the mesh.
+
+  * ``mesh.num_cells()`` returns the number of cells (triangles)
+    in the mesh,
+
+  * ``mesh.num_vertices()`` returns the number of vertices in
+    the mesh (with our choice of linear Lagrange elements this equals the
+    number of nodes, ``len(u_array)``, or dimension of the space ``V.dim()``),
+
+  * ``mesh.cells()`` returns the vertex numbers of the vertices in
+    each cell as a ``numpy`` array with shape
+    (*number of cells*, *number of vertices in a cell*),
+
+  * ``mesh.hmin()`` returns the minimum cell diameter ("smallest cell"),
+
+  * ``mesh.hmax()`` returns the maximum cell diameter ("largest cell").
+
+Writing ``print(mesh)`` dumps a short, pretty-print description
+of the mesh (``print(mesh)`` actually displays the result of ``str(mesh)``,
+which defines the pretty print):
+
+.. code-block:: text
+
+        <Mesh of topological dimension 2 (triangles) with
+        16 vertices and 18 cells, ordered>
+
+Function space
+~~~~~~~~~~~~~~
+
+Let ``V`` be a ``FunctionSpace`` object.
+
+ * ``V.mesh()`` returns the associated mesh.
+
+ * ``V.dim()`` returns the dimension (number of degrees of freedom).
+
+ * ``V.ufl_element()`` returns the associated finite element.
+
+Function
+~~~~~~~~
+
+Let ``u`` be a ``Function`` object.
+
+ * ``u.function_space()`` returns the associated function space.
+
+ * ``u.vector()`` returns the DOLFIN vector of degrees of freedom.
+
+ * ``u.vector().array()`` returns a copy of the degrees of freedom
+   in a ``numpy`` array.
 

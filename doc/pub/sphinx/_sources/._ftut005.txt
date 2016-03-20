@@ -1,957 +1,757 @@
 .. !split
 
-.. _tut:poisson:nonlinear:
+Visualization
+=============
 
-Nonlinear problems
-==================
+.. _tut:poisson:membrane:
 
-Now we shall address how to solve nonlinear PDEs in FEniCS. Our
-sample PDE for implementation is taken as a nonlinear Poisson equation:
+Deflection of a circular membrane
+---------------------------------
 
-.. _Eq:_auto25:
+Perhaps you are not particularly amazed by viewing the simple surface
+of :math:`u` in the test problem used in the previous sections.
+However, solving a real physical problem
+with a more interesting and amazing solution on the screen is only a
+matter of specifying a more exciting domain, boundary condition,
+and/or right-hand side :math:`f`.
 
-.. math::
+The problem
+~~~~~~~~~~~
 
-    \tag{59}
-    -\nabla\cdot\left( q(u)\nabla u\right) = f{\thinspace .}
-        
-        
+One possible physical problem regards the deflection :math:`D(x,y)` of an
+elastic circular membrane with radius :math:`R`, subject to a localized
+perpendicular pressure force, modeled as a Gaussian function.  The
+appropriate PDE model is
 
-The coefficient :math:`q(u)` makes the equation nonlinear (unless :math:`q(u)`
-is constant in :math:`u`).
-
-To be able to easily verify our implementation,
-we choose the domain, :math:`q(u)`, :math:`f`, and the boundary
-conditions such that we have
-a simple, exact solution :math:`u`. Let
-:math:`\Omega` be the unit hypercube :math:`[0, 1]^d`
-in :math:`d` dimensions, :math:`q(u)=(1+u)^m`, :math:`f=0`, :math:`u=0` for :math:`x_0=0`, :math:`u=1`
-for :math:`x_0=1`, and :math:`\partial u/\partial n=0` at all other boundaries
-:math:`x_i=0` and :math:`x_i=1`, :math:`i=1,\ldots,d-1`. The coordinates are now represented by
-the symbols :math:`x_0,\ldots,x_{d-1}`. The exact solution is then
-
-.. _Eq:_auto26:
+.. _Eq:_auto13:
 
 .. math::
 
-    \tag{60}
-    u(x_0,\ldots,x_{d-1}) = \left((2^{m+1}-1)x_0 + 1\right)^{1/(m+1)} - 1{\thinspace .}
+    \tag{25}
+    -T\nabla^2 D = p(x,y)\quad\hbox{in }\Omega = \{ (x,y)\,|\, x^2+y^2\leq R\},
         
         
 
-We refer to the section :ref:`tut:poisson:nD` for details on formulating a PDE
-problem in :math:`d` space dimensions.
+with
 
-The variational formulation of our model problem reads:
-Find :math:`u \in V` such that
-
-.. _Eq:tut:poisson:nonlinear1:
+.. _Eq:_auto14:
 
 .. math::
 
-    \tag{61}
-    F(u; v) = 0 \quad \forall v \in \hat{V},
+    \tag{26}
+    p(x,y) = {A\over 2\pi\sigma}\exp{\left(
+        - {1\over2}\left( {x-x_0\over\sigma}\right)^2
+        - {1\over2}\left( {y-y_0\over\sigma}\right)^2
+        \right)}\, .
         
+        
+
+Here, :math:`T` is the tension in the membrane (constant), :math:`p` is the external
+pressure load,
+:math:`A` the amplitude of the pressure, :math:`(x_0,y_0)` the localization of
+the Gaussian pressure function, and :math:`\sigma` the "width" of this
+function. The boundary of the membrane has no
+deflection, implying :math:`D=0` as boundary condition.
+
+.. For scaling and verification it is convenient to simplify the problem
+
+.. to find an analytical solution. In the limit :math:`\sigma\rightarrow\infty`,
+
+.. :math:`p\rightarrow A/(2\pi\sigma)` (constant pressure throughout :math:`\Omega`),
+
+.. and we can easily find an analytical solution
+
+.. of the problem by integrating the Poisson equation in the
+
+.. radial coordinate: :math:`r\in [0,R]`. The result becomes
+
+.. :math:`D(r)=(r^2-R^2)A/(8\pi\sigma T)`.
+
+Scaling
+~~~~~~~
+
+The localization of the pressure, :math:`(x_0,y_0)`, is for simplicity
+set to :math:`(0, R_0)`.
+There are many physical parameters in this problem, and we can benefit
+from grouping them by means of scaling. Let us introduce dimensionless
+coordinates :math:`\bar x = x/R`, :math:`\bar y = y/R`, and a dimensionless
+deflection :math:`w=D/D_c`, where :math:`D_c` is a characteristic size of the
+deflection. Introducing :math:`\bar R_0=R_0/R`, we get
+
+.. math::
+         \frac{\partial^2 w}{\partial\bar x^2} +
+        \frac{\partial^2 w}{\partial\bar y^2}= \alpha
+        \exp{\left(
+        - \beta^2(\bar x^2
+        + (\bar y-\bar R_0)^2)\right)}\hbox{ for } \bar x^2 + \bar y^2 < 1,
 
 where
 
-.. _Eq:tut:poisson:nonlinear2:
+.. math::
+         \alpha = \frac{R^2A}{2\pi T D_c\sigma},\quad\beta = \frac{R}{\sqrt{2}\sigma}{\thinspace .}
+
+With an appropriate scaling, :math:`\bar w` and its derivatives are of size
+unity, so the left-hand side of the scaled PDE is about unity in size,
+while the right-hand side has :math:`\alpha` as its characteristic size.
+This suggest choosing :math:`\alpha` to be unity, or around unit.
+We shall in particular choose :math:`\alpha=4`. With this value,
+the solution is :math:`w(\bar x,\bar y) = 1-\bar x^2 - \bar y^2`.
+(One can also find the analytical solution in scaled coordinates and show
+that the maximum deflection :math:`D(0,0)` is :math:`D_c` if we choose :math:`\alpha=4`
+to determine :math:`D_c`.)
+With :math:`D_c=AR^2/(8\pi\sigma T)`
+and dropping the bars we get the scaled problem
+
+.. _Eq:tut:poisson1:membrane:scaled:eq:
 
 .. math::
 
-    \tag{62}
-    F(u; v) = \int_\Omega q(u)\nabla u\cdot \nabla v {\, \mathrm{d}x},
+    \tag{27}
+    \nabla^2w = 4\exp{\left(
+        - \beta^2(x^2
+        + (y-R_0)^2)\right)},
+        
         
 
-and
+to be solved over the unit circle with :math:`w=0` on the boundary.
+Now there are only two parameters to vary: the dimensionless extent
+of the pressure, :math:`\beta`, and the localization of the pressure peak, :math:`R_0\in [0,1]`.
+As :math:`\beta\rightarrow 0`, we
+have a special case with solution :math:`w=1-x^2-y^2`.
+
+Given a computed :math:`w`, the physical deflection is given by
 
 .. math::
-        
-            \hat{V} &= \{v \in H^1(\Omega) : v = 0 \mbox{ on } x_0=0\mbox{ and }x_0=1\}, \\ 
-             V      &= \{v \in H^1(\Omega) : v = 0 \mbox{ on } x_0=0\mbox{ and } v = 1\mbox{ on }x_0=1\}{\thinspace .}
-        
+         D = \frac{AR^2}{8\pi\sigma T}w{\thinspace .}
 
-The discrete problem arises as usual by restricting :math:`V` and :math:`\hat V` to a
-pair of discrete spaces. As usual, we omit any subscript on discrete
-spaces and simply say :math:`V` and :math:`\hat V` are chosen finite dimensional
-according to some mesh with some element type.
-Similarly, we let :math:`u` be the discrete solution and use :math:`{u_{\small\mbox{e}}}` for
-the exact solution if it becomes necessary to distinguish between the two.
+Implementation          (1)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-The discrete nonlinear problem is then written as: find :math:`u\in V` such that
-
-.. _Eq:tut:poisson:nonlinear:d:
-
-.. math::
-
-    \tag{63}
-    F(u; v) = 0 \quad \forall v \in \hat{V},
-        
-        
-
-with :math:`u = \sum_{j=1}^N U_j \phi_j`. Since :math:`F` is a nonlinear function
-of :math:`u`, the variational statement gives rise to a system of
-nonlinear algebraic equations.
-
-FEniCS can be used in alternative ways for solving a nonlinear PDE
-problem. We shall in the following subsections go through four
-solution strategies:
-
- 1. a simple Picard-type iteration,
-
- 2. a Newton method at the algebraic level,
-
- 3. a Newton method at the PDE level, and
-
- 4. an automatic approach where FEniCS attacks the nonlinear variational
-    problem directly.
-
-The "black box" strategy 4 is definitely the simplest one from a
-programmer's point of view, but the others give more manual control of
-the solution process for nonlinear equations (which also has some
-pedagogical advantages, especially for newcomers to nonlinear finite
-element problems).
-
-.. _tut:nonlinear:Picard:
-
-Picard iteration
-----------------
-
-.. index:: Picard iteration
-
-.. index:: successive substitutions
-
-Picard iteration is an easy way of handling nonlinear PDEs: we simply
-use a known, previous solution in the nonlinear terms so that these
-terms become linear in the unknown :math:`u`. The strategy is also known as
-the method of successive substitutions.
-For our particular problem,
-we use a known, previous solution in the coefficient :math:`q(u)`.
-More precisely, given a solution :math:`u^k` from iteration :math:`k`, we seek a
-new (hopefully improved) solution :math:`u^{k+1}` in iteration :math:`k+1` such
-that :math:`u^{k+1}` solves the *linear problem*,
-
-.. _Eq:tut:poisson:nonlinear:picard1:
-
-.. math::
-
-    \tag{64}
-    \nabla\cdot \left(q(u^k)\nabla u^{k+1}\right) = 0,\quad k=0,1,\ldots
-        
-
-The iterations require an initial guess :math:`u^0`.
-The hope is that :math:`u^{k} \rightarrow u` as :math:`k\rightarrow\infty`, and that
-:math:`u^{k+1}` is sufficiently close to the exact
-solution :math:`u` of the discrete problem after just a few iterations.
-
-We can easily formulate a variational problem for :math:`u^{k+1}` from
-:ref:`(64) <Eq:tut:poisson:nonlinear:picard1>`.
-Equivalently, we can approximate :math:`q(u)` by :math:`q(u^k)` in
-:ref:`(62) <Eq:tut:poisson:nonlinear2>`
-to obtain the same linear variational problem.
-In both cases, the problem consists of seeking
-:math:`u^{k+1} \in V` such that
-
-.. _Eq:tut:poisson:nonlinear:picard2:
-
-.. math::
-
-    \tag{65}
-    \tilde F(u^{k+1}; v) = 0 \quad \forall v \in \hat{V},\quad k=0,1,\ldots,
-        
-
-with
-
-.. _Eq:tut:poisson:nonlinear:picard3:
-
-.. math::
-
-    \tag{66}
-    \tilde F(u^{k+1}; v) = \int_\Omega q(u^k)\nabla u^{k+1}\cdot \nabla v {\, \mathrm{d}x}
-        {\thinspace .}
-        
-
-Since this is a linear problem in the unknown :math:`u^{k+1}`, we can equivalently
-use the formulation
-
-.. _Eq:_auto27:
-
-.. math::
-
-    \tag{67}
-    a(u^{k+1},v) = L(v),
-        
-        
-
-with
-
-.. _Eq:_auto28:
-
-.. math::
-
-    \tag{68}
-    a(u,v) = \int_\Omega q(u^k)\nabla u\cdot \nabla v {\, \mathrm{d}x}
-        
-        
-
-.. _Eq:_auto29:
-
-.. math::
-
-    \tag{69}
-    L(v) = 0{\thinspace .}
-        
-        
-
-The iterations can be stopped when
-:math:`\epsilon\equiv ||u^{k+1}-u^k|| < \mbox{tol}`,
-where :math:`\mbox{tol}` is a small tolerance, say :math:`10^{-5}`, or
-when the number of iterations exceed some critical limit. The latter
-case will pick up divergence of the method or unacceptable slow
-convergence.
-
-.. index:: picard_np.py
-
-In the solution algorithm we only need to store :math:`u^k` and :math:`u^{k+1}`,
-called ``u_k`` and ``u`` in the code below.
-The algorithm can then be expressed as follows:
+Very few modifications of the software in
+``p2D_iter.py`` are required. Actually, the ``solver`` function
+can be reused, except that the domain is now a circle and not a
+square. We change the ``solver`` function by letting the mesh be
+an argument ``mesh`` (instead of ``Nx`` and ``Ny``):
 
 .. code-block:: python
 
-        def q(u):
-            return (1+u)**m
+        def solver(
+            f, u0, mesh, degree=1,
+            linear_solver='Krylov', # Alt: 'direct'
+            ...):
+            V = FunctionSpace(mesh, 'Lagrange', degree)
+            ...
+
+A mesh over the unit circle can be created by the ``mshr`` tool in
+FEniCS:
+
+.. code-block:: python
+
+        from mshr import *
+        domain = Circle(Point(0.0, 0.0), 1.0)
+        mesh = generate_mesh(domain, n)
+
+The ``Circle`` shape from ``mshr`` takes the center and radius of the circle
+as the two first arguments, while ``n`` is the resolution, here the
+suggested number of cells per radius.
+
+.. index:: Expresion
+
+.. index:: Expression with parameters
+
+The right-hand side pressure function
+is represented by an ``Expression`` object. There
+are two physical parameters in the formula for :math:`f` that enter the
+expression string and these parameters must have their values set
+by keyword arguments:
+
+.. code-block:: python
+
+        p = Expression(
+            '4*exp(-pow(beta,2)*(pow(x[0], 2) + pow(x[1]-R0, 2)))',
+            beta=beta, R0=R0)
+
+The coordinates in ``Expression`` objects *must* be a vector
+with indices 0, 1, and 2, and with the name ``x``. Otherwise
+we are free to introduce names of parameters as long as these are
+given default values by keyword arguments. All the parameters
+initialized by keyword arguments can at any time have their
+values modified. For example, we may set
+
+.. code-block:: python
+
+        f.beta = 12
+        f.R0 = 0.3
+
+.. index:: interpolation
+
+It would be of interest to visualize :math:`p` along with :math:`w` so that we can
+examine the pressure force and the membrane's response.  We must then transform
+the formula (``Expression``) to a finite element function
+(``Function``).  The most natural approach is to construct a finite
+element function whose degrees of freedom are
+calculated from :math:`p`. That is, we interpolate :math:`p`:
+
+.. code-block:: python
+
+        p = interpolate(p, V)
+
+Calling ``plot(p)`` will produce a plot of :math:`p`. Note that the assignment
+to ``p`` destroys the previous ``Expression`` object ``p``, so if
+it is of interest to still have access to this object, another name must be used
+for the ``Function`` object returned by ``interpolate``.
+
+We need some evidence that the program works, and to this end we may
+use the analytical solution listed above for the case :math:`\beta =0`.
+
+The final program is found in the file ``membrane.py``, located
+in the ``poisson`` directory. The key function to simulate
+membrane deflection is named ``application``.
+
+.. code-block:: python
+
+        from dolfin import *
+        from mshr import *
+        import numpy as np
         
-        # Define variational problem for Picard iteration
-        u = TrialFunction(V)
-        v = TestFunction(V)
-        u_k = interpolate(Constant(0.0), V)  # previous (known) u
-        a = inner(q(u_k)*nabla_grad(u), nabla_grad(v))*dx
-        f = Constant(0.0)
-        L = f*v*dx
+        def solver(
+            f, u0, mesh, degree=1,
+            linear_solver='Krylov', # Alt: 'direct'
+            abs_tol=1E-5,           # Absolute tolerance in Krylov solver
+            rel_tol=1E-3,           # Relative tolerance in Krylov solver
+            max_iter=1000,          # Max no of iterations in Krylov solver
+            log_level=PROGRESS,     # Amount of solver output
+            dump_parameters=False,  # Write out parameter database?
+            ):
+            """
+            Solve -Laplace(u)=f on given mesh with Lagrange elements
+            of specified degree and u=u0 (Expresssion) on the boundary.
+            """
+            V = FunctionSpace(mesh, 'Lagrange', degree)
         
-        # Picard iterations
-        u = Function(V)     # new unknown function
-        eps = 1.0           # error measure ||u-u_k||
-        tol = 1.0E-5        # tolerance
-        iter = 0            # iteration counter
-        maxiter = 25        # max no of iterations allowed
-        while eps > tol and iter < maxiter:
-            iter += 1
-            solve(a == L, u, bcs)
-            diff = u.vector().array() - u_k.vector().array()
-            eps = numpy.linalg.norm(diff, ord=numpy.Inf)
-            print('iter=%d: norm=%g' % (iter, eps))
-            u_k.assign(u)   # update for next iteration
-
-We need to define the previous solution in the iterations, ``u_k``,
-as a finite element function so that ``u_k`` can be updated with
-``u`` at the end of the loop. We may create the initial
-``Function u_k``
-by interpolating
-an ``Expression`` or a ``Constant``
-to the same vector space as ``u`` lives in (``V``).
-
-In the code above we demonstrate how to use
-``numpy`` functionality to compute the norm of
-the difference between the two most recent solutions. Here we apply
-the maximum norm (:math:`\ell_\infty` norm) on the difference of the solution vectors
-(``ord=1`` and ``ord=2`` give the :math:`\ell_1` and :math:`\ell_2` vector
-norms - other norms are possible for ``numpy`` arrays,
-see ``pydoc numpy.linalg.norm``).
-
-The file ``picard_np.py`` contains the complete code for
-this nonlinear Poisson problem.
-The implementation is :math:`d` dimensional, with mesh
-construction and setting of Dirichlet conditions as explained in
-the section :ref:`tut:poisson:nD`.
-For a :math:`33\times 33` grid with :math:`m=2` we need 9 iterations for convergence
-when the tolerance is :math:`10^{-5}`.
-
-.. _tut:nonlinear:Newton:algebraic:
-
-A Newton method at the algebraic level
---------------------------------------
-
-.. index:: Newton's method (algebraic equations)
-
-After having discretized our nonlinear PDE problem, we may
-use Newton's method to solve the system of nonlinear algebraic equations.
-From the continuous variational problem :ref:`(61) <Eq:tut:poisson:nonlinear1>`,
-the discrete version :ref:`(63) <Eq:tut:poisson:nonlinear:d>` results in a
-system of equations for the unknown parameters :math:`U_1,\ldots, U_N`
-(by inserting :math:`u = \sum_{j=1}^N U_j \phi_j`
-and :math:`v=\hat\phi_i` in :ref:`(63) <Eq:tut:poisson:nonlinear:d>`):
-
-.. _Eq:tut:nonlinear:Newton:F1:
-
-.. math::
-
-    \tag{70}
-    F_i(U_1,\ldots,U_N) \equiv
-        \sum_{j=1}^N
-        \int_\Omega \left( q\left(\sum_{\ell=1}^NU_\ell\phi_\ell\right)
-        \nabla \phi_j U_j\right)\cdot \nabla \hat\phi_i {\, \mathrm{d}x} = 0,\quad i=1,\ldots,N{\thinspace .}
+            def u0_boundary(x, on_boundary):
+                return on_boundary
         
-
-Newton's method for the system :math:`F_i(U_1,\ldots,U_j)=0`, :math:`i=1,\ldots,N`
-can be formulated as
-
-.. _Eq:_auto30:
-
-.. math::
-
-    \tag{71}
-    \sum_{j=1}^N
-        {\partial \over\partial U_j} F_i(U_1^k,\ldots,U_N^k)\delta U_j
-        = -F_i(U_1^k,\ldots,U_N^k),\quad i=1,\ldots,N,
+            bc = DirichletBC(V, u0, u0_boundary)
+        
+            # Define variational problem
+            u = TrialFunction(V)
+            v = TestFunction(V)
+            a = inner(nabla_grad(u), nabla_grad(v))*dx
+            L = f*v*dx
+        
+            # Compute solution
+            u = Function(V)
+        
+            if linear_solver == 'Krylov':
+                prm = parameters['krylov_solver'] # short form
+                prm['absolute_tolerance'] = abs_tol
+                prm['relative_tolerance'] = rel_tol
+                prm['maximum_iterations'] = max_iter
+                print(parameters['linear_algebra_backend'])
+                set_log_level(log_level)
+                if dump_parameters:
+                    info(parameters, True)
+                solver_parameters = {'linear_solver': 'gmres',
+                                     'preconditioner': 'ilu'}
+            else:
+                solver_parameters = {'linear_solver': 'lu'}
+        
+            solve(a == L, u, bc, solver_parameters=solver_parameters)
+            return u
         
         
-
-.. _Eq:_auto31:
-
-.. math::
-
-    \tag{72}
-    U_j^{k+1} = U_j^k + \omega\delta U_j,\quad j=1,\ldots,N,
+        def application(beta, R0, num_elements_radial_dir):
+            # Scaled pressure function
+            p = Expression(
+                '4*exp(-pow(beta,2)*(pow(x[0], 2) + pow(x[1]-R0, 2)))',
+                beta=beta, R0=R0)
         
+            # Generate mesh over the unit circle
+            domain = Circle(Point(0.0, 0.0), 1.0)
+            mesh = generate_mesh(domain, num_elements_radial_dir)
         
+            w = solver(p, Constant(0), mesh, degree=1,
+                       linear_solver='direct')
+            w.rename('w', 'deflection')  # set name and label (description)
+        
+            # Plot scaled solution, mesh and pressure
+            plot(mesh, title='Mesh over scaled domain')
+            plot(w, title='Scaled ' + w.label())
+            V = w.function_space()
+            p = interpolate(p, V)
+            p.rename('p', 'pressure')
+            plot(p, title='Scaled ' + p.label())
 
-where :math:`\omega\in [0,1]` is a relaxation parameter, and :math:`k` is
-an iteration index. An initial guess :math:`u^0` must
-be provided to start the algorithm.
+Choosing a very peak-formed pressure with large :math:`\beta` (e.g., :math:`\beta
+\geq 20`) and a location :math:`R_0` toward the circular boundary (e.g.,
+:math:`R_0=0.5`), may produce an exciting visual demonstrations of the very
+smoothed elastic response to a peak force (or mathematically, the
+smoothing properties of the inverse of the Laplace operator).  One
+needs to experiment with the mesh resolution to get a smooth visual
+representation of :math:`p`.  You are strongly encouraged to play around
+with the plots and different mesh resolutions:
 
-.. index:: under-relaxation
+.. code-block:: text
 
-The original Newton method has :math:`\omega=1`, but in problems where it is
-difficult to obtain convergence,
-so-called *under-relaxation* with :math:`\omega < 1` may help. It means that
-one takes a smaller step than what is suggested by Newton's method.
+        Terminal> python -c 'import membrane as m; m.application()' \ 
+                  membrane.py
+
+.. _tut:quickviz:
+
+Quick visualization with VTK
+----------------------------
+
+.. index:: visualization
+
+.. index:: plotting
+
+.. index:: VTK
+
+As we go along with examples it is fun to play around with
+``plot`` commands and visualize what is computed. This section explains
+some useful visualization features.
+
+The ``plot`` command applies the VTK package to visualize finite element
+functions in a very quick and simple way.  The command is ideal for
+debugging, teaching, and initial scientific investigations.  The
+visualization can be interactive, or you can steer and automate it
+through program statements.  More advanced and professional
+visualizations are usually better created with advanced tools like
+Mayavi, ParaView, or VisIt.
+
+.. index:: membranev.p
+
+We have made a program ``membrane.py`` for the membrane deflection
+problem in the section :ref:`tut:poisson:membrane` and added various
+demonstrations of plotting capabilities. You are encouraged to play around with
+``membrane.py`` and modify the code as you read about various features.
+
+.. index:: plot
+
+The ``plot`` function can take additional arguments, such as
+a title of the plot, or a specification of a wireframe plot (elevated mesh)
+instead of a colored surface plot:
+
+.. code-block:: python
+
+        plot(mesh, title='Finite element mesh')
+        plot(w, wireframe=True, title='Solution')
+
+Axes can be turned on by the ``axes=True`` argument, while
+``interactive=True`` makes the program hang at the plot command - you have
+to type ``q`` in the plot window to terminate the plot and continue execution.
+
+The left mouse button is used to rotate the surface, while the right
+button can zoom the image in and out.
+Point the mouse to the ``Help`` text down in the lower left corner to
+get a list of all the keyboard commands that are available.
+For example,
+
+ * pressing ``m`` turns visualization of the mesh on and off,
+
+ * pressing ``b`` turns on and off a bounding box,
+
+ * pressing ``p`` dumps the plot to a PNG file,
+
+ * pressing ``P`` dumps the plot to a PDF file,
+
+ * pressing `Ctrl +' stretches the surface in the :math:`z` direction,
+
+ * pressing `Ctrl -' shrinks++ the surface in the :math:`z` direction,
+
+ * pressing `Ctrl w' closes the plot window,
+
+ * pressing `Ctrl q' closes all plot windows.
+
+The plots created by pressing ``p`` or ``P`` are stored in files with
+names ``dolfin_plot_X.png`` or ``dolfin_plot_X.pdf``,
+where ``X`` is an integer that is increase by one from the last plot
+that was made. The file stem ``dolfin_plot_`` can be set to something
+more suitable through the ``hardcopy_prefix`` keyword argument to the
+``plot`` function,
+for instance, ``plot(f, hardcopy_prefix='pressure')``.
+
+.. index:: rotate PDF plots
+
+.. index:: pdftk
+
+Plots stored in PDF format need to be rotated 90 degrees before
+inclusion in documents. This can be done by the ``convert -rotate 90``
+command (from the ImageMagick utility), but the resulting file has
+then no more high-resolution PDF vector graphics. A better solution
+is therefore to use ``pdftk`` to preserve the vector graphics:
+
+.. code-block:: text
+
+        Terminal> pdftk dolfin_plot_1.pdf cat 1-endnorth output out.pdf
+
+For making plots in batch, we can do the following:
+
+.. code-block:: python
+
+        viz_w = plot(w, interactive=False)
+        viz_w.elevate(-10)  # adjust (lift) camera from the default view
+        viz_w.plot(w)       # bring new settings into action
+        viz_w.write_png('deflection')  # make deflection.png
+        viz_w.write_pdf('deflection')  # make deflection.pdf
+        # Rotate pdf file (right) from landscape to portrait
+        import os
+        os.system('pdftk deflection.pdf cat 1-endnorth output w.pdf')
+
+The commands above appear in the ``application2``
+function in the ``membrane.py`` file.
+
+.. _tut:poisson:2D:fig1:
+
+.. figure:: membrane_deflection.png
+   :width: 480
+
+   *Plot of the deflection of a membrane*
+
+Paraview
+--------
+
+.. _tut:structviz:
+
+Taking advantage of structured mesh data
+----------------------------------------
+
+.. index:: structured mesh
 
 .. index::
-   single: Jacobian, manual computation
+   single: visualization, structured mesh
 
-We need, in a program, to compute the Jacobian
-matrix :math:`\partial F_i/\partial U_j`
-and the right-hand side vector :math:`-F_i`.
-Our present problem has :math:`F_i` given by :ref:`(70) <Eq:tut:nonlinear:Newton:F1>`.
-The derivative :math:`\partial F_i/\partial U_j` becomes
+.. index:: scitools
 
-.. _Eq:tut:poisson:nonlinear:dFdU:
+When finite element computations are done on a structured rectangular
+mesh, maybe with uniform partitioning, VTK-based tools for completely
+unstructured 2D/3D meshes are not required.  Instead we can use
+visualization and data analysis tools for *structured data*.
+Such data typically appear in finite difference simulations and
+image analysis.  Analysis and visualization of structured data are faster
+and easier than doing the same with data on unstructured meshes, and
+the collection of tools to choose among is much larger.  We shall
+demonstrate the potential of such tools and how they allow for
+tailored and flexible visualization and data analysis.
 
-.. math::
+.. index:: BoxField
 
-    \tag{73}
-    \int\limits_\Omega \left\lbrack
-         q'(\sum_{\ell=1}^NU_\ell^k\phi_\ell)\phi_j
-        \nabla (\sum_{j=1}^NU_j^k\phi_j)\cdot \nabla \hat\phi_i
-        +
-        q\left(\sum_{\ell=1}^NU_\ell^k\phi_\ell\right)
-        \nabla \phi_j \cdot \nabla \hat\phi_i
-        \right\rbrack
-         {\, \mathrm{d}x}{\thinspace .}
-        
-        
+A necessary first step is to transform our ``mesh`` object to an object
+representing a rectangle with equally-shaped *rectangular* cells.
+The second step is to
+transform the one-dimensional array of nodal values to a
+two-dimensional array holding the values at the corners of the cells
+in the structured mesh. We want to access a value by
+its :math:`i` and :math:`j` indices, :math:`i` counting cells in the :math:`x` direction, and
+:math:`j` counting cells in the :math:`y` direction.  This transformation is in
+principle straightforward, yet it frequently leads to obscure indexing
+errors, so using software tools to ease the work is advantageous.
 
-The following results were used to obtain :ref:`(73) <Eq:tut:poisson:nonlinear:dFdU>`:
-
-.. _Eq:_auto32:
-
-.. math::
-
-    \tag{74}
-    {\partial u\over\partial U_j} = {\partial\over\partial U_j}
-        \sum_{j=1}^NU_j\phi_j = \phi_j,\quad {\partial\over\partial U_j}\nabla u = \nabla\phi_j,\quad {\partial\over\partial U_j}q(u) = q'(u)\phi_j{\thinspace .}
-        
-        
-
-We can reformulate the Jacobian matrix
-in :ref:`(73) <Eq:tut:poisson:nonlinear:dFdU>`
-by introducing the short
-notation :math:`u^k = \sum_{j=1}^NU_j^k\phi_j`:
-
-.. _Eq:_auto33:
-
-.. math::
-
-    \tag{75}
-    {\partial F_i\over\partial U_j} =
-        \int_\Omega \left\lbrack
-        q'(u^k)\phi_j
-        \nabla u^k \cdot \nabla \hat\phi_i
-        +
-        q(u^k)
-        \nabla \phi_j \cdot \nabla \hat\phi_i
-        \right\rbrack {\, \mathrm{d}x}{\thinspace .}
-        
-        
-
-In order to make FEniCS compute this matrix, we need to formulate a
-corresponding variational problem. Looking at the
-linear system of equations in Newton's method,
-
-.. math::
-        
-        \sum_{j=1}^N {\partial F_i\over\partial U_j}\delta U_j = -F_i,\quad
-        i=1,\ldots,N,
-        
-
-we can introduce :math:`v` as a general test function replacing :math:`\hat\phi_i`,
-and we can identify the unknown
-:math:`\delta u = \sum_{j=1}^N\delta U_j\phi_j`. From the linear system
-we can now go "backwards" to construct the corresponding linear
-discrete weak form to be solved in each Newton iteration:
-
-.. _Eq:tut:nonlinear:Newton:aLF:
-
-.. math::
-
-    \tag{76}
-    \int_\Omega \left\lbrack
-        q'(u^k)\delta u
-        \nabla u^k \cdot \nabla v
-        +
-        q(u^k)
-        \nabla \delta u\cdot \nabla v
-        \right\rbrack {\, \mathrm{d}x} = - \int_\Omega q(u^k)
-        \nabla u^k\cdot \nabla v {\, \mathrm{d}x}{\thinspace .}
-        
-
-This variational form fits the standard notation
-:math:`a(\delta u,v)=L(v)` with
-
-.. math::
-        
-        a(\delta u,v) &=
-        \int_\Omega \left\lbrack
-        q'(u^k)\delta u
-        \nabla u^k \cdot \nabla v
-        +
-        q(u^k)
-        \nabla \delta u \cdot \nabla v
-        \right\rbrack
-         {\, \mathrm{d}x}\\ 
-        L(v) &= - \int_\Omega q(u^k)
-        \nabla u^k\cdot \nabla v {\, \mathrm{d}x}{\thinspace .}
-        
-
-Note the important feature in Newton's method
-that the
-previous solution :math:`u^k` replaces :math:`u`
-in the formulas when computing the matrix
-:math:`\partial F_i/\partial U_j` and vector :math:`F_i` for the linear system in
-each Newton iteration.
-
-.. index:: alg_newton_np.py
-
-We now turn to the implementation.
-To obtain a good initial guess :math:`u^0`, we can solve a simplified, linear
-problem, typically with :math:`q(u)=1`, which yields the standard Laplace
-equation :math:`\nabla^2 u^0 =0`. The recipe for solving this problem
-appears in the sections :ref:`tut:poisson1:varform`,
-:ref:`tut:poisson1:impl`, and :ref:`tut:poisson1:DN`.
-The code for computing :math:`u^0` becomes as follows:
+In the directory ``src/modules``, associated with this booklet,
+we have included a Python module ``BoxField`` that can take a finite
+element function ``u`` computed by a FEniCS software and represent
+it on a structured box-shaped mesh and assign or extract values by
+multi-dimensional indexing: ``[i]`` in 1D, ``[i,j]`` in 2D, and
+``[i,j,k]`` in 3D. Given a finite element function ``u``,
+the following function returns a ``BoxField`` object that represents
+``u`` on a structured mesh:
 
 .. code-block:: python
 
-        tol = 1E-14
-        def left_boundary(x, on_boundary):
-            return on_boundary and abs(x[0]) < tol
-        
-        def right_boundary(x, on_boundary):
-            return on_boundary and abs(x[0]-1) < tol
-        
-        Gamma_0 = DirichletBC(V, Constant(0.0), left_boundary)
-        Gamma_1 = DirichletBC(V, Constant(1.0), right_boundary)
-        bcs = [Gamma_0, Gamma_1]
-        
-        # Define variational problem for initial guess (q(u)=1, i.e., m=0)
-        u = TrialFunction(V)
-        v = TestFunction(V)
-        a = inner(nabla_grad(u), nabla_grad(v))*dx
-        f = Constant(0.0)
-        L = f*v*dx
-        A, b = assemble_system(a, L, bcs)
-        u_k = Function(V)
-        U_k = u_k.vector()
-        solve(A, U_k, b)
+        def structured_mesh(u, divisions):
+            """Represent u on a structured mesh."""
+            # u must have P1 elements, otherwise interpolate to P1 elements
+            u2 = u if u.ufl_element().degree() == 1 else \ 
+                 interpolate(u, FunctionSpace(mesh, 'Lagrange', 1))
+            mesh = u.function_space().mesh()
+            from BoxField import dolfin_function2BoxField
+            u_box = dolfin_function2BoxField(
+                u2, mesh, divisions, uniform_mesh=True)
+            return u_box
 
-Here, ``u_k`` denotes the solution function for the previous
-iteration, so that the solution
-after each Newton iteration is ``u = u_k + omega*du``.
-Initially, ``u_k`` is the initial guess we call :math:`u^0` in the mathematics.
+Note that we can only turn functions on meshes with P1 elements into
+``BoxField`` objects, so if ``u`` is based on another element type, we first
+interpolate the scalar field onto a mesh with P1 elements. Also note
+that to use the
+function, we need to know the divisions into cells in the various
+spatial directions (``divisions``).
 
-The Dirichlet boundary conditions for :math:`\delta u`, in
-the problem to be solved in each Newton
-iteration, are somewhat different than the conditions for :math:`u`.
-Assuming that :math:`u^k` fulfills the
-Dirichlet conditions for :math:`u`, :math:`\delta u` must be zero at the boundaries
-where the Dirichlet conditions apply, in order for :math:`u^{k+1}=u^k + \omega\delta u` to fulfill
-the right boundary values. We therefore define an additional list of
-Dirichlet boundary conditions objects for :math:`\delta u`:
+The ``u_box`` object contains several useful data structures:
 
-.. code-block:: python
+ * ``u_box.grid``: object for the structured mesh
 
-        Gamma_0_du = DirichletBC(V, Constant(0), left_boundary)
-        Gamma_1_du = DirichletBC(V, Constant(0), right_boundary)
-        bcs_du = [Gamma_0_du, Gamma_1_du]
+ * ``u_box.grid.coor[X]``: grid coordinates in ``X=0`` direction
 
-The nonlinear coefficient and its derivative must be defined
-before coding the weak form of the Newton system:
+ * ``u_box.grid.coor[Y]``: grid coordinates in ``Y=1`` direction
 
-.. code-block:: python
+ * ``u_box.grid.coor[Z]``: grid coordinates in ``Z=2`` direction
 
-        def q(u):
-            return (1+u)**m
-        
-        def Dq(u):
-            return m*(1+u)**(m-1)
-        
-        du = TrialFunction(V) # u = u_k + omega*du
-        a = inner(q(u_k)*nabla_grad(du), nabla_grad(v))*dx + \ 
-            inner(Dq(u_k)*du*nabla_grad(u_k), nabla_grad(v))*dx
-        L = -inner(q(u_k)*nabla_grad(u_k), nabla_grad(v))*dx
+ * ``u_box.grid.coorv[X]``: vectorized version of ``u_box.grid.coor[X]``
+   (for vectorized computations or surface plotting)
 
-The Newton iteration loop is very similar to the Picard iteration loop
-in the section :ref:`tut:nonlinear:Picard`:
+ * ``u_box.grid.coorv[Y]``: vectorized version of ``u_box.grid.coor[Y]``
+
+ * ``u_box.grid.coorv[Z]``: vectorized version of ``u_box.grid.coor[Z]``
+
+ * ``u_box.values``: ``numpy`` array holding the ``u`` values;
+   ``u_box.values[i,j]`` holds ``u`` at the mesh point with coordinates 
+
+|    ``(u_box.grid.coor[X], u_box.grid.coor[Y])``
+
+Iterating over points and values
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Let us go back to the ``solver`` function in the
+``p2D_vc.py`` code from
+the section :ref:`tut:possion:2D:varcoeff`, compute ``u``, map it onto a
+``BoxField`` object for a structured mesh representation, and
+write out the coordinates and function values at all mesh points:
 
 .. code-block:: python
 
-        du = Function(V)
-        u  = Function(V)  # u = u_k + omega*du
-        omega = 1.0       # relaxation parameter
-        eps = 1.0
-        tol = 1.0E-5
-        iter = 0
-        maxiter = 25
-        while eps > tol and iter < maxiter:
-            iter += 1
-            A, b = assemble_system(a, L, bcs_du)
-            solve(A, du.vector(), b)
-            eps = numpy.linalg.norm(du.vector().array(), ord=numpy.Inf)
-            print('Norm:', eps)
-            u.vector()[:] = u_k.vector() + omega*du.vector()
-            u_k.assign(u)
+        u = solver(p, f, u0, nx, ny, 1, linear_solver='direct')
+        u_box = structured_mesh(u, (nx, ny))
+        u_ = u_box.values       # numpy array
+        X = 0;  Y = 1           # for indexing in x and y direction
+        
+        # Iterate over 2D mesh points (i,j)
+        print('u_ is defined on a structured mesh with %s points' %
+              str(u_.shape))
+        for j in range(u_.shape[1]):
+            for i in range(u_.shape[0]):
+                print('u[%d,%d]=u(%g,%g)=%g' %
+                      (i, j,
+                       u_box.grid.coor[X][i], u_box.grid.coor[X][j],
+                       u_[i,j]))
 
-There are other ways of implementing the
-update of the solution as well:
+Finite difference approximations
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Note that with ``u_``, we can easily express finite difference approximation
+of derivatives:
 
 .. code-block:: python
 
-        u.assign(u_k)  # u = u_k
-        u.vector().axpy(omega, du.vector())
-        
-        # or
-        u.vector()[:] += omega*du.vector()
+        x = u_box.grid.coor[X]
+        dx = x[1] - x[0]
+        u_xx = (u_[i-1,j] - 2*u_[i,j] + u_[i+1,j])/dx**2
 
-The ``axpy(a, y)`` operation adds a scalar ``a`` times a ``Vector``
-``y`` to a ``Vector`` object.  It is usually a fast operation
-calling up an optimized BLAS routine for the calculation.
+.. index:: surface plot (structured mesh)
 
-Mesh construction for a :math:`d`-dimensional problem with arbitrary degree of
-the Lagrange elements can be done as
-explained in the section :ref:`tut:poisson:nD`.
-The complete program appears in the file ``alg_newton_np.py``.
+Surface plot
+~~~~~~~~~~~~
 
-.. _tut:nonlinear:Newton:pdelevel:
-
-A Newton method at the PDE level
---------------------------------
-
-.. index:: Newton's method (PDE level)
-
-Although Newton's method in PDE problems is normally formulated at the
-linear algebra level, i.e., as a solution method for systems of nonlinear
-algebraic equations, we can also formulate the method at the PDE level.
-This approach yields a linearization of the PDEs before they are discretized.
-FEniCS users will probably find this technique simpler to apply than
-the more standard method in the section :ref:`tut:nonlinear:Newton:algebraic`.
-
-Given an approximation to the solution field, :math:`u^k`, we seek a
-perturbation :math:`\delta u` so that
-
-.. _Eq:_auto34:
-
-.. math::
-
-    \tag{77}
-    u^{k+1} = u^k + \delta u
-        
-        
-
-fulfills the nonlinear PDE.
-However, the problem for :math:`\delta u` is still nonlinear and nothing is
-gained. The idea is therefore to assume that :math:`\delta u` is sufficiently
-small so that we can linearize the problem with respect to :math:`\delta u`.
-Inserting :math:`u^{k+1}` in the PDE,
-linearizing the :math:`q` term as
-
-.. _Eq:_auto35:
-
-.. math::
-
-    \tag{78}
-    q(u^{k+1}) = q(u^k) + q'(u^k)\delta u + {\cal O}((\delta u)^2)
-        \approx q(u^k) + q'(u^k)\delta u,
-        
-        
-
-and dropping nonlinear terms in :math:`\delta u`,
-we get
-
-.. math::
-        
-        \nabla\cdot\left( q(u^k)\nabla u^k\right) +
-        \nabla\cdot\left( q(u^k)\nabla\delta u\right) +
-        \nabla\cdot\left( q'(u^k)\delta u\nabla u^k\right) = 0{\thinspace .}
-        
-
-We may collect the terms with the unknown :math:`\delta u` on the left-hand side,
-
-.. _Eq:_auto36:
-
-.. math::
-
-    \tag{79}
-    \nabla\cdot\left( q(u^k)\nabla\delta u\right) +
-        \nabla\cdot\left( q'(u^k)\delta u\nabla u^k\right) =
-        -\nabla\cdot\left( q(u^k)\nabla u^k\right),
-        
-        
-
-The weak form of this PDE is derived by multiplying by a test function :math:`v`
-and integrating over :math:`\Omega`, integrating as usual
-the second-order derivatives by parts:
-
-.. _Eq:_auto37:
-
-.. math::
-
-    \tag{80}
-    \int_\Omega \left(
-        q(u^k)\nabla\delta u\cdot \nabla v
-        + q'(u^k)\delta u\nabla u^k\cdot \nabla v\right) {\, \mathrm{d}x}
-        = -\int_\Omega q(u^k)\nabla u^k\cdot \nabla v {\, \mathrm{d}x}{\thinspace .}
-        
-        
-
-The variational problem reads: find :math:`\delta u\in V` such that
-:math:`a(\delta u,v) = L(v)` for all :math:`v\in \hat V`, where
-
-.. _Eq:tut:nonlinear:poisson:pdelevel:eqa:
-
-.. math::
-
-    \tag{81}
-    a(\delta u,v) =
-        \int_\Omega \left(
-        q(u^k)\nabla\delta u\cdot \nabla v
-        + q'(u^k)\delta u\nabla u^k\cdot \nabla v\right) {\, \mathrm{d}x},
-        
-        
-
-.. _Eq:tut:nonlinear:poisson:pdelevel:eqL:
-
-.. math::
-
-    \tag{82}
-    L(v) = -
-        \int_\Omega q(u^k)\nabla u^k\cdot \nabla v {\, \mathrm{d}x}{\thinspace .}
-        
-        
-
-The function spaces :math:`V` and :math:`\hat V`, being continuous or discrete,
-are as in the
-linear Poisson problem from the section :ref:`tut:poisson1:varform`.
-
-We must provide some initial guess, e.g., the solution of the
-PDE with :math:`q(u)=1`. The corresponding weak form :math:`a_0(u^0,v)=L_0(v)`
-has
-
-.. math::
-        
-        a_0(u,v)=\int_\Omega\nabla u\cdot \nabla v {\, \mathrm{d}x},\quad L_0(v)=0{\thinspace .}
-        
-
-Thereafter, we enter a loop and solve
-:math:`a(\delta u,v)=L(v)` for :math:`\delta u` and compute a new approximation
-:math:`u^{k+1} = u^k + \delta u`. Note that :math:`\delta u` is a correction, so if
-:math:`u^0` satisfies the prescribed
-Dirichlet conditions on some part :math:`\Gamma_D` of the boundary,
-we must demand :math:`\delta u=0` on :math:`\Gamma_D`.
-
-Looking at :ref:`(81) <Eq:tut:nonlinear:poisson:pdelevel:eqa>` and
-:ref:`(82) <Eq:tut:nonlinear:poisson:pdelevel:eqL>`,
-we see that the variational form is the same as for the Newton method
-at the algebraic level in the section :ref:`tut:nonlinear:Newton:algebraic`. Since Newton's method at the
-algebraic level required some "backward" construction of the
-underlying weak forms, FEniCS users may prefer Newton's method at the
-PDE level, which this author finds more straightforward, although not so
-commonly documented in the literature on numerical methods for PDEs.
-There is seemingly no need for differentiations to derive a Jacobian
-matrix, but a mathematically equivalent derivation is done when
-nonlinear terms are linearized using the first two Taylor series terms
-and when products in the perturbation :math:`\delta u` are neglected.
-
-.. index:: pde_newton_np.py
-
-The implementation is identical to the one in
-the section :ref:`tut:nonlinear:Newton:algebraic` and is found in
-the file ``pde_newton_np.py``. The reader is encouraged to go
-through this code to be convinced that the present method actually
-ends up with the same program as needed for the Newton method at
-the linear algebra level in the section :ref:`tut:nonlinear:Newton:algebraic`.
-
-.. _tut:nonlinear:Newton:auto:
-
-Solving the nonlinear variational problem directly
---------------------------------------------------
-
-.. index:: vp1_np.py
-
-.. index:: vp2_np.py
-
-The previous hand-calculations and manual implementation of
-Picard or Newton methods can be automated by tools in FEniCS.
-In a nutshell, one can just write
+The ability to access a finite element field in the way one can access
+a finite difference-type of field is handy in many occasions, including
+visualization and data analysis.
+With Matplotlib we can create a surface plot, see
+Figure :ref:`tut:structviz:fig1` (upper left):
 
 .. code-block:: python
 
-        problem = NonlinearVariationalProblem(F, u, bcs, J)
-        solver  = NonlinearVariationalSolver(problem)
-        solver.solve()
+        import matplotlib.pyplot as plt
+        from mpl_toolkits.mplot3d import Axes3D
+        from matplotlib import cm
+        fig = plt.figure()
+        ax = fig.gca(projection='3d')
+        cv = u_box.grid.coorv  # vectorized mesh coordinates
+        ax.plot_surface(cv[X], cv[Y], u_, cmap=cm.coolwarm,
+                        rstride=1, cstride=1)
+        plt.title('Surface plot of solution')
 
-where ``F`` corresponds to the nonlinear form :math:`F(u;v)`,
-``u`` is the unknown ``Function`` object, ``bcs``
-represents the essential boundary conditions (in general a list of
-``DirichletBC`` objects), and
-``J`` is a variational form for the Jacobian of ``F``.
+The key issue is to know that the coordinates needed for the surface
+plot is in ``u_box.grid.coorv`` and that the values are in ``u_``.
 
-Let us explain in detail how to use the built-in tools for
-nonlinear variational problems and their solution.
-The ``F`` form corresponding to :ref:`(62) <Eq:tut:poisson:nonlinear2>`
-is straightforwardly defined as follows, assuming ``q(u)`` is
-coded as a Python function:
+.. _tut:structviz:fig1:
+
+.. figure:: p2D_vc_structmesh2.png
+   :width: 800
+
+   *Various plots of the solution on a structured mesh*
+
+.. index:: contour plot
+
+Contour plot
+~~~~~~~~~~~~
+
+A contour plot can also be made by Matplotlib:
 
 .. code-block:: python
 
-        u_ = Function(V)     # most recently computed solution
-        v  = TestFunction(V)
-        F  = inner(q(u_)*nabla_grad(u_), nabla_grad(v))*dx
+        fig = plt.figure()
+        ax = fig.gca()
+        levels = [1.5, 2.0, 2.5, 3.5]
+        cs = ax.contour(cv[X], cv[Y], u_, levels=levels)
+        plt.clabel(cs)  # add labels to contour lines
+        plt.axis('equal')
+        plt.title('Contour plot of solution')
 
-Note here that ``u_`` is a ``Function`` (not a ``TrialFunction``).
-An alternative and perhaps more intuitive formula for :math:`F` is to
-define :math:`F(u;v)` directly in terms of
-a trial function for :math:`u` and a test function for :math:`v`, and then
-create the proper ``F`` by
+The result appears in Figure :ref:`tut:structviz:fig1` (upper right).
+
+Curve plot through the mesh
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+A handy feature of ``BoxField`` objects is the ability to give a start
+point in the grid and a direction, and then extract the field and
+corresponding coordinates along the nearest line of mesh points. In 3D fields
+one can also extract data in a plane.  Say we want to plot :math:`u` along
+the line :math:`y=0.4`. The mesh points, ``x``, and the :math:`u` values
+along this line, ``u_val``, are extracted by
 
 .. code-block:: python
 
-        u  = TrialFunction(V)
-        v  = TestFunction(V)
-        F  = inner(q(u)*nabla_grad(u), nabla_grad(v))*dx
-        u_ = Function(V)     # the most recently computed solution
-        F  = action(F, u_)
+        start = (0, 0.4)
+        X = 0
+        x, u_val, y_fixed, snapped = u_box.gridline(start, direction=X)
 
-The latter statement is equivalent to :math:`F(u=u_{-}; v)`, where :math:`u_{-}` is
-an existing finite element function representing the most recently
-computed approximation to the solution.
-(Note that :math:`u^k` and :math:`u^{k+1}` in the previous notation
-correspond to :math:`u_{-}` and :math:`u` in the present
-notation. We have changed notation to better align the mathematics with
-the associated UFL code.)
+The variable ``snapped`` is true if the line had to be snapped onto a
+gridline and in that case ``y_fixed`` holds the snapped
+(altered) :math:`y` value. To avoid interpolation in the structured mesh,
+``snapped`` is in fact *always* true.
 
-.. index:: Gateaux derivative
+A comparison of the numerical and exact solution along the line
+:math:`y=0.5` (snapped from :math:`y=0.4`) is made by the following code:
 
-The derivative :math:`J` (``J``) of :math:`F` (``F``) is formally the
-Gateaux derivative :math:`DF(u^k; \delta u, v)`
-of :math:`F(u;v)` at :math:`u=u_{-}` in the direction of :math:`\delta u`.
-Technically, this Gateaux derivative is derived by computing
+.. code-block:: python
 
-.. _Eq:tut:poisson:nonlinear:Gateaux1:
+        start = (0, 0.4)
+        x, u_val, y_fixed, snapped = u_box.gridline(start, direction=X)
+        u_e_val = [u0((x_, y_fixed)) for x_ in x]
+        
+        plt.figure()
+        plt.plot(x, u_val, 'r-')
+        plt.plot(x, u_e_val, 'bo')
+        plt.legend(['P1 elements', 'exact'], loc='upper left')
+        plt.title('Solution along line y=%g' % y_fixed)
+        plt.xlabel('x');  plt.ylabel('u')
+
+See Figure :ref:`tut:structviz:fig1` (lower left) for the resulting curve plot.
+
+Curve plot of the flux
+~~~~~~~~~~~~~~~~~~~~~~
+
+Let us also compare the numerical and
+exact flux :math:`-p\partial u/\partial x` along the same line as above:
+
+.. code-block:: python
+
+        flux_u = flux(u, p)
+        flux_u_x, flux_u_y = flux_u.split(deepcopy=True)
+        
+        # Plot the numerical and exact flux along the same line
+        flux2_x = flux_u_x if flux_u_x.ufl_element().degree() == 1 \ 
+                  else interpolate(flux_x,
+                       FunctionSpace(u.function_space().mesh(),
+                                     'Lagrange', 1))
+        flux_u_x_box = structured_mesh(flux_u_x, (nx,ny))
+        x, flux_u_val, y_fixed, snapped = \ 
+           flux_u_x_box.gridline(start, direction=X)
+        y = y_fixed
+        
+        plt.figure()
+        plt.plot(x, flux_u_val, 'r-')
+        plt.plot(x, flux_u_x_exact(x, y_fixed), 'bo')
+        plt.legend(['P1 elements', 'exact'], loc='upper right')
+        plt.title('Flux along line y=%g' % y_fixed)
+        plt.xlabel('x');  plt.ylabel('u')
+
+The second ``plt.plot`` command
+requires a Python function ``flux_u_x_exact(x,y)`` to be
+available for the exact flux expression.
+
+Note that Matplotlib is one choice of plotting package. With the unified
+interface in the `SciTools package <https://github.com/hplgit/scitools>`__ one
+can access Matplotlib, Gnuplot, MATLAB, OpenDX, VisIt, and other plotting
+engines through the same API.
+
+.. index:: sympy
+
+Test problem          (2)
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The graphics referred to in Figure :ref:`tut:structviz:fig1` correspond to
+a test problem with prescribed solution :math:`{u_{\small\mbox{e}}} = H(x)H(y)`, where
 
 .. math::
+         H(x) = e^{-16(x-\frac{1}{2})^2}\sin(3\pi x){\thinspace .}
 
-    \tag{83}
-    \lim_{\epsilon\rightarrow 0}{d\over d\epsilon} F_i(u_{-} + \epsilon\delta u; v)
-        {\thinspace .}  
-        
+We just fit a function :math:`f(x,y)` in the PDE (can choose :math:`p=1`),
+and notice that :math:`u=0` along the
+boundary of the unit square. Although it is easy to carry out the
+differentiation of :math:`f` by hand and hardcode the resulting expressions
+in an ``Expression`` object, a more reliable habit is to use Python's
+symbolic computing engine, ``sympy``, to perform mathematics and
+automatically turn formulas into C++ syntax for ``Expression`` objects.
+The following text assumes some familiarity with ``sympy`` and illustrates
+how FEniCS programmers may take advantage of symbolic computing.
 
-The :math:`\delta u` is now the trial function and :math:`u_{-}` is the previous
-approximation to the solution :math:`u`.
-We start with
-
-.. math::
-        
-        {d\over d\epsilon}\int_\Omega \nabla v\cdot\left( q(u_{-} + \epsilon\delta u)
-        \nabla (u_{-} + \epsilon\delta u)\right) {\, \mathrm{d}x}
-        
-
-and obtain
-
-.. math::
-        
-        \int_\Omega \nabla v\cdot\left\lbrack
-        q'(u_{-} + \epsilon\delta u)\delta u
-        \nabla (u_{-} + \epsilon\delta u)
-        +
-        q(u_{-} + \epsilon\delta u)
-        \nabla \delta u
-        \right\rbrack {\, \mathrm{d}x},
-        
-
-which leads to
-
-.. _Eq:_auto38:
-
-.. math::
-
-    \tag{84}
-    \int_\Omega \nabla v\cdot\left\lbrack
-        q'(u_{-})\delta u
-        \nabla (u_{-})
-        +
-        q(u_{-})
-        \nabla \delta u
-        \right\rbrack {\, \mathrm{d}x},
-        
-        
-
-as :math:`\epsilon\rightarrow 0`.
-This last expression is the Gateaux derivative of :math:`F`. We may use :math:`J` or
-:math:`a(\delta u, v)` for this derivative, the latter having the advantage
-that we easily recognize the expression as a bilinear form. However, in
-the forthcoming code examples ``J`` is used as variable name for
-the Jacobian.
-
-The specification of ``J``
-goes as follows if ``du`` is the ``TrialFunction``:
+We start out with defining the exact solution in ``sympy``:
 
 .. code-block:: python
 
-        du = TrialFunction(V)
-        v  = TestFunction(V)
-        u_ = Function(V)      # the most recently computed solution
-        F  = inner(q(u_)*nabla_grad(u_), nabla_grad(v))*dx
-        
-        J = inner(q(u_)*nabla_grad(du), nabla_grad(v))*dx + \ 
-            inner(Dq(u_)*du*nabla_grad(u_), nabla_grad(v))*dx
+        from sympy import exp, sin, pi  # for use in math formulas
+        import sympy as sym
+        H = lambda x: exp(-16*(x-0.5)**2)*sin(3*pi*x)
+        x, y = sym.symbols('x[0], x[1]')
+        u = H(x)*H(y)
 
-The alternative specification of ``F``, with ``u`` as
-``TrialFunction``, leads to
 
-.. code-block:: python
+.. admonition:: Define symbolic coordinates as required in ``Expression`` objects
 
-        u  = TrialFunction(V)
-        v  = TestFunction(V)
-        u_ = Function(V)      # the most recently computed solution
-        F  = inner(q(u)*nabla_grad(u), nabla_grad(v))*dx
-        F  = action(F, u_)
-        
-        J = inner(q(u_)*nabla_grad(u), nabla_grad(v))*dx + \ 
-            inner(Dq(u_)*u*nabla_grad(u_), nabla_grad(v))*dx
+   Note that we would normally write ``x, y = sym.symbols('x y')``, but
+   if we want the resulting expressions to be have valid syntax for
+   ``Expression`` objects, and then :math:`x` reads ``x[0]`` and :math:`y` must be ``x[1]``.
+   This is easily accomplished with ``sympy`` by defining the names of ``x`` and
+   ``y`` as ``x[0]`` and ``x[1]``: ``x, y = sym.symbols('x[0] x[1]')``.
 
-.. index:: derivative
 
-.. index:: automatic differentiation
 
-.. index::
-   single: Jacobian, automatic computation
 
-The UFL language, used to specify weak forms, supports differentiation
-of forms. This feature facilitates automatic *symbolic* computation of the
-Jacobian ``J`` by calling the function ``derivative`` with ``F``, the most
-recently computed solution (``Function``), and the unknown
-(``TrialFunction``) as parameters:
+Turning the expression for ``u`` into C or C++ syntax for ``Expression`` objects
+needs two steps. First we ask for the C code of the expression,
 
 .. code-block:: python
 
-        du = TrialFunction(V)
-        v  = TestFunction(V)
-        u_ = Function(V)      # the most recently computed solution
-        F  = inner(q(u_)*nabla_grad(u_), nabla_grad(v))*dx
-        
-        J  = derivative(F, u_, du)  # Gateaux derivative in dir. of du
+        u_c = sym.printing.ccode(u)
 
-or
+Then we do some editing of ``u_c`` to match the required syntax of
+``Expression`` objects. Printing ``u_c`` gives (here manually broken up as
+two lines)
 
-.. code-block:: python
+.. code-block:: text
 
-        u  = TrialFunction(V)
-        v  = TestFunction(V)
-        u_ = Function(V)      # the most recently computed solution
-        F  = inner(q(u)*nabla_grad(u), nabla_grad(v))*dx
-        F  = action(F, u_)
-        
-        J  = derivative(F, u_, u)   # Gateaux derivative in dir. of u
+        -exp(-16*pow(x[0] - 0.5, 2) - 16*pow(x[1] - 0.5, 2))*
+        sin(3*M_PI*x[0])*sin(3*M_PI*x[1])
 
-The ``derivative`` function is obviously
-very convenient in problems where differentiating ``F`` by hand
-implies lengthy calculations.
-
-The preferred implementation of ``F`` and ``J``, depending on whether
-``du`` or ``u`` is the ``TrialFunction`` object,
-is a matter of personal taste. Derivation of the Gateaux derivative
-by hand, as shown above, is most naturally matched by an
-implementation where ``du`` is the ``TrialFunction``, while
-use of automatic symbolic differentiation with the aid of the ``derivative``
-function is most naturally matched by an implementation where
-``u`` is the ``TrialFunction``.
-We have implemented both approaches in two files:
-``vp1_np.py`` with
-``u`` as ``TrialFunction``, and
-``vp2_np.py`` with ``du`` as ``TrialFunction``.
-The directory
-``nonlinear_poisson`` contains both files.
-The first command-line argument determines if the Jacobian is to
-be automatically derived or computed from the hand-derived formula.
-
-.. index:: nonlinear variational problems
-
-.. index:: NonlinearVariationalProblem
-
-.. index:: NonlinearVariationalSolver
-
-The following code defines the nonlinear variational problem and
-an associated solver based on Newton's method. We here demonstrate
-how key parameters in
-Newton's method can be set, as well as the choice of
-solver and preconditioner, and associated parameters, for the
-linear system occurring in the Newton iterations.
+The necessary syntax adjustment is replacing
+the symbol ``M_PI`` for :math:`\pi` in C/C++ by ``DOLFIN_PI``:
 
 .. code-block:: python
 
-        problem = NonlinearVariationalProblem(F, u_, bcs, J)
-        solver  = NonlinearVariationalSolver(problem)
-        
-        prm = solver.parameters
-        info(prm, True)
-        prm_n = prm['newton_solver']
-        prm_n['absolute_tolerance'] = 1E-8
-        prm_n['relative_tolerance'] = 1E-7
-        prm_n['maximum_iterations'] = 25
-        prm_n['relaxation_parameter'] = 1.0
-        if iterative_solver:
-            prec = 'jacobi' if 'jacobi' in \ 
-                   list(zip(*krylov_solver_preconditioners()))[0] \ 
-                   else 'ilu'
-            prm_n['linear_solver'] = 'gmres'
-            prm_n['preconditioner'] = prec
-            prm_n['krylov_solver']['absolute_tolerance'] = 1E-9
-            prm_n['krylov_solver']['relative_tolerance'] = 1E-7
-            prm_n['krylov_solver']['maximum_iterations'] = 1000
-            prm_n['krylov_solver']['monitor_convergence'] = True
-            prm_n['krylov_solver']['nonzero_initial_guess'] = False
-            prm_n['krylov_solver']['gmres']['restart'] = 40
-            prm_n['krylov_solver']['preconditioner']['structure'] = \ 
-                                                'same_nonzero_pattern'
-            prm_n['krylov_solver']['preconditioner']['ilu']['fill_level'] = 0
-        PROGRESS = 16
-        set_log_level(PROGRESS)
-        
-        solver.solve()
+        u_c = u_c.replace('M_PI', 'DOLFIN_PI')
+        u0 = Expression(u_c)
 
-A list of available parameters and their default values can as
-usual be printed by calling ``info(prm, True)``.
-The ``u_`` we feed to the nonlinear variational problem object
-is filled with the solution by the call ``solver.solve()``.
+Thereafter, we can progress with the computation of :math:`f = -\nabla\cdot(p\nabla u)`:
+
+.. code-block:: python
+
+        p = 1
+        f = sym.diff(-p*sym.diff(u, x), x) + sym.diff(-p*sym.diff(u, y), y)
+        f = sym.simplify(f)
+        f_c = sym.printing.ccode(f)
+        f_c = f_c.replace('M_PI', 'DOLFIN_PI')
+        f = Expression(f_c)
+
+We also need a Python function for the exact flux :math:`-p\partial u/\partial x`:
+
+.. code-block:: python
+
+        flux_u_x_exact = sym.lambdify([x, y], -p*sym.diff(u, x),
+                                      modules='numpy')
+
+It remains to define ``p = Constant(1)`` and set ``nx`` and ``ny`` before calling
+``solver`` to compute the finite element solution of this problem.
+
+.. FIGURE: [fig/p2D_vc_structmesh, width=800 frac=1] Various plots of the solution on a structured mesh.
 

@@ -6,7 +6,7 @@
   <head>
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
     
-    <title>Time-dependent problems</title>
+    <title>Useful extensions</title>
     
     <link rel="stylesheet" href="_static/fenics.css" type="text/css" />
     <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
@@ -42,8 +42,8 @@
 
     
     <link rel="top" title="The FEniCS Tutorial" href="index.html" />
-    <link rel="next" title="Nonlinear problems" href="._ftut005.html" />
-    <link rel="prev" title="Basic building blocks in a Poisson solver" href="._ftut003.html" />
+    <link rel="next" title="Visualization" href="._ftut005.html" />
+    <link rel="prev" title="A basic Poisson solver" href="._ftut003.html" />
 
 <!--[if lte IE 6]>
 <link rel="stylesheet" href="_static/ie6.css" type="text/css" media="screen" charset="utf-8" />
@@ -132,750 +132,958 @@
         <div class="bodywrapper">
           <div class="body" role="main">
             
-  <div class="section" id="time-dependent-problems">
-<span id="tut-timedep"></span><h1>Time-dependent problems<a class="headerlink" href="#time-dependent-problems" title="Permalink to this headline">¶</a></h1>
-<p>The examples in the section <a class="reference internal" href="._ftut002.html#tut-fundamentals"><span class="std std-ref">The mathematics of the model problem</span></a> illustrate that solving
-linear, stationary PDE problems with the aid of FEniCS is easy and
-requires little programming.  FEniCS clearly automates the spatial
-discretization by the finite element method. One can use a separate,
-one-dimensional finite element method in the domain as well, but very
-often, it is easier to just use a finite difference method, or to
-formulate the problem as an ODE system and leave the time-stepping to
-an ODE solver.</p>
-<p>[<strong>hpl 9</strong>: Should exemplify all three approaches? With emphasis on simple finite differences?]</p>
-<div class="section" id="a-diffusion-problem-and-its-discretization">
-<span id="tut-timedep-diffusion1"></span><h2>A diffusion problem and its discretization<a class="headerlink" href="#a-diffusion-problem-and-its-discretization" title="Permalink to this headline">¶</a></h2>
-<p id="index-0">Our time-dependent
-model problem for teaching purposes is naturally the simplest
-extension of the Poisson problem into the time domain, i.e.,
-the diffusion problem</p>
-<div class="math" id="eq-tut-diffusion-pde1">
-\[\begin{split}\tag{37}
-{\partial u\over\partial t} = \nabla^2 u + f \mbox{ in } \Omega, \hbox{ for } t&gt;0,\end{split}\]</div>
-<div class="math" id="eq-tut-diffusion-pde1-bc">
-\[\begin{split}\tag{38}
-u = u_0 \mbox{ on } \partial \Omega,\hbox{ for } t&gt;0,\end{split}\]</div>
-<div class="math" id="eq-tut-diffusion-pde1-ic">
-\[\tag{39}
-u = I   \mbox{ at } t=0{\thinspace .}\]</div>
-<p>Here, <span class="math">\(u\)</span> varies with space and time, e.g., <span class="math">\(u=u(x,y,t)\)</span> if the spatial
-domain <span class="math">\(\Omega\)</span> is two-dimensional. The source function <span class="math">\(f\)</span> and the
-boundary values <span class="math">\(u_0\)</span> may also vary with space and time.
-The initial condition <span class="math">\(I\)</span> is a function of space only.</p>
-<p>A straightforward approach to solving time-dependent
-PDEs by the finite element method is to first discretize the
-time derivative by a finite difference approximation, which yields
-a recursive set of stationary problems, and then turn each stationary
-problem into a variational formulation.</p>
-<p>Let superscript <span class="math">\(k\)</span> denote
-a quantity at time <span class="math">\(t_k\)</span>,
-where <span class="math">\(k\)</span> is an integer counting time levels. For example, <span class="math">\(u^k\)</span> means
-<span class="math">\(u\)</span> at time level <span class="math">\(k\)</span>.
-A finite difference discretization in time first consists in
-sampling the PDE at some time level, say <span class="math">\(k\)</span>:</p>
-<div class="math" id="eq-tut-diffusion-pde1-tk">
-\[\tag{40}
-{\partial \over\partial t}u^k = \nabla^2 u^k + f^k{\thinspace .}\]</div>
-<p>The time-derivative can be approximated by a finite difference.
-For simplicity and stability reasons we choose a
-simple backward difference:</p>
-<div class="math" id="eq-tut-diffusion-be">
-\[\tag{41}
-{\partial \over\partial t}u^k\approx {u^k - u^{k-1}\over{{\Delta t}}},\]</div>
-<p>where <span class="math">\({\Delta t}\)</span> is the time discretization parameter.
-Inserting <a class="reference internal" href="#eq-tut-diffusion-be"><span class="std std-ref">(41)</span></a> in <a class="reference internal" href="#eq-tut-diffusion-pde1-tk"><span class="std std-ref">(40)</span></a> yields</p>
-<div class="math" id="eq-tut-diffusion-pde1-be">
-\[\tag{42}
-{u^k - u^{k-1}\over{{\Delta t}}} = \nabla^2 u^k + f^k{\thinspace .}\]</div>
-<p>This is our time-discrete version of the diffusion PDE
-<a class="reference internal" href="#eq-tut-diffusion-pde1"><span class="std std-ref">(37)</span></a>.
-Reordering <a class="reference internal" href="#eq-tut-diffusion-pde1-be"><span class="std std-ref">(42)</span></a>
-so that <span class="math">\(u^k\)</span> appears
-on the left-hand side only,
-shows that <a class="reference internal" href="#eq-tut-diffusion-pde1-be"><span class="std std-ref">(42)</span></a> is
-a recursive set of
-spatial (stationary) problems for <span class="math">\(u^k\)</span> (assuming <span class="math">\(u^{k-1}\)</span> is known from
-computations at the previous time level):</p>
-<div class="math" id="eq-tut-diffusion-pde1-u0">
-\[\tag{43}
-u^0 = I,\]</div>
-<div class="math" id="eq-tut-diffusion-pde1-uk">
-\[\tag{44}
-u^k - {{\Delta t}}\nabla^2 u^k =  u^{k-1} + {{\Delta t}} f^k,\quad k=1,2,\ldots\]</div>
-<p>Given <span class="math">\(I\)</span>, we can solve for <span class="math">\(u^0\)</span>, <span class="math">\(u^1\)</span>, <span class="math">\(u^2\)</span>, and so on.</p>
-<p>We use a finite element method
-to solve the
-equations <a class="reference internal" href="#eq-tut-diffusion-pde1-u0"><span class="std std-ref">(43)</span></a> and <a class="reference internal" href="#eq-tut-diffusion-pde1-uk"><span class="std std-ref">(44)</span></a>.
-This requires turning the equations into weak forms.
-As usual, we multiply by a test function <span class="math">\(v\in \hat V\)</span> and integrate
-second-derivatives by parts. Introducing the symbol <span class="math">\(u\)</span> for <span class="math">\(u^k\)</span>
-(which is natural in the program too), the resulting weak
-form can be conveniently written in the standard notation:
-<span class="math">\(a_0(u,v)=L_0(v)\)</span> for <a class="reference internal" href="#eq-tut-diffusion-pde1-u0"><span class="std std-ref">(43)</span></a>
-and <span class="math">\(a(u,v)=L(v)\)</span> for <a class="reference internal" href="#eq-tut-diffusion-pde1-uk"><span class="std std-ref">(44)</span></a>, where</p>
-<div class="math" id="eq-tut-diffusion-pde1-a0">
-\[\tag{45}
-a_0(u,v) = \int_\Omega uv {\, \mathrm{d}x},\]</div>
-<div class="math" id="eq-tut-diffusion-pde1-l0">
-\[\tag{46}
-L_0(v) = \int_\Omega Iv {\, \mathrm{d}x},\]</div>
-<div class="math" id="eq-tut-diffusion-pde1-a">
-\[\tag{47}
-a(u,v) = \int_\Omega\left( uv + {{\Delta t}}
-    \nabla u\cdot \nabla v\right) {\, \mathrm{d}x},\]</div>
-<div class="math" id="eq-tut-diffusion-pde1-l">
-\[\tag{48}
-L(v) = \int_\Omega \left(u^{k-1} + {{\Delta t}}  f^k\right)v {\, \mathrm{d}x}{\thinspace .}\]</div>
-<p>The continuous variational problem is to find
-<span class="math">\(u^0\in V\)</span> such that <span class="math">\(a_0(u^0,v)=L_0(v)\)</span> holds for all <span class="math">\(v\in\hat V\)</span>,
-and then find <span class="math">\(u^k\in V\)</span>
-such that <span class="math">\(a(u^k,v)=L(v)\)</span> for all <span class="math">\(v\in\hat V\)</span>,
-<span class="math">\(k=1,2,\ldots\)</span>.</p>
-<p>Approximate solutions in space
-are found by
-restricting the functional spaces <span class="math">\(V\)</span> and <span class="math">\(\hat V\)</span>
-to finite-dimensional spaces,
-exactly as we have done in the Poisson problems.
-We shall use the symbol <span class="math">\(u\)</span> for the finite element
-approximation at time <span class="math">\(t_k\)</span>. In case we need to distinguish this
-space-time discrete approximation from the exact solution of
-the continuous diffusion problem, we use <span class="math">\({u_{\small\mbox{e}}}\)</span> for the latter.
-By <span class="math">\(u^{k-1}\)</span> we mean the finite element approximation
-of the solution at time <span class="math">\(t_{k-1}\)</span>.</p>
-<p>Note that the forms <span class="math">\(a_0\)</span> and <span class="math">\(L_0\)</span> are identical to the forms
-met in the section <a class="reference internal" href="._ftut003.html#tut-poisson-gradu"><span class="std std-ref">Computing derivatives</span></a>, except that the test and trial
-functions are now
-scalar fields and not vector fields.
-Instead of solving
-<a class="reference internal" href="#eq-tut-diffusion-pde1-u0"><span class="std std-ref">(43)</span></a>
-by a finite
-element method, i.e., projecting <span class="math">\(I\)</span> onto <span class="math">\(V\)</span> via
-the problem <span class="math">\(a_0(u,v)=L_0(v)\)</span>, we could simply interpolate <span class="math">\(u^0\)</span> from
-<span class="math">\(I\)</span>. That is, if <span class="math">\(u^0=\sum_{j=1}^N U^0_j\phi_j\)</span>, we
-simply set <span class="math">\(U_j=I(x_j,y_j)\)</span>, where <span class="math">\((x_j,y_j)\)</span> are the coordinates of
-node number <span class="math">\(j\)</span>. We refer to these two strategies as computing
-the initial condition by either projecting <span class="math">\(I\)</span> or interpolating <span class="math">\(I\)</span>.
-Both operations are easy to compute through one statement, using either
-the <code class="docutils literal"><span class="pre">project</span></code> or <code class="docutils literal"><span class="pre">interpolate</span></code> function.</p>
-</div>
-<div class="section" id="implementation-3">
-<span id="tut-timedep-diffusion1-impl"></span><h2>Implementation<a class="headerlink" href="#implementation-3" title="Permalink to this headline">¶</a></h2>
-<p>Our program needs to perform the time stepping explicitly, but can
-rely on FEniCS to easily compute <span class="math">\(a_0\)</span>, <span class="math">\(L_0\)</span>, <span class="math">\(a\)</span>, and <span class="math">\(L\)</span>, and solve
-the linear systems for the unknowns.  We realize that <span class="math">\(a\)</span> does not
-depend on time, which means that its associated matrix also will be
-time independent. Therefore, it is wise to explicitly create matrices
-and vectors as in the section <a class="reference internal" href="._ftut003.html#tut-poisson1-linalg"><span class="std std-ref">A linear algebra formulation</span></a>.  The matrix <span class="math">\(A\)</span>
-arising from <span class="math">\(a\)</span> can be computed prior to the time stepping, so that
-we only need to compute the right-hand side <span class="math">\(b\)</span>, corresponding to <span class="math">\(L\)</span>,
-in each pass in the time loop. Let us express the solution procedure
-in algorithmic form, writing <span class="math">\(u\)</span> for the unknown spatial function at
-the new time level (<span class="math">\(u^k\)</span>) and <span class="math">\(u_1\)</span> for the spatial solution at one
-earlier time level (<span class="math">\(u^{k-1}\)</span>):</p>
-<blockquote>
-<div><ul class="simple">
-<li>define Dirichlet boundary condition (<span class="math">\(u_0\)</span>, Dirichlet boundary, etc.)</li>
-<li>if <span class="math">\(u_1\)</span> is to be computed by projecting <span class="math">\(I\)</span>:<ul>
-<li>define <span class="math">\(a_0\)</span> and <span class="math">\(L_0\)</span></li>
-<li>assemble matrix <span class="math">\(M\)</span> from <span class="math">\(a_0\)</span> and vector <span class="math">\(b\)</span> from <span class="math">\(L_0\)</span></li>
-<li>solve <span class="math">\(MU=b\)</span> and store <span class="math">\(U\)</span> in <span class="math">\(u_1\)</span></li>
-</ul>
-</li>
-<li>else:  (interpolation)<ul>
-<li>let <span class="math">\(u_1\)</span> interpolate <span class="math">\(I\)</span></li>
-</ul>
-</li>
-<li>define <span class="math">\(a\)</span> and <span class="math">\(L\)</span></li>
-<li>assemble matrix <span class="math">\(A\)</span> from <span class="math">\(a\)</span></li>
-<li>set some stopping time <span class="math">\(T\)</span></li>
-<li><span class="math">\(t={{\Delta t}}\)</span></li>
-<li>while <span class="math">\(t\leq T\)</span><ul>
-<li>assemble vector <span class="math">\(b\)</span> from <span class="math">\(L\)</span></li>
-<li>apply essential boundary conditions</li>
-<li>solve <span class="math">\(AU=b\)</span> for <span class="math">\(U\)</span> and store in <span class="math">\(u\)</span></li>
-<li><span class="math">\(t\leftarrow t + {{\Delta t}}\)</span></li>
-<li><span class="math">\(u_1 \leftarrow u\)</span> (be ready for next step)</li>
-</ul>
-</li>
-</ul>
-</div></blockquote>
-<p>Before starting the coding, we shall construct a problem where it is
-easy to determine if the calculations are correct. The simple backward
-time difference is exact for linear functions, so we decide to have
-a linear variation in time. Combining a second-degree polynomial in space
-with a linear term in time,</p>
-<div class="math" id="eq-tut-diffusion-pde1-u0test">
-\[\tag{49}
-u = 1 + x^2 + \alpha y^2 + \beta t,\]</div>
-<p>yields a function whose computed values at the nodes may be exact,
-regardless of the size of the elements and <span class="math">\({\Delta t}\)</span>, as long as the
-mesh is uniformly partitioned.
-By inserting <a class="reference internal" href="#eq-tut-diffusion-pde1-u0test"><span class="std std-ref">(49)</span></a> in the PDE problem
-<a class="reference internal" href="#eq-tut-diffusion-pde1"><span class="std std-ref">(37)</span></a>, it follows
-that <span class="math">\(u_0\)</span> must be given as
-<a class="reference internal" href="#eq-tut-diffusion-pde1-u0test"><span class="std std-ref">(49)</span></a> and that <span class="math">\(f(x,y,t)=\beta - 2 - 2\alpha\)</span>
-and <span class="math">\(I(x,y)=1+x^2+\alpha y^2\)</span>.</p>
-<p id="index-1">A new programming issue is how to deal with functions that vary in
-space <em>and time</em>, such as the boundary condition
-<span class="math">\(u_0\)</span> given by <a class="reference internal" href="#eq-tut-diffusion-pde1-u0test"><span class="std std-ref">(49)</span></a>.
-A natural solution is
-to apply an <code class="docutils literal"><span class="pre">Expression</span></code> object with time <span class="math">\(t\)</span> as a parameter,
-in addition to the parameters <span class="math">\(\alpha\)</span> and <span class="math">\(\beta\)</span> (see
-the section <a class="reference internal" href="._ftut003.html#tut-poisson-membrane"><span class="std std-ref">Deflection of a circular membrane</span></a> for <code class="docutils literal"><span class="pre">Expression</span></code>
-objects with parameters):</p>
-<div class="highlight-python"><div class="highlight"><pre><span class="n">alpha</span> <span class="o">=</span> <span class="mi">3</span><span class="p">;</span> <span class="n">beta</span> <span class="o">=</span> <span class="mf">1.2</span>
-<span class="n">u0</span> <span class="o">=</span> <span class="n">Expression</span><span class="p">(</span><span class="s">&#39;1 + x[0]*x[0] + alpha*x[1]*x[1] + beta*t&#39;</span><span class="p">,</span>
-                <span class="n">alpha</span><span class="o">=</span><span class="n">alpha</span><span class="p">,</span> <span class="n">beta</span><span class="o">=</span><span class="n">beta</span><span class="p">,</span> <span class="n">t</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+  <div class="section" id="useful-extensions">
+<h1>Useful extensions<a class="headerlink" href="#useful-extensions" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="controlling-the-solution-process">
+<span id="tut-poisson1-solve-prm"></span><h2>Controlling the solution process<a class="headerlink" href="#controlling-the-solution-process" title="Permalink to this headline">¶</a></h2>
+<p>Sparse LU decomposition (Gaussian elimination) is used by default to
+solve linear systems of equations in FEniCS programs.  This is a very
+robust and recommended method for a few thousand unknowns in the
+equation system, and may hence be the method of choice in many 2D and
+smaller 3D problems. However, sparse LU decomposition becomes slow and
+memory demanding in large problems.  This fact forces the use of
+iterative methods, which are faster and require much less memory.
+Consequently, we must tell you already now how you can take
+advantage of state-of-the-art iterative solution methods in FEniCS.</p>
+<div class="section" id="setting-linear-solver-parameters">
+<h3>Setting linear solver parameters<a class="headerlink" href="#setting-linear-solver-parameters" title="Permalink to this headline">¶</a></h3>
+<p>Preconditioned Krylov solvers is a type of popular iterative methods
+that are easily accessible in FEniCS programs. The Poisson equation
+results in a symmetric, positive definite coefficient matrix, for
+which the optimal Krylov solver is the Conjugate Gradient (CG)
+method. However, the CG method requires boundary conditions to be
+implemented in a symmetric way. This is not the case by default, so
+then a Krylov solver for non-symmetric system, such as GMRES, is a
+better choice.  Incomplete LU factorization (ILU) is a popular and
+robust all-round preconditioner, so let us try the GMRES-ILU pair:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">solve</span><span class="p">(</span><span class="n">a</span> <span class="o">==</span> <span class="n">L</span><span class="p">,</span> <span class="n">u</span><span class="p">,</span> <span class="n">bc</span><span class="p">)</span>
+      <span class="n">solver_parameters</span><span class="o">=</span><span class="p">{</span><span class="s">&#39;linear_solver&#39;</span><span class="p">:</span> <span class="s">&#39;gmres&#39;</span><span class="p">,</span>
+                         <span class="s">&#39;preconditioner&#39;</span><span class="p">:</span> <span class="s">&#39;ilu&#39;</span><span class="p">})</span>
+<span class="c"># Alternative syntax</span>
+<span class="n">solve</span><span class="p">(</span><span class="n">a</span> <span class="o">==</span> <span class="n">L</span><span class="p">,</span> <span class="n">u</span><span class="p">,</span> <span class="n">bc</span><span class="p">,</span>
+      <span class="n">solver_parameters</span><span class="o">=</span><span class="nb">dict</span><span class="p">(</span><span class="n">linear_solver</span><span class="o">=</span><span class="s">&#39;gmres&#39;</span><span class="p">,</span>
+                             <span class="n">preconditioner</span><span class="o">=</span><span class="s">&#39;ilu&#39;</span><span class="p">))</span>
 </pre></div>
 </div>
-<p>The time parameter can later be updated by assigning values to <code class="docutils literal"><span class="pre">u0.t</span></code>.</p>
-<p>Given a <code class="docutils literal"><span class="pre">mesh</span></code> and an associated function space <code class="docutils literal"><span class="pre">V</span></code>, we
-can specify the <span class="math">\(u_0\)</span> function as</p>
-<div class="highlight-python"><div class="highlight"><pre><span class="n">alpha</span> <span class="o">=</span> <span class="mi">3</span><span class="p">;</span> <span class="n">beta</span> <span class="o">=</span> <span class="mf">1.2</span>
-<span class="n">u0</span> <span class="o">=</span> <span class="n">Expression</span><span class="p">(</span><span class="s">&#39;1 + x[0]*x[0] + alpha*x[1]*x[1] + beta*t&#39;</span><span class="p">,</span>
-                <span class="p">{</span><span class="s">&#39;alpha&#39;</span><span class="p">:</span> <span class="n">alpha</span><span class="p">,</span> <span class="s">&#39;beta&#39;</span><span class="p">:</span> <span class="n">beta</span><span class="p">})</span>
-<span class="n">u0</span><span class="o">.</span><span class="n">t</span> <span class="o">=</span> <span class="mi">0</span>
+<p>the section <a class="reference internal" href="._ftut014.html#tut-app-solver-prec"><span class="std std-ref">Linear solvers and preconditioners</span></a> lists the most popular choices of
+Krylov solvers and preconditioners available in FEniCS.</p>
+<span class="target" id="index-0"></span><span class="target" id="index-1"></span><span class="target" id="index-2"></span><span class="target" id="index-3"></span></div>
+<div class="section" id="linear-algebra-backend">
+<span id="index-4"></span><h3>Linear algebra backend<a class="headerlink" href="#linear-algebra-backend" title="Permalink to this headline">¶</a></h3>
+<p>The actual GMRES and ILU implementations that are brought into action
+depends on the choice of linear algebra package. FEniCS interfaces
+several linear algebra packages, called <em>linear algebra backends</em> in
+FEniCS terminology.  PETSc is the default choice if DOLFIN is compiled
+with PETSc, otherwise uBLAS.  Epetra (Trilinos), Eigen, MTL4 are other
+supported backends.  Which backend to apply can be controlled by
+setting</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">parameters</span><span class="p">[</span><span class="s">&#39;linear_algebra_backend&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">backendname</span>
 </pre></div>
 </div>
-<p>This function expression has the components of <code class="docutils literal"><span class="pre">x</span></code> as independent
-variables, while <code class="docutils literal"><span class="pre">alpha</span></code>, <code class="docutils literal"><span class="pre">beta</span></code>, and <code class="docutils literal"><span class="pre">t</span></code> are parameters.
-The parameters can either be set through a dictionary at construction time,
-as demonstrated for <code class="docutils literal"><span class="pre">alpha</span></code> and <code class="docutils literal"><span class="pre">beta</span></code>, or anytime through
-attributes in the function
-object, as shown for the <code class="docutils literal"><span class="pre">t</span></code> parameter.</p>
-<p>The essential boundary conditions, along the whole boundary in this case,
-are set in the usual way,</p>
-<div class="highlight-python"><div class="highlight"><pre><span class="k">def</span> <span class="nf">boundary</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">on_boundary</span><span class="p">):</span>  <span class="c"># define the Dirichlet boundary</span>
-    <span class="k">return</span> <span class="n">on_boundary</span>
-
-<span class="n">bc</span> <span class="o">=</span> <span class="n">DirichletBC</span><span class="p">(</span><span class="n">V</span><span class="p">,</span> <span class="n">u0</span><span class="p">,</span> <span class="n">boundary</span><span class="p">)</span>
+<p>where <code class="docutils literal"><span class="pre">backendname</span></code> is a string, either <code class="docutils literal"><span class="pre">'Eigen'</span></code>, <code class="docutils literal"><span class="pre">'PETSc'</span></code>, <code class="docutils literal"><span class="pre">'uBLAS'</span></code>,
+<code class="docutils literal"><span class="pre">'Epetra'</span></code>, or <code class="docutils literal"><span class="pre">'MTL4'</span></code>.  All these backends offer high-quality
+implementations of both iterative and direct solvers for linear systems
+of equations.</p>
+<p id="index-5">A common platform for FEniCS users is Ubuntu Linux.  The FEniCS
+distribution for Ubuntu contains PETSc, making this package the
+default linear algebra backend.  The default solver is sparse LU
+decomposition (<code class="docutils literal"><span class="pre">'lu'</span></code>), and the actual software that is called is then
+the sparse LU solver from UMFPACK (which PETSc has an interface
+to). The available linear algebra backends in a FEniCS installation is
+listed by</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">list_linear_algebra_backends</span><span class="p">()</span>
 </pre></div>
 </div>
-<p>We shall use <code class="docutils literal"><span class="pre">u</span></code> for the unknown <span class="math">\(u\)</span> at the new time level and
-<code class="docutils literal"><span class="pre">u_1</span></code> for <span class="math">\(u\)</span> at the previous time level.  The initial value of
-<code class="docutils literal"><span class="pre">u_1</span></code>, implied by the initial condition on <span class="math">\(u\)</span>, can be computed
-by either projecting or interpolating <span class="math">\(I\)</span>.
-The <span class="math">\(I(x,y)\)</span> function is available in the program through
-<code class="docutils literal"><span class="pre">u0</span></code>,
-as long as <code class="docutils literal"><span class="pre">u0.t</span></code> is zero.
-We can then do</p>
-<div class="highlight-python"><div class="highlight"><pre><span class="n">u_1</span> <span class="o">=</span> <span class="n">interpolate</span><span class="p">(</span><span class="n">u0</span><span class="p">,</span> <span class="n">V</span><span class="p">)</span>
+<span class="target" id="index-6"></span></div>
+<div class="section" id="the-parameters-database">
+<span id="index-7"></span><h3>The <code class="docutils literal"><span class="pre">parameters</span></code> database<a class="headerlink" href="#the-parameters-database" title="Permalink to this headline">¶</a></h3>
+<p>We will normally like to control the tolerance in the stopping
+criterion and the maximum number of iterations when running an
+iterative method.  Such parameters can be set by accessing the <em>global
+parameter database</em>, which is called <code class="docutils literal"><span class="pre">parameters</span></code> and which behaves as
+a nested dictionary. Write</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">info</span><span class="p">(</span><span class="n">parameters</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>to list all parameters and their default values in the database.
+The nesting of parameter sets is indicated through indentation in the
+output from <code class="docutils literal"><span class="pre">info</span></code>.
+According to this output, the relevant parameter set is
+named <code class="docutils literal"><span class="pre">'krylov_solver'</span></code>, and the parameters are set like this:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">prm</span> <span class="o">=</span> <span class="n">parameters</span><span class="p">[</span><span class="s">&#39;krylov_solver&#39;</span><span class="p">]</span>  <span class="c"># short form</span>
+<span class="n">prm</span><span class="p">[</span><span class="s">&#39;absolute_tolerance&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="mf">1E-10</span>
+<span class="n">prm</span><span class="p">[</span><span class="s">&#39;relative_tolerance&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="mf">1E-6</span>
+<span class="n">prm</span><span class="p">[</span><span class="s">&#39;maximum_iterations&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="mi">1000</span>
+</pre></div>
+</div>
+<p>Stopping criteria for Krylov solvers usually involve the norm of
+the residual, which must be smaller than the absolute tolerance
+parameter <em>or</em> smaller than the relative tolerance parameter times
+the initial residual.</p>
+<p>To get a printout of the number of actual iterations to reach the
+stopping criterion, we can insert</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">set_log_level</span><span class="p">(</span><span class="n">PROGRESS</span><span class="p">)</span>
 <span class="c"># or</span>
-<span class="n">u_1</span> <span class="o">=</span> <span class="n">project</span><span class="p">(</span><span class="n">u0</span><span class="p">,</span> <span class="n">V</span><span class="p">)</span>
+<span class="n">set_log_level</span><span class="p">(</span><span class="n">DEBUG</span><span class="p">)</span>
 </pre></div>
 </div>
-<p>Note that we could, as an equivalent alternative to using <code class="docutils literal"><span class="pre">project</span></code>, define
-<span class="math">\(a_0\)</span> and <span class="math">\(L_0\)</span> as we did in the section <a class="reference internal" href="._ftut003.html#tut-poisson-gradu"><span class="std std-ref">Computing derivatives</span></a> and form
-the associated variational problem.
-To actually recover the exact solution
-<a class="reference internal" href="#eq-tut-diffusion-pde1-u0test"><span class="std std-ref">(49)</span></a>
-to machine precision,
-it is important not to compute the discrete initial condition by
-projecting <span class="math">\(I\)</span>, but by interpolating <span class="math">\(I\)</span> so that the nodal values are
-exact at <span class="math">\(t=0\)</span> (projection results in approximative values at the nodes).</p>
-<p>The definition of <span class="math">\(a\)</span> and <span class="math">\(L\)</span> goes as follows:</p>
-<div class="highlight-python"><div class="highlight"><pre><span class="n">dt</span> <span class="o">=</span> <span class="mf">0.3</span>      <span class="c"># time step</span>
-
-<span class="n">u</span> <span class="o">=</span> <span class="n">TrialFunction</span><span class="p">(</span><span class="n">V</span><span class="p">)</span>
-<span class="n">v</span> <span class="o">=</span> <span class="n">TestFunction</span><span class="p">(</span><span class="n">V</span><span class="p">)</span>
-<span class="n">f</span> <span class="o">=</span> <span class="n">Constant</span><span class="p">(</span><span class="n">beta</span> <span class="o">-</span> <span class="mi">2</span> <span class="o">-</span> <span class="mi">2</span><span class="o">*</span><span class="n">alpha</span><span class="p">)</span>
-
-<span class="n">a</span> <span class="o">=</span> <span class="n">u</span><span class="o">*</span><span class="n">v</span><span class="o">*</span><span class="n">dx</span> <span class="o">+</span> <span class="n">dt</span><span class="o">*</span><span class="n">inner</span><span class="p">(</span><span class="n">nabla_grad</span><span class="p">(</span><span class="n">u</span><span class="p">),</span> <span class="n">nabla_grad</span><span class="p">(</span><span class="n">v</span><span class="p">))</span><span class="o">*</span><span class="n">dx</span>
-<span class="n">L</span> <span class="o">=</span> <span class="p">(</span><span class="n">u_1</span> <span class="o">+</span> <span class="n">dt</span><span class="o">*</span><span class="n">f</span><span class="p">)</span><span class="o">*</span><span class="n">v</span><span class="o">*</span><span class="n">dx</span>
-
-<span class="n">A</span> <span class="o">=</span> <span class="n">assemble</span><span class="p">(</span><span class="n">a</span><span class="p">)</span>   <span class="c"># assemble only once, before the time stepping</span>
+<p>A message with the equation system size, solver type, and number of
+iterations arises from specifying the argument <code class="docutils literal"><span class="pre">PROGRESS</span></code>, while
+<code class="docutils literal"><span class="pre">DEBUG</span></code> results in more information, including CPU time spent in
+the various parts of the matrix assembly and solve process.</p>
+<p>We remark that default values for the global parameter database can be
+defined in an XML file. To generate such a file from the current set
+of parameters in a program, run</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">File</span><span class="p">(</span><span class="s">&#39;dolfin_parameters.xml&#39;</span><span class="p">)</span> <span class="o">&lt;&lt;</span> <span class="n">parameters</span>
 </pre></div>
 </div>
-<p>Finally, we perform the time stepping in a loop:</p>
-<div class="highlight-python"><div class="highlight"><pre><span class="n">u</span> <span class="o">=</span> <span class="n">Function</span><span class="p">(</span><span class="n">V</span><span class="p">)</span>   <span class="c"># the unknown at a new time level</span>
-<span class="n">T</span> <span class="o">=</span> <span class="mi">2</span>             <span class="c"># total simulation time</span>
-<span class="n">t</span> <span class="o">=</span> <span class="n">dt</span>
-
-<span class="k">while</span> <span class="n">t</span> <span class="o">&lt;=</span> <span class="n">T</span><span class="p">:</span>
-    <span class="n">b</span> <span class="o">=</span> <span class="n">assemble</span><span class="p">(</span><span class="n">L</span><span class="p">)</span>
-    <span class="n">u0</span><span class="o">.</span><span class="n">t</span> <span class="o">=</span> <span class="n">t</span>
-    <span class="n">bc</span><span class="o">.</span><span class="n">apply</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="n">b</span><span class="p">)</span>
-    <span class="n">solve</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="n">u</span><span class="o">.</span><span class="n">vector</span><span class="p">(),</span> <span class="n">b</span><span class="p">)</span>
-
-    <span class="n">t</span> <span class="o">+=</span> <span class="n">dt</span>
-    <span class="n">u_1</span><span class="o">.</span><span class="n">assign</span><span class="p">(</span><span class="n">u</span><span class="p">)</span>
+<p>If a <code class="docutils literal"><span class="pre">dolfin_parameters.xml</span></code> file is found in the directory where a
+FEniCS program is run, this file is read and used to initialize the
+<code class="docutils literal"><span class="pre">parameters</span></code> object. Otherwise, the file
+<code class="docutils literal"><span class="pre">.config/fenics/dolfin_parameters.xml</span></code> in the user&#8217;s home directory is
+read, if it exists.  Another alternative is to load the XML (with any
+name) manually in the program:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">File</span><span class="p">(</span><span class="s">&#39;dolfin_parameters.xml&#39;</span><span class="p">)</span> <span class="o">&gt;&gt;</span> <span class="n">parameters</span>
 </pre></div>
 </div>
-<p>Observe that <code class="docutils literal"><span class="pre">u0.t</span></code> must be updated before the <code class="docutils literal"><span class="pre">bc.apply</span></code>
-statement, to enforce computation of Dirichlet conditions at the
-current time level.</p>
-<p>The time loop above does not contain any comparison of the numerical
-and the exact solution, which we must include in order to verify the
-implementation.  As in many previous examples, we compute the
-difference between the array of nodal values of <code class="docutils literal"><span class="pre">u</span></code> and the array of
-the interpolated exact solution.  The following code is to be included
-inside the loop, after <code class="docutils literal"><span class="pre">u</span></code> is found:</p>
-<div class="highlight-python"><div class="highlight"><pre><span class="n">u_e</span> <span class="o">=</span> <span class="n">interpolate</span><span class="p">(</span><span class="n">u0</span><span class="p">,</span> <span class="n">V</span><span class="p">)</span>
-<span class="n">maxdiff</span> <span class="o">=</span> <span class="n">numpy</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">u_e</span><span class="o">.</span><span class="n">vector</span><span class="p">()</span><span class="o">.</span><span class="n">array</span><span class="p">()</span><span class="o">-</span><span class="n">u</span><span class="o">.</span><span class="n">vector</span><span class="p">()</span><span class="o">.</span><span class="n">array</span><span class="p">())</span><span class="o">.</span><span class="n">max</span><span class="p">()</span>
-<span class="k">print</span><span class="p">(</span><span class="s">&#39;Max error, t=</span><span class="si">%.2f</span><span class="s">: </span><span class="si">%-10.3f</span><span class="s">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">t</span><span class="p">,</span> <span class="n">maxdiff</span><span class="p">))</span>
-</pre></div>
+<p>The XML file can also be in gzip&#8217;ed form with the extension <code class="docutils literal"><span class="pre">.xml.gz</span></code>.</p>
 </div>
-<p id="index-2">The right-hand side vector <code class="docutils literal"><span class="pre">b</span></code> must obviously
-be recomputed at each time level.
-With the construction <code class="docutils literal"><span class="pre">b</span> <span class="pre">=</span> <span class="pre">assemble(L)</span></code>, a new
-vector for <code class="docutils literal"><span class="pre">b</span></code> is allocated in memory in every pass of the time loop.
-It would be much more memory friendly to reuse the storage of the <code class="docutils literal"><span class="pre">b</span></code>
-we already have.
-This is easily accomplished by</p>
-<div class="highlight-python"><div class="highlight"><pre><span class="n">b</span> <span class="o">=</span> <span class="n">assemble</span><span class="p">(</span><span class="n">L</span><span class="p">,</span> <span class="n">tensor</span><span class="o">=</span><span class="n">b</span><span class="p">)</span>
-</pre></div>
-</div>
-<p>That is, we send in our previous <code class="docutils literal"><span class="pre">b</span></code>, which is then filled with new values
-and returned from <code class="docutils literal"><span class="pre">assemble</span></code>. Now there will be only a single
-memory allocation of the right-hand side vector. Before the time loop
-we set <code class="docutils literal"><span class="pre">b</span> <span class="pre">=</span> <span class="pre">None</span></code> such that <code class="docutils literal"><span class="pre">b</span></code> is defined in the first call to
-<code class="docutils literal"><span class="pre">assemble</span></code>.</p>
-<p>The complete program code for this time-dependent case goes as follows:</p>
+<div class="section" id="an-extended-solver-function">
+<span id="index-8"></span><h3>An extended solver function<a class="headerlink" href="#an-extended-solver-function" title="Permalink to this headline">¶</a></h3>
+<p>Let us extend the previous solver function from
+<code class="docutils literal"><span class="pre">p2D_func.py</span></code> such that it also offers the GMRES+ILU
+preconditioned Krylov solver.</p>
 <div class="highlight-python"><div class="highlight"><pre><span class="kn">from</span> <span class="nn">dolfin</span> <span class="kn">import</span> <span class="o">*</span>
-<span class="kn">import</span> <span class="nn">numpy</span>
 
-<span class="c"># Create mesh and define function space</span>
-<span class="n">nx</span> <span class="o">=</span> <span class="n">ny</span> <span class="o">=</span> <span class="mi">2</span>
-<span class="n">mesh</span> <span class="o">=</span> <span class="n">UnitSquareMesh</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span> <span class="n">ny</span><span class="p">)</span>
-<span class="n">V</span> <span class="o">=</span> <span class="n">FunctionSpace</span><span class="p">(</span><span class="n">mesh</span><span class="p">,</span> <span class="s">&#39;Lagrange&#39;</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+<span class="k">def</span> <span class="nf">solver</span><span class="p">(</span>
+    <span class="n">f</span><span class="p">,</span> <span class="n">u0</span><span class="p">,</span> <span class="n">Nx</span><span class="p">,</span> <span class="n">Ny</span><span class="p">,</span> <span class="n">degree</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+    <span class="n">linear_solver</span><span class="o">=</span><span class="s">&#39;Krylov&#39;</span><span class="p">,</span> <span class="c"># Alt: &#39;direct&#39;</span>
+    <span class="n">abs_tol</span><span class="o">=</span><span class="mf">1E-5</span><span class="p">,</span>           <span class="c"># Absolute tolerance in Krylov solver</span>
+    <span class="n">rel_tol</span><span class="o">=</span><span class="mf">1E-3</span><span class="p">,</span>           <span class="c"># Relative tolerance in Krylov solver</span>
+    <span class="n">max_iter</span><span class="o">=</span><span class="mi">1000</span><span class="p">,</span>          <span class="c"># Max no of iterations in Krylov solver</span>
+    <span class="n">log_level</span><span class="o">=</span><span class="n">PROGRESS</span><span class="p">,</span>     <span class="c"># Amount of solver output</span>
+    <span class="n">dump_parameters</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span>  <span class="c"># Write out parameter database?</span>
+    <span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Solve -Laplace(u)=f on [0,1]x[0,1] with 2*Nx*Ny Lagrange</span>
+<span class="sd">    elements of specified degree and u=u0 (Expresssion) on</span>
+<span class="sd">    the boundary.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="c"># Create mesh and define function space</span>
+    <span class="n">mesh</span> <span class="o">=</span> <span class="n">UnitSquareMesh</span><span class="p">(</span><span class="n">Nx</span><span class="p">,</span> <span class="n">Ny</span><span class="p">)</span>
+    <span class="n">V</span> <span class="o">=</span> <span class="n">FunctionSpace</span><span class="p">(</span><span class="n">mesh</span><span class="p">,</span> <span class="s">&#39;Lagrange&#39;</span><span class="p">,</span> <span class="n">degree</span><span class="p">)</span>
 
-<span class="c"># Define boundary conditions</span>
-<span class="n">alpha</span> <span class="o">=</span> <span class="mi">3</span><span class="p">;</span> <span class="n">beta</span> <span class="o">=</span> <span class="mf">1.2</span>
-<span class="n">u0</span> <span class="o">=</span> <span class="n">Expression</span><span class="p">(</span><span class="s">&#39;1 + x[0]*x[0] + alpha*x[1]*x[1] + beta*t&#39;</span><span class="p">,</span>
-                <span class="n">alpha</span><span class="o">=</span><span class="n">alpha</span><span class="p">,</span> <span class="n">beta</span><span class="o">=</span><span class="n">beta</span><span class="p">,</span> <span class="n">t</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
-
-<span class="k">class</span> <span class="nc">Boundary</span><span class="p">(</span><span class="n">SubDomain</span><span class="p">):</span>  <span class="c"># define the Dirichlet boundary</span>
-    <span class="k">def</span> <span class="nf">inside</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">on_boundary</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">u0_boundary</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">on_boundary</span><span class="p">):</span>
         <span class="k">return</span> <span class="n">on_boundary</span>
 
-<span class="n">boundary</span> <span class="o">=</span> <span class="n">Boundary</span><span class="p">()</span>
-<span class="n">bc</span> <span class="o">=</span> <span class="n">DirichletBC</span><span class="p">(</span><span class="n">V</span><span class="p">,</span> <span class="n">u0</span><span class="p">,</span> <span class="n">boundary</span><span class="p">)</span>
+    <span class="n">bc</span> <span class="o">=</span> <span class="n">DirichletBC</span><span class="p">(</span><span class="n">V</span><span class="p">,</span> <span class="n">u0</span><span class="p">,</span> <span class="n">u0_boundary</span><span class="p">)</span>
 
-<span class="c"># Initial condition</span>
-<span class="n">u_1</span> <span class="o">=</span> <span class="n">interpolate</span><span class="p">(</span><span class="n">u0</span><span class="p">,</span> <span class="n">V</span><span class="p">)</span>
-<span class="c">#u_1 = project(u0, V)  # will not result in exact solution!</span>
+    <span class="c"># Define variational problem</span>
+    <span class="n">u</span> <span class="o">=</span> <span class="n">TrialFunction</span><span class="p">(</span><span class="n">V</span><span class="p">)</span>
+    <span class="n">v</span> <span class="o">=</span> <span class="n">TestFunction</span><span class="p">(</span><span class="n">V</span><span class="p">)</span>
+    <span class="n">a</span> <span class="o">=</span> <span class="n">inner</span><span class="p">(</span><span class="n">nabla_grad</span><span class="p">(</span><span class="n">u</span><span class="p">),</span> <span class="n">nabla_grad</span><span class="p">(</span><span class="n">v</span><span class="p">))</span><span class="o">*</span><span class="n">dx</span>
+    <span class="n">L</span> <span class="o">=</span> <span class="n">f</span><span class="o">*</span><span class="n">v</span><span class="o">*</span><span class="n">dx</span>
 
-<span class="n">dt</span> <span class="o">=</span> <span class="mf">0.3</span>      <span class="c"># time step</span>
+    <span class="c"># Compute solution</span>
+    <span class="n">u</span> <span class="o">=</span> <span class="n">Function</span><span class="p">(</span><span class="n">V</span><span class="p">)</span>
 
-<span class="c"># Define variational problem</span>
-<span class="n">u</span> <span class="o">=</span> <span class="n">TrialFunction</span><span class="p">(</span><span class="n">V</span><span class="p">)</span>
-<span class="n">v</span> <span class="o">=</span> <span class="n">TestFunction</span><span class="p">(</span><span class="n">V</span><span class="p">)</span>
-<span class="n">f</span> <span class="o">=</span> <span class="n">Constant</span><span class="p">(</span><span class="n">beta</span> <span class="o">-</span> <span class="mi">2</span> <span class="o">-</span> <span class="mi">2</span><span class="o">*</span><span class="n">alpha</span><span class="p">)</span>
-<span class="n">a</span> <span class="o">=</span> <span class="n">u</span><span class="o">*</span><span class="n">v</span><span class="o">*</span><span class="n">dx</span> <span class="o">+</span> <span class="n">dt</span><span class="o">*</span><span class="n">inner</span><span class="p">(</span><span class="n">nabla_grad</span><span class="p">(</span><span class="n">u</span><span class="p">),</span> <span class="n">nabla_grad</span><span class="p">(</span><span class="n">v</span><span class="p">))</span><span class="o">*</span><span class="n">dx</span>
-<span class="n">L</span> <span class="o">=</span> <span class="p">(</span><span class="n">u_1</span> <span class="o">+</span> <span class="n">dt</span><span class="o">*</span><span class="n">f</span><span class="p">)</span><span class="o">*</span><span class="n">v</span><span class="o">*</span><span class="n">dx</span>
+    <span class="k">if</span> <span class="n">linear_solver</span> <span class="o">==</span> <span class="s">&#39;Krylov&#39;</span><span class="p">:</span>
+        <span class="n">prm</span> <span class="o">=</span> <span class="n">parameters</span><span class="p">[</span><span class="s">&#39;krylov_solver&#39;</span><span class="p">]</span> <span class="c"># short form</span>
+        <span class="n">prm</span><span class="p">[</span><span class="s">&#39;absolute_tolerance&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">abs_tol</span>
+        <span class="n">prm</span><span class="p">[</span><span class="s">&#39;relative_tolerance&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">rel_tol</span>
+        <span class="n">prm</span><span class="p">[</span><span class="s">&#39;maximum_iterations&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">max_iter</span>
+        <span class="k">print</span><span class="p">(</span><span class="n">parameters</span><span class="p">[</span><span class="s">&#39;linear_algebra_backend&#39;</span><span class="p">])</span>
+        <span class="n">set_log_level</span><span class="p">(</span><span class="n">log_level</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">dump_parameters</span><span class="p">:</span>
+            <span class="n">info</span><span class="p">(</span><span class="n">parameters</span><span class="p">,</span> <span class="bp">True</span><span class="p">)</span>
+        <span class="n">solver_parameters</span> <span class="o">=</span> <span class="p">{</span><span class="s">&#39;linear_solver&#39;</span><span class="p">:</span> <span class="s">&#39;gmres&#39;</span><span class="p">,</span>
+                             <span class="s">&#39;preconditioner&#39;</span><span class="p">:</span> <span class="s">&#39;ilu&#39;</span><span class="p">}</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">solver_parameters</span> <span class="o">=</span> <span class="p">{</span><span class="s">&#39;linear_solver&#39;</span><span class="p">:</span> <span class="s">&#39;lu&#39;</span><span class="p">}</span>
 
-<span class="n">A</span> <span class="o">=</span> <span class="n">assemble</span><span class="p">(</span><span class="n">a</span><span class="p">)</span>   <span class="c"># assemble only once, before the time stepping</span>
-<span class="n">b</span> <span class="o">=</span> <span class="bp">None</span>          <span class="c"># necessary for memory saving assemeble call</span>
+    <span class="n">solve</span><span class="p">(</span><span class="n">a</span> <span class="o">==</span> <span class="n">L</span><span class="p">,</span> <span class="n">u</span><span class="p">,</span> <span class="n">bc</span><span class="p">,</span> <span class="n">solver_parameters</span><span class="o">=</span><span class="n">solver_parameters</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">u</span>
 
-<span class="c"># Compute solution</span>
-<span class="n">u</span> <span class="o">=</span> <span class="n">Function</span><span class="p">(</span><span class="n">V</span><span class="p">)</span>   <span class="c"># the unknown at a new time level</span>
-<span class="n">T</span> <span class="o">=</span> <span class="mf">1.9</span>           <span class="c"># total simulation time</span>
-<span class="n">t</span> <span class="o">=</span> <span class="n">dt</span>
-<span class="k">while</span> <span class="n">t</span> <span class="o">&lt;=</span> <span class="n">T</span><span class="p">:</span>
-    <span class="k">print</span><span class="p">(</span><span class="s">&#39;time =&#39;</span><span class="p">,</span> <span class="n">t</span><span class="p">)</span>
-    <span class="n">b</span> <span class="o">=</span> <span class="n">assemble</span><span class="p">(</span><span class="n">L</span><span class="p">,</span> <span class="n">tensor</span><span class="o">=</span><span class="n">b</span><span class="p">)</span>
-    <span class="n">u0</span><span class="o">.</span><span class="n">t</span> <span class="o">=</span> <span class="n">t</span>
-    <span class="n">bc</span><span class="o">.</span><span class="n">apply</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="n">b</span><span class="p">)</span>
-    <span class="n">solve</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="n">u</span><span class="o">.</span><span class="n">vector</span><span class="p">(),</span> <span class="n">b</span><span class="p">)</span>
+<span class="k">def</span> <span class="nf">solver_objects</span><span class="p">(</span>
+    <span class="n">f</span><span class="p">,</span> <span class="n">u0</span><span class="p">,</span> <span class="n">Nx</span><span class="p">,</span> <span class="n">Ny</span><span class="p">,</span> <span class="n">degree</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+    <span class="n">linear_solver</span><span class="o">=</span><span class="s">&#39;Krylov&#39;</span><span class="p">,</span> <span class="c"># Alt: &#39;direct&#39;</span>
+    <span class="n">abs_tol</span><span class="o">=</span><span class="mf">1E-5</span><span class="p">,</span>           <span class="c"># Absolute tolerance in Krylov solver</span>
+    <span class="n">rel_tol</span><span class="o">=</span><span class="mf">1E-3</span><span class="p">,</span>           <span class="c"># Relative tolerance in Krylov solver</span>
+    <span class="n">max_iter</span><span class="o">=</span><span class="mi">1000</span><span class="p">,</span>          <span class="c"># Max no of iterations in Krylov solver</span>
+    <span class="n">log_level</span><span class="o">=</span><span class="n">PROGRESS</span><span class="p">,</span>     <span class="c"># Amount of solver output</span>
+    <span class="n">dump_parameters</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span>  <span class="c"># Write out parameter database?</span>
+    <span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;As solver, but use objects for linear variational problem</span>
+<span class="sd">    and solver.&quot;&quot;&quot;</span>
+    <span class="c"># Create mesh and define function space</span>
+    <span class="n">mesh</span> <span class="o">=</span> <span class="n">UnitSquareMesh</span><span class="p">(</span><span class="n">Nx</span><span class="p">,</span> <span class="n">Ny</span><span class="p">)</span>
+    <span class="n">V</span> <span class="o">=</span> <span class="n">FunctionSpace</span><span class="p">(</span><span class="n">mesh</span><span class="p">,</span> <span class="s">&#39;Lagrange&#39;</span><span class="p">,</span> <span class="n">degree</span><span class="p">)</span>
 
-    <span class="c"># Verify</span>
-    <span class="n">u_e</span> <span class="o">=</span> <span class="n">interpolate</span><span class="p">(</span><span class="n">u0</span><span class="p">,</span> <span class="n">V</span><span class="p">)</span>
-    <span class="n">maxdiff</span> <span class="o">=</span> <span class="n">numpy</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">u_e</span><span class="o">.</span><span class="n">vector</span><span class="p">()</span><span class="o">.</span><span class="n">array</span><span class="p">()</span> <span class="o">-</span> <span class="n">u</span><span class="o">.</span><span class="n">vector</span><span class="p">()</span><span class="o">.</span><span class="n">array</span><span class="p">())</span><span class="o">.</span><span class="n">max</span><span class="p">()</span>
-    <span class="k">print</span><span class="p">(</span><span class="s">&#39;Max error, t=</span><span class="si">%.2f</span><span class="s">: </span><span class="si">%-10.3f</span><span class="s">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">t</span><span class="p">,</span> <span class="n">maxdiff</span><span class="p">))</span>
+    <span class="k">def</span> <span class="nf">u0_boundary</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">on_boundary</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">on_boundary</span>
 
-    <span class="n">t</span> <span class="o">+=</span> <span class="n">dt</span>
-    <span class="n">u_1</span><span class="o">.</span><span class="n">assign</span><span class="p">(</span><span class="n">u</span><span class="p">)</span>
+    <span class="n">bc</span> <span class="o">=</span> <span class="n">DirichletBC</span><span class="p">(</span><span class="n">V</span><span class="p">,</span> <span class="n">u0</span><span class="p">,</span> <span class="n">u0_boundary</span><span class="p">)</span>
+
+    <span class="c"># Define variational problem</span>
+    <span class="n">u</span> <span class="o">=</span> <span class="n">TrialFunction</span><span class="p">(</span><span class="n">V</span><span class="p">)</span>
+    <span class="n">v</span> <span class="o">=</span> <span class="n">TestFunction</span><span class="p">(</span><span class="n">V</span><span class="p">)</span>
+    <span class="n">a</span> <span class="o">=</span> <span class="n">inner</span><span class="p">(</span><span class="n">nabla_grad</span><span class="p">(</span><span class="n">u</span><span class="p">),</span> <span class="n">nabla_grad</span><span class="p">(</span><span class="n">v</span><span class="p">))</span><span class="o">*</span><span class="n">dx</span>
+    <span class="n">L</span> <span class="o">=</span> <span class="n">f</span><span class="o">*</span><span class="n">v</span><span class="o">*</span><span class="n">dx</span>
+
+    <span class="c"># Compute solution</span>
+    <span class="n">u</span> <span class="o">=</span> <span class="n">Function</span><span class="p">(</span><span class="n">V</span><span class="p">)</span>
+    <span class="n">problem</span> <span class="o">=</span> <span class="n">LinearVariationalProblem</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">L</span><span class="p">,</span> <span class="n">u</span><span class="p">,</span> <span class="n">bc</span><span class="p">)</span>
+    <span class="n">solver</span>  <span class="o">=</span> <span class="n">LinearVariationalSolver</span><span class="p">(</span><span class="n">problem</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">linear_solver</span> <span class="o">==</span> <span class="s">&#39;Krylov&#39;</span><span class="p">:</span>
+        <span class="n">solver</span><span class="o">.</span><span class="n">parameters</span><span class="p">[</span><span class="s">&#39;linear_solver&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s">&#39;gmres&#39;</span>
+        <span class="n">solver</span><span class="o">.</span><span class="n">parameters</span><span class="p">[</span><span class="s">&#39;preconditioner&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s">&#39;ilu&#39;</span>
+        <span class="n">prm</span> <span class="o">=</span> <span class="n">solver</span><span class="o">.</span><span class="n">parameters</span><span class="p">[</span><span class="s">&#39;krylov_solver&#39;</span><span class="p">]</span> <span class="c"># short form</span>
+        <span class="n">prm</span><span class="p">[</span><span class="s">&#39;absolute_tolerance&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">abs_tol</span>
+        <span class="n">prm</span><span class="p">[</span><span class="s">&#39;relative_tolerance&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">rel_tol</span>
+        <span class="n">prm</span><span class="p">[</span><span class="s">&#39;maximum_iterations&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">max_iter</span>
+        <span class="k">print</span><span class="p">(</span><span class="n">parameters</span><span class="p">[</span><span class="s">&#39;linear_algebra_backend&#39;</span><span class="p">])</span>
+        <span class="n">set_log_level</span><span class="p">(</span><span class="n">log_level</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">dump_parameters</span><span class="p">:</span>
+            <span class="n">info</span><span class="p">(</span><span class="n">parameters</span><span class="p">,</span> <span class="bp">True</span><span class="p">)</span>
+        <span class="n">solver_parameters</span> <span class="o">=</span> <span class="p">{</span><span class="s">&#39;linear_solver&#39;</span><span class="p">:</span> <span class="s">&#39;gmres&#39;</span><span class="p">,</span>
+                             <span class="s">&#39;preconditioner&#39;</span><span class="p">:</span> <span class="s">&#39;ilu&#39;</span><span class="p">}</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">solver_parameters</span> <span class="o">=</span> <span class="p">{</span><span class="s">&#39;linear_solver&#39;</span><span class="p">:</span> <span class="s">&#39;lu&#39;</span><span class="p">}</span>
+
+    <span class="n">solver</span><span class="o">.</span><span class="n">solve</span><span class="p">()</span>
+    <span class="k">return</span> <span class="n">u</span>
 </pre></div>
 </div>
-<p>The code
-is available in the
-file <a class="reference external" href="https://github.com/hplgit/fenics-tutorial/blob/master/src/diffusion/d1_d2D.py">d1_d2D.py</a>
-in the directory <a class="reference external" href="https://github.com/hplgit/fenics-tutorial/blob/master/src/diffusion">diffusion</a>.</p>
+<p>This new <code class="docutils literal"><span class="pre">solver</span></code> function, found in the file
+<code class="docutils literal"><span class="pre">p2D_iter.py</span></code>, replaces the one in <code class="docutils literal"><span class="pre">p2D_func.py</span></code>:
+it has all the functionality of the previous <code class="docutils literal"><span class="pre">solver</span></code> function,
+but can also solve the linear system with
+iterative methods and report the progress of such solvers.</p>
 </div>
-<div class="section" id="avoiding-assembly">
-<span id="tut-timedep-diffusion1-noassemble"></span><h2>Avoiding assembly<a class="headerlink" href="#avoiding-assembly" title="Permalink to this headline">¶</a></h2>
-<p id="index-3">The purpose of this section is to present a technique for speeding
-up FEniCS simulators for time-dependent problems where it is
-possible to perform all assembly operations prior to the time loop.
-There are two costly operations in the time loop: assembly of the
-right-hand side <span class="math">\(b\)</span> and solution of the linear system via the
-<code class="docutils literal"><span class="pre">solve</span></code> call. The assembly process involves work proportional to
-the number of degrees of freedom <span class="math">\(N\)</span>, while the solve operation
-has a work estimate of <span class="math">\(\mathcal{O}( N^{\alpha})\)</span>, for some <span class="math">\(\alpha\geq 1\)</span>. As
-<span class="math">\(N\rightarrow\infty\)</span>, the solve operation will dominate for <span class="math">\(\alpha&gt;1\)</span>,
-but for the values of <span class="math">\(N\)</span> typically used on smaller computers, the
-assembly step may still
-represent a considerable part of the total work at each
-time level. Avoiding repeated assembly can therefore contribute to a
-significant speed-up of a finite element code in time-dependent problems.</p>
-<p>To see how repeated assembly can be avoided, we look at the <span class="math">\(L(v)\)</span>
-form in  <a class="reference internal" href="#eq-tut-diffusion-pde1-l"><span class="std std-ref">(48)</span></a>,
-which in general varies with
-time through <span class="math">\(u^{k-1}\)</span>, <span class="math">\(f^k\)</span>, and possibly also with <span class="math">\({\Delta t}\)</span>
-if the time step is adjusted during the simulation.
-The technique for avoiding repeated assembly consists in
-expanding the finite element functions in sums over the basis functions
-<span class="math">\(\phi_i\)</span>, as explained
-in the section <a class="reference internal" href="._ftut003.html#tut-poisson1-linalg"><span class="std std-ref">A linear algebra formulation</span></a>, to identify matrix-vector
-products that build up the complete system. We have
-<span class="math">\(u^{k-1}=\sum_{j=1}^NU^{k-1}_j\phi_j\)</span>, and we can expand <span class="math">\(f^k\)</span> as
-<span class="math">\(f^{k}=\sum_{j=1}^NF^{k}_j\phi_j\)</span>. Inserting these expressions in <span class="math">\(L(v)\)</span>
-and using
-<span class="math">\(v=\hat\phi_i\)</span> result in</p>
+<div class="section" id="remark-regarding-unit-tests">
+<h3>Remark regarding unit tests<a class="headerlink" href="#remark-regarding-unit-tests" title="Permalink to this headline">¶</a></h3>
+<p>Regarding verification of the new <code class="docutils literal"><span class="pre">solver</span></code> function in terms of unit
+tests, it turns out that unit testing in a problem where the
+approximation error vanishes is gets more complicated when we use
+iterative methods. The problem is to keep the error due to iterative
+solution smaller than the tolerance used in the verification
+tests. First of all this means that the tolerances used in the Krylov
+solvers must be smaller than the tolerance used in the <code class="docutils literal"><span class="pre">assert</span></code> test,
+but this is no guarantee to keep the linear solver error this small.
+For linear elements and small meshes, a tolerance of <span class="math">\(10^{-11}\)</span> works
+well in the case of Krylov solvers too (using a tolerance <span class="math">\(10^{-12}\)</span>
+in those solvers. However, as soon as we switch to P2 elements, it is
+hard to force the linear solver error below <span class="math">\(10^{-6}\)</span>. Consequently,
+tolerances in tests depend on the numerical methods. The interested
+reader is referred to the <code class="docutils literal"><span class="pre">test_solver</span></code> function in
+<code class="docutils literal"><span class="pre">p2D_iter.py</span></code> for details: this test function tests the
+numerical solution for direct and iterative linear solvers, for
+different meshes, and different degrees of the polynomials in the
+finite element basis functions.</p>
+</div>
+</div>
+<div class="section" id="linear-variational-problem-and-solver-objects">
+<span id="tut-poisson1-solver-problem"></span><h2>Linear variational problem and solver objects<a class="headerlink" href="#linear-variational-problem-and-solver-objects" title="Permalink to this headline">¶</a></h2>
+<span class="target" id="index-9"></span><span class="target" id="index-10"></span><p id="index-11">The <code class="docutils literal"><span class="pre">solve(a</span> <span class="pre">==</span> <span class="pre">L,</span> <span class="pre">u,</span> <span class="pre">bc)</span></code> call is just a compact syntax alternative to a
+slightly more comprehensive specification of the variational equation
+and the solution of the associated linear system.  This alternative
+syntax is used in a lot of FEniCS applications and will also be
+used later in this tutorial, so we show it already now:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">u</span> <span class="o">=</span> <span class="n">Function</span><span class="p">(</span><span class="n">V</span><span class="p">)</span>
+<span class="n">problem</span> <span class="o">=</span> <span class="n">LinearVariationalProblem</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">L</span><span class="p">,</span> <span class="n">u</span><span class="p">,</span> <span class="n">bc</span><span class="p">)</span>
+<span class="n">solver</span>  <span class="o">=</span> <span class="n">LinearVariationalSolver</span><span class="p">(</span><span class="n">problem</span><span class="p">)</span>
+<span class="n">solver</span><span class="o">.</span><span class="n">solve</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>Many objects have an attribute <code class="docutils literal"><span class="pre">parameters</span></code> corresponding to
+a parameter set in the global <code class="docutils literal"><span class="pre">parameters</span></code> database,
+but local to the object. Here, <code class="docutils literal"><span class="pre">solver.parameters</span></code> play that
+role. Setting the CG method with ILU preconditioning as solution
+method and specifying solver-specific parameters can be done
+like this:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">solver</span><span class="o">.</span><span class="n">parameters</span><span class="p">[</span><span class="s">&#39;linear_solver&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s">&#39;gmres&#39;</span>
+<span class="n">solver</span><span class="o">.</span><span class="n">parameters</span><span class="p">[</span><span class="s">&#39;preconditioner&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s">&#39;ilu&#39;</span>
+<span class="n">prm</span> <span class="o">=</span> <span class="n">solver</span><span class="o">.</span><span class="n">parameters</span><span class="p">[</span><span class="s">&#39;krylov_solver&#39;</span><span class="p">]</span> <span class="c"># short form</span>
+<span class="n">prm</span><span class="p">[</span><span class="s">&#39;absolute_tolerance&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="mf">1E-7</span>
+<span class="n">prm</span><span class="p">[</span><span class="s">&#39;relative_tolerance&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="mf">1E-4</span>
+<span class="n">prm</span><span class="p">[</span><span class="s">&#39;maximum_iterations&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="mi">1000</span>
+</pre></div>
+</div>
+<p>Settings in the global <code class="docutils literal"><span class="pre">parameters</span></code> database are
+propagated to parameter sets in individual objects, with the
+possibility of being overwritten as done above.</p>
+<p>The linear variational problem and solver objects as outlined above
+are incorporated in an alternative solver function, named
+<code class="docutils literal"><span class="pre">solver_objects</span></code>, in
+<code class="docutils literal"><span class="pre">p2D_iter.py</span></code>. Otherwise, this function is parallel to the
+previously shown <code class="docutils literal"><span class="pre">solver</span></code> function.</p>
+</div>
+<div class="section" id="writing-out-the-discrete-solution">
+<span id="tut-poisson1-verify1"></span><h2>Writing out the discrete solution<a class="headerlink" href="#writing-out-the-discrete-solution" title="Permalink to this headline">¶</a></h2>
+<p>We have seen how to grab the degrees of freedom array from a
+finite element function <code class="docutils literal"><span class="pre">u</span></code>:</p>
+<div class="highlight-python"><div class="highlight"><pre>u_array = `u.vector().array()
+</pre></div>
+</div>
+<p>The elements in <code class="docutils literal"><span class="pre">u_array</span></code> correspond to function values of <code class="docutils literal"><span class="pre">u</span></code> at nodes
+in the mesh.  Now, a fundamental question is: What are the
+coordinates of node <code class="docutils literal"><span class="pre">i</span></code> whose value is <code class="docutils literal"><span class="pre">u_array[i]</span></code>? To answer this
+question, we need to understand how to get our hands on the
+coordinates, and in particular, the numbering of degrees of freedom
+and the numbering of vertices in the mesh. We start with P1 (1st order
+Lagrange) elements where all the nodes are vertices in the mesh.</p>
+<p>The function <code class="docutils literal"><span class="pre">mesh.coordinates()</span></code> returns the coordinates of the
+vertices as a <code class="docutils literal"><span class="pre">numpy</span></code> array with shape <span class="math">\((M,d\)</span>), <span class="math">\(M\)</span> being the number
+of vertices in the mesh and <span class="math">\(d\)</span> being the number of space dimensions:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">dolfin</span> <span class="kn">import</span> <span class="o">*</span>
+<span class="go">&gt;&gt;&gt;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">mesh</span> <span class="o">=</span> <span class="n">UnitSquareMesh</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">coor</span> <span class="o">=</span> <span class="n">mesh</span><span class="o">.</span><span class="n">coordinates</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">coor</span>
+<span class="go">array([[ 0. ,  0. ],</span>
+<span class="go">       [ 0.5,  0. ],</span>
+<span class="go">       [ 1. ,  0. ],</span>
+<span class="go">       [ 0. ,  0.5],</span>
+<span class="go">       [ 0.5,  0.5],</span>
+<span class="go">       [ 1. ,  0.5],</span>
+<span class="go">       [ 0. ,  1. ],</span>
+<span class="go">       [ 0.5,  1. ],</span>
+<span class="go">       [ 1. ,  1. ]])</span>
+</pre></div>
+</div>
+<p>We see from this output that vertices are first numbered along <span class="math">\(y=0\)</span>
+with increasing <span class="math">\(x\)</span> coordinate, then along <span class="math">\(y=0.5\)</span>, and so on.</p>
+<p>Next we compute a function <code class="docutils literal"><span class="pre">u</span></code> on this mesh, e.g., the <span class="math">\(u=x+y\)</span>:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">V</span> <span class="o">=</span> <span class="n">FunctionSpace</span><span class="p">(</span><span class="n">mesh</span><span class="p">,</span> <span class="s">&#39;Lagrange&#39;</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">u</span> <span class="o">=</span> <span class="n">interpolate</span><span class="p">(</span><span class="n">Expression</span><span class="p">(</span><span class="s">&#39;x[0]+x[1]&#39;</span><span class="p">),</span> <span class="n">V</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">plot</span><span class="p">(</span><span class="n">u</span><span class="p">,</span> <span class="n">interactive</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">u_array</span> <span class="o">=</span> <span class="n">u</span><span class="o">.</span><span class="n">vector</span><span class="p">()</span><span class="o">.</span><span class="n">array</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">u_array</span>
+<span class="go">array([ 1. ,  0.5,  1.5,  0. ,  1. ,  2. ,  0.5,  1.5,  1. ])</span>
+</pre></div>
+</div>
+<p>We observe that <code class="docutils literal"><span class="pre">u_array[0]</span></code> is <em>not</em> the value of <span class="math">\(x+y\)</span> at vertex number 0,
+since this vertex has coordinates <span class="math">\(x=y=0\)</span>. The numbering of the
+degrees of freedom <span class="math">\(U_1,\ldots,U_{N}\)</span> is obviously not the same as the
+numbering of the vertices.</p>
+<p>In the plot of <code class="docutils literal"><span class="pre">u</span></code>, type <code class="docutils literal"><span class="pre">w</span></code> to turn on wireframe instead of fully colored
+surface, <code class="docutils literal"><span class="pre">m</span></code> to show the mesh, and then <code class="docutils literal"><span class="pre">v</span></code> to show the
+numbering of the vertices.</p>
+<div class="line-block">
+<div class="line"><br /></div>
+<div class="line"><br /></div>
+</div>
+<div class="figure">
+<a class="reference internal image-reference" href="_images/vertex_numbering.png"><img alt="_images/vertex_numbering.png" src="_images/vertex_numbering.png" style="width: 500px;" /></a>
+</div>
+<div class="line-block">
+<div class="line"><br /></div>
+<div class="line"><br /></div>
+</div>
+<span class="target" id="index-12"></span><p id="index-13">The vertex values of a <code class="docutils literal"><span class="pre">Function</span></code> object can be extracted by
+<code class="docutils literal"><span class="pre">u.compute_vertex_values()</span></code>, which returns an array where element <code class="docutils literal"><span class="pre">i</span></code>
+is the value of <code class="docutils literal"><span class="pre">u</span></code> at vertex <code class="docutils literal"><span class="pre">i</span></code>:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">u_at_vertices</span> <span class="o">=</span> <span class="n">u</span><span class="o">.</span><span class="n">compute_vertex_values</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">x</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">coor</span><span class="p">):</span>
+<span class="gp">... </span>    <span class="k">print</span><span class="p">(</span><span class="s">&#39;vertex </span><span class="si">%d</span><span class="s">: u_at_vertices[</span><span class="si">%d</span><span class="s">]=</span><span class="si">%g</span><span class="se">\t</span><span class="s">u(</span><span class="si">%s</span><span class="s">)=</span><span class="si">%g</span><span class="s">&#39;</span> <span class="o">%</span>
+<span class="gp">... </span>          <span class="p">(</span><span class="n">i</span><span class="p">,</span> <span class="n">i</span><span class="p">,</span> <span class="n">u_at_vertices</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="n">x</span><span class="p">,</span> <span class="n">u</span><span class="p">(</span><span class="n">x</span><span class="p">)))</span>
+<span class="go">vertex 0: u_at_vertices[0]=0    u([ 0.  0.])=8.46545e-16</span>
+<span class="go">vertex 1: u_at_vertices[1]=0.5  u([ 0.5  0. ])=0.5</span>
+<span class="go">vertex 2: u_at_vertices[2]=1    u([ 1.  0.])=1</span>
+<span class="go">vertex 3: u_at_vertices[3]=0.5  u([ 0.   0.5])=0.5</span>
+<span class="go">vertex 4: u_at_vertices[4]=1    u([ 0.5  0.5])=1</span>
+<span class="go">vertex 5: u_at_vertices[5]=1.5  u([ 1.   0.5])=1.5</span>
+<span class="go">vertex 6: u_at_vertices[6]=1    u([ 0.  1.])=1</span>
+<span class="go">vertex 7: u_at_vertices[7]=1.5  u([ 0.5  1. ])=1.5</span>
+<span class="go">vertex 8: u_at_vertices[8]=2    u([ 1.  1.])=2</span>
+</pre></div>
+</div>
+<span class="target" id="index-14"></span><p id="index-15">Alternatively, we can ask for the mapping from vertex numbering to degrees
+of freedom numbering in the space <span class="math">\(V\)</span>:</p>
+<div class="highlight-text"><div class="highlight"><pre>v2d = vertex_to_dof_map(V)
+</pre></div>
+</div>
+<p>Now, <code class="docutils literal"><span class="pre">u_array[v2d[i]]</span></code> will give us the value of the
+degree of freedom in <code class="docutils literal"><span class="pre">u</span></code> corresponding
+to vertex <code class="docutils literal"><span class="pre">i</span></code> (<code class="docutils literal"><span class="pre">v2d[i]</span></code>). In particular, <code class="docutils literal"><span class="pre">u_array[v2d]</span></code> is an array
+with all the elements in the same (vertex numbered) order as <code class="docutils literal"><span class="pre">coor</span></code>.
+The inverse map, from degrees of freedom
+number to vertex number is given by <code class="docutils literal"><span class="pre">dof_to_vertex_map(V)</span></code>, so
+<code class="docutils literal"><span class="pre">coor[dof_to_vertex_map(V)]</span></code> results in an array of all the
+coordinates in the same order as the degrees of freedom.</p>
+<p>For Lagrange elements of degree larger than 1, there are degrees of
+freedom (nodes) that do not correspond to vertices.
+[<strong>hpl 4</strong>: Anders, is the following true?] There is no simple way of getting the
+coordinates associated with the non-vertex degrees of freedom, so
+if we want to write out the values of a finite element solution,
+the following code snippet does the task at the vertices, and this
+will work for all kinds of Lagrange elements.</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="k">def</span> <span class="nf">compare_exact_and_numerical_solution</span><span class="p">(</span><span class="n">Nx</span><span class="p">,</span> <span class="n">Ny</span><span class="p">,</span> <span class="n">degree</span><span class="o">=</span><span class="mi">1</span><span class="p">):</span>
+    <span class="n">u0</span> <span class="o">=</span> <span class="n">Expression</span><span class="p">(</span><span class="s">&#39;1 + x[0]*x[0] + 2*x[1]*x[1]&#39;</span><span class="p">)</span>
+    <span class="n">f</span> <span class="o">=</span> <span class="n">Constant</span><span class="p">(</span><span class="o">-</span><span class="mf">6.0</span><span class="p">)</span>
+    <span class="n">u</span> <span class="o">=</span> <span class="n">solver</span><span class="p">(</span><span class="n">f</span><span class="p">,</span> <span class="n">u0</span><span class="p">,</span> <span class="n">Nx</span><span class="p">,</span> <span class="n">Ny</span><span class="p">,</span> <span class="n">degree</span><span class="p">,</span> <span class="n">linear_solver</span><span class="o">=</span><span class="s">&#39;direct&#39;</span><span class="p">)</span>
+    <span class="c"># Grab exact and numerical solution at the vertices and compare</span>
+    <span class="n">V</span> <span class="o">=</span> <span class="n">u</span><span class="o">.</span><span class="n">function_space</span><span class="p">()</span>
+    <span class="n">u0_Function</span> <span class="o">=</span> <span class="n">interpolate</span><span class="p">(</span><span class="n">u0</span><span class="p">,</span> <span class="n">V</span><span class="p">)</span>
+    <span class="n">u0_at_vertices</span> <span class="o">=</span> <span class="n">u0_Function</span><span class="o">.</span><span class="n">compute_vertex_values</span><span class="p">()</span>
+    <span class="n">u_at_vertices</span> <span class="o">=</span> <span class="n">u</span><span class="o">.</span><span class="n">compute_vertex_values</span><span class="p">()</span>
+    <span class="n">coor</span> <span class="o">=</span> <span class="n">V</span><span class="o">.</span><span class="n">mesh</span><span class="p">()</span><span class="o">.</span><span class="n">coordinates</span><span class="p">()</span>
+    <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">x</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">coor</span><span class="p">):</span>
+        <span class="k">print</span><span class="p">(</span><span class="s">&#39;vertex </span><span class="si">%2d</span><span class="s"> (</span><span class="si">%9g</span><span class="s">,</span><span class="si">%9g</span><span class="s">): error=</span><span class="si">%g</span><span class="s">&#39;</span>
+              <span class="o">%</span> <span class="p">(</span><span class="n">i</span><span class="p">,</span> <span class="n">x</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">x</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span>
+                 <span class="n">u0_at_vertices</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">-</span> <span class="n">u_at_vertices</span><span class="p">[</span><span class="n">i</span><span class="p">]))</span>
+        <span class="c"># Could compute u0(x) - u_at_vertices[i] but this</span>
+        <span class="c"># is much more expensive and gives more rounding errors</span>
+    <span class="n">center</span> <span class="o">=</span> <span class="p">(</span><span class="mf">0.5</span><span class="p">,</span> <span class="mf">0.5</span><span class="p">)</span>
+    <span class="n">error</span> <span class="o">=</span> <span class="n">u0</span><span class="p">(</span><span class="n">center</span><span class="p">)</span> <span class="o">-</span> <span class="n">u</span><span class="p">(</span><span class="n">center</span><span class="p">)</span>
+    <span class="k">print</span><span class="p">(</span><span class="s">&#39;numerical error at </span><span class="si">%s</span><span class="s">: </span><span class="si">%g</span><span class="s">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">center</span><span class="p">,</span> <span class="n">error</span><span class="p">))</span>
+</pre></div>
+</div>
+<p>As expected, the error is either identically zero or about <span class="math">\(10^{-15}\)</span> or
+<span class="math">\(10^{-16}\)</span>.</p>
+<div class="admonition-cheap-vs-expensive-function-evaluation admonition">
+<p class="first admonition-title">Cheap vs expensive function evaluation</p>
+<p>Given a <code class="docutils literal"><span class="pre">Function</span></code> object <code class="docutils literal"><span class="pre">u</span></code>, we can evaluate its values in various
+ways:</p>
+<ol class="arabic simple">
+<li><code class="docutils literal"><span class="pre">u(x)</span></code> for an arbitrary point <code class="docutils literal"><span class="pre">x</span></code></li>
+<li><code class="docutils literal"><span class="pre">u.vector().array()[i]</span></code> for degree of freedom number <code class="docutils literal"><span class="pre">i</span></code></li>
+<li><code class="docutils literal"><span class="pre">u.compute_vertex_values()[i]</span></code> at vertex number <code class="docutils literal"><span class="pre">i</span></code></li>
+</ol>
+<p class="last">The first method, though very flexible, is in general very expensive
+while the other two are very efficient (but limited to certain points).</p>
+</div>
+<p>To demonstrate the use of point evaluations of <code class="docutils literal"><span class="pre">Function</span></code> objects,
+we write out the computed <code class="docutils literal"><span class="pre">u</span></code> at the center point
+of the domain and compare it with the exact solution:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">center</span> <span class="o">=</span> <span class="p">(</span><span class="mf">0.5</span><span class="p">,</span> <span class="mf">0.5</span><span class="p">)</span>
+<span class="n">error</span> <span class="o">=</span> <span class="n">u0</span><span class="p">(</span><span class="n">center</span><span class="p">)</span> <span class="o">-</span> <span class="n">u</span><span class="p">(</span><span class="n">center</span><span class="p">)</span>
+<span class="k">print</span><span class="p">(</span><span class="s">&#39;numerical error at </span><span class="si">%s</span><span class="s">: </span><span class="si">%g</span><span class="s">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">center</span><span class="p">,</span> <span class="n">error</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Trying a <span class="math">\(2(3\times 3)\)</span> mesh, the output from the
+previous snippet becomes</p>
+<div class="highlight-text"><div class="highlight"><pre>numerical error at (0.5, 0.5): -0.0833333
+</pre></div>
+</div>
+<p>The discrepancy is due to the fact that the center point is not a node
+in this particular mesh, but a point in the interior of a cell,
+and <code class="docutils literal"><span class="pre">u</span></code> varies linearly over the cell while
+<code class="docutils literal"><span class="pre">u0</span></code> is a quadratic function. When the center point is a node, as in
+a <span class="math">\(2(t\times 2)\)</span> or <span class="math">\(2(4\times 4)\)</span> mesh, the error is of the order
+<span class="math">\(10^{-15}\)</span>.</p>
+<p>We have seen how to extract the nodal values in a <code class="docutils literal"><span class="pre">numpy</span></code> array.
+If desired, we can adjust the nodal values too. Say we want to
+normalize the solution such that <span class="math">\(\max_j U_j = 1\)</span>. Then we
+must divide all <span class="math">\(U_j\)</span> values
+by <span class="math">\(\max_j U_j\)</span>. The following function performs the task:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="k">def</span> <span class="nf">normalize_solution</span><span class="p">(</span><span class="n">u</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Normalize u: return u divided by max(u).&quot;&quot;&quot;</span>
+    <span class="n">u_array</span> <span class="o">=</span> <span class="n">u</span><span class="o">.</span><span class="n">vector</span><span class="p">()</span><span class="o">.</span><span class="n">array</span><span class="p">()</span>
+    <span class="n">u_max</span> <span class="o">=</span> <span class="n">u_array</span><span class="o">.</span><span class="n">max</span><span class="p">()</span>
+    <span class="n">u_array</span> <span class="o">/=</span> <span class="n">u_max</span>
+    <span class="n">u</span><span class="o">.</span><span class="n">vector</span><span class="p">()[:]</span> <span class="o">=</span> <span class="n">u_array</span>
+    <span class="n">u</span><span class="o">.</span><span class="n">vector</span><span class="p">()</span><span class="o">.</span><span class="n">set_local</span><span class="p">(</span><span class="n">u_array</span><span class="p">)</span>  <span class="c"># alternative</span>
+    <span class="k">return</span> <span class="n">u</span>
+</pre></div>
+</div>
+<p>That is, we manipulate <code class="docutils literal"><span class="pre">u_array</span></code> as desired, and then we insert this
+array into <code class="docutils literal"><span class="pre">u</span></code>&#8216;s <code class="docutils literal"><span class="pre">Vector</span></code> object.  The <code class="docutils literal"><span class="pre">/=</span></code> operator implies an
+in-place modification of the object on the left-hand side: all
+elements of the <code class="docutils literal"><span class="pre">u_array</span></code> are divided by the value <code class="docutils literal"><span class="pre">max_u</span></code>.
+Alternatively, one could write <code class="docutils literal"><span class="pre">u_array</span> <span class="pre">=</span> <span class="pre">u_array/max_u</span></code>, which
+implies creating a new array on the right-hand side and assigning this
+array to the name <code class="docutils literal"><span class="pre">u_array</span></code>.</p>
+<div class="admonition-be-careful-when-manipulating-degrees-of-freedom admonition">
+<p class="first admonition-title">Be careful when manipulating degrees of freedom</p>
+<p class="last">A call like <code class="docutils literal"><span class="pre">u.vector().array()</span></code> returns a <em>copy</em> of the data in
+<code class="docutils literal"><span class="pre">u.vector()</span></code>. One must therefore never perform assignments like
+<code class="docutils literal"><span class="pre">u.vector.array()[:]</span> <span class="pre">=</span> <span class="pre">...</span></code>, but instead extract the <code class="docutils literal"><span class="pre">numpy</span></code> array
+(i.e., a copy), manipulate it, and insert it back with <code class="docutils literal"><span class="pre">u.vector()[:]</span>
+<span class="pre">=</span> <span class="pre">``</span> <span class="pre">or</span> <span class="pre">``u.set_local(...)</span></code>.</p>
+</div>
+<p>All the code in this subsection can be found in the file <code class="docutils literal"><span class="pre">p2D_iter.py</span></code>
+in the <code class="docutils literal"><span class="pre">poisson</span></code> directory.</p>
+</div>
+<div class="section" id="parameterizing-the-number-of-space-dimensions">
+<span id="tut-poisson-nd"></span><h2>Parameterizing the number of space dimensions<a class="headerlink" href="#parameterizing-the-number-of-space-dimensions" title="Permalink to this headline">¶</a></h2>
+<p id="index-16">FEniCS makes it is easy to write a unified simulation code that can
+operate in 1D, 2D, and 3D. We will conveniently make use of this
+feature in forthcoming examples.  As an appetizer, go back to the
+introductory programs <code class="docutils literal"><span class="pre">p2D_plain.py</span></code> or
+<code class="docutils literal"><span class="pre">p2D_func.py</span></code> in the <code class="docutils literal"><span class="pre">poisson</span></code> directory and change the
+mesh construction from <code class="docutils literal"><span class="pre">UnitSquareMesh(6,</span> <span class="pre">4)</span></code> to <code class="docutils literal"><span class="pre">UnitCubeMesh(6,</span> <span class="pre">4,</span>
+<span class="pre">5)</span></code>. Now the domain is the unit cube partitioned into <span class="math">\(6\times 4\times
+5\)</span> boxes, and each box is divided into six tetrahedra-shaped
+finite elements for computations.  Run the program and observe that we
+can solve a 3D problem without any other modifications (!). The
+visualization allows you to rotate the cube and observe the function
+values as colors on the boundary.</p>
+<div class="section" id="generating-a-hypercube">
+<h3>Generating a hypercube<a class="headerlink" href="#generating-a-hypercube" title="Permalink to this headline">¶</a></h3>
+<p>The syntax for generating a unit interval, square, or box is different,
+so we need to encapsulate this part of the code. Given a list or
+tuple with the divisions into cells in the various spatial direction,
+the following function returns the mesh in a <span class="math">\(d\)</span>-dimensional problem:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="k">def</span> <span class="nf">unit_hypercube</span><span class="p">(</span><span class="n">divisions</span><span class="p">,</span> <span class="n">degree</span><span class="p">):</span>
+    <span class="n">mesh_classes</span> <span class="o">=</span> <span class="p">[</span><span class="n">UnitIntervalMesh</span><span class="p">,</span> <span class="n">UnitSquareMesh</span><span class="p">,</span> <span class="n">UnitCubeMesh</span><span class="p">]</span>
+    <span class="n">d</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">divisions</span><span class="p">)</span>
+    <span class="n">mesh</span> <span class="o">=</span> <span class="n">mesh_classes</span><span class="p">[</span><span class="n">d</span><span class="o">-</span><span class="mi">1</span><span class="p">](</span><span class="o">*</span><span class="n">divisions</span><span class="p">)</span>
+    <span class="n">V</span> <span class="o">=</span> <span class="n">FunctionSpace</span><span class="p">(</span><span class="n">mesh</span><span class="p">,</span> <span class="s">&#39;Lagrange&#39;</span><span class="p">,</span> <span class="n">degree</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">V</span><span class="p">,</span> <span class="n">mesh</span>
+</pre></div>
+</div>
+<p>The construction <code class="docutils literal"><span class="pre">mesh_class[d-1]</span></code> will pick the right name of the
+object used to define the domain and generate the mesh.
+Moreover, the argument <code class="docutils literal"><span class="pre">*divisions</span></code>
+sends all the component of the list <code class="docutils literal"><span class="pre">divisions</span></code> as separate
+arguments. For example, in a 2D problem where <code class="docutils literal"><span class="pre">divisions</span></code> has
+two elements, the statement</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">mesh</span> <span class="o">=</span> <span class="n">mesh_classes</span><span class="p">[</span><span class="n">d</span><span class="o">-</span><span class="mi">1</span><span class="p">](</span><span class="o">*</span><span class="n">divisions</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>is equivalent to</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">mesh</span> <span class="o">=</span> <span class="n">UnitSquareMesh</span><span class="p">(</span><span class="n">divisions</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">divisions</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
+</pre></div>
+</div>
+<p>Replacing the <code class="docutils literal"><span class="pre">Nx</span></code> and <code class="docutils literal"><span class="pre">Ny</span></code> parameters by <code class="docutils literal"><span class="pre">divisions</span></code> and calling
+<code class="docutils literal"><span class="pre">unit_hypercube</span></code> to create the mesh are the two modifications that
+we need in any of the previously shown <code class="docutils literal"><span class="pre">solver</span></code> functions to turn
+them into solvers for <span class="math">\(d\)</span>-dimensional problems!</p>
+</div>
+</div>
+<div class="section" id="computing-derivatives">
+<span id="tut-poisson-gradu"></span><h2>Computing derivatives<a class="headerlink" href="#computing-derivatives" title="Permalink to this headline">¶</a></h2>
+<p id="index-17">In Poisson and many other problems, the gradient of the solution is
+of interest. The computation is in principle simple:
+since
+<span class="math">\(u = \sum_{j=1}^N U_j \phi_j\)</span>, we have that</p>
 <div class="math">
-\[\begin{split}\int_\Omega \left(u^{k-1} + {{\Delta t}}f^k\right)v {\, \mathrm{d}x} &amp;=
-\int_\Omega \left(\sum_{j=1}^N U^{k-1}_j\phi_j + {{\Delta t}}\sum_{j=1}^N F^{k}_j\phi_j\right)\hat\phi_i {\, \mathrm{d}x},\\
-&amp;=\sum_{j=1}^N\left(\int_\Omega \hat\phi_i\phi_j {\, \mathrm{d}x}\right)U^{k-1}_j
- + {{\Delta t}}\sum_{j=1}^N\left(\int_\Omega \hat\phi_i\phi_j {\, \mathrm{d}x}\right)F^{k}_j{\thinspace .}\end{split}\]</div>
-<p>Introducing <span class="math">\(M_{ij} = \int_\Omega \hat\phi_i\phi_j {\, \mathrm{d}x}\)</span>, we see that
-the last expression can be written</p>
+\[\nabla u = \sum_{j=1}^N U_j \nabla \phi_j{\thinspace .}\]</div>
+<p>Given the solution variable <code class="docutils literal"><span class="pre">u</span></code> in the program, its gradient is
+obtained by <code class="docutils literal"><span class="pre">grad(u)</span></code> or <code class="docutils literal"><span class="pre">nabla_grad(u)</span></code>.  However, the gradient of a
+piecewise continuous finite element scalar field is a discontinuous
+vector field since the <span class="math">\(\phi_j\)</span> has discontinuous derivatives at the
+boundaries of the cells. For example, using Lagrange elements of
+degree 1, <span class="math">\(u\)</span> is linear over each cell, and the numerical <span class="math">\(\nabla u\)</span>
+becomes a piecewise constant vector field. On the contrary, the exact
+gradient is continuous.  For visualization and data analysis purposes
+we often want the computed gradient to be a continuous vector
+field. Typically, we want each component of <span class="math">\(\nabla u\)</span> to be
+represented in the same way as <span class="math">\(u\)</span> itself. To this end, we can project
+the components of <span class="math">\(\nabla u\)</span> onto the same function space as we used
+for <span class="math">\(u\)</span>.  This means that we solve <span class="math">\(w = \nabla u\)</span> approximately by a
+finite element method, using the same elements for the components of
+<span class="math">\(w\)</span> as we used for <span class="math">\(u\)</span>. This process is known as <em>projection</em>.</p>
+<span class="target" id="index-18"></span><p id="index-19">Not surprisingly, projection is a so common operation in finite
+element programs that FEniCS has a function for doing the task:
+<code class="docutils literal"><span class="pre">project(q,</span> <span class="pre">W)</span></code>, which returns the projection of some <code class="docutils literal"><span class="pre">Function</span></code> or
+<code class="docutils literal"><span class="pre">Expression</span></code> object named <code class="docutils literal"><span class="pre">q</span></code> onto the <code class="docutils literal"><span class="pre">FunctionSpace</span></code> (if <code class="docutils literal"><span class="pre">q</span></code> is
+scalar) or <code class="docutils literal"><span class="pre">VectorFunctionSpace</span></code> (if <code class="docutils literal"><span class="pre">q</span></code> is vector-valued) named <code class="docutils literal"><span class="pre">W</span></code>.
+Specifically, in our case where <code class="docutils literal"><span class="pre">u</span></code> is computed and we want to project
+the vector-valued <code class="docutils literal"><span class="pre">grad(u)</span></code> onto the <code class="docutils literal"><span class="pre">VectorFunctionSpace</span></code> where each
+component has the same <code class="docutils literal"><span class="pre">Function</span></code> space as <code class="docutils literal"><span class="pre">u</span></code>:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">V</span> <span class="o">=</span> <span class="n">u</span><span class="o">.</span><span class="n">function_space</span><span class="p">()</span>
+<span class="n">degree</span> <span class="o">=</span> <span class="n">u</span><span class="o">.</span><span class="n">ufl_element</span><span class="p">()</span><span class="o">.</span><span class="n">degree</span><span class="p">()</span>
+<span class="n">W</span> <span class="o">=</span> <span class="n">VectorFunctionSpace</span><span class="p">(</span><span class="n">V</span><span class="o">.</span><span class="n">mesh</span><span class="p">(),</span> <span class="s">&#39;Lagrange&#39;</span><span class="p">,</span> <span class="n">degree</span><span class="p">)</span>
+
+<span class="n">grad_u</span> <span class="o">=</span> <span class="n">project</span><span class="p">(</span><span class="n">grad</span><span class="p">(</span><span class="n">u</span><span class="p">),</span> <span class="n">W</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Figure <a class="reference internal" href="#tut-poisson-2d-fig-ex1-gradu"><span class="std std-ref">Example of visualizing the vector field  \( nabla u \)  by arrows at the nodes</span></a> shows
+example of how such a smoothed <code class="docutils literal"><span class="pre">gradu(u)</span></code> vector field is visualized.</p>
+<div class="figure" id="id1">
+<span id="tut-poisson-2d-fig-ex1-gradu"></span><a class="reference internal image-reference" href="_images/ex1_gradu.png"><img alt="_images/ex1_gradu.png" src="_images/ex1_gradu.png" style="width: 480px;" /></a>
+<p class="caption"><span class="caption-text"><em>Example of visualizing the vector field  \( nabla u \)  by arrows at the nodes</em></span></p>
+</div>
+<p>The applications of projection are many, including turning discontinuous
+gradient fields into continuous ones, comparing higher- and lower-order
+function approximations, and transforming a higher-order finite element
+solution down to a piecewise linear field, which is required by many
+visualization packages.</p>
+<p>The scalar component fields of the gradient
+can be extracted as separate fields and, e.g., visualized:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">grad_u_x</span><span class="p">,</span> <span class="n">grad_u_y</span> <span class="o">=</span> <span class="n">grad_u</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="n">deepcopy</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+<span class="n">plot</span><span class="p">(</span><span class="n">grad_u_x</span><span class="p">,</span> <span class="n">title</span><span class="o">=</span><span class="s">&#39;x-component of grad(u)&#39;</span><span class="p">)</span>
+<span class="n">plot</span><span class="p">(</span><span class="n">grad_u_y</span><span class="p">,</span> <span class="n">title</span><span class="o">=</span><span class="s">&#39;y-component of grad(u)&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>The <code class="docutils literal"><span class="pre">deepcopy=True</span></code> argument signifies a <em>deep copy</em>, which is
+a general term in computer science implying that a copy of the data is
+returned. (The opposite, <code class="docutils literal"><span class="pre">deepcopy=False</span></code>,
+means a <em>shallow copy</em>, where
+the returned objects are just pointers to the original data.)</p>
+<span class="target" id="index-20"></span><span class="target" id="index-21"></span><p id="index-22">The <code class="docutils literal"><span class="pre">grad_u_x</span></code> and <code class="docutils literal"><span class="pre">grad_u_y</span></code> variables behave as
+<code class="docutils literal"><span class="pre">Function</span></code> objects. In particular, we can extract the underlying
+arrays of nodal values by</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">grad_u_x_array</span> <span class="o">=</span> <span class="n">grad_u_x</span><span class="o">.</span><span class="n">vector</span><span class="p">()</span><span class="o">.</span><span class="n">array</span><span class="p">()</span>
+<span class="n">grad_u_y_array</span> <span class="o">=</span> <span class="n">grad_u_y</span><span class="o">.</span><span class="n">vector</span><span class="p">()</span><span class="o">.</span><span class="n">array</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>The degrees of freedom of the <code class="docutils literal"><span class="pre">grad_u</span></code> vector field can also be
+reached by</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">grad_u_array</span> <span class="o">=</span> <span class="n">grad_u</span><span class="o">.</span><span class="n">vector</span><span class="p">()</span><span class="o">.</span><span class="n">array</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>but this is a flat <code class="docutils literal"><span class="pre">numpy</span></code> array where the degrees of freedom for the
+<span class="math">\(x\)</span> component of the gradient is stored in the first part, then the
+degrees of freedom of the <span class="math">\(y\)</span> component, and so on. This is less convenient
+to work with.</p>
+<p id="index-23">The function <code class="docutils literal"><span class="pre">gradient(u)</span></code> in <code class="docutils literal"><span class="pre">p2D_iter.py</span></code>
+returns a projected (smoothed) <span class="math">\(\nabla u\)</span> vector field, given some
+finite element function <code class="docutils literal"><span class="pre">u</span></code>:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="k">def</span> <span class="nf">gradient</span><span class="p">(</span><span class="n">u</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Return grad(u) projected onto same space as u.&quot;&quot;&quot;</span>
+    <span class="n">V</span> <span class="o">=</span> <span class="n">u</span><span class="o">.</span><span class="n">function_space</span><span class="p">()</span>
+    <span class="n">mesh</span> <span class="o">=</span> <span class="n">V</span><span class="o">.</span><span class="n">mesh</span><span class="p">()</span>
+    <span class="n">V_g</span> <span class="o">=</span> <span class="n">VectorFunctionSpace</span><span class="p">(</span><span class="n">mesh</span><span class="p">,</span> <span class="s">&#39;Lagrange&#39;</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+    <span class="n">grad_u</span> <span class="o">=</span> <span class="n">project</span><span class="p">(</span><span class="n">grad</span><span class="p">(</span><span class="n">u</span><span class="p">),</span> <span class="n">V_g</span><span class="p">)</span>
+    <span class="n">grad_u</span><span class="o">.</span><span class="n">rename</span><span class="p">(</span><span class="s">&#39;grad(u)&#39;</span><span class="p">,</span> <span class="s">&#39;continuous gradient field&#39;</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">grad_u</span>
+</pre></div>
+</div>
+<p>Examining the arrays with vertex values of <code class="docutils literal"><span class="pre">grad_u_x</span></code> and <code class="docutils literal"><span class="pre">grad_u_y</span></code>
+quickly reveals that the computed <code class="docutils literal"><span class="pre">grad_u</span></code> field does not equal the
+exact gradient <span class="math">\((2x, 4y)\)</span> in this particular test problem where
+<span class="math">\(u=1+x^2+2y^2\)</span>.  There are inaccuracies at the boundaries, arising
+from the approximation problem for <span class="math">\(w\)</span>. Increasing the mesh resolution
+shows, however, that the components of the gradient vary linearly as
+<span class="math">\(2x\)</span> and <span class="math">\(4y\)</span> in the interior of the mesh (i.e., as soon as we are one
+element away from the boundary).  The <code class="docutils literal"><span class="pre">application_test_gradient</span></code>
+function in <code class="docutils literal"><span class="pre">p2D_iter.py</span></code> performs some experiments.</p>
+<div class="admonition-detour-manual-projection admonition">
+<p class="first admonition-title">Detour: Manual projection</p>
+<p>Although you will always use <code class="docutils literal"><span class="pre">project</span></code> to project a finite element
+function, it can be constructive this point in the tutorial to formulate the
+projection mathematically and implement its steps manually in FEniCS.</p>
+<p>Looking at the component <span class="math">\(\partial u/\partial x\)</span> of the gradient, we
+project the (discrete) derivative <span class="math">\(\sum_jU_j{\partial \phi_j/\partial
+x}\)</span> onto a function space with basis <span class="math">\(\phi_1,\phi_2,\ldots\)</span> such that
+the derivative in this space is expressed by the standard sum
+<span class="math">\(\sum_j\bar U_j \phi_j\)</span>, for suitable (new) coefficients <span class="math">\(\bar U_j\)</span>.</p>
+<p class="last">The variational problem for <span class="math">\(w\)</span> reads: find  <span class="math">\(w\in V^{(\mbox{g})}\)</span> such that</p>
+</div>
+<div class="math" id="eq-auto5">
+\[ \tag{16}
+ a(w, v) = L(v)\quad\forall v\in \hat{V^{(\mbox{g})}},\]\[where\]\[.. _Eq:_auto6:\]</div>
 <div class="math">
-\[\sum_{j=1}^NM_{ij}U^{k-1}_j + {{\Delta t}} \sum_{j=1}^NM_{ij}F^{k}_j,\]</div>
-<p>which is nothing but two matrix-vector products,</p>
+\[ \tag{17}
+ a(w, v) = \int_\Omega w\cdot v {\, \mathrm{d}x},\]\[.. _Eq:_auto7:\]</div>
 <div class="math">
-\[MU^{k-1} + {{\Delta t}} MF^k,\]</div>
-<p>if <span class="math">\(M\)</span> is the matrix with entries <span class="math">\(M_{ij}\)</span>,</p>
-<div class="math">
-\[U^{k-1}=(U^{k-1}_1,\ldots,U^{k-1}_N)^T,\]</div>
-<p>and</p>
-<div class="math">
-\[F^k=(F^{k}_1,\ldots,F^{k}_N)^T{\thinspace .}\]</div>
-<p>We have immediate access to <span class="math">\(U^{k-1}\)</span>
-in the program since that is the vector
-in the <code class="docutils literal"><span class="pre">u_1</span></code> function. The <span class="math">\(F^k\)</span> vector can easily be
-computed by interpolating the prescribed <span class="math">\(f\)</span> function (at each time level if
-<span class="math">\(f\)</span> varies with time). Given <span class="math">\(M\)</span>, <span class="math">\(U^{k-1}\)</span>, and <span class="math">\(F^k\)</span>, the right-hand side
-<span class="math">\(b\)</span> can be calculated as</p>
-<div class="math">
-\[b = MU^{k-1} + {{\Delta t}} MF^k {\thinspace .}\]</div>
-<p>That is, no assembly is necessary to compute <span class="math">\(b\)</span>.</p>
-<p>The coefficient matrix <span class="math">\(A\)</span> can also be split into two terms.
-We insert <span class="math">\(v=\hat\phi_i\)</span> and <span class="math">\(u^k = \sum_{j=1}^N U^k_j\phi_j\)</span> in
-the expression <a class="reference internal" href="#eq-tut-diffusion-pde1-a"><span class="std std-ref">(47)</span></a> to get</p>
-<div class="math">
-\[\sum_{j=1}^N \left(\int_\Omega \hat\phi_i\phi_j {\, \mathrm{d}x}\right)U^k_j + {{\Delta t}}
-\sum_{j=1}^N \left(\int_\Omega \nabla\hat\phi_i\cdot\nabla\phi_j {\, \mathrm{d}x}\right)U^k_j,\]</div>
-<p>which can be written as a sum of matrix-vector products,</p>
-<div class="math">
-\[MU^k + {{\Delta t}} KU^k = (M + {{\Delta t}} K)U^k,\]</div>
-<p>if we identify the matrix <span class="math">\(M\)</span> with entries <span class="math">\(M_{ij}\)</span> as above and
-the matrix <span class="math">\(K\)</span> with entries</p>
-<div class="math" id="eq-auto18">
-\[\tag{50}
-K_{ij} = \int_\Omega \nabla\hat\phi_i\cdot\nabla\phi_j {\, \mathrm{d}x}{\thinspace .}\]</div>
-<p>The matrix <span class="math">\(M\)</span> is often called the &#8220;mass matrix&#8221; while &#8220;stiffness matrix&#8221;
-is a common nickname for <span class="math">\(K\)</span>. The associated bilinear forms for these
-matrices, as we need them for the assembly process in a FEniCS
-program, become</p>
-<div class="math" id="eq-tut-diffusion-pde1-ak">
-\[\tag{51}
-a_K(u,v) = \int_\Omega\nabla u\cdot\nabla v {\, \mathrm{d}x},\]</div>
-<div class="math" id="eq-tut-diffusion-pde1-am">
-\[\tag{52}
-a_M(u,v) = \int_\Omega uv {\, \mathrm{d}x} {\thinspace .}\]</div>
-<p>The linear system at each time level, written as <span class="math">\(AU^k=b\)</span>,
-can now be computed by first computing <span class="math">\(M\)</span> and <span class="math">\(K\)</span>, and then forming
-<span class="math">\(A=M+{{\Delta t}} K\)</span> at <span class="math">\(t=0\)</span>, while <span class="math">\(b\)</span> is computed as
-<span class="math">\(b=MU^{k-1} + {{\Delta t}}MF^k\)</span> at each time level.</p>
-<p id="index-4">The following modifications are needed in the <code class="docutils literal"><span class="pre">d1_d2D.py</span></code>
-program from the previous section in order to implement the new
-strategy of avoiding assembly at each time level:</p>
+\[ \tag{18}
+ L(v) = \int_\Omega \nabla u\cdot v {\, \mathrm{d}x}{\thinspace .}\]\[\begin{split}The function spaces  \( V^{(\mbox{g})} \)  and  \( \hat{V^{(\mbox{g})}} \)  (with the superscript g
+denoting &quot;gradient&quot;) are vector versions of the function space for
+ \( u \) , with boundary conditions removed (if  \( V \)  is the space we used for
+ \( u \) , with no restrictions on boundary values, :math:`V^{(\mbox{g})} = \hat{V^{(\mbox{g})}} =
+[V]^d`, where  \( d \)  is the number of space dimensions).  For example, if
+we used piecewise linear functions on the mesh to approximate  \( u \) , the
+variational problem for  \( w \)  corresponds to approximating each
+component field of  \( w \)  by piecewise linear functions.\end{split}\]\[The variational problem for the vector field
+ \( w \) , called ``grad_u`` in the code, is easy to solve in FEniCS:\]\[.. code-block:: python\]\[        V_g = VectorFunctionSpace(mesh, 'Lagrange', 1)
+        w = TrialFunction(V_g)
+        v = TestFunction(V_g)\]\[        a = inner(w, v)*dx
+        L = inner(grad(u), v)*dx
+        grad_u = Function(V_g)
+        solve(a == L, grad_u)\]\[        plot(grad_u, title='grad(u)')\]\[The boundary condition argument to ``solve`` is dropped since there are
+no essential boundary conditions in this problem.
+The new thing is basically that we work with a ``VectorFunctionSpace``,
+since the unknown is now a vector field, instead of the
+``FunctionSpace`` object for scalar fields.\]</div>
+</div>
+<div class="section" id="a-variable-coefficient-poisson-problem">
+<span id="tut-possion-2d-varcoeff"></span><h2>A variable-coefficient Poisson problem<a class="headerlink" href="#a-variable-coefficient-poisson-problem" title="Permalink to this headline">¶</a></h2>
+<span class="target" id="index-24"></span><p id="index-25">Suppose we have a variable coefficient <span class="math">\(p(x,y)\)</span> in the Laplace operator,
+as in the boundary-value problem</p>
+<div class="math" id="eq-tut-poisson-2d-varcoeff">
+\[\begin{split}\tag{19}
+- \nabla\cdot \left\lbrack
+    p(x,y)\nabla u(x,y)\right\rbrack &amp;= f(x,y) \quad \mbox{in } \Omega,
+        \\
+        u(x,y) &amp;= u_0(x,y) \quad \mbox{on}\  \partial\Omega{\thinspace .}\end{split}\]</div>
+<p>We shall quickly demonstrate that this simple extension of our model
+problem only requires an equally simple extension of the FEniCS program.</p>
+<div class="section" id="test-problem-1">
+<h3>Test problem<a class="headerlink" href="#test-problem-1" title="Permalink to this headline">¶</a></h3>
+<p>Let us continue to use our favorite solution <span class="math">\(u(x,y)=1+x^2+2y^2\)</span> and
+then prescribe <span class="math">\(p(x,y)=x+y\)</span>. It follows that
+<span class="math">\(u_0(x,y) = 1 + x^2 + 2y^2\)</span> and <span class="math">\(f(x,y)=-8x-10y\)</span>.</p>
+</div>
+<div class="section" id="modifications-of-the-pde-solver">
+<h3>Modifications of the PDE solver<a class="headerlink" href="#modifications-of-the-pde-solver" title="Permalink to this headline">¶</a></h3>
+<p>What are the modifications we need to do in the previously shown codes
+to incorporate the variable coefficient <span class="math">\(p\)</span>?
+from the section <a class="reference internal" href="#tut-poisson1-verify1"><span class="std std-ref">Writing out the discrete solution</span></a>?</p>
 <blockquote>
 <div><ul class="simple">
-<li>Define separate forms <span class="math">\(a_M\)</span> and <span class="math">\(a_K\)</span></li>
-<li>Assemble <span class="math">\(a_M\)</span> to <span class="math">\(M\)</span> and <span class="math">\(a_K\)</span> to <span class="math">\(K\)</span></li>
-<li>Compute <span class="math">\(A=M+{{\Delta t}}\)</span>, <span class="math">\(K\)</span></li>
-<li>Define <span class="math">\(f\)</span> as an <code class="docutils literal"><span class="pre">Expression</span></code></li>
-<li>Interpolate the formula for <span class="math">\(f\)</span> to a finite element function <span class="math">\(F^k\)</span></li>
-<li>Compute <span class="math">\(b=MU^{k-1} + {{\Delta t}}MF^k\)</span></li>
+<li><code class="docutils literal"><span class="pre">solver</span></code> must take <code class="docutils literal"><span class="pre">p</span></code> as argument,</li>
+<li><code class="docutils literal"><span class="pre">f</span></code> in our test problem
+must be an <code class="docutils literal"><span class="pre">Expression</span></code> since it is no longer a constant,</li>
+<li>a new <code class="docutils literal"><span class="pre">Expression</span> <span class="pre">p</span></code> must be defined for the variable coefficient,</li>
+<li>the formula for <span class="math">\(a(u,v)\)</span> in the variational problem is slightly changed.</li>
 </ul>
 </div></blockquote>
-<p>The relevant code segments become</p>
-<div class="highlight-python"><div class="highlight"><pre><span class="c"># 1.</span>
-<span class="n">a_K</span> <span class="o">=</span> <span class="n">inner</span><span class="p">(</span><span class="n">nabla_grad</span><span class="p">(</span><span class="n">u</span><span class="p">),</span> <span class="n">nabla_grad</span><span class="p">(</span><span class="n">v</span><span class="p">))</span><span class="o">*</span><span class="n">dx</span>
-<span class="n">a_M</span> <span class="o">=</span> <span class="n">u</span><span class="o">*</span><span class="n">v</span><span class="o">*</span><span class="n">dx</span>
-
-<span class="c"># 2. and 3.</span>
-<span class="n">M</span> <span class="o">=</span> <span class="n">assemble</span><span class="p">(</span><span class="n">a_M</span><span class="p">)</span>
-<span class="n">K</span> <span class="o">=</span> <span class="n">assemble</span><span class="p">(</span><span class="n">a_K</span><span class="p">)</span>
-<span class="n">A</span> <span class="o">=</span> <span class="n">M</span> <span class="o">+</span> <span class="n">dt</span><span class="o">*</span><span class="n">K</span>
-
-<span class="c"># 4.</span>
-<span class="n">f</span> <span class="o">=</span> <span class="n">Expression</span><span class="p">(</span><span class="s">&#39;beta - 2 - 2*alpha&#39;</span><span class="p">,</span> <span class="n">beta</span><span class="o">=</span><span class="n">beta</span><span class="p">,</span> <span class="n">alpha</span><span class="o">=</span><span class="n">alpha</span><span class="p">)</span>
-
-<span class="c"># 5. and 6.</span>
-<span class="k">while</span> <span class="n">t</span> <span class="o">&lt;=</span> <span class="n">T</span><span class="p">:</span>
-    <span class="n">f_k</span> <span class="o">=</span> <span class="n">interpolate</span><span class="p">(</span><span class="n">f</span><span class="p">,</span> <span class="n">V</span><span class="p">)</span>
-    <span class="n">F_k</span> <span class="o">=</span> <span class="n">f_k</span><span class="o">.</span><span class="n">vector</span><span class="p">()</span>
-    <span class="n">b</span> <span class="o">=</span> <span class="n">M</span><span class="o">*</span><span class="n">u_1</span><span class="o">.</span><span class="n">vector</span><span class="p">()</span> <span class="o">+</span> <span class="n">dt</span><span class="o">*</span><span class="n">M</span><span class="o">*</span><span class="n">F_k</span>
-</pre></div>
-</div>
-<p>The complete program appears in the file <code class="docutils literal"><span class="pre">d2_d2D.py</span></code>.</p>
-</div>
-<div class="section" id="a-physical-example">
-<span id="tut-timedep-diffusion2-sin"></span><h2>A physical example<a class="headerlink" href="#a-physical-example" title="Permalink to this headline">¶</a></h2>
-<p id="index-5">With the basic programming techniques for time-dependent problems from
-the sections <a class="reference internal" href="#tut-timedep-diffusion1-noassemble"><span class="std std-ref">Avoiding assembly</span></a>
-and <a class="reference internal" href="#tut-timedep-diffusion1-impl"><span class="std std-ref">Implementation</span></a>
-we are ready to attack more physically realistic examples.
-The next example concerns the question: How is the temperature in the
-ground affected by day and night variations at the earth&#8217;s surface?
-We consider some box-shaped domain <span class="math">\(\Omega\)</span> in <span class="math">\(d\)</span> dimensions with
-coordinates <span class="math">\(x_0,\ldots,x_{d-1}\)</span> (the problem is meaningful in 1D, 2D, and 3D).
-At the top of the domain, <span class="math">\(x_{d-1}=0\)</span>, we have an oscillating
-temperature</p>
+<p>First we address the modified variational problem. Multiplying
+the PDE by a test function <span class="math">\(v\)</span> and
+integrating by parts now results
+in</p>
 <div class="math">
-\[T_0(t) = T_R + T_A\sin (\omega t),\]</div>
-<p>where <span class="math">\(T_R\)</span> is some reference temperature, <span class="math">\(T_A\)</span> is the amplitude of
-the temperature variations at the surface, and <span class="math">\(\omega\)</span> is the frequency
-of the temperature oscillations.
-At all other boundaries we assume
-that the temperature does not change anymore when we move away from
-the boundary, i.e., the normal derivative is zero.
-Initially, the temperature can be taken as <span class="math">\(T_R\)</span> everywhere.
-The heat conductivity properties of the soil in the
-ground may vary with space so
-we introduce a variable coefficient <span class="math">\(\kappa\)</span> reflecting this property.
-Figure <a class="reference internal" href="#tut-timedep-diffusion2-sin-fig1"><span class="std std-ref">Sketch of a (2D) problem involving heating and cooling of the ground due to an oscillating surface temperature</span></a> shows a sketch of the
-problem, with a small region where the heat conductivity is much lower.</p>
-<div class="figure" id="id1">
-<span id="tut-timedep-diffusion2-sin-fig1"></span><a class="reference internal image-reference" href="_images/daynight.png"><img alt="_images/daynight.png" src="_images/daynight.png" style="width: 480px;" /></a>
-<p class="caption"><span class="caption-text"><em>Sketch of a (2D) problem involving heating and cooling of the ground due to an oscillating surface temperature</em></span></p>
+\[\int_\Omega p\nabla u\cdot\nabla v {\, \mathrm{d}x} -
+\int_{\partial\Omega} p{\partial u\over
+\partial n}v {\, \mathrm{d}s} = \int_\Omega fv {\, \mathrm{d}x}{\thinspace .}\]</div>
+<p>The function spaces for <span class="math">\(u\)</span> and <span class="math">\(v\)</span> are the same as in
+the section <a class="reference internal" href="._ftut002.html#tut-poisson1-varform"><span class="std std-ref">Variational formulation</span></a>, implying that the boundary integral
+vanishes since <span class="math">\(v=0\)</span> on <span class="math">\(\partial\Omega\)</span> where we have Dirichlet conditions.
+The weak form <span class="math">\(a(u,v)=L(v)\)</span> then has</p>
+<div class="math" id="eq-auto8">
+\[\tag{20}
+a(u,v) = \int_\Omega p\nabla u\cdot\nabla v {\, \mathrm{d}x},\]</div>
+<div class="math" id="eq-auto9">
+\[\tag{21}
+L(v) = \int_\Omega fv {\, \mathrm{d}x}{\thinspace .}\]</div>
+<p>In the code for solving <span class="math">\(-\nabla^2u=f\)</span> we must replace</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">a</span> <span class="o">=</span> <span class="n">inner</span><span class="p">(</span><span class="n">nabla_grad</span><span class="p">(</span><span class="n">u</span><span class="p">),</span> <span class="n">nabla_grad</span><span class="p">(</span><span class="n">v</span><span class="p">))</span><span class="o">*</span><span class="n">dx</span>
+</pre></div>
 </div>
-<p>The initial-boundary value problem for this problem reads</p>
-<div class="math" id="eq-auto19">
-\[\tag{53}
-\varrho c{\partial T\over\partial t} = \nabla\cdot\left( \kappa\nabla T\right)\hbox{ in }\Omega\times (0,t_{\hbox{stop}}],\]</div>
-<div class="math" id="eq-auto20">
-\[\tag{54}
-T = T_0(t)\hbox{ on }\Gamma_0,\]</div>
-<div class="math" id="eq-auto21">
-\[\tag{55}
-{\partial T\over\partial n} = 0\hbox{ on }\partial\Omega\backslash\Gamma_0,\]</div>
-<div class="math" id="eq-auto22">
-\[\tag{56}
-T = T_R\hbox{ at }t =0{\thinspace .}\]</div>
-<p>Here, <span class="math">\(\varrho\)</span> is the density of the soil, <span class="math">\(c\)</span> is the
-heat capacity, <span class="math">\(\kappa\)</span> is the thermal conductivity
-(heat conduction coefficient)
-in the soil, and <span class="math">\(\Gamma_0\)</span> is the surface boundary <span class="math">\(x_{d-1}=0\)</span>.</p>
-<p>We use a <span class="math">\(\theta\)</span>-scheme in time, i.e., the evolution equation
-<span class="math">\(\partial P/\partial t=Q(t)\)</span> is discretized as</p>
+<p>by</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">a</span> <span class="o">=</span> <span class="n">p</span><span class="o">*</span><span class="n">inner</span><span class="p">(</span><span class="n">nabla_grad</span><span class="p">(</span><span class="n">u</span><span class="p">),</span> <span class="n">nabla_grad</span><span class="p">(</span><span class="n">v</span><span class="p">))</span><span class="o">*</span><span class="n">dx</span>
+</pre></div>
+</div>
+<p>to solve <span class="math">\(-\nabla\cdot(p\nabla u)=f\)</span>. Moreover,
+the definitions of <code class="docutils literal"><span class="pre">p</span></code> and <code class="docutils literal"><span class="pre">f</span></code> in the test problem read</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">p</span> <span class="o">=</span> <span class="n">Expression</span><span class="p">(</span><span class="s">&#39;x[0] + x[1]&#39;</span><span class="p">)</span>
+<span class="n">f</span> <span class="o">=</span> <span class="n">Expression</span><span class="p">(</span><span class="s">&#39;-8*x[0] - 10*x[1]&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>No additional modifications are necessary. The file
+<code class="docutils literal"><span class="pre">p2D_vc.py</span></code> (variable-coefficient Poisson problem in 2D)
+is a copy of <code class="docutils literal"><span class="pre">p2D_iter.py</span></code> with the mentioned changes
+incorporated. Observe that <span class="math">\(p=1\)</span> recovers the original problem in
+<code class="docutils literal"><span class="pre">p2D_iter.py</span></code>.</p>
+<p>You can run it and confirm
+that it recovers the exact <span class="math">\(u\)</span> at the nodes.</p>
+</div>
+<div class="section" id="modifications-of-the-flux-computations">
+<h3>Modifications of the flux computations<a class="headerlink" href="#modifications-of-the-flux-computations" title="Permalink to this headline">¶</a></h3>
+<p>The flux <span class="math">\(-p\nabla u\)</span> may be of particular interest in
+variable-coefficient Poisson problems as it often has an interesting
+physical significance. As explained in the section <a class="reference internal" href="#tut-poisson-gradu"><span class="std std-ref">Computing derivatives</span></a>,
+we normally want the piecewise discontinuous flux or gradient to be
+approximated by a continuous vector field, using the same elements as
+used for the numerical solution <span class="math">\(u\)</span>. The approximation now consists of
+solving <span class="math">\(w = -p\nabla u\)</span> by a finite element method: find <span class="math">\(w\in V^{(\mbox{g})}\)</span>
+such that</p>
+<div class="math" id="eq-auto10">
+\[\tag{22}
+a(w, v) = L(v)\quad\forall v\in \hat{V^{(\mbox{g})}},\]</div>
+<p>where</p>
+<div class="math" id="eq-auto11">
+\[\tag{23}
+a(w, v) = \int_\Omega w\cdot v {\, \mathrm{d}x},\]</div>
+<div class="math" id="eq-auto12">
+\[\tag{24}
+L(v) = \int_\Omega (-p \nabla u)\cdot v {\, \mathrm{d}x}{\thinspace .}\]</div>
+<p>This problem is identical to the one in the section <a class="reference internal" href="#tut-poisson-gradu"><span class="std std-ref">Computing derivatives</span></a>,
+except that <span class="math">\(p\)</span> enters the integral in <span class="math">\(L\)</span>.</p>
+<p>The relevant Python statement for computing the flux field take the form</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">flux</span> <span class="o">=</span> <span class="n">project</span><span class="p">(</span><span class="o">-</span><span class="n">p</span><span class="o">*</span><span class="n">grad</span><span class="p">(</span><span class="n">u</span><span class="p">),</span>
+               <span class="n">VectorFunctionSpace</span><span class="p">(</span><span class="n">mesh</span><span class="p">,</span> <span class="s">&#39;Lagrange&#39;</span><span class="p">,</span> <span class="n">degreee</span><span class="p">))</span>
+</pre></div>
+</div>
+<p>An appropriate function for computing the flux based on <code class="docutils literal"><span class="pre">u</span></code> and <code class="docutils literal"><span class="pre">p</span></code> is</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="k">def</span> <span class="nf">flux</span><span class="p">(</span><span class="n">u</span><span class="p">,</span> <span class="n">p</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Return p*grad(u) projected onto same space as u.&quot;&quot;&quot;</span>
+    <span class="n">V</span> <span class="o">=</span> <span class="n">u</span><span class="o">.</span><span class="n">function_space</span><span class="p">()</span>
+    <span class="n">mesh</span> <span class="o">=</span> <span class="n">V</span><span class="o">.</span><span class="n">mesh</span><span class="p">()</span>
+    <span class="n">degree</span> <span class="o">=</span> <span class="n">u</span><span class="o">.</span><span class="n">ufl_element</span><span class="p">()</span><span class="o">.</span><span class="n">degree</span><span class="p">()</span>
+    <span class="n">V_g</span> <span class="o">=</span> <span class="n">VectorFunctionSpace</span><span class="p">(</span><span class="n">mesh</span><span class="p">,</span> <span class="s">&#39;Lagrange&#39;</span><span class="p">,</span> <span class="n">degree</span><span class="p">)</span>
+    <span class="n">grad_u</span> <span class="o">=</span> <span class="n">project</span><span class="p">(</span><span class="o">-</span><span class="n">p</span><span class="o">*</span><span class="n">grad</span><span class="p">(</span><span class="n">u</span><span class="p">),</span> <span class="n">V_g</span><span class="p">)</span>
+    <span class="n">grad_u</span><span class="o">.</span><span class="n">rename</span><span class="p">(</span><span class="s">&#39;flux(u)&#39;</span><span class="p">,</span> <span class="s">&#39;continuous flux field&#39;</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">grad_u</span>
+</pre></div>
+</div>
+<p>Plotting the flux vector field is naturally as easy as plotting
+the gradient (see the section <a class="reference internal" href="#tut-poisson-gradu"><span class="std std-ref">Computing derivatives</span></a>):</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">plot</span><span class="p">(</span><span class="n">flux</span><span class="p">,</span> <span class="n">title</span><span class="o">=</span><span class="s">&#39;flux field&#39;</span><span class="p">)</span>
+
+<span class="n">flux_x</span><span class="p">,</span> <span class="n">flux_y</span> <span class="o">=</span> <span class="n">flux</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="n">deepcopy</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>  <span class="c"># extract components</span>
+<span class="n">plot</span><span class="p">(</span><span class="n">flux_x</span><span class="p">,</span> <span class="n">title</span><span class="o">=</span><span class="s">&#39;x-component of flux (-p*grad(u))&#39;</span><span class="p">)</span>
+<span class="n">plot</span><span class="p">(</span><span class="n">flux_y</span><span class="p">,</span> <span class="n">title</span><span class="o">=</span><span class="s">&#39;y-component of flux (-p*grad(u))&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>For data analysis of the nodal values of the flux field we can
+grab the underlying <code class="docutils literal"><span class="pre">numpy</span></code> arrays (demands a <code class="docutils literal"><span class="pre">deepcopy=True</span></code>
+in the split of <code class="docutils literal"><span class="pre">flux</span></code>):</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">flux_x_array</span> <span class="o">=</span> <span class="n">flux_x</span><span class="o">.</span><span class="n">vector</span><span class="p">()</span><span class="o">.</span><span class="n">array</span><span class="p">()</span>
+<span class="n">flux_y_array</span> <span class="o">=</span> <span class="n">flux_y</span><span class="o">.</span><span class="n">vector</span><span class="p">()</span><span class="o">.</span><span class="n">array</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>[<strong>hpl 5</strong>: The following is not done properly in the revised version.]
+The function <code class="docutils literal"><span class="pre">application_test_gradient</span></code> in the
+program <code class="docutils literal"><span class="pre">p2D_vc.py</span></code> contains in addition some plots,
+including a curve plot
+comparing <code class="docutils literal"><span class="pre">flux_x</span></code> and the exact counterpart along the line <span class="math">\(y=1/2\)</span>.
+The associated programming details related to this visualization
+are explained in the section <a class="reference internal" href="._ftut005.html#tut-structviz"><span class="std std-ref">Taking advantage of structured mesh data</span></a>.</p>
+</div>
+</div>
+<div class="section" id="creating-the-linear-system-explicitly">
+<span id="tut-poisson1-linalg"></span><h2>Creating the linear system explicitly<a class="headerlink" href="#creating-the-linear-system-explicitly" title="Permalink to this headline">¶</a></h2>
+<p>Given <span class="math">\(a(u,v)=L(v)\)</span>, the discrete solution <span class="math">\(u\)</span> is computed by
+inserting <span class="math">\(u=\sum_{j=1}^N U_j \phi_j\)</span> into <span class="math">\(a(u,v)\)</span> and demanding
+<span class="math">\(a(u,v)=L(v)\)</span> to be fulfilled for <span class="math">\(N\)</span> test functions
+<span class="math">\(\hat\phi_1,\ldots,\hat\phi_N\)</span>. This implies</p>
 <div class="math">
-\[{P^k - P^{k-1}\over{{\Delta t}}} = \theta Q^k + (1-\theta )Q^{k-1},\]</div>
-<p>where <span class="math">\(\theta\in[0,1]\)</span> is a weighting factor: <span class="math">\(\theta =1\)</span> corresponds
-to the backward difference scheme, <span class="math">\(\theta =1/2\)</span> to the Crank-Nicolson
-scheme, and <span class="math">\(\theta =0\)</span> to a forward difference scheme.
-The <span class="math">\(\theta\)</span>-scheme applied to our PDE results in</p>
+\[\sum_{j=1}^N a(\phi_j,\hat\phi_i) U_j = L(\hat\phi_i),\quad i=1,\ldots,N,\]</div>
+<p>which is nothing but a linear system,</p>
 <div class="math">
-\[\varrho c{T^k-T^{k-1}\over{{\Delta t}}} =
-\theta \nabla\cdot\left( \kappa\nabla T^k\right)
-+ (1-\theta) \nabla\cdot\left( k\nabla T^{k-1}\right){\thinspace .}\]</div>
-<p>Bringing this time-discrete PDE into weak form follows the technique shown
-many times earlier in this tutorial. In the standard notation
-<span class="math">\(a(T,v)=L(v)\)</span> the weak form has</p>
-<div class="math" id="eq-auto23">
-\[\tag{57}
-a(T,v) = \int_\Omega
-    \left( \varrho c Tv + \theta{{\Delta t}} \kappa\nabla T\cdot \nabla v\right) {\, \mathrm{d}x},\]</div>
-<div class="math" id="eq-auto24">
-\[\tag{58}
-L(v) = \int_\Omega \left( \varrho c T^{k-1}v - (1-\theta){{\Delta t}}
-    \kappa\nabla T^{k-1}\cdot \nabla v\right) {\, \mathrm{d}x}{\thinspace .}\]</div>
-<p>Observe that boundary integrals vanish because of the Neumann boundary
-conditions.</p>
-<span class="target" id="index-6"></span><p id="index-7">The size of a 3D box is taken as <span class="math">\(W\times W\times D\)</span>, where <span class="math">\(D\)</span> is
-the depth and <span class="math">\(W=D/2\)</span> is the width.
-We give the degree of the basis functions at the command line, then <span class="math">\(D\)</span>,
-and then the divisions of the domain in the various directions.
-To make a box, rectangle, or interval of arbitrary (not unit) size,
-we have the DOLFIN classes <code class="docutils literal"><span class="pre">BoxMesh</span></code>, <code class="docutils literal"><span class="pre">RectangleMesh</span></code>, and
-<code class="docutils literal"><span class="pre">IntervalMesh</span></code> at our disposal. The mesh and the function space
-can be created by the following code:</p>
-<div class="highlight-python"><div class="highlight"><pre><span class="n">degree</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">sys</span><span class="o">.</span><span class="n">argv</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
-<span class="n">D</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">sys</span><span class="o">.</span><span class="n">argv</span><span class="p">[</span><span class="mi">2</span><span class="p">])</span>
-<span class="n">W</span> <span class="o">=</span> <span class="n">D</span><span class="o">/</span><span class="mf">2.0</span>
-<span class="n">divisions</span> <span class="o">=</span> <span class="p">[</span><span class="nb">int</span><span class="p">(</span><span class="n">arg</span><span class="p">)</span> <span class="k">for</span> <span class="n">arg</span> <span class="ow">in</span> <span class="n">sys</span><span class="o">.</span><span class="n">argv</span><span class="p">[</span><span class="mi">3</span><span class="p">:]]</span>
-<span class="n">d</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">divisions</span><span class="p">)</span>  <span class="c"># no of space dimensions</span>
-<span class="k">if</span> <span class="n">d</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
-    <span class="n">mesh</span> <span class="o">=</span> <span class="n">IntervalMesh</span><span class="p">(</span><span class="n">divisions</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="o">-</span><span class="n">D</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
-<span class="k">elif</span> <span class="n">d</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>
-    <span class="n">mesh</span> <span class="o">=</span> <span class="n">RectangleMesh</span><span class="p">(</span><span class="o">-</span><span class="n">W</span><span class="o">/</span><span class="mi">2</span><span class="p">,</span> <span class="o">-</span><span class="n">D</span><span class="p">,</span> <span class="n">W</span><span class="o">/</span><span class="mi">2</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="n">divisions</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">divisions</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
-<span class="k">elif</span> <span class="n">d</span> <span class="o">==</span> <span class="mi">3</span><span class="p">:</span>
-    <span class="n">mesh</span> <span class="o">=</span> <span class="n">BoxMesh</span><span class="p">(</span><span class="o">-</span><span class="n">W</span><span class="o">/</span><span class="mi">2</span><span class="p">,</span> <span class="o">-</span><span class="n">W</span><span class="o">/</span><span class="mi">2</span><span class="p">,</span> <span class="o">-</span><span class="n">D</span><span class="p">,</span> <span class="n">W</span><span class="o">/</span><span class="mi">2</span><span class="p">,</span> <span class="n">W</span><span class="o">/</span><span class="mi">2</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span>
-               <span class="n">divisions</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">divisions</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">divisions</span><span class="p">[</span><span class="mi">2</span><span class="p">])</span>
-<span class="n">V</span> <span class="o">=</span> <span class="n">FunctionSpace</span><span class="p">(</span><span class="n">mesh</span><span class="p">,</span> <span class="s">&#39;Lagrange&#39;</span><span class="p">,</span> <span class="n">degree</span><span class="p">)</span>
-</pre></div>
-</div>
-<p>The <code class="docutils literal"><span class="pre">RectangleMesh</span></code> and <code class="docutils literal"><span class="pre">BoxMesh</span></code> objects are defined by the coordinates
-of the &#8220;minimum&#8221; and &#8220;maximum&#8221; corners.</p>
-<p>Setting Dirichlet conditions at the upper boundary can be done by</p>
-<div class="highlight-python"><div class="highlight"><pre><span class="n">T_R</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span> <span class="n">T_A</span> <span class="o">=</span> <span class="mf">1.0</span><span class="p">;</span> <span class="n">omega</span> <span class="o">=</span> <span class="mi">2</span><span class="o">*</span><span class="n">pi</span>
-
-<span class="n">T_0</span> <span class="o">=</span> <span class="n">Expression</span><span class="p">(</span><span class="s">&#39;T_R + T_A*sin(omega*t)&#39;</span><span class="p">,</span>
-                 <span class="n">T_R</span><span class="o">=</span><span class="n">T_R</span><span class="p">,</span> <span class="n">T_A</span><span class="o">=</span><span class="n">T_A</span><span class="p">,</span> <span class="n">omega</span><span class="o">=</span><span class="n">omega</span><span class="p">,</span> <span class="n">t</span><span class="o">=</span><span class="mf">0.0</span><span class="p">)</span>
-
-<span class="k">def</span> <span class="nf">surface</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">on_boundary</span><span class="p">):</span>
-    <span class="k">return</span> <span class="n">on_boundary</span> <span class="ow">and</span> <span class="nb">abs</span><span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="n">d</span><span class="o">-</span><span class="mi">1</span><span class="p">])</span> <span class="o">&lt;</span> <span class="mf">1E-14</span>
-
-<span class="n">bc</span> <span class="o">=</span> <span class="n">DirichletBC</span><span class="p">(</span><span class="n">V</span><span class="p">,</span> <span class="n">T_0</span><span class="p">,</span> <span class="n">surface</span><span class="p">)</span>
-</pre></div>
-</div>
-<p>The <span class="math">\(\kappa\)</span> function can be defined as a constant <span class="math">\(\kappa_1\)</span> inside
-the particular rectangular area with a special soil composition, as
-indicated in Figure <a class="reference internal" href="#tut-timedep-diffusion2-sin-fig1"><span class="std std-ref">Sketch of a (2D) problem involving heating and cooling of the ground due to an oscillating surface temperature</span></a>. Outside
-this area <span class="math">\(\kappa\)</span> is a constant <span class="math">\(\kappa_0\)</span>.
-The domain of the rectangular area is taken as</p>
+\[AU = b,\]</div>
+<p>where the entries in <span class="math">\(A\)</span> and <span class="math">\(b\)</span> are given by</p>
 <div class="math">
-\[[-W/4, W/4]\times [-W/4, W/4]\times [-D/2, -D/2 + D/4]\]</div>
-<p>in 3D, with <span class="math">\([-W/4, W/4]\times [-D/2, -D/2 + D/4]\)</span> in 2D and
-<span class="math">\([-D/2, -D/2 + D/4]\)</span> in 1D.
-Since we need some testing in the definition of the <span class="math">\(\kappa(\boldsymbol{x})\)</span>
-function, the most straightforward approach is to define a subclass
-of <code class="docutils literal"><span class="pre">Expression</span></code>, where we can use a full Python method instead of
-just a C++ string formula for specifying a function.
-The method that defines the function is called <code class="docutils literal"><span class="pre">eval</span></code>:</p>
-<div class="highlight-python"><div class="highlight"><pre><span class="k">class</span> <span class="nc">Kappa</span><span class="p">(</span><span class="n">Expression</span><span class="p">):</span>
-    <span class="k">def</span> <span class="nf">eval</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
-        <span class="sd">&quot;&quot;&quot;x: spatial point, value[0]: function value.&quot;&quot;&quot;</span>
-        <span class="n">d</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>  <span class="c"># no of space dimensions</span>
-        <span class="n">material</span> <span class="o">=</span> <span class="mi">0</span>  <span class="c"># 0: outside, 1: inside</span>
-        <span class="k">if</span> <span class="n">d</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
-            <span class="k">if</span> <span class="o">-</span><span class="n">D</span><span class="o">/</span><span class="mf">2.</span> <span class="o">&lt;</span> <span class="n">x</span><span class="p">[</span><span class="n">d</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">&lt;</span> <span class="o">-</span><span class="n">D</span><span class="o">/</span><span class="mf">2.</span> <span class="o">+</span> <span class="n">D</span><span class="o">/</span><span class="mf">4.</span><span class="p">:</span>
-                <span class="n">material</span> <span class="o">=</span> <span class="mi">1</span>
-        <span class="k">elif</span> <span class="n">d</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>
-            <span class="k">if</span> <span class="o">-</span><span class="n">D</span><span class="o">/</span><span class="mf">2.</span> <span class="o">&lt;</span> <span class="n">x</span><span class="p">[</span><span class="n">d</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">&lt;</span> <span class="o">-</span><span class="n">D</span><span class="o">/</span><span class="mf">2.</span> <span class="o">+</span> <span class="n">D</span><span class="o">/</span><span class="mf">4.</span> <span class="ow">and</span> \
-               <span class="o">-</span><span class="n">W</span><span class="o">/</span><span class="mf">4.</span> <span class="o">&lt;</span> <span class="n">x</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">&lt;</span> <span class="n">W</span><span class="o">/</span><span class="mf">4.</span><span class="p">:</span>
-                <span class="n">material</span> <span class="o">=</span> <span class="mi">1</span>
-        <span class="k">elif</span> <span class="n">d</span> <span class="o">==</span> <span class="mi">3</span><span class="p">:</span>
-            <span class="k">if</span> <span class="o">-</span><span class="n">D</span><span class="o">/</span><span class="mf">2.</span> <span class="o">&lt;</span> <span class="n">x</span><span class="p">[</span><span class="n">d</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">&lt;</span> <span class="o">-</span><span class="n">D</span><span class="o">/</span><span class="mf">2.</span> <span class="o">+</span> <span class="n">D</span><span class="o">/</span><span class="mf">4.</span> <span class="ow">and</span> \
-               <span class="o">-</span><span class="n">W</span><span class="o">/</span><span class="mf">4.</span> <span class="o">&lt;</span> <span class="n">x</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">&lt;</span> <span class="n">W</span><span class="o">/</span><span class="mf">4.</span> <span class="ow">and</span> <span class="o">-</span><span class="n">W</span><span class="o">/</span><span class="mf">4.</span> <span class="o">&lt;</span> <span class="n">x</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">&lt;</span> <span class="n">W</span><span class="o">/</span><span class="mf">4.</span><span class="p">:</span>
-                <span class="n">material</span> <span class="o">=</span> <span class="mi">1</span>
-        <span class="n">value</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="n">kappa_0</span> <span class="k">if</span> <span class="n">material</span> <span class="o">==</span> <span class="mi">0</span> <span class="k">else</span> <span class="n">kappa_1</span>
+\[\begin{split}A_{ij} &amp;= a(\phi_j, \hat{\phi}_i), \\
+b_i &amp;= L(\hat\phi_i){\thinspace .}\end{split}\]</div>
+<span class="target" id="index-26"></span><span class="target" id="index-27"></span><p id="index-28">The examples so far have specified the left- and right-hand side of
+the variational formulation and then asked FEniCS to assemble the
+linear system and solve it.  An alternative is to explicitly call
+functions for assembling the coefficient matrix <span class="math">\(A\)</span> and the right-side
+vector <span class="math">\(b\)</span>, and then solve the linear system <span class="math">\(AU=b\)</span> with respect to
+the <span class="math">\(U\)</span> vector.  Instead of <code class="docutils literal"><span class="pre">solve(a</span> <span class="pre">==</span> <span class="pre">L,</span> <span class="pre">u,</span> <span class="pre">b)</span></code> we now write</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">A</span> <span class="o">=</span> <span class="n">assemble</span><span class="p">(</span><span class="n">a</span><span class="p">)</span>
+<span class="n">b</span> <span class="o">=</span> <span class="n">assemble</span><span class="p">(</span><span class="n">L</span><span class="p">)</span>
+<span class="n">bc</span><span class="o">.</span><span class="n">apply</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="n">b</span><span class="p">)</span>
+<span class="n">u</span> <span class="o">=</span> <span class="n">Function</span><span class="p">(</span><span class="n">V</span><span class="p">)</span>
+<span class="n">U</span> <span class="o">=</span> <span class="n">u</span><span class="o">.</span><span class="n">vector</span><span class="p">()</span>
+<span class="n">solve</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="n">U</span><span class="p">,</span> <span class="n">b</span><span class="p">)</span>
 </pre></div>
 </div>
-<p>The <code class="docutils literal"><span class="pre">eval</span></code> method gives great flexibility in defining functions,
-but a downside is that C++ calls up <code class="docutils literal"><span class="pre">eval</span></code> in Python for
-each point <code class="docutils literal"><span class="pre">x</span></code>, which is a slow process, and the number of calls
-is proportional to the number of nodes in the mesh.
-Function expressions in terms of strings are compiled to efficient
-C++ functions, being called from C++, so we should try to express functions
-as string expressions if possible. (The <code class="docutils literal"><span class="pre">eval</span></code> method can also be
-defined through C++ code, but this is much
-more complicated and not covered here.)
-Using inline if-tests in C++, we can make string expressions for
-<span class="math">\(\kappa\)</span>:</p>
-<div class="highlight-python"><div class="highlight"><pre><span class="n">kappa_str</span> <span class="o">=</span> <span class="p">{}</span>
-<span class="n">kappa_str</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">=</span> <span class="s">&#39;x[0] &gt; -D/2 &amp;&amp; x[0] &lt; -D/2 + D/4 ? kappa_1 : kappa_0&#39;</span>
-<span class="n">kappa_str</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="o">=</span> <span class="s">&#39;x[0] &gt; -W/4 &amp;&amp; x[0] &lt; W/4 &#39;</span>\
-               <span class="s">&#39;&amp;&amp; x[1] &gt; -D/2 &amp;&amp; x[1] &lt; -D/2 + D/4 ? &#39;</span>\
-               <span class="s">&#39;kappa_1 : kappa_0&#39;</span>
-<span class="n">kappa_str</span><span class="p">[</span><span class="mi">3</span><span class="p">]</span> <span class="o">=</span> <span class="s">&#39;x[0] &gt; -W/4 &amp;&amp; x[0] &lt; W/4 &#39;</span>\
-               <span class="s">&#39;x[1] &gt; -W/4 &amp;&amp; x[1] &lt; W/4 &#39;</span>\
-               <span class="s">&#39;&amp;&amp; x[2] &gt; -D/2 &amp;&amp; x[2] &lt; -D/2 + D/4 ?&#39;</span>\
-               <span class="s">&#39;kappa_1 : kappa_0&#39;</span>
-
-<span class="n">kappa</span> <span class="o">=</span> <span class="n">Expression</span><span class="p">(</span><span class="n">kappa_str</span><span class="p">[</span><span class="n">d</span><span class="p">],</span>
-                   <span class="n">D</span><span class="o">=</span><span class="n">D</span><span class="p">,</span> <span class="n">W</span><span class="o">=</span><span class="n">W</span><span class="p">,</span> <span class="n">kappa_0</span><span class="o">=</span><span class="n">kappa_0</span><span class="p">,</span> <span class="n">kappa_1</span><span class="o">=</span><span class="n">kappa_1</span><span class="p">)</span>
-</pre></div>
-</div>
-<p>Let <code class="docutils literal"><span class="pre">T</span></code> denote the unknown spatial temperature function at the
-current time level, and let <code class="docutils literal"><span class="pre">T_1</span></code> be the corresponding function
-at one earlier time level.
-We are now ready to define the initial condition and the
-<code class="docutils literal"><span class="pre">a</span></code> and <code class="docutils literal"><span class="pre">L</span></code> forms of our problem:</p>
-<div class="highlight-python"><div class="highlight"><pre><span class="n">T_prev</span> <span class="o">=</span> <span class="n">interpolate</span><span class="p">(</span><span class="n">Constant</span><span class="p">(</span><span class="n">T_R</span><span class="p">),</span> <span class="n">V</span><span class="p">)</span>
-
-<span class="n">rho</span> <span class="o">=</span> <span class="mi">1</span>
-<span class="n">c</span> <span class="o">=</span> <span class="mi">1</span>
-<span class="n">period</span> <span class="o">=</span> <span class="mi">2</span><span class="o">*</span><span class="n">pi</span><span class="o">/</span><span class="n">omega</span>
-<span class="n">t_stop</span> <span class="o">=</span> <span class="mi">5</span><span class="o">*</span><span class="n">period</span>
-<span class="n">dt</span> <span class="o">=</span> <span class="n">period</span><span class="o">/</span><span class="mi">20</span>  <span class="c"># 20 time steps per period</span>
-<span class="n">theta</span> <span class="o">=</span> <span class="mi">1</span>
-
-<span class="n">T</span> <span class="o">=</span> <span class="n">TrialFunction</span><span class="p">(</span><span class="n">V</span><span class="p">)</span>
-<span class="n">v</span> <span class="o">=</span> <span class="n">TestFunction</span><span class="p">(</span><span class="n">V</span><span class="p">)</span>
-<span class="n">f</span> <span class="o">=</span> <span class="n">Constant</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
-<span class="n">a</span> <span class="o">=</span> <span class="n">rho</span><span class="o">*</span><span class="n">c</span><span class="o">*</span><span class="n">T</span><span class="o">*</span><span class="n">v</span><span class="o">*</span><span class="n">dx</span> <span class="o">+</span> <span class="n">theta</span><span class="o">*</span><span class="n">dt</span><span class="o">*</span><span class="n">kappa</span><span class="o">*</span>\
-    <span class="n">inner</span><span class="p">(</span><span class="n">nabla_grad</span><span class="p">(</span><span class="n">T</span><span class="p">),</span> <span class="n">nabla_grad</span><span class="p">(</span><span class="n">v</span><span class="p">))</span><span class="o">*</span><span class="n">dx</span>
-<span class="n">L</span> <span class="o">=</span> <span class="p">(</span><span class="n">rho</span><span class="o">*</span><span class="n">c</span><span class="o">*</span><span class="n">T_prev</span><span class="o">*</span><span class="n">v</span> <span class="o">+</span> <span class="n">dt</span><span class="o">*</span><span class="n">f</span><span class="o">*</span><span class="n">v</span> <span class="o">-</span>
-     <span class="p">(</span><span class="mi">1</span><span class="o">-</span><span class="n">theta</span><span class="p">)</span><span class="o">*</span><span class="n">dt</span><span class="o">*</span><span class="n">kappa</span><span class="o">*</span><span class="n">inner</span><span class="p">(</span><span class="n">nabla_grad</span><span class="p">(</span><span class="n">T_1</span><span class="p">),</span> <span class="n">nabla_grad</span><span class="p">(</span><span class="n">v</span><span class="p">)))</span><span class="o">*</span><span class="n">dx</span>
-
-<span class="n">A</span> <span class="o">=</span> <span class="n">assemble</span><span class="p">(</span><span class="n">a</span><span class="p">)</span>
-<span class="n">b</span> <span class="o">=</span> <span class="bp">None</span>  <span class="c"># variable used for memory savings in assemble calls</span>
-<span class="n">T</span> <span class="o">=</span> <span class="n">Function</span><span class="p">(</span><span class="n">V</span><span class="p">)</span>   <span class="c"># unknown at the current time level</span>
-</pre></div>
-</div>
-<p>We could, alternatively, break <code class="docutils literal"><span class="pre">a</span></code> and <code class="docutils literal"><span class="pre">L</span></code> up in subexpressions
-and assemble a mass matrix and stiffness matrix, as exemplified in
-the section <a class="reference internal" href="#tut-timedep-diffusion1-noassemble"><span class="std std-ref">Avoiding assembly</span></a>, to avoid
-assembly of <code class="docutils literal"><span class="pre">b</span></code> at every time level. This modification is
-straightforward and left as an exercise. The speed-up can be significant
-in 3D problems.</p>
-<p>The time loop is very similar to what we have displayed in
-the section <a class="reference internal" href="#tut-timedep-diffusion1-impl"><span class="std std-ref">Implementation</span></a>:</p>
-<div class="highlight-python"><div class="highlight"><pre><span class="n">T</span> <span class="o">=</span> <span class="n">Function</span><span class="p">(</span><span class="n">V</span><span class="p">)</span>   <span class="c"># unknown at the current time level</span>
-<span class="n">t</span> <span class="o">=</span> <span class="n">dt</span>
-<span class="k">while</span> <span class="n">t</span> <span class="o">&lt;=</span> <span class="n">t_stop</span><span class="p">:</span>
-    <span class="n">b</span> <span class="o">=</span> <span class="n">assemble</span><span class="p">(</span><span class="n">L</span><span class="p">,</span> <span class="n">tensor</span><span class="o">=</span><span class="n">b</span><span class="p">)</span>
-    <span class="n">T_0</span><span class="o">.</span><span class="n">t</span> <span class="o">=</span> <span class="n">t</span>
+<p>The variables <code class="docutils literal"><span class="pre">a</span></code> and <code class="docutils literal"><span class="pre">L</span></code> are as before. That is, <code class="docutils literal"><span class="pre">a</span></code> refers to the
+bilinear form involving a <code class="docutils literal"><span class="pre">TrialFunction</span></code> object (e.g., <code class="docutils literal"><span class="pre">u</span></code>)
+and a <code class="docutils literal"><span class="pre">TestFunction</span></code> object (<code class="docutils literal"><span class="pre">v</span></code>), and <code class="docutils literal"><span class="pre">L</span></code> involves a
+<code class="docutils literal"><span class="pre">TestFunction</span></code> object (<code class="docutils literal"><span class="pre">v</span></code>). From <code class="docutils literal"><span class="pre">a</span></code> and <code class="docutils literal"><span class="pre">L</span></code>,
+the <code class="docutils literal"><span class="pre">assemble</span></code> function can
+compute <span class="math">\(A\)</span> and <span class="math">\(b\)</span>.</p>
+<p>The matrix <span class="math">\(A\)</span> and vector <span class="math">\(b\)</span> are first assembled without incorporating
+essential (Dirichlet) boundary conditions. Thereafter, the
+call <code class="docutils literal"><span class="pre">bc.apply(A,</span> <span class="pre">b)</span></code> performs the necessary modifications of
+the linear system such that <code class="docutils literal"><span class="pre">u</span></code> is guaranteed to equal the prescribed
+boundary values.
+When we have multiple Dirichlet conditions stored in a list <code class="docutils literal"><span class="pre">bcs</span></code>,
+as explained in the section <a class="reference internal" href="._ftut007.html#tut-poisson-multiple-dirichlet"><span class="std std-ref">Multiple Dirichlet conditions</span></a>, we must apply
+each condition in <code class="docutils literal"><span class="pre">bcs</span></code> to the system:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="c"># bcs is a list of DirichletBC objects</span>
+<span class="k">for</span> <span class="n">bc</span> <span class="ow">in</span> <span class="n">bcs</span><span class="p">:</span>
     <span class="n">bc</span><span class="o">.</span><span class="n">apply</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="n">b</span><span class="p">)</span>
-    <span class="n">solve</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="n">T</span><span class="o">.</span><span class="n">vector</span><span class="p">(),</span> <span class="n">b</span><span class="p">)</span>
-    <span class="c"># visualization statements</span>
-    <span class="n">t</span> <span class="o">+=</span> <span class="n">dt</span>
-    <span class="n">T_prev</span><span class="o">.</span><span class="n">assign</span><span class="p">(</span><span class="n">T</span><span class="p">)</span>
 </pre></div>
 </div>
-<p>The complete code in <code class="docutils literal"><span class="pre">sin_daD.py</span></code> contains several
-statements related to visualization and animation of the solution, both as a
-finite element field (<code class="docutils literal"><span class="pre">plot</span></code> calls) and as a curve in the
-vertical direction. The code also plots the exact analytical solution,</p>
-<div class="math">
-\[T(x,t) = T_R + T_Ae^{ax}\sin (\omega t + ax),\quad a =\sqrt{\omega\varrho c\over 2\kappa},\]</div>
-<p>which is valid when <span class="math">\(\kappa = \kappa_0=\kappa_1\)</span>.</p>
-<p>Implementing this analytical solution as a Python function
-taking scalars and numpy arrays as arguments requires a word of caution.
-A straightforward function like</p>
-<div class="highlight-python"><div class="highlight"><pre><span class="k">def</span> <span class="nf">T_exact</span><span class="p">(</span><span class="n">x</span><span class="p">):</span>
-    <span class="n">a</span> <span class="o">=</span> <span class="n">sqrt</span><span class="p">(</span><span class="n">omega</span><span class="o">*</span><span class="n">rho</span><span class="o">*</span><span class="n">c</span><span class="o">/</span><span class="p">(</span><span class="mi">2</span><span class="o">*</span><span class="n">kappa_0</span><span class="p">))</span>
-    <span class="k">return</span> <span class="n">T_R</span> <span class="o">+</span> <span class="n">T_A</span><span class="o">*</span><span class="n">exp</span><span class="p">(</span><span class="n">a</span><span class="o">*</span><span class="n">x</span><span class="p">)</span><span class="o">*</span><span class="n">sin</span><span class="p">(</span><span class="n">omega</span><span class="o">*</span><span class="n">t</span> <span class="o">+</span> <span class="n">a</span><span class="o">*</span><span class="n">x</span><span class="p">)</span>
+<p id="index-29">There is an alternative function <code class="docutils literal"><span class="pre">assemble_system</span></code>, which can
+assemble the system and take boundary conditions into account in one call:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">A</span><span class="p">,</span> <span class="n">b</span> <span class="o">=</span> <span class="n">assemble_system</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">L</span><span class="p">,</span> <span class="n">bcs</span><span class="p">)</span>
 </pre></div>
 </div>
-<p>will not work and result in an error message from UFL. The reason is that
-the names <code class="docutils literal"><span class="pre">exp</span></code> and <code class="docutils literal"><span class="pre">sin</span></code> are those imported
-by the <code class="docutils literal"><span class="pre">from</span> <span class="pre">dolfin</span> <span class="pre">import</span> <span class="pre">*</span></code> statement, and these names
-come from UFL and are aimed at being used in variational forms.
-In the <code class="docutils literal"><span class="pre">T_exact</span></code> function where <code class="docutils literal"><span class="pre">x</span></code> may be a scalar or a
-<code class="docutils literal"><span class="pre">numpy</span></code> array, we therefore need to explicitly specify
-<code class="docutils literal"><span class="pre">numpy.exp</span></code> and <code class="docutils literal"><span class="pre">numpy.sin</span></code>:</p>
-<div class="highlight-python"><div class="highlight"><pre><span class="k">def</span> <span class="nf">T_exact</span><span class="p">(</span><span class="n">x</span><span class="p">):</span>
-    <span class="n">a</span> <span class="o">=</span> <span class="n">sqrt</span><span class="p">(</span><span class="n">omega</span><span class="o">*</span><span class="n">rho</span><span class="o">*</span><span class="n">c</span><span class="o">/</span><span class="p">(</span><span class="mi">2</span><span class="o">*</span><span class="n">kappa_0</span><span class="p">))</span>
-    <span class="k">return</span> <span class="n">T_R</span> <span class="o">+</span> <span class="n">T_A</span><span class="o">*</span><span class="n">numpy</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span><span class="n">a</span><span class="o">*</span><span class="n">x</span><span class="p">)</span><span class="o">*</span><span class="n">numpy</span><span class="o">.</span><span class="n">sin</span><span class="p">(</span><span class="n">omega</span><span class="o">*</span><span class="n">t</span> <span class="o">+</span> <span class="n">a</span><span class="o">*</span><span class="n">x</span><span class="p">)</span>
+<p>The <code class="docutils literal"><span class="pre">assemble_system</span></code> function incorporates the boundary conditions
+in the element matrices and vectors, prior to assembly.
+The conditions are also incorporated in a symmetric way to preserve
+eventual symmetry of the coefficient matrix.</p>
+<p>With <code class="docutils literal"><span class="pre">bc.apply(A,</span> <span class="pre">b)</span></code> the
+matrix <code class="docutils literal"><span class="pre">A</span></code> is modified in an nonsymmetric way.</p>
+<p>Note that the solution <code class="docutils literal"><span class="pre">u</span></code> is, as before, a <code class="docutils literal"><span class="pre">Function</span></code> object.
+The degrees of freedom, <span class="math">\(U=A^{-1}b\)</span>, are filled
+into <code class="docutils literal"><span class="pre">u</span></code>&#8216;s <code class="docutils literal"><span class="pre">Vector</span></code> object (<code class="docutils literal"><span class="pre">u.vector()</span></code>)
+by the <code class="docutils literal"><span class="pre">solve</span></code> function.</p>
+<p>The object <code class="docutils literal"><span class="pre">A</span></code> is of type <code class="docutils literal"><span class="pre">Matrix</span></code>, while <code class="docutils literal"><span class="pre">b</span></code> and
+<code class="docutils literal"><span class="pre">u.vector()</span></code> are of type <code class="docutils literal"><span class="pre">Vector</span></code>. We may convert the
+matrix and vector data to <code class="docutils literal"><span class="pre">numpy</span></code> arrays by calling the
+<code class="docutils literal"><span class="pre">array()</span></code> method as shown before. If you wonder how essential
+boundary conditions are incorporated in the linear system, you can
+print out <code class="docutils literal"><span class="pre">A</span></code> and <code class="docutils literal"><span class="pre">b</span></code> before and after the
+<code class="docutils literal"><span class="pre">bc.apply(A,</span> <span class="pre">b)</span></code> call:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">A</span> <span class="o">=</span> <span class="n">assemble</span><span class="p">(</span><span class="n">a</span><span class="p">)</span>
+<span class="n">b</span> <span class="o">=</span> <span class="n">assemble</span><span class="p">(</span><span class="n">L</span><span class="p">)</span>
+<span class="k">if</span> <span class="n">mesh</span><span class="o">.</span><span class="n">num_cells</span><span class="p">()</span> <span class="o">&lt;</span> <span class="mi">16</span><span class="p">:</span>  <span class="c"># print for small meshes only</span>
+    <span class="k">print</span><span class="p">(</span><span class="n">A</span><span class="o">.</span><span class="n">array</span><span class="p">())</span>
+    <span class="k">print</span><span class="p">(</span><span class="n">b</span><span class="o">.</span><span class="n">array</span><span class="p">())</span>
+<span class="n">bc</span><span class="o">.</span><span class="n">apply</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="n">b</span><span class="p">)</span>
+<span class="k">if</span> <span class="n">mesh</span><span class="o">.</span><span class="n">num_cells</span><span class="p">()</span> <span class="o">&lt;</span> <span class="mi">16</span><span class="p">:</span>
+    <span class="k">print</span><span class="p">(</span><span class="n">A</span><span class="o">.</span><span class="n">array</span><span class="p">())</span>
+    <span class="k">print</span><span class="p">(</span><span class="n">b</span><span class="o">.</span><span class="n">array</span><span class="p">())</span>
 </pre></div>
 </div>
-<p>The complete code is found in the file
-The reader
-is encouraged to play around with the code and test out various parameter
-sets:</p>
-<blockquote>
-<div><ol class="arabic simple">
-<li><span class="math">\(T_R=0\)</span>, <span class="math">\(T_A=1\)</span>, <span class="math">\(\kappa_0 = \kappa_1=0.2\)</span>, <span class="math">\(\varrho = c = 1\)</span>, <span class="math">\(\omega = 2\pi\)</span></li>
-<li><span class="math">\(T_R=0\)</span>, <span class="math">\(T_A=1\)</span>, <span class="math">\(\kappa_0=0.2\)</span>, <span class="math">\(\kappa_1=0.01\)</span>, <span class="math">\(\varrho = c = 1\)</span>, <span class="math">\(\omega = 2\pi\)</span></li>
-<li><span class="math">\(T_R=0\)</span>, <span class="math">\(T_A=1\)</span>, <span class="math">\(\kappa_0=0.2\)</span>, <span class="math">\(\kappa_1=0.001\)</span>, <span class="math">\(\varrho = c = 1\)</span>, <span class="math">\(\omega = 2\pi\)</span></li>
-<li><span class="math">\(T_R=10\)</span> C, <span class="math">\(T_A=10\)</span> C, <span class="math">\(\kappa_0= 2.3 \hbox{ K}^{-1}\hbox{Ns}^{-1}\)</span>,
-<span class="math">\(\kappa_1= 100 \hbox{ K}^{-1}\hbox{Ns}^{-1}\)</span>,
-<span class="math">\(\varrho = 1500\hbox{ kg/m}^3\)</span>,
-<span class="math">\(c = 1480\hbox{ Nm}\cdot\hbox{kg}^{-1}\hbox{K}^{-1}\)</span>,
-<span class="math">\(\omega = 2\pi/24\)</span> 1/h  <span class="math">\(= 7.27\cdot 10^{-5}\)</span> 1/s, <span class="math">\(D=1.5\)</span> m</li>
-<li>As above, but <span class="math">\(\kappa_0= 12.3 \hbox{ K}^{-1}\hbox{Ns}^{-1}\)</span> and
-<span class="math">\(\kappa_1= 10^4 \hbox{ K}^{-1}\hbox{Ns}^{-1}\)</span></li>
-</ol>
-</div></blockquote>
-<p>Data set number 4 is relevant for real temperature variations in
-the ground (not necessarily the large value of <span class="math">\(\kappa_1\)</span>),
-while data set number 5
-exaggerates the effect of a large heat conduction contrast so that
-it becomes clearly visible in an animation.</p>
+<p>With access to the elements in <code class="docutils literal"><span class="pre">A</span></code> through a <code class="docutils literal"><span class="pre">numpy</span></code> array we can easily
+perform computations on this matrix, such as computing the eigenvalues
+(using the <code class="docutils literal"><span class="pre">eig</span></code> function in <code class="docutils literal"><span class="pre">numpy.linalg</span></code>). We can alternatively dump
+<code class="docutils literal"><span class="pre">A.array()</span></code> and <code class="docutils literal"><span class="pre">b.array()</span></code> to file in MATLAB format and invoke
+MATLAB or Octave to analyze the linear system.
+Dumping the arrays to MATLAB format is done by</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="kn">import</span> <span class="nn">scipy.io</span>
+<span class="n">scipy</span><span class="o">.</span><span class="n">io</span><span class="o">.</span><span class="n">savemat</span><span class="p">(</span><span class="s">&#39;Ab.mat&#39;</span><span class="p">,</span> <span class="p">{</span><span class="s">&#39;A&#39;</span><span class="p">:</span> <span class="n">A</span><span class="o">.</span><span class="n">array</span><span class="p">(),</span> <span class="s">&#39;b&#39;</span><span class="p">:</span> <span class="n">b</span><span class="o">.</span><span class="n">array</span><span class="p">()})</span>
+</pre></div>
+</div>
+<p>Writing <code class="docutils literal"><span class="pre">load</span> <span class="pre">Ab.mat</span></code> in MATLAB or Octave will then make
+the array variables <code class="docutils literal"><span class="pre">A</span></code> and <code class="docutils literal"><span class="pre">b</span></code> available for computations.</p>
+<p id="index-30">Matrix processing in Python or MATLAB/Octave is only feasible for
+small PDE problems since the <code class="docutils literal"><span class="pre">numpy</span></code> arrays or matrices in MATLAB
+file format are dense matrices. DOLFIN also has an interface to the
+eigensolver package SLEPc, which is a preferred tool for computing the
+eigenvalues of large, sparse matrices of the type encountered in PDE
+problems (see <code class="docutils literal"><span class="pre">demo/la/eigenvalue</span></code> in the DOLFIN source code tree
+for a demo).</p>
+<p>By default, <code class="docutils literal"><span class="pre">solve(A,</span> <span class="pre">U,</span> <span class="pre">b)</span></code> applies sparse LU decomposition
+as solver. Specification of an iterative solver and preconditioner
+is done through two optional arguments:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">solve</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="n">U</span><span class="p">,</span> <span class="n">b</span><span class="p">,</span> <span class="s">&#39;cg&#39;</span><span class="p">,</span> <span class="s">&#39;ilu&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Appropriate names of solvers and preconditioners are found in
+the section <a class="reference internal" href="._ftut014.html#tut-app-solver-prec"><span class="std std-ref">Linear solvers and preconditioners</span></a>.</p>
+<p id="index-31">To control tolerances in the stopping criterion and the maximum
+number of iterations, one can explicitly form a <code class="docutils literal"><span class="pre">KrylovSolver</span></code> object
+and set items in its <code class="docutils literal"><span class="pre">parameters</span></code> attribute
+(see also the section <a class="reference internal" href="#tut-poisson1-solver-problem"><span class="std std-ref">Linear variational problem and solver objects</span></a>):</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">solver</span> <span class="o">=</span> <span class="n">KrylovSolver</span><span class="p">(</span><span class="s">&#39;cg&#39;</span><span class="p">,</span> <span class="s">&#39;ilu&#39;</span><span class="p">)</span>
+<span class="n">prm</span> <span class="o">=</span> <span class="n">solver</span><span class="o">.</span><span class="n">parameters</span>
+<span class="n">prm</span><span class="p">[</span><span class="s">&#39;absolute_tolerance&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="mf">1E-7</span>
+<span class="n">prm</span><span class="p">[</span><span class="s">&#39;relative_tolerance&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="mf">1E-4</span>
+<span class="n">prm</span><span class="p">[</span><span class="s">&#39;maximum_iterations&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="mi">1000</span>
+<span class="n">u</span> <span class="o">=</span> <span class="n">Function</span><span class="p">(</span><span class="n">V</span><span class="p">)</span>
+<span class="n">U</span> <span class="o">=</span> <span class="n">u</span><span class="o">.</span><span class="n">vector</span><span class="p">()</span>
+<span class="n">set_log_level</span><span class="p">(</span><span class="n">DEBUG</span><span class="p">)</span>
+<span class="n">solver</span><span class="o">.</span><span class="n">solve</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="n">U</span><span class="p">,</span> <span class="n">b</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>The function <code class="docutils literal"><span class="pre">solver_linalg</span></code> in the
+program file <code class="docutils literal"><span class="pre">p2D_vc.py</span></code> implements a solver function where
+the user can choose between different types of assembly: the variational
+(<code class="docutils literal"><span class="pre">solve(a</span> <span class="pre">==</span> <span class="pre">L,</span> <span class="pre">u,</span> <span class="pre">bc)</span></code>), assembling the matrix and right-hand side separately, and assembling the system such that the coefficient matrix preserves
+symmetry.
+The function <code class="docutils literal"><span class="pre">application_linalg</span></code> runs a test problem on sequence of
+meshes and solves the problem with symmetric and non-symmetric modification
+of the coefficient matrix. One can monitor the number of Krylov
+method iteration and realize that with a symmetric coefficient matrix,
+the Conjugate Gradient method requires slightly fewer iterations than
+GMRES in the non-symmetric case. Taking into account that the Conjugate
+Gradient method has less work per iteration, there is some efficiency to
+be gained by using <code class="docutils literal"><span class="pre">assemble_system</span></code>.</p>
+<p>[<strong>hpl 6</strong>: Running <code class="docutils literal"><span class="pre">application_linalg</span></code>, the results are strange: Why does the <code class="docutils literal"><span class="pre">solve(a==L,...)</span></code> method need many more iterations than <code class="docutils literal"><span class="pre">solve(A,</span> <span class="pre">U,</span> <span class="pre">b,</span> <span class="pre">...)</span></code> when we use the same Krylov parameter settings? Something wrong with the settings?]</p>
+<p id="index-32">The choice of start vector for the iterations in a linear solver is often
+important. With the <code class="docutils literal"><span class="pre">solver.solve(A,</span> <span class="pre">U,</span> <span class="pre">b)</span></code> call the default start vector
+is the zero vector. A start vector
+with random numbers in the interval <span class="math">\([-100,100]\)</span> can be computed as</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">n</span> <span class="o">=</span> <span class="n">u</span><span class="o">.</span><span class="n">vector</span><span class="p">()</span><span class="o">.</span><span class="n">array</span><span class="p">()</span><span class="o">.</span><span class="n">size</span>
+<span class="n">U</span> <span class="o">=</span> <span class="n">u</span><span class="o">.</span><span class="n">vector</span><span class="p">()</span>
+<span class="n">U</span><span class="p">[:]</span> <span class="o">=</span> <span class="n">numpy</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">uniform</span><span class="p">(</span><span class="o">-</span><span class="mi">100</span><span class="p">,</span> <span class="mi">100</span><span class="p">,</span> <span class="n">n</span><span class="p">)</span>
+<span class="n">solver</span><span class="o">.</span><span class="n">parameters</span><span class="p">[</span><span class="s">&#39;nonzero_initial_guess&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">True</span>
+<span class="n">solver</span><span class="o">.</span><span class="n">solve</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="n">U</span><span class="p">,</span> <span class="n">b</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Note that we must turn off the default behavior of setting the start
+vector (&#8220;initial guess&#8221;) to zero.</p>
+<p>Creating the linear system explicitly in a program can have some
+advantages in more advanced problem settings. For example, <span class="math">\(A\)</span> may
+be constant throughout a time-dependent simulation, so we can avoid
+recalculating <span class="math">\(A\)</span> at every time level and save a significant amount
+of simulation time.  The sections <a class="reference internal" href="._ftut008.html#tut-timedep-diffusion1-impl"><span class="std std-ref">Implementation</span></a>
+and <a class="reference internal" href="._ftut008.html#tut-timedep-diffusion1-noassemble"><span class="std std-ref">Avoiding assembly</span></a> deal with this topic
+in detail.</p>
 </div>
 </div>
 
