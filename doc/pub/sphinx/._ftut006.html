@@ -282,58 +282,7 @@ use the analytical solution listed above for the case <span class="math">\(\beta
 <p>The final program is found in the file <code class="docutils literal"><span class="pre">membrane.py</span></code>, located
 in the <code class="docutils literal"><span class="pre">poisson</span></code> directory. The key function to simulate
 membrane deflection is named <code class="docutils literal"><span class="pre">application</span></code>.</p>
-<div class="highlight-python"><div class="highlight"><pre><span class="kn">from</span> <span class="nn">dolfin</span> <span class="kn">import</span> <span class="o">*</span>
-<span class="kn">from</span> <span class="nn">mshr</span> <span class="kn">import</span> <span class="o">*</span>
-<span class="kn">import</span> <span class="nn">numpy</span> <span class="kn">as</span> <span class="nn">np</span>
-
-<span class="k">def</span> <span class="nf">solver</span><span class="p">(</span>
-    <span class="n">f</span><span class="p">,</span> <span class="n">u0</span><span class="p">,</span> <span class="n">mesh</span><span class="p">,</span> <span class="n">degree</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
-    <span class="n">linear_solver</span><span class="o">=</span><span class="s">&#39;Krylov&#39;</span><span class="p">,</span> <span class="c"># Alt: &#39;direct&#39;</span>
-    <span class="n">abs_tol</span><span class="o">=</span><span class="mf">1E-5</span><span class="p">,</span>           <span class="c"># Absolute tolerance in Krylov solver</span>
-    <span class="n">rel_tol</span><span class="o">=</span><span class="mf">1E-3</span><span class="p">,</span>           <span class="c"># Relative tolerance in Krylov solver</span>
-    <span class="n">max_iter</span><span class="o">=</span><span class="mi">1000</span><span class="p">,</span>          <span class="c"># Max no of iterations in Krylov solver</span>
-    <span class="n">log_level</span><span class="o">=</span><span class="n">PROGRESS</span><span class="p">,</span>     <span class="c"># Amount of solver output</span>
-    <span class="n">dump_parameters</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span>  <span class="c"># Write out parameter database?</span>
-    <span class="p">):</span>
-    <span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">    Solve -Laplace(u)=f on given mesh with Lagrange elements</span>
-<span class="sd">    of specified degree and u=u0 (Expresssion) on the boundary.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
-    <span class="n">V</span> <span class="o">=</span> <span class="n">FunctionSpace</span><span class="p">(</span><span class="n">mesh</span><span class="p">,</span> <span class="s">&#39;Lagrange&#39;</span><span class="p">,</span> <span class="n">degree</span><span class="p">)</span>
-
-    <span class="k">def</span> <span class="nf">u0_boundary</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">on_boundary</span><span class="p">):</span>
-        <span class="k">return</span> <span class="n">on_boundary</span>
-
-    <span class="n">bc</span> <span class="o">=</span> <span class="n">DirichletBC</span><span class="p">(</span><span class="n">V</span><span class="p">,</span> <span class="n">u0</span><span class="p">,</span> <span class="n">u0_boundary</span><span class="p">)</span>
-
-    <span class="c"># Define variational problem</span>
-    <span class="n">u</span> <span class="o">=</span> <span class="n">TrialFunction</span><span class="p">(</span><span class="n">V</span><span class="p">)</span>
-    <span class="n">v</span> <span class="o">=</span> <span class="n">TestFunction</span><span class="p">(</span><span class="n">V</span><span class="p">)</span>
-    <span class="n">a</span> <span class="o">=</span> <span class="n">inner</span><span class="p">(</span><span class="n">nabla_grad</span><span class="p">(</span><span class="n">u</span><span class="p">),</span> <span class="n">nabla_grad</span><span class="p">(</span><span class="n">v</span><span class="p">))</span><span class="o">*</span><span class="n">dx</span>
-    <span class="n">L</span> <span class="o">=</span> <span class="n">f</span><span class="o">*</span><span class="n">v</span><span class="o">*</span><span class="n">dx</span>
-
-    <span class="c"># Compute solution</span>
-    <span class="n">u</span> <span class="o">=</span> <span class="n">Function</span><span class="p">(</span><span class="n">V</span><span class="p">)</span>
-
-    <span class="k">if</span> <span class="n">linear_solver</span> <span class="o">==</span> <span class="s">&#39;Krylov&#39;</span><span class="p">:</span>
-        <span class="n">prm</span> <span class="o">=</span> <span class="n">parameters</span><span class="p">[</span><span class="s">&#39;krylov_solver&#39;</span><span class="p">]</span> <span class="c"># short form</span>
-        <span class="n">prm</span><span class="p">[</span><span class="s">&#39;absolute_tolerance&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">abs_tol</span>
-        <span class="n">prm</span><span class="p">[</span><span class="s">&#39;relative_tolerance&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">rel_tol</span>
-        <span class="n">prm</span><span class="p">[</span><span class="s">&#39;maximum_iterations&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">max_iter</span>
-        <span class="k">print</span><span class="p">(</span><span class="n">parameters</span><span class="p">[</span><span class="s">&#39;linear_algebra_backend&#39;</span><span class="p">])</span>
-        <span class="n">set_log_level</span><span class="p">(</span><span class="n">log_level</span><span class="p">)</span>
-        <span class="k">if</span> <span class="n">dump_parameters</span><span class="p">:</span>
-            <span class="n">info</span><span class="p">(</span><span class="n">parameters</span><span class="p">,</span> <span class="bp">True</span><span class="p">)</span>
-        <span class="n">solver_parameters</span> <span class="o">=</span> <span class="p">{</span><span class="s">&#39;linear_solver&#39;</span><span class="p">:</span> <span class="s">&#39;gmres&#39;</span><span class="p">,</span>
-                             <span class="s">&#39;preconditioner&#39;</span><span class="p">:</span> <span class="s">&#39;ilu&#39;</span><span class="p">}</span>
-    <span class="k">else</span><span class="p">:</span>
-        <span class="n">solver_parameters</span> <span class="o">=</span> <span class="p">{</span><span class="s">&#39;linear_solver&#39;</span><span class="p">:</span> <span class="s">&#39;lu&#39;</span><span class="p">}</span>
-
-    <span class="n">solve</span><span class="p">(</span><span class="n">a</span> <span class="o">==</span> <span class="n">L</span><span class="p">,</span> <span class="n">u</span><span class="p">,</span> <span class="n">bc</span><span class="p">,</span> <span class="n">solver_parameters</span><span class="o">=</span><span class="n">solver_parameters</span><span class="p">)</span>
-    <span class="k">return</span> <span class="n">u</span>
-
-
-<span class="k">def</span> <span class="nf">application</span><span class="p">(</span><span class="n">beta</span><span class="p">,</span> <span class="n">R0</span><span class="p">,</span> <span class="n">num_elements_radial_dir</span><span class="p">):</span>
+<div class="highlight-python"><div class="highlight"><pre><span class="k">def</span> <span class="nf">application</span><span class="p">(</span><span class="n">beta</span><span class="p">,</span> <span class="n">R0</span><span class="p">,</span> <span class="n">num_elements_radial_dir</span><span class="p">):</span>
     <span class="c"># Scaled pressure function</span>
     <span class="n">p</span> <span class="o">=</span> <span class="n">Expression</span><span class="p">(</span>
         <span class="s">&#39;4*exp(-pow(beta,2)*(pow(x[0], 2) + pow(x[1]-R0, 2)))&#39;</span><span class="p">,</span>
