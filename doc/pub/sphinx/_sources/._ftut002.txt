@@ -1,314 +1,103 @@
 .. !split
 
-Mathematical problem formulation
-================================
+To-do list
+==========
 
-.. _tut:poisson1:bvp:
+Remember: cannot exceed 150 pages (as reported at the end of ``ftut.log``).
+Solutions to exercises will not appear in the printed book. If we run
+out of pages, we can also remove the exercises by putting if-else
+constructs around them. There will be one short printed tutorial and
+then extended e-versions with exercises (and optionally solution) on our
+github web site.
 
-The Poisson equation
---------------------
+Regarding layout, we must use ``svmono.cls`` for the printed book, but
+are allowed to use gray background in code boxes and lmodern instead
+of Courier for monospace font. Springer's official ebook has exactly
+the same layout. For all other versions on our github
+web site, we can choose whatever layout we want.
 
-.. index:: Poisson's equation
+ * Reorganize sections into chapters. (HPL)
 
-Let us start with a "Hello, World!" program in the world of PDEs - it
-must be a program that solves the Laplace or Poisson equation.
-Our first example regards the following Poisson problem,
+ * Rethink how to organize example programs in directories.
+   Find a naming convention. (AL)
+   HPL suggestion: Drop the ``stationary`` and ``transient`` directories,
+   have at most separate directories for each PDE.
 
-.. _Eq:tut:poisson1:
+ * Programs are now flat demos. Educate the reader with
+   better software engineering habits: functions, classes, unit tests.
+   Avoid copy-and-edit flat programs implied by today's collection. (HPL)
 
-.. math::
+ * Compute maximum error already in the first example so we can create
+   a unit test as early as possible. (Done, HPL)
 
-    \tag{1}
-    - \nabla^2 u(\boldsymbol{x}) = f(\boldsymbol{x}),\quad \boldsymbol{x}\mbox{ in } \Omega,
-        
-        
+ * Find successful exercises from various tutorials (AL) and add as
+   exercises in the book (HPL/AL). Exercises are key for learning
+   software so having them (in an extended version?) sends an important
+   signal about their relevance.
 
-.. _Eq:tut:poisson1:bc:
+ * Write about installation in a way that does not get outdated.
+   More as a guide to a newcomer: What to choose? (AL)
 
-.. math::
+ * Multi-boundary examples do not work with FEniCS 1.6: ``dnr*.py``. (AL)
 
-    \tag{2}
-    u(\boldsymbol{x}) = u_0(\boldsymbol{x}),\quad \boldsymbol{x}\mbox{ on } \partial \Omega{\thinspace .} 
-        
+ * ``membrane2.py`` referred to, but it is still in sandbox. (HPL)
 
-Here, :math:`u(\boldsymbol{x})` is the unknown function, :math:`f(\boldsymbol{x})` is a
-prescribed function, :math:`\nabla^2` is the Laplace operator (also
-often written as :math:`\Delta`), :math:`\Omega` is the spatial domain, and
-:math:`\partial\Omega` is the boundary of :math:`\Omega`. A stationary PDE like
-this, together with a complete set of boundary conditions, constitute
-a *boundary-value problem*, which must be precisely stated before
-it makes sense to start solving it with FEniCS.
+ * Meshr domains. Set up some common continuum mechanics examples first. (HPL/AL)
 
-In two space dimensions with coordinates :math:`x` and :math:`y`, we can write out
-the Poisson equation as
+ * Decide on an elasticity problem.
 
-.. _Eq:_auto1:
+ * Simple Navier-Stokes solver. Do backward facing step and flow around a
+   cylinder.
 
-.. math::
+ * According to the ``plot`` doc string, it should be easy to
+   plot the element a la ``plot(u.function_space().ufl_element())`` but I
+   did not get this to work. Not crucial, but plotting the element is a
+   nice feature :-)
 
-    \tag{3}
-    - {\partial^2 u\over\partial x^2} -
-        {\partial^2 u\over\partial y^2} = f(x,y){\thinspace .}
-        
-        
+ * Show how the definition of boundaries can be done via strings
+   compiled to C++ (as soon as we have an example with non-trivial
+   boundary segments), cf. Navier-Stokes FEniCS demo.
 
-The unknown :math:`u` is now a function of two variables, :math:`u(x,y)`, defined
-over a two-dimensional domain :math:`\Omega`.
+ * Can we change the value of ``DOLFIN_EPS``? ``imort dolfin; dolfin.DOLFIN_EPS=...`` will work, but then all modules in the simulator must do ``import dolfin``. Note that its value is very strict, e.g., ``10.1+10.2`` has rounding :math:`3.5 10^{-15}`, so ``DOLFIN_EPS`` is strictly for scaled problems only where all variables are in :math:`[0,1]`.
 
-The Poisson equation arises in numerous physical contexts, including
-heat conduction, electrostatics, diffusion of substances, twisting of
-elastic rods, inviscid fluid flow, and water waves. Moreover, the
-equation appears in numerical splitting strategies of more complicated
-systems of PDEs, in particular the Navier-Stokes equations.
+  * Comment regarding FEniCS demos: The documented demos mention a lot
+    of packages: DOLFIN, FFC, Fiat, ... Make sure the reader of the tutorial
+    does not get lost in the jungle of packages and make sure this is
+    explained somewhere such that the tutorial is a good background for
+    understanding every demo in every detail.
 
-Solving a physical problem with FEniCS consists of the following steps:
+HPL questions
+-------------
 
- 1. Identify the PDE and its boundary conditions.
+Iterative linear solvers info
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
- 2. Reformulate the PDE problem as a variational problem.
+We can get this printed out on the screen, but is there any method to
+extract this text inside the program, such that we can see how many
+Krylov iterations we do etc.? Any way for Python to capture the standard
+output stream in C++?
 
- 3. Make a Python program where the formulas in the variational
-    problem are coded, along with definitions of input data such as
-    :math:`f`, :math:`u_0`, and a mesh for the spatial domain :math:`\Omega`.
+Easy to write a script that post-processes
+the output, but we have to wait until the simulator has terminated, or
+we can pipe to a script ``process.py`` that treats the output in some
+desired way (could append some into to a file and that is reopened
+by the simulator):
 
- 4. Add statements in the program for solving the variational
-    problem, computing derived quantities such as :math:`\nabla u`, and
-    visualizing the results.
+.. code-block:: text
 
-We shall now go through steps 2-4 in detail.  The key feature of
-FEniCS is that steps 3 and 4 result in fairly short code, while most
-other software frameworks for PDEs require much more code and more
-technically difficult programming.
+        Terminal> python mysolver.py | process.py
 
-.. _tut:poisson1:varform:
+where the simplest ``process.py`` is
 
-Variational formulation          (1)
-------------------------------------
+.. code-block:: python
 
-.. index:: variational formulation
-
-FEniCS makes it easy to solve PDEs if finite elements are used for
-discretization in space and the problem is expressed as a *variational
-problem*. Readers who are not familiar with variational problems will
-get a brief introduction to the topic in this tutorial, but getting
-and reading a proper book on the finite element method in addition is
-encouraged.  The section :ref:`tut:appendix:books` contains a list of some
-suitable books.
-
-.. index:: test function
-
-.. index:: trial function
-
-The core of the recipe for turning a PDE into a variational problem is
-to multiply the PDE by a function :math:`v`, integrate the resulting
-equation over :math:`\Omega`, and perform integration by parts of terms with
-second-order derivatives. The function :math:`v` which multiplies the PDE is
-in the mathematical finite element literature called a *test
-function*. The unknown function :math:`u` to be approximated is referred to
-as a *trial function*. The terms test and trial function are used in
-FEniCS programs too.  Suitable function spaces must be specified for
-the test and trial functions.  For standard PDEs arising in physics
-and mechanics such spaces are well known.
-
-In the present case, we first multiply the Poisson equation
-by the test function :math:`v` and integrate,
-
-.. _Eq:tut:poisson1:multbyv:
-
-.. math::
-
-    \tag{4}
-    -\int_\Omega (\nabla^2 u)v {\, \mathrm{d}x} = \int_\Omega fv {\, \mathrm{d}x}{\thinspace .} 
-
-Then we apply integration by parts to the integrand with
-second-order derivatives,
-
-.. _Eq:tut:poisson1:eqbyparts:
-
-.. math::
-
-    \tag{5}
-    -\int_\Omega (\nabla^2 u)v {\, \mathrm{d}x}
-        = \int_\Omega\nabla u\cdot\nabla v {\, \mathrm{d}x} - \int_{\partial\Omega}{\partial u\over
-        \partial n}v {\, \mathrm{d}s} ,
-        
-
-where :math:`\frac{\partial u}{\partial n}` is the derivative of :math:`u` in the
-outward normal direction at the boundary.  The test function :math:`v` is
-required to vanish on the parts of the boundary where :math:`u` is known,
-which in the present problem implies that :math:`v=0` on the whole boundary
-:math:`\partial\Omega`.  The second term on the right-hand side of
-:ref:`(5) <Eq:tut:poisson1:eqbyparts>` therefore vanishes.  From
-:ref:`(4) <Eq:tut:poisson1:multbyv>` and :ref:`(5) <Eq:tut:poisson1:eqbyparts>` it
-follows that
-
-.. _Eq:tut:poisson1:weak1:
-
-.. math::
-
-    \tag{6}
-    \int_\Omega\nabla u\cdot\nabla v {\, \mathrm{d}x} = \int_\Omega fv {\, \mathrm{d}x}{\thinspace .}
-        
-        
-
-This equation is supposed to hold for all :math:`v` in some function space
-:math:`\hat V`. The trial function :math:`u` lies in some (possibly different)
-function space :math:`V`.  We refer to :ref:`(6) <Eq:tut:poisson1:weak1>` as the
-*weak form* or *variational form* of the original boundary-value
-problem :ref:`(1) <Eq:tut:poisson1>`-:ref:`(2) <Eq:tut:poisson1:bc>`.
-
-The proper statement of
-our variational problem now goes as follows:
-Find :math:`u \in V` such that
-
-.. _Eq:tut:poisson1:var:
-
-.. math::
-
-    \tag{7}
-    \int_{\Omega} \nabla u \cdot \nabla v {\, \mathrm{d}x} =
-          \int_{\Omega} fv {\, \mathrm{d}x}
-          \quad \forall v \in \hat{V}.
-        
-
-The test and trial spaces :math:`\hat{V}` and :math:`V` are in the present
-problem defined as
-
-.. math::
-        
-            \hat{V} &= \{v \in H^1(\Omega) : v = 0 \mbox{ on } \partial\Omega\}, \\ 
-             V      &= \{v \in H^1(\Omega) : v = u_0 \mbox{ on } \partial\Omega\}{\thinspace .}
-        
-
-In short,
-:math:`H^1(\Omega)` is the mathematically well-known Sobolev space containing
-functions :math:`v` such that :math:`v^2` and :math:`||\nabla v||^2` have finite integrals over
-:math:`\Omega`. The solution of the underlying
-PDE
-must lie in a function space where also the derivatives are continuous,
-but the Sobolev space :math:`H^1(\Omega)` allows functions with discontinuous
-derivatives.
-This weaker continuity requirement of :math:`u` in the variational
-statement :ref:`(7) <Eq:tut:poisson1:var>`,
-caused by the integration by parts, has
-great practical consequences when it comes to constructing
-finite elements.
-
-To solve the Poisson equation numerically, we need to transform the
-continuous variational problem
-:ref:`(7) <Eq:tut:poisson1:var>`
-to a discrete variational
-problem. This is done by introducing *finite-dimensional* test and
-trial spaces, often denoted as
-:math:`\hat{V}_h\subset\hat{V}` and :math:`V_h\subset{V}`. The
-discrete variational problem reads:
-Find :math:`u_h \in V_h \subset V` such that
-
-.. _Eq:tut:poisson1:vard:
-
-.. math::
-
-    \tag{8}
-    \int_{\Omega} \nabla u_h \cdot \nabla v {\, \mathrm{d}x} =
-          \int_{\Omega} fv {\, \mathrm{d}x}
-          \quad \forall v \in \hat{V}_h \subset \hat{V}{\thinspace .}
-        
-
-The choice of :math:`\hat{V}_h` and :math:`V_h` follows directly from the
-kind of finite elements we want to apply in our problem. For example,
-choosing the well-known linear triangular element with three nodes
-implies that
-:math:`\hat V_h` and :math:`V_h` are the spaces of all piecewise linear functions
-over a mesh of triangles,
-where the functions in :math:`\hat V_h`
-are zero on the boundary
-and those in :math:`V_h` equal :math:`u_0` on the boundary.
-
-
-.. admonition:: What we mean by the notation :math:`u` and :math:`V`
-
-   The mathematics literature on variational problems writes :math:`u_h` for
-   the solution of the discrete problem and :math:`u` for the solution of the
-   continuous problem. To obtain (almost) a one-to-one relationship
-   between the mathematical formulation of a problem and the
-   corresponding FEniCS program, we shall use :math:`u` for the solution of
-   the discrete problem and :math:`{u_{\small\mbox{e}}}` for the exact solution of the
-   continuous problem, *if* we need to explicitly distinguish
-   between the two.
-   
-   In most cases, we will introduce the PDE problem with
-   :math:`u` as unknown, derive a variational equation :math:`a(u,v)=L(v)` with :math:`u\in
-   V` and :math:`v\in \hat V`, and then simply discretize the problem by saying
-   that we choose finite-dimensional spaces for :math:`V` and :math:`\hat V`, without
-   adding any subscript to :math:`V` or :math:`\hat V`. This
-   restriction of :math:`V` simply implies that :math:`u` becomes a discrete finite element
-   function.  In practice, this means that we turn our PDE problem into a
-   continuous variational problem, create a mesh and specify an element
-   type, and then let :math:`V` correspond to this mesh and element choice.
-   Depending upon whether :math:`V` is infinite- or finite-dimensional, :math:`u`
-   will be the exact or approximate solution.
-
-
-
-
-It turns out to be convenient to
-introduce the following unified notation for linear weak forms:
-
-.. _Eq:_auto2:
-
-.. math::
-
-    \tag{9}
-    a(u, v) = L(v){\thinspace .}
-        
-        
-
-In the present problem we have that
-
-.. _Eq:tut:poisson1:vard:a:
-
-.. math::
-
-    \tag{10}
-    a(u, v) = \int_{\Omega} \nabla u \cdot \nabla v {\, \mathrm{d}x},
-        
-        
-
-.. _Eq:tut:poisson1:vard:L:
-
-.. math::
-
-    \tag{11}
-    L(v) = \int_{\Omega} fv {\, \mathrm{d}x}{\thinspace .}  
-        
-
-From the mathematics literature,
-:math:`a(u,v)` is known as a *bilinear form* and :math:`L(v)` as a
-*linear form*.
-We shall in every linear problem we solve identify the terms with the
-unknown :math:`u` and collect them in :math:`a(u,v)`, and similarly collect
-all terms with only known functions in :math:`L(v)`. The formulas for :math:`a` and
-:math:`L` are then coded directly in the program.
-
-To summarize, before making a FEniCS program for solving a PDE,
-we must first perform two steps:
-
-  * Turn the PDE problem into a discrete
-    variational problem: find :math:`u\in V`
-    such that :math:`a(u,v) = L(v)\quad\forall v\in \hat{V}`.
-
-  * Specify the choice of spaces (:math:`V` and :math:`\hat V`), which means
-    specifying the mesh and type of finite elements.
-
-.. Suggested: var coeff as early as possible!
-
-.. A basic Poisson solver
-
-.. Useful extensions/Useful stuff/: var coeff here
-
-.. Visualization: membrane, vtk, paraview, structured mesh
-
-.. Postprocessing computations: var coeff, functionals, conv rates
-
-.. Multiple domains and boundaries
+        import sys, time
+        t0 = time.clock()
+        while True:
+            line = sys.stdin.readline()
+            if not line:
+                break
+            t1 = time.clock()
+            print 'after %g seconds: %s' % (t1-t0, line.rstrip())
+        print 'END'
 
