@@ -78,6 +78,11 @@ def application(beta, R0, num_elements_radial_dir):
     p.rename('p', 'pressure')
     plot(p, title='Scaled ' + p.label())
 
+    # Dump p and w to file in VTK format
+    vizfile = File('membrane.pvd')
+    vizfile << w
+    vizfile << p
+
 def test_membrane():
     """Verification for constant pressure."""
     p = Constant(4)
@@ -136,6 +141,11 @@ def application2(
     viz_p.plot(p)
     viz_p.write_png('pressure')
     viz_p.write_pdf('pressure')
+
+    # Dump w and p to file in VTK format
+    vizfile = File('membrane.pvd')
+    vizfile << w
+    vizfile << p
 
 if __name__ == '__main__':
     application2(8, 0.6, 20)
