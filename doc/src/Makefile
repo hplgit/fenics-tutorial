@@ -1,2 +1,2 @@
 all:
-	bash make.sh
+	bash make_simple.sh
