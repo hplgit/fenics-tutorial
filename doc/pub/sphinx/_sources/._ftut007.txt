@@ -1,515 +1,495 @@
 .. !split
 
-Miscellaneous topics
-====================
+Postprocessing computations
+===========================
 
-Glossary
---------
+[**hpl 3**: Need a little intro.]
 
-.. index:: self
+.. _tut:poisson1:functionals:
 
-.. index:: FEniCS
+Computing functionals
+---------------------
 
-.. index:: DOLFIN
+.. index:: functionals
 
-.. index:: Viper
+After the solution :math:`u` of a PDE is computed, we occasionally want to compute
+functionals of :math:`u`, for example,
 
-.. index:: UFL
+.. _Eq:tut:poisson1:functionals:energy:
 
-.. index:: class
+.. math::
 
-.. index:: instance
+    \tag{28}
+    {1\over2}||\nabla u||^2 \equiv {1\over2}\int_\Omega \nabla u\cdot \nabla u {\, \mathrm{d}x},
+        
+        
 
-.. index:: method (class)
+which often reflects some energy quantity.
+Another frequently occurring functional is the error
 
-.. index:: attribute (class)
+.. _Eq:tut:poisson1:functionals:error:
 
-Below we explain some key terms used in this tutorial.
+.. math::
 
-  FEniCS: name of a software suite composed of many individual software
-          components (see ``fenicsproject.org``). Some components are DOLFIN and
-	  Viper, explicitly referred to in this tutorial. Others are
-          FFC and FIAT, heavily used by the programs appearing in this tutorial,
-          but never explicitly used from the programs.
+    \tag{29}
+    ||{u_{\small\mbox{e}}}-u|| = \left(\int_\Omega ({u_{\small\mbox{e}}}-u)^2 {\, \mathrm{d}x}\right)^{1/2},
+        
+        
 
-  DOLFIN: a FEniCS component, more precisely a C++ library, with
-          a Python interface, for performing important actions in finite element
-          programs. DOLFIN makes use of many other FEniCS components and
-          many external software packages.
+where :math:`{u_{\small\mbox{e}}}` is the exact solution. The error
+is of particular interest when studying convergence properties.
+Sometimes the interest concerns the flux out of a part :math:`\Gamma` of
+the boundary :math:`\partial\Omega`,
 
-  Viper:  a FEniCS component for quick visualization of finite element
-          meshes and solutions.
+.. _Eq:tut:poisson1:functionals:flux:
 
-  UFL:    a FEniCS component implementing the *unified form language*
-          for specifying finite element forms in FEniCS programs.
-          The definition of the forms, typically called ``a`` and ``L`` in
-          this tutorial, must have legal UFL syntax. The same applies to
-          the definition of functionals (see the section :ref:`tut:poisson1:functionals`).
+.. math::
 
-  Class (Python): a programming construction for creating objects
-          containing a set of variables and functions. Most
-          types of FEniCS objects are defined through the class concept.
+    \tag{30}
+    F = -\int_\Gamma p\nabla u\cdot\boldsymbol{n} {\, \mathrm{d}s},
+        
+        
 
-  Instance (Python): an object of a particular type, where the type is
-          implemented as a class. For instance,
-          ``mesh = UnitIntervalMesh(10)`` creates
-          an instance of class ``UnitIntervalMesh``, which is reached by the
-          name ``mesh``. (Class ``UnitIntervalMesh`` is actually just
-          an interface to a corresponding C++ class in the DOLFIN C++ library.)
+where :math:`\boldsymbol{n}` is an outward unit normal at :math:`\Gamma` and :math:`p` is a
+coefficient (see the problem in the section :ref:`tut:possion:2D:varcoeff`
+for a specific example).
+All these functionals are easy to compute with FEniCS, and this section
+describes how it can be done.
 
-  Class method (Python): a function in a class, reached by dot
-          notation: ``instance_name.method_name``
+.. index:: energy functional
 
-  argument ``self`` (Python): required first parameter in class methods,
-         representing a particular object of the class.
-         Used in method definitions, but never in calls to a method.
-         For example, if ``method(self, x)`` is the definition of
-         ``method`` in a class ``Y``, ``method`` is called as
-         ``y.method(x)``, where ``y`` is an instance of class ``Y``.
-         In a call like ``y.method(x)``, ``method`` is invoked with
-         ``self=y``.
+Energy functional
+~~~~~~~~~~~~~~~~~
 
-  Class attribute (Python): a variable in a class, reached by
-         dot notation: ``instance_name.attribute_name``
-
-Overview of objects and functions
----------------------------------
-
-Most classes in FEniCS have an explanation of the purpose and usage
-that can be seen by using the general documentation command
-``pydoc`` for Python objects. You can type
-
-.. index:: pydoc
-
-.. code-block:: text
-
-        pydoc dolfin.X
-
-to look up documentation of a Python class ``X`` from the DOLFIN
-library (``X`` can be ``UnitSquareMesh``, ``Function``,
-``Viper``, etc.). Below is an overview of the most important classes
-and functions
-in FEniCS programs, in the order they typically appear within programs.
-
-``UnitSquareMesh(nx, ny)``: generate mesh over the unit square
-:math:`[0,1]\times [0,1]` using ``nx`` divisions in :math:`x` direction and
-``ny`` divisions in :math:`y` direction. Each of the ``nx*ny`` squares
-are divided into two cells of triangular shape.
-
-``UnitIntervalMesh``, ``UnitCubeMesh``, ``UnitCircleMesh``, ``UnitSphere``,
-``IntervalMesh``, ``RectangleMesh``, and ``BoxMesh``: generate mesh over
-domains of simple geometric shape, see the section :ref:`tut:prepro`.
-
-``FunctionSpace(mesh, element_type, degree)``:
-a function space defined over a mesh, with a given element type
-(e.g., ``'Lagrange'`` or ``'DG'``), with basis functions as polynomials of
-a specified degree.
-
-``Expression(formula, p1=v1, p2=v2, ...)``:
-a scalar- or vector-valued function, given as a
-mathematical expression ``formula`` (string) written in C++ syntax.
-The spatial coordinates in the expression are named
-``x[0]``, ``x[1]``, and ``x[2]``, while time and other
-physical parameters can be represented as symbols ``p1``, ``p2``,
-etc., with corresponding values ``v1``, ``v2``, etc., initialized
-through keyword arguments. These parameters become attributes,
-whose values can be modified when desired.
-
-``Function(V)``: a scalar- or vector-valued finite element field in
-the function space ``V``. If ``V`` is a ``FunctionSpace`` object,
-``Function(V)`` becomes a scalar field, and with ``V`` as a
-``VectorFunctionSpace`` object, ``Function(V)`` becomes a
-vector field.
-
-``SubDomain``: class for defining a subdomain, either a part of the
-boundary, an internal boundary, or a part of the domain.
-The programmer must subclass ``SubDomain`` and implement the
-``inside(self, x, on_boundary)`` function
-(see the section :ref:`tut:poisson1:impl`) for telling whether a
-point ``x`` is inside the subdomain or not.
-
-``Mesh``: class for representing a finite element mesh, consisting of
-cells, vertices, and optionally faces, edges, and facets.
-
-``MeshFunction``: tool for marking parts of the domain or the boundary.
-Used for variable coefficients ("material properties", see
-the section :ref:`tut:possion:2D:2mat:problem`) or for
-boundary conditions (see the section :ref:`tut:poisson:mat:neumann`).
-
-``DirichletBC(V, value, where)``: specification of Dirichlet (essential)
-boundary conditions via a function space ``V``, a function
-``value(x)`` for computing the value of the condition at a point ``x``,
-and a specification ``where`` of the boundary, either as a
-``SubDomain`` subclass instance, a plain function, or as a
-``MeshFunction`` instance.
-In the latter case, a 4th argument is provided to describe which subdomain
-number that describes the relevant boundary.
-
-``TestFunction(V)``: define a test function on a space ``V`` to be used
-in a variational form.
-
-``TrialFunction(V)``: define a trial function on a space ``V`` to be used
-in a variational form to represent the unknown in a finite element problem.
-
-``assemble(X)``: assemble a matrix, a right-hand side, or a functional,
-given a from ``X`` written with UFL syntax.
-
-``assemble_system(a, L, bcs)``: assemble the matrix and the right-hand
-side from a bilinear (``a``) and linear (``L``) form written with UFL
-syntax. The ``bcs`` parameter holds one or more ``DirichletBC`` objects.
-
-``LinearVariationalProblem(a, L, u, bcs)``: define a variational problem,
-given a bilinear (``a``) and linear (``L``) form, written with UFL
-syntax, and one or more ``DirichletBC`` objects stored in ``bcs``.
-
-``LinearVariationalSolver(problem)``: create solver object for a linear
-variational problem object (``problem``).
-
-``solve(A, U, b)``: solve a linear system with ``A`` as coefficient
-matrix (``Matrix`` object), ``U`` as unknown (``Vector`` object),
-and ``b`` as right-hand side (``Vector`` object).
-Usually, ``U = u.vector()``, where
-``u`` is a ``Function`` object representing the unknown finite
-element function of the problem, while
-``A`` and ``b`` are computed by calls to ``assemble``
-or ``assemble_system``.
-
-``plot(q)``: quick visualization of a mesh, function, or mesh function
-``q``, using the Viper component in FEniCS.
-
-``interpolate(func, V)``: interpolate a formula or finite
-element function ``func`` onto the function space ``V``.
-
-``project(func, V)``: project a formula or finite element function ``func``
-onto the function space ``V``.
-
-.. _tut:app:cpp:functions:
-
-User-defined functions
-----------------------
-
-When defining a function in terms of a mathematical expression inside
-a string formula, e.g.,
+The integrand of the
+energy functional
+:ref:`(28) <Eq:tut:poisson1:functionals:energy>`
+is described in the UFL language in the same manner as we describe
+weak forms:
 
 .. code-block:: python
 
-        myfunc = Expression('sin(x[0])*cos(x[1])')
+        energy = 0.5*inner(grad(u), grad(u))*dx
+        E = assemble(energy)
 
-the expression contained in the first argument
-will be turned into a C++ function
-and compiled to gain efficiency. Therefore,
-the syntax used in the expression must be valid C++ syntax.
-Most Python syntax for mathematical expressions are also valid C++ syntax,
-but power expressions make an exception: ``p**a`` must be written as
-``pow(p,a)`` in C++ (this is also an alternative Python syntax).
-The following mathematical functions can be used directly
-in C++
-expressions when defining ``Expression`` objects:
-``cos``, ``sin``, ``tan``, ``acos``, ``asin``,
-``atan``, ``atan2``, ``cosh``, ``sinh``, ``tanh``, ``exp``,
-``frexp``, ``ldexp``, ``log``, ``log10``, ``modf``,
-``pow``, ``sqrt``, ``ceil``, ``fabs``, ``floor``, and ``fmod``.
-Moreover, the number :math:`\pi` is available as the symbol ``pi``.
-All the listed functions are taken from the ``cmath`` C++ header file, and
-one may hence
-consult documentation of ``cmath`` for more information on the
-various functions.
+The ``assemble`` call performs the integration.
+It is possible to restrict the integration to subdomains, or parts
+of the boundary, by using
+a mesh function to mark the subdomains as explained in
+the section :ref:`tut:poisson:mat:neumann`.
 
-Parameters in expression strings must be initialized via keyword
-arguments when creating the ``Expression`` object:
+.. index:: error functional
+
+Error functional
+~~~~~~~~~~~~~~~~
+
+Computation of :ref:`(29) <Eq:tut:poisson1:functionals:error>` is typically done
+by
 
 .. code-block:: python
 
-        myfunc = Expression('sin(w_x*x[0])*cos(w_y*x[1])',
-                             w_x=pi, w_y=2*pi)
+        error = (u - u_exact)**2*dx
+        E = sqrt(abs(assemble(error)))
 
-.. _tut:app:solver:prec:
+The exact solution :math:`{u_{\small\mbox{e}}}` is here in a ``Function`` or
+``Expression`` object ``u_exact``, while ``u`` is the
+finite element approximation.
+(Sometimes, for very small error values, the result of
+``assemble(error)`` can be a (very small) negative number, so we have
+used ``abs`` in the expression for ``E`` above to ensure a positive value
+for the ``sqrt`` function.)
 
-Linear solvers and preconditioners
-----------------------------------
-
-The following solution methods for linear
-systems can be accessed in FEniCS programs:
-
-================  ============================================  
-      Name                           Method                     
-================  ============================================  
-``'lu'``          sparse LU factorization (Gaussian elim.)      
-``'cholesky'``    sparse Cholesky factorization                 
-``'cg'``          Conjugate gradient method                     
-``'gmres'``       Generalized minimal residual method           
-``'bicgstab'``    Biconjugate gradient stabilized method        
-``'minres'``      Minimal residual method                       
-``'tfqmr'``       Transpose-free quasi-minimal residual method  
-``'richardson'``  Richardson method                             
-================  ============================================  
-
-Possible choices of preconditioners include
-
-======================  ==========================================  
-         Name                             Method                    
-======================  ==========================================  
-``'none'``              No preconditioner                           
-``'ilu'``               Incomplete LU factorization                 
-``'icc'``               Incomplete Cholesky factorization           
-``'jacobi'``            Jacobi iteration                            
-``'bjacobi'``           Block Jacobi iteration                      
-``'sor'``               Successive over-relaxation                  
-``'amg'``               Algebraic multigrid (BoomerAMG or ML)       
-``'additive_schwarz'``  Additive Schwarz                            
-``'hypre_amg'``         Hypre algebraic multigrid (BoomerAMG)       
-``'hypre_euclid'``      Hypre parallel incomplete LU factorization  
-``'hypre_parasails'``   Hypre parallel sparse approximate inverse   
-``'ml_amg'``            ML algebraic multigrid                      
-======================  ==========================================  
-
-Many of the choices listed above
-are only offered by a specific backend, so setting the backend
-appropriately is necessary for being able to choose a desired
-linear solver or preconditioner.
-
-An up-to-date list of the available solvers and preconditioners
-in FEniCS can be produced by
+As will be explained and demonstrate in the section :ref:`tut:poisson1:convrates`, the integration of ``(u - u_exact)**2*dx``
+can result in too optimistic convergence rates unless one is careful
+how ``u_exact`` is transferred onto a mesh. The general recommendation
+for reliable error computation is to use the ``errornorm`` function
+(see ``pydoc dolfin.errornorm`` and the section :ref:`tut:poisson1:convrates`
+for more information):
 
 .. code-block:: python
 
-        list_linear_solver_methods()
-        list_krylov_solver_preconditioners()
+        E = errornorm(u_exact, u)
 
-.. _tut:Epetra:
+.. index:: flux functional
 
-Using a backend-specific solver
--------------------------------
+Flux Functionals
+~~~~~~~~~~~~~~~~
 
-
-.. warning::
-    The linear algebra backends in FEniCS have recently changed. This
-    section is not yet up-to-date.
-
-
-
-
-.. index:: down-casting matrices and vectors
-
-.. index:: PETSc
-
-The linear algebra backend determines the specific data structures
-that are used in the ``Matrix`` and ``Vector`` classes. For example, with
-the PETSc backend, ``Matrix`` encapsulates a PETSc matrix storage
-structure, and ``Vector`` encapsulates a PETSc vector storage structure.
-Sometimes one wants to perform operations directly on (say) the
-underlying PETSc objects. These can be fetched by
+To compute flux integrals like :math:`F = -\int_\Gamma p\nabla
+u\cdot\boldsymbol{n} {\, \mathrm{d}s}` we need to define the :math:`\boldsymbol{n}` vector,
+referred to as *facet normal* in FEniCS. If the surface domain
+:math:`\Gamma` in the flux integral is the complete
+boundary we can perform the flux computation by
 
 .. code-block:: python
 
-        A_PETSc =
-        down_cast(A).mat() b_PETSc = down_cast(b).vec() U_PETSc =
-        down_cast(u.vector()).vec()
+        n = FacetNormal(mesh)
+        flux = -p*dot(nabla_grad(u), n)*ds
+        total_flux = assemble(flux)
 
-Here, ``u`` is a ``Function``, ``A`` is a
-``Matrix``, and ``b`` is a ``Vector``.  The same syntax applies if we want
-to fetch the underlying Epetra, uBLAS, or MTL4 matrices and vectors.
+Although ``nabla_grad(u)`` and ``grad(u)`` are interchangeable
+in the above expression when ``u`` is a scalar function, we have
+chosen to write ``nabla_grad(u)`` because this is
+the right expression if we generalize the underlying equation
+to a vector Laplace/Poisson PDE. With ``grad(u)`` we must in that
+case write ``dot(n, grad(u))``.
 
-.. ../../../la/trilinos/python/demo.py
+It is possible to restrict the integration to a part of the boundary
+using a mesh function to mark the relevant part, as
+explained in the section :ref:`tut:poisson:mat:neumann`. Assuming that the
+part corresponds to subdomain number ``i``, the relevant syntax for
+the variational formulation of the
+flux is ``-p*inner(grad(u), n)*ds(i)``.
 
-.. index:: Trilinos
+.. _tut:poisson1:convrates:
 
-.. index:: Epetra
+Computing convergence rates
+---------------------------
 
-Sometimes one wants to implement tailored solution algorithms, using
-special features of the underlying numerical packages.
-Here is an example where we create an ML preconditioned Conjugate
-Gradient solver by programming with Trilinos-specific objects directly.
-Given a linear system
-:math:`AU=b`, represented by a ``Matrix`` object ``A``,
-and two ``Vector`` objects ``U`` and ``b`` in a
-Python program, the purpose is to
-set up a solver using the Aztec Conjugate Gradient method from
-Trilinos' Aztec library and combine that solver with the
-algebraic multigrid preconditioner ML
-from the ML library in Trilinos. Since the various parts of
-Trilinos are mirrored in Python through the PyTrilinos package,
-we can operate directly
-on Trilinos-specific objects.
+To illustrate error computations and convergence of finite element
+solutions, we have included a function ``convergence_rate`` in
+the ``p2D_vc.py`` program. This is a tool that is very
+handy when verifying finite element codes and will therefore be explained in
+detail here.
+
+The :math:`L^2` norm of the error in a finite element approximation :math:`u`,
+:math:`{u_{\small\mbox{e}}}` being the exact solution, is given by
+
+Various ways of computing the error
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+.. math::
+         E = \left(\int_\Omega (u_e-u)^2 {\, \mathrm{d}x}\right)^{1/2},
+
+and implemented in FEniCS by
 
 .. code-block:: python
 
-        try:
-            from PyTrilinos import Epetra, AztecOO, TriUtils, ML
-        except:
-            print('''You Need to have PyTrilinos with
-        Epetra, AztecOO, TriUtils and ML installed
-        for this demo to run''')
-            exit()
+        error = (u - u_e)**2*dx
+        E = sqrt(abs(assemble(error)))
+
+Sometimes, for very small error values, the result of
+``assemble(error)`` can be a (very small) negative number, so we have
+used ``abs`` in the expression for ``E`` above to ensure a positive value
+for the ``sqrt`` function.
+
+We remark that ``u_e`` will, in the expression
+above, be interpolated onto the function space ``V`` before ``assemble``
+can perform the integration over the domain. This implies that the
+exact solution used in the integral will vary linearly over the cells,
+and not as a sine function, if ``V`` corresponds to linear Lagrange
+elements.  This situation may yield a smaller error ``u - u_e`` than
+what is actually true.  More accurate representation of the exact
+solution is easily achieved by interpolating the formula onto a space
+defined by higher-order elements, say of third degree:
+
+.. code-block:: python
+
+        Ve = FunctionSpace(mesh, 'Lagrange', degree=3)
+        u_e_Ve = interpolate(u_e, Ve)
+        error = (u - u_e_Ve)**2*dx
+        E = sqrt(assemble(error))
+
+To achieve complete mathematical control of which function space the
+computations are carried out in, we can explicitly interpolate ``u`` to
+the same space:
+
+.. code-block:: python
+
+        u_Ve = interpolate(u, Ve)
+        error = (u_Ve - u_e_Ve)**2*dx
+
+The square in the expression for ``error`` will be expanded and lead to
+a lot of terms that almost cancel when the error is small, with the
+potential of introducing significant rounding errors.  The function
+``errornorm`` is available for avoiding this effect by first
+interpolating ``u`` and ``u_exact`` to a space with higher-order elements,
+then subtracting the degrees of freedom, and then performing the
+integration of the error field. The usage is simple:
+
+.. code-block:: python
+
+        E = errornorm(u_exact, u, normtype='L2', degree=3)
+
+It is illustrative to look at the short implementation of ``errornorm``:
+
+.. code-block:: python
+
+        def errornorm(u_exact, u, Ve):
+            u_Ve = interpolate(u, Ve)
+            u_e_Ve = interpolate(u_exact, Ve)
+            e_Ve = Function(Ve)
+            # Subtract degrees of freedom for the error field
+            e_Ve.vector()[:] = u_e_Ve.vector().array() - \ 
+                               u_Ve.vector().array()
+            error = e_Ve**2*dx
+            return sqrt(assemble(error))
+
+The ``errornorm`` procedure turns out to be identical to computing
+the expression ``(u_e - u)**2*dx`` directly in
+the present test case.
+
+Sometimes it is of interest to compute the error of the
+gradient field: :math:`||\nabla (u-{u_{\small\mbox{e}}})||`
+(often referred to as the :math:`H^1` seminorm of the error).
+Given the error field ``e_Ve`` above, we simply write
+
+.. code-block:: python
+
+        H1seminorm = sqrt(assemble(inner(grad(e_Ve), grad(e_Ve))*dx))
+
+All the various types of error computations here are placed in a
+function ``compute_errors`` in ``p2D_vc.py``:
+[**hpl 10**: Necessary to repeat code? New info is essentiall the return dict.]
+[**hpl 11**: Anders, I (in 2010...) ran into problems with ``dolfin.errornorm``, see comments in the code below, and made the version below. We should check out these problems again and adjust ``dolfin.errornorm`` if necessary.]
+
+.. code-block:: python
+
+        def compute_errors(u, u_exact):
+            """Compute various measures of the error u - u_exact, where
+            u is a finite element Function and u_exact is an Expression."""
         
-        from dolfin import *
+            # Compute error norm (for very small errors, the value can be
+            # negative so we run abs(assemble(error)) to avoid failure in sqrt
         
-        if not has_la_backend('Epetra'):
-            print('Warning: Dolfin is not compiled with Trilinos')
-            exit()
+            V = u.function_space()
         
-        parameters['linear_algebra_backend'] = 'Epetra'
+            # Function - Expression
+            error = (u - u_exact)**2*dx
+            E1 = sqrt(abs(assemble(error)))
         
-        # create matrix A and vector b in the usual way
-        # u is a Function
+            # Explicit interpolation of u_e onto the same space as u:
+            u_e = interpolate(u_exact, V)
+            error = (u - u_e)**2*dx
+            E2 = sqrt(abs(assemble(error)))
         
-        # Fetch underlying Epetra objects
-        A_epetra = down_cast(A).mat()
-        b_epetra = down_cast(b).vec()
-        U_epetra = down_cast(u.vector()).vec()
+            # Explicit interpolation of u_exact to higher-order elements,
+            # u will also be interpolated to the space Ve before integration
+            Ve = FunctionSpace(V.mesh(), 'Lagrange', 5)  # mesh here: BUG, module mesh in dolfin...make warning box
+            u_e = interpolate(u_exact, Ve)
+            error = (u - u_e)**2*dx
+            E3 = sqrt(abs(assemble(error)))
         
-        # Sets up the parameters for ML using a python dictionary
-        ML_param = {"max levels"        : 3,
-                    "output"            : 10,
-                    "smoother: type"    : "ML symmetric Gauss-Seidel",
-                    "aggregation: type" : "Uncoupled",
-                    "ML validate parameter list" : False
-        }
+            # dolfin.errornorm interpolates u and u_e to a space with
+            # given degree, and creates the error field by subtracting
+            # the degrees of freedom, then the error field is integrated
+            # TEMPORARY BUG - doesn't accept Expression for u_e
+            #E4 = errornorm(u_e, u, normtype='l2', degree=3)
+            # Manual implementation errornorm to get around the bug:
+            def errornorm(u_exact, u, Ve):
+                u_Ve = interpolate(u, Ve)
+                u_e_Ve = interpolate(u_exact, Ve)
+                e_Ve = Function(Ve)
+                # Subtract degrees of freedom for the error field
+                e_Ve.vector()[:] = u_e_Ve.vector().array() - u_Ve.vector().array()
+                # More efficient computation (avoids the rhs array result above)
+                #e_Ve.assign(u_e_Ve)                      # e_Ve = u_e_Ve
+                #e_Ve.vector().axpy(-1.0, u_Ve.vector())  # e_Ve += -1.0*u_Ve
+                error = e_Ve**2*dx(Ve.mesh())
+                return sqrt(abs(assemble(error))), e_Ve
+            E4, e_Ve = errornorm(u_exact, u, Ve)
         
-        # Create the preconditioner
-        prec = ML.MultiLevelPreconditioner(A_epetra, False)
-        prec.SetParameterList(ML_param)
-        prec.ComputePreconditioner()
+            # Infinity norm based on nodal values
+            u_e = interpolate(u_exact, V)
+            E5 = abs(u_e.vector().array() - u.vector().array()).max()
         
-        # Create solver and solve system
-        solver = AztecOO.AztecOO(A_epetra, U_epetra, b_epetra)
-        solver.SetPrecOperator(prec)
-        solver.SetAztecOption(AztecOO.AZ_solver, AztecOO.AZ_cg)
-        solver.SetAztecOption(AztecOO.AZ_output, 16)
-        solver.Iterate(MaxIters=1550, Tolerance=1e-5)
+            # H1 seminorm
+            error = inner(grad(e_Ve), grad(e_Ve))*dx
+            E6 = sqrt(abs(assemble(error)))
         
-        plot(u)
+            # Collect error measures in a dictionary with self-explanatory keys
+            errors = {'u - u_exact': E1,
+                      'u - interpolate(u_exact,V)': E2,
+                      'interpolate(u,Ve) - interpolate(u_exact,Ve)': E3,
+                      'errornorm': E4,
+                      'infinity norm (of dofs)': E5,
+                      'grad(error) H1 seminorm': E6}
+        
+            return errors
 
-.. _tut:app:install:
+Computing convergence rates empirically
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Installing FEniCS
------------------
+Calling the ``solver`` function for finer and finer meshes enables us to
+study the convergence rate. Define the element size :math:`h=1/n`, where :math:`n`
+is the number of cell divisions in :math:`x` and :math:`y` direction (``n=Nx=Ny`` in
+the code). We perform experiments with :math:`h_0>h_1>h_2\cdots` and compute
+the corresponding errors :math:`E_0, E_1, E_3` and so forth.  Assuming
+:math:`E_i=Ch_i^r` for unknown constants :math:`C` and :math:`r`, we can compare two
+consecutive experiments, :math:`E_i=Ch_i^r` and :math:`E_{i-1}=Ch_{i-1}^r`, and
+solve for :math:`r`:
 
-.. index:: installing FEniCS
+.. math::
+        
+        r = {\ln(E_i/E_{i-1})\over\ln (h_i/h_{i-1})}{\thinspace .}
+        
 
-The FEniCS software components are available for Linux, Windows and Mac OS
-X platforms. Detailed information on how to get FEniCS running on such
-machines are available at the ``fenicsproject.org`` website.
-Here are just some quick descriptions and recommendations by the author.
+The :math:`r` values should approach the expected convergence
+rate ``degree+1`` as :math:`i` increases.
 
-To make the installation of FEniCS as painless and reliable as
-possible, I strongly recommend to use Ubuntu Linux.  (Even though Mac
-users now can get FEniCS by a one-click install, I recommend using
-Ubuntu on Mac, unless you have significant experience with compiling
-and linking C++ libraries on Mac OS X.)  Any standard PC can easily be
-equipped with Ubuntu Linux, which may live side by side with either
-Windows or Mac OS X or another Linux installation.
+The procedure above can easily be turned into Python code. Here
+we run through a different types of elements (P1, P2, P3, and P4),
+perform experiments over a series of refined meshes, and for
+each experiment report the six error types as returned by ``compute_errors``:
 
-On Windows you can use the tool `Wubi <http://www.ubuntu.com/download/desktop/windows-installer>`__ to
-automatically install Ubuntu in a dual boot fashion.  A very popular
-alternative is to run Ubuntu in a separate window in your existing
-operation system, using a *virtual machine*.  There are several
-virtual machine solutions to chose among, e.g., the free `VirtualBoxMesh <https://www.virtualbox.org/>`__ or the commercial tool `VMWare Fusion <http://www.vmware.com/products/fusion/>`__. VirtualBoxMesh works well for
-many, but there might be hardware integration problems on Mac, so the
-superior VMWare Fusion tool is often worth the investment.  The author
-has a description of `how to install Ubuntu in a VMWare Fusion virtual
-machine <http://hplgit.github.io/teamods/ubuntu/vmware/index.html>`__.
+.. code-block:: python
 
-Once Ubuntu
-is up and running, FEniCS is painlessly installed by
+        def convergence_rate(u_exact, f, u0, p, degrees,
+                             n=[2**(k+3) for k in range(5)]):
+            """
+            Compute convergence rates for various error norms for a
+            sequence of meshes with Nx=Ny=b and P1, P2, ...,
+            Pdegrees elements. Return rates for two consecutive meshes:
+            rates[degree][error_type] = r0, r1, r2, ...
+            """
+        
+            h = {}  # Discretization parameter, h[degree][experiment]
+            E = {}  # Error measure(s), E[degree][experiment][error_type]
+            P_degrees = 1,2,3,4
+            num_meshes = 5
+        
+            # Perform experiments with meshes and element types
+            for degree in P_degrees:
+                n = 4   # Coarsest mesh division
+                h[degree] = []
+                E[degree] = []
+                for i in range(num_meshes):
+                    n *= 2
+                    h[degree].append(1.0/n)
+                    u = solver(p, f, u0, n, n, degree,
+                               linear_solver='direct')
+                    errors = compute_errors(u, u_exact)
+                    E[degree].append(errors)
+                    print('2*(%dx%d) P%d mesh, %d unknowns, E1=%g' %
+                          (n, n, degree, u.function_space().dim(),
+                           errors['u - u_exact']))
+            # Convergence rates
+            from math import log as ln  # log is a dolfin name too
+            error_types = list(E[1][0].keys())
+            rates = {}
+            for degree in P_degrees:
+                rates[degree] = {}
+                for error_type in sorted(error_types):
+                    rates[degree][error_type] = []
+                    for i in range(num_meshes):
+                        Ei   = E[degree][i][error_type]
+                        Eim1 = E[degree][i-1][error_type]
+                        r = ln(Ei/Eim1)/ln(h[degree][i]/h[degree][i-1])
+                        rates[degree][error_type].append(round(r,2))
+            return rates
+        
+        def convergence_rate_sin():
+            """Compute convergence rates for u=sin(x)*sin(y) solution."""
+            omega = 1.0
+            u_exact = Expression('sin(omega*pi*x[0])*sin(omega*pi*x[1])',
+                                 omega=omega)
+            f = 2*omega**2*pi**2*u_exact
+            u0 = Constant(0)
+            p = Constant(1)
+            # Note: P4 for n>=128 seems to break down
+            rates = convergence_rates(u_exact, f, u0, p, degrees=4,
+                                      n=[2**(k+3) for k in range(5)])
+            # Print rates
+            print('\n\n')
+            for error_type in error_types:
+                print(error_type)
+                for degree in P_degrees:
+                    print('P%d: %s' %
+                          (degree, str(rates[degree][error_type])[1:-1]))
 
-.. code-block:: text
+Note how make a complete general function ``convergence_rate``, aimed at
+any 2D Poisson problem in the class we now can solve, and then call
+this general function in ``convergence_rate_sin`` for a special test
+case.
 
-        sudo apt-get install fenics
+Test problem          (3)
+~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Sometimes the FEniCS software in a standard Ubuntu installation
-lacks some recent features and bug fixes. Go to
-`fenicsproject.org <http://fenicsproject.org>`__, click on *Download*
-and then the Ubuntu logo, move down to *Ubuntu PPA* and copy a few Unix
-commands to install the newest version of the FEniCS software.
+The section :ref:`tut:poisson:gradu` and specify a more complicated solution,
 
-A different type of virtual machine technology is `Vagrant <http://www.vagrantup.com/>`__, which allows you to download a big file
-with a complete Ubuntu environment and run that environment in a
-terminal window on your Mac or Windows computer. This Ubuntu machine
-is integrated with the file system on your computer. The author has
-made a Vagrant box with most of the scientific computing
-software you need for programming
-with FEniCS, see a preliminary `guide <http://hplgit.github.io/INF5620/doc/web/vagrant_inf5620.html>`__
-for download, installation, and usage.
+.. math::
+        
+        u(x,y) = \sin(\omega\pi x)\sin(\omega\pi y)
+        
 
-The FEniCS installation also features a set of demo programs.
-These are stored in locations depending on the type of operating system.
-For Ubuntu the programs are stored in ``/usr/share/dolfin/demo``.
+on the unit square.
+This choice implies :math:`f(x,y)=2\omega^2\pi^2 u(x,y)`.
+With :math:`\omega` restricted to an integer
+it follows that :math:`u_0=0`.
 
-The graphical user interface (GUI) of Ubuntu is quite similar to both
-Windows and Mac OS X, but to be efficient when doing science with
-FEniCS I recommend to run programs in a terminal window and write them
-in a text editor like Emacs or Vim. You can employ an integrated
-development environment such as Eclipse, but intensive FEniCS
-developers and users tend to find terminal windows and plain text
-editors more efficient and user friendly.
+We need to define the
+appropriate boundary conditions, the exact solution, and the :math:`f` function
+in the code:
 
-.. Vagrant!
+.. code-block:: python
 
-.. _tut:appendix:books:
+        def boundary(x, on_boundary):
+            return on_boundary
+        
+        bc = DirichletBC(V, Constant(0.0), boundary)
+        
+        omega = 1.0
+        u_e = Expression('sin(omega*pi*x[0])*sin(omega*pi*x[1])',
+                         omega=omega)
+        
+        f = 2*pi**2*omega**2*u_e
 
-Books on the finite element method
-----------------------------------
+Experiments
+~~~~~~~~~~~
 
-There are a large number of books on the finite element method.  The
-books typically fall in either of two categories: the abstract
-mathematical version of the method and the engineering "structural
-analysis" formulation. FEniCS builds heavily on concepts in the
-abstract mathematical exposition. The author has in development
-a `book <http://tinyurl.com/opdfafk/>`__
-that explains all details of the finite element method with
-the abstract mathematical formulations that FEniCS employ.
+Calling ``convergence_rate_sin()`` gives some interesting results.
+Using the error measure ``E5`` based on the infinity norm of the
+difference of the degrees of freedom, we have
 
-An easy-to-read book, which
-provides a good general background for using FEniCS, is Gockenbach
-[Ref04]_. The book by Donea and Huerta
-[Ref05]_ has a similar style, but aims at readers with
-interest in fluid flow problems. Hughes [Ref06]_ is also
-highly recommended, especially for those interested in solid mechanics
-and heat transfer applications.
+=======  ===========  ============  ============  ============  =============  
+element  :math:`n=8`  :math:`n=16`  :math:`n=32`  :math:`n=64`  :math:`n=128`  
+=======  ===========  ============  ============  ============  =============  
+P1              1.99          1.97          1.99           2.0            2.0  
+P2              3.99          3.96          3.99           4.0           3.99  
+P3              3.96          3.89          3.96          3.99            4.0  
+P4              3.75          4.99           5.0           5.0                 
+=======  ===========  ============  ============  ============  =============  
 
-Readers with background in the engineering "structural analysis"
-version of the finite element method may find Bickford
-[Ref07]_ as an attractive bridge over to the abstract
-mathematical formulation that FEniCS builds upon.  Those who have a
-weak background in differential equations in general should consult a
-more fundamental book, and Eriksson {\em et
-al}. [Ref08]_ is a very good choice.  On the
-other hand, FEniCS users with a strong background in mathematics and
-interest in the mathematical properties of the finite element method,
-will appreciate the texts by Brenner and Scott [Ref09]_,
-Braess [Ref10]_, Ern and Guermond [Ref11]_,
-Quarteroni and Valli [Ref12]_, or Ciarlet [Ref13]_.
+The computations with P4 elements on a :math:`128\times 128` with a
+direct solver (UMFPACK) on a small laptop broke down.
+Otherwise we achieve expected results: the error goes like
+:math:`h^{d+1}` for elements of degree :math:`d`. Also :math:`L^2` norms based
+on the ``errornorm`` gives the expected :math:`h^{d+1}` rate for
+:math:`u` and :math:`h^d` for :math:`\nabla u`.
 
-.. _tut:appendix:pybooks:
+However, using ``(u - u_exact)**2`` for the error computation, which implies
+interpolating ``u_exact`` onto the same space as ``u``, results in :math:`h^4`
+convergence for P2 elements.
 
-Books on Python
----------------
+=======  ===========  ============  ============  ============  =============  
+element  :math:`n=8`  :math:`n=16`  :math:`n=32`  :math:`n=64`  :math:`n=128`  
+=======  ===========  ============  ============  ============  =============  
+P1              1.98          1.94          1.98           2.0            2.0  
+P2              3.98          3.95          3.99          3.99           3.99  
+P3              3.69          4.03          4.01          3.95           2.77  
+=======  ===========  ============  ============  ============  =============  
 
-Two very popular introductory books on Python are
-"Learning Python"  by Lutz [Ref14]_ and
-"Practical Python"  by Hetland [Ref15]_.
-More advanced and comprehensive books include
-"Programming Python" by Lutz [Ref16]_,
-and "Python Cookbook" [Ref17]_ and "Python in a Nutshell"
-[Ref18]_ by Martelli.
-The web page ``http://wiki.python.org/moin/PythonBooks``
-lists numerous additional books.
-Very few texts teach Python in a mathematical and numerical context,
-but the references [Ref19]_ [Ref20]_ [Ref21]_
-are exceptions.
+This is an example where it is important to interpolate ``u_exact`` to a
+higher-order space (polynomials of degree 3 are sufficient here) to
+avoid computing a too optimistic convergence rate.
 
-Acknowledgments
----------------
+.. Problems with interpolate(u,Ve) - interpolate(u_exact,Ve) for
 
-The author is very thankful to Johan Hake, Anders Logg, Kent-Andre
-Mardal, and Kristian Valen-Sendstad for promptly answering all my
-questions about FEniCS functionality and for implementing all my
-requests.  I will in particular thank Professor Douglas Arnold for
-very valuable feedback on the text. Øystein Sørensen pointed out a lot
-of typos and contributed with many helpful comments.  Many errors and
-typos were also reported by Mauricio Angeles, Ida Drøsdal, Hans
-Ekkehard Plesser, Marie Rognes, and Hans Joachim (Achim) Scroll.
-Ekkehard Ellmann as well as two anonymous reviewers
-provided a series of suggestions and improvements.
+.. high degree and large meshes. Rounding errors? errornorm is the
+
+.. remedy?
+
+.. interpolate(u,Ve) - interpolate(u_exact,Ve)
+
+.. P1: 1.98, 1.96, 1.99, 2.0, 2.0
+
+.. P2: 3.01, 3.03, 3.01, 3.0, 3.02
+
+.. P3: 2.7, 4.02, 4.0, 2.63, 0.17
+
+.. P4: 1.54, 5.11, 0.91, 0.15, -0.01
+
+Checking convergence rates is the next best method for verifying PDE codes
+(the best being a numerical solution without approximation errors
+as in the section :ref:`tut:poisson1:verify1` and many other places in this tutorial).
 
