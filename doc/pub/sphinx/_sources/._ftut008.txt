@@ -398,14 +398,10 @@ The output for a mesh made by ``UnitSquareMesh(3, 2)`` becomes
         dof 11: u=4 	 at point (1.0, 1.0)
         dof  7: u=2.5 	 at point (1.0, 0.5)
 
-.. The file ``dn2_p2D.py`` contains a complete program which
-
-.. demonstrates the constructions above.
-
 An extended example with multiple Neumann conditions would have
 been quite natural now, but this requires marking various parts
 of the boundary using the *mesh function* concept and is therefore
-left to the section :ref:`tut:poisson:mat:neumann`.
+left to the section :ref:`tut:poisson:multi:bc`.
 
 .. _tut:possion:2D:2mat:problem:
 
@@ -488,14 +484,12 @@ by Lagrange elements of any degree. We use this property to verify
 the implementation.
 
 Physically, the present problem may correspond to heat conduction, where
-the heat conduction in :math:`\Omega_1` is ten times more efficient than
+the heat conduction in :math:`\Omega_1` is more efficient than
 in :math:`\Omega_0`. An alternative interpretation is flow in porous media
 with two geological layers, where the layers' ability to transport
 the fluid differs by a factor of 10.
 
 .. index:: boundary specification (class)
-
-.. index:: mat2_p2D.py
 
 .. _tut:possion:2D:2mat:impl:
 
@@ -547,19 +541,23 @@ where :math:`y\leq 1/2` and another for the subdomain :math:`\Omega_1` where :ma
 
 .. code-block:: python
 
+        tol = 1E-14  # Tolerance for coordinate comparisons
+        
         class Omega0(SubDomain):
             def inside(self, x, on_boundary):
-                return True if x[1] <= 0.5 else False
+                return True if x[1] <= 0.5+tol else False
         
         class Omega1(SubDomain):
             def inside(self, x, on_boundary):
-                return True if x[1] >= 0.5 else False
+                return True if x[1] >= 0.5-tol else False
 
 Notice the use of ``<=`` and ``>=`` in both tests. For a cell to
 belong to, e.g., :math:`\Omega_1`, the ``inside`` method must return
 ``True`` for all the vertices ``x`` of the cell. So to make the
 cells at the internal boundary :math:`y=1/2` belong to :math:`\Omega_1`, we need
-the test ``x[1] >= 0.5``.
+the test ``x[1] >= 0.5``. However,
+because of potential rounding errors in the coordinates ``x[1]``, we
+use a tolerance in the comparisons: ``x[1] >= 0.5-tol``.
 
 The next task is to use a ``MeshFunction`` to mark all
 cells in :math:`\Omega_0` with the subdomain number 0 and all cells in :math:`\Omega_1`
@@ -610,7 +608,7 @@ look up the subdomain or material number of a specific element.
 We need a function ``k`` that is constant in
 each subdomain :math:`\Omega_0` and :math:`\Omega_1`. Since we want ``k``
 to be a finite element function, it is natural to choose
-a space of functions that are constant over each element.
+a space of functions that is constant over each element.
 The family of discontinuous Galerkin methods, in FEniCS
 denoted by ``'DG'``, is suitable for this purpose. Since we
 want functions that are piecewise constant, the value of
@@ -658,9 +656,8 @@ can proceed in the normal manner with defining essential boundary
 conditions, as in the section :ref:`tut:poisson:multiple:Dirichlet`,
 and the :math:`a(u,v)` and :math:`L(v)` forms, as in
 the section :ref:`tut:possion:2D:varcoeff`.
-All the details can be found in the file ``mat2_p2D.py``.
 
-.. _tut:poisson:mat:neumann:
+.. _tut:poisson:multi:bc:
 
 Multiple Neumann, Robin, and Dirichlet condition
 ------------------------------------------------
@@ -673,140 +670,158 @@ Multiple Neumann, Robin, and Dirichlet condition
 
 .. index:: boundary conditions
 
-Let us go back to the model problem from
-the section :ref:`tut:poisson:multiple:Dirichlet`
-where we had both Dirichlet and Neumann conditions.
-The term ``v*g*ds`` in the expression for ``L`` implies a
-boundary integral over the complete boundary, or in FEniCS terms,
-an integral over all exterior facets.
-However, the contributions from the parts of the boundary where we have
-Dirichlet conditions are erased when the linear system is modified by
-the Dirichlet conditions.
-We would like, from an efficiency point of view, to integrate ``v*g*ds``
-only over the parts of the boundary where we actually have Neumann conditions.
-And more importantly,
-in other problems one may have different Neumann conditions or
-other conditions like the Robin type condition.
-With the mesh function concept we can mark
-different parts of the boundary and integrate over specific parts.
-The same concept can also be used to treat multiple Dirichlet conditions.
-The forthcoming text illustrates how this is done.
+Let us go back to the model problem from the section :ref:`tut:poisson:multiple:Dirichlet` where we had both Dirichlet and
+Neumann conditions.  The term ``v*g*ds`` in the expression for ``L``
+implies a boundary integral over the complete boundary, or in FEniCS
+terms, an integral over all exterior facets.  However, the
+contributions from the parts of the boundary where we have Dirichlet
+conditions are erased when the linear system is modified by the
+Dirichlet conditions.  We would like, from an efficiency point of
+view, to integrate ``v*g*ds`` only over the parts of the boundary where
+we actually have Neumann conditions.  And more importantly, in other
+problems one may have different Neumann conditions or other conditions
+like the Robin type condition.  With the mesh function concept we can
+mark different parts of the boundary and integrate over specific
+parts.  The same concept can also be used to treat multiple Dirichlet
+conditions.  The forthcoming text illustrates how this is done.
 
-Essentially, we still stick to the model problem from
-the section :ref:`tut:poisson:multiple:Dirichlet`, but replace the
-Neumann condition at :math:`y=0` by a *Robin condition*:
+Three types of boundary conditions
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+We extend our repertoire of boundary conditions to three types:
+Dirichlet, Neumann, and Robin.  Dirichlet conditions apply to some
+parts :math:`\Gamma_{D,0}`, :math:`\Gamma_{D,1}`, :math:`...`, of the boundary:
 
 .. math::
-        
-        -{\partial u\over\partial n} = p(u-q),
+         u_{0,0}\hbox{ on }\Gamma_{D,0},\quad
+        u_{0,1}\hbox{ on }\Gamma_{D,1}, \ldots
+
+where :math:`u_{0,i}` are prescribed functions, :math:`i=0,1,\ldots`
+On other parts, :math:`\Gamma_{N,0}`, :math:`\Gamma_{N,1}`, and so on, we have
+Neumann conditions
+
+.. math::
+         -p{\partial u\over\partial n} = g_{0}\hbox{ on }\Gamma_{N,0},\quad
+        -p{\partial u\over\partial n} = g_{1}\hbox{ on }\Gamma_{N,1},\quad \ldots
         
 
-where :math:`p` and :math:`q` are specified functions.
-The Robin condition is
+Finally, we have some parts :math:`\Gamma_{R,0}`, :math:`\Gamma_{R,1}`, and so forth,
+with *Robin conditions*:
+
+.. index:: Robin condition
+
+.. _Eq:tut:poisson:multi:bc:Robin:
+
+.. math::
+
+    \tag{39}
+    -p{\partial u\over\partial n} = r(u-s),
+        
+        
+
+where :math:`r` and :math:`s` are specified functions.  The Robin condition is
 most often used to model heat transfer to the surroundings and arise
-naturally from Newton's cooling law.
+naturally from Newton's cooling law. In that case, :math:`r` is a heat
+transfer coefficient, and :math:`s` is the temperature of the
+surroundings. Both can be space and time-dependent.
 
-Since we have prescribed a simple solution in our model problem,
-:math:`u=1+x^2+2y^2`, we adjust :math:`p` and :math:`q` such that the condition holds
-at :math:`y=0`. This implies that :math:`q=1+x^2+2y^2` and :math:`p` can be arbitrary
-(the normal derivative at :math:`y=0`: :math:`\partial u/\partial n = -\partial u/\partial y = -4y=0`).
+Model problem
+~~~~~~~~~~~~~
 
-Now we have four parts of the boundary: :math:`\Gamma_N` which corresponds to
-the upper side :math:`y=1`, :math:`\Gamma_R` which corresponds to the lower part
-:math:`y=0`, :math:`\Gamma_0` which corresponds to the left part :math:`x=0`, and
-:math:`\Gamma_1` which corresponds to the right part :math:`x=1`. The
-complete boundary-value problem reads
+The model problem to be solved with multiple Dirichlet, Neumann, and
+Robin conditions can formally be defined as
 
 .. _Eq:tut:poisson:2D:DN3:
 
 .. math::
 
-    \tag{39}
-    - \nabla^2 u = -6 \mbox{ in } \Omega, 
-        
-
-.. _Eq:tut:poisson:2D:DN3:bc1:
-
-.. math::
-
     \tag{40}
-    u = u_L \mbox{ on } \Gamma_0, 
+    -\nabla\cdot(p\nabla u) = -f, \mbox{ in } \Omega, 
         
 
-.. _Eq:tut:poisson:2D:DN3:bc2:
+.. _Eq:tut:poisson:2D:DN3:bcD:
 
 .. math::
 
     \tag{41}
-    u = u_R \mbox{ on } \Gamma_1, 
+    u = u_{0,i} \mbox{ on } \Gamma_{D,i},\quad i=0,1,\ldots
+        
         
 
-.. _Eq:tut:poisson:2D:DN3:bc3:
+.. _Eq:tut:poisson:2D:DN3:bcN:
 
 .. math::
 
     \tag{42}
-    - {\partial u\over\partial n} = p(u-q) \mbox{ on } \Gamma_R,
+    -p{\partial u\over\partial n} = g_i \mbox{ on } \Gamma_{N,i},\quad
+        i=0,1,\ldots
         
         
 
-.. _Eq:tut:poisson:2D:DN3:bc4:
+.. _Eq:tut:poisson:2D:DN3:bcR:
 
 .. math::
 
     \tag{43}
-    - {\partial u\over\partial n} = g \mbox{ on } \Gamma_N{\thinspace .}
+    -p{\partial u\over\partial n} = r_i(u-s_i) \mbox{ on } \Gamma_{R,i},\quad
+        i=0,1,\ldots
         
         
 
-The involved prescribed functions are :math:`u_L= 1 + 2y^2`,
-:math:`u_R = 2 + 2y^2`, :math:`q=1+x^2+2y^2`, :math:`p` is arbitrary, and :math:`g=-4y`.
+Variational formulation          (3)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Integration by parts of :math:`-\int_\Omega v\nabla^2 u {\, \mathrm{d}x}` becomes
+Integration by parts of :math:`-\int_\Omega v\nabla\cdot(p\nabla u) {\, \mathrm{d}x}` becomes
 as usual
 
 .. math::
         
-         -\int_\Omega v\nabla^2 u {\, \mathrm{d}x}
-        = \int_\Omega\nabla u\cdot \nabla v {\, \mathrm{d}x} - \int_{\partial\Omega}{\partial u\over
-        \partial n}v {\, \mathrm{d}s}{\thinspace .}
+         -\int_\Omega v\nabla\cdot(p\nabla u) {\, \mathrm{d}x}
+        = \int_\Omega p\nabla u\cdot \nabla v {\, \mathrm{d}x} -
+        \int_{\partial\Omega}p\frac{\partial u}{\partial n}v {\, \mathrm{d}s}{\thinspace .}
         
 
-The boundary integral vanishes on :math:`\Gamma_0\cup\Gamma_1`, and
-we split the parts over :math:`\Gamma_N` and :math:`\Gamma_R` since we have
-different conditions at those parts:
+The boundary integral does not apply to the parts of
+the boundary where we have Dirichlet conditions (:math:`\Gamma_{D,i}`).
+Moreover, on the remaining parts, we must split the boundary integral
+into the parts where we have Neumann and Robin conditions such that we
+insert the right conditions as integrands.
+Specifically, we have
 
 .. math::
         
-        - \int_{\partial\Omega}v{\partial u\over\partial n} {\, \mathrm{d}s}
+        -\int_{\partial\Omega}p\frac{\partial u}{\partial n}v {\, \mathrm{d}s}
         =
-        -\int_{\Gamma_N}v{\partial u\over\partial n} {\, \mathrm{d}s} -
-        \int_{\Gamma_R}v{\partial u\over\partial n} {\, \mathrm{d}s}
-        = \int_{\Gamma_N}vg {\, \mathrm{d}s} +
-        \int_{\Gamma_R}vp(u-q) {\, \mathrm{d}s}{\thinspace .}
+        -\sum_i\int_{\Gamma_{N,i}}p\frac{\partial u}{\partial n} {\, \mathrm{d}s}
+        -\sum_i\int_{\Gamma_{R,i}}p\frac{\partial u}{\partial n} {\, \mathrm{d}s}
+        =
+        \sum_i\int_{\Gamma_{N,i}}g_i {\, \mathrm{d}s}
+        \sum_i\int_{\Gamma_{R,i}}r_i(u-s_i) {\, \mathrm{d}s}{\thinspace .}
         
 
-The weak form then becomes
+The variational formulation then becomes
+
+.. _Eq:tut:poisson:multi:bc:varform:
+
+.. math::
+
+    \tag{44}
+    \int_{\Omega} p\nabla u\cdot \nabla v {\, \mathrm{d}x} +
+        \sum_i\int_{\Gamma_{N,i}} g_iv {\, \mathrm{d}s} + \int_{\Gamma_{R,i}}r_i(u-s_i)v {\, \mathrm{d}s}
+        = \int_{\Omega} fv {\, \mathrm{d}x}{\thinspace .}
+        
+        
+
+We want to write this variational formulation in the standard notation
+:math:`a(u,v)=L(v)`, which requires that we identify all integrals with
+*both* :math:`u` and :math:`v`, and collect these in :math:`a(u,v)`, while the remaining
+integrals with :math:`v` and not :math:`u` go into :math:`L(v)`.  The integral from the
+Robin condition must of this reason be split in two parts:
 
 .. math::
         
-        \int_{\Omega} \nabla u\cdot \nabla v {\, \mathrm{d}x} +
-        \int_{\Gamma_N} gv {\, \mathrm{d}s} + \int_{\Gamma_R}p(u-q)v {\, \mathrm{d}s}
-        = \int_{\Omega} fv {\, \mathrm{d}x},
-        
-
-We want to write this weak form in the standard
-notation :math:`a(u,v)=L(v)`, which
-requires that we identify all integrals with *both* :math:`u` and :math:`v`,
-and collect these in :math:`a(u,v)`, while the remaining integrals with
-:math:`v` and not :math:`u` go
-into :math:`L(v)`.
-The integral from the Robin condition must of this reason be split in two
-parts:
-
-.. math::
-         \int_{\Gamma_R}p(u-q)v {\, \mathrm{d}s}
-        = \int_{\Gamma_R}puv {\, \mathrm{d}s} - \int_{\Gamma_R}pqv {\, \mathrm{d}s}{\thinspace .}
+        \int_{\Gamma_{R,i}}r_i(u-s_i)v {\, \mathrm{d}s}
+        = \int_{\Gamma_{R,i}} r_iuv {\, \mathrm{d}s} - \int_{\Gamma_{R,i}}r_is_iv {\, \mathrm{d}s}{\thinspace .}
         
 
 We then have
@@ -815,9 +830,9 @@ We then have
 
 .. math::
 
-    \tag{44}
-    a(u, v) = \int_{\Omega} \nabla u\cdot \nabla v {\, \mathrm{d}x}
-        + \int_{\Gamma_R}puv {\, \mathrm{d}s},
+    \tag{45}
+    a(u, v) = \int_{\Omega} p\nabla u\cdot \nabla v {\, \mathrm{d}x}
+        + sum_i\int_{\Gamma_{R,i}}r_iuv {\, \mathrm{d}s},
         
         
 
@@ -825,16 +840,17 @@ We then have
 
 .. math::
 
-    \tag{45}
+    \tag{46}
     L(v) = \int_{\Omega} fv {\, \mathrm{d}x} -
-        \int_{\Gamma_N} g v {\, \mathrm{d}s} + \int_{\Gamma_R}pqv {\, \mathrm{d}s}{\thinspace .}
+        sum_i\int_{\Gamma_{N,i}} g_i v {\, \mathrm{d}s} + \sum_i\int_{\Gamma_{R,i}}r_is_iv {\, \mathrm{d}s}{\thinspace .}
         
         
 
-.. index:: dnr_p2D.py
+Implementation          (4)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-A natural starting point for implementation is the ``dn2_p2D.py``
-program in the directory ``poisson``. The new aspects are
+Looking at our previous ``solver`` functions for solving the 2D Poisson equation,
+the following new aspects must be taken care of:
 
  1. definition of a mesh function over the boundary,
 
@@ -842,88 +858,83 @@ program in the directory ``poisson``. The new aspects are
 
  3. splitting a boundary integral into parts.
 
-Task 1 makes use of the ``MeshFunction`` object, but contrary to
+A general approach to the first task is to mark each of the four sides
+of the square with markers 1, 2, 3, and 4.
+To this end, we make use of the mesh function object, but contrary to
 the section :ref:`tut:possion:2D:2mat:impl`, this is not a function over
-cells, but a function over cell facets. The topological dimension of
-cell facets is one lower than the cell interiors, so in a two-dimensional
-problem the dimension
-becomes 1. In general, the facet dimension
-is given as ``mesh.topology().dim()-1``,
-which we use in the code for ease of direct reuse in other problems.
-The construction of a ``MeshFunction`` object to mark boundary parts
-now reads
+cells, but a function over cell facets. We apply the ``FacetFunction``
+for this purpose:
 
 .. code-block:: python
 
-        boundary_parts = \ 
-          MeshFunction('size_t', mesh, mesh.topology().dim()-1)
+        boundary_parts = FacetFunction('size_t', mesh)
 
-As in the section :ref:`tut:possion:2D:2mat:impl` we
-use a subclass of ``SubDomain`` to identify the various parts
-of the mesh function. Problems with domains of more complicated geometries may
-set the mesh function for marking boundaries as part of the mesh
-generation.
-In our case, the :math:`y=0` boundary can be marked by
+As in the section :ref:`tut:possion:2D:2mat:impl` we use a subclass of
+``SubDomain`` to identify the various parts of the mesh
+function. Problems with domains of more complicated geometries may set
+the mesh function for marking boundaries as part of the mesh
+generation.  In our case, the :math:`x=0` boundary can be marked by
 
 .. code-block:: python
 
-        class LowerRobinBoundary(SubDomain):
+        class BoundaryX0(SubDomain):
             def inside(self, x, on_boundary):
-                tol = 1E-14   # tolerance for coordinate comparisons
-                return on_boundary and abs(x[1]) < tol
-        
-        Gamma_R = LowerRobinBoundary()
-        Gamma_R.mark(boundary_parts, 0)
-
-The code for the :math:`y=1` boundary is similar and is seen in
-``dnr_p2D.py``.
-
-The Dirichlet boundaries are marked similarly, using subdomain number 2 for :math:`\Gamma_0` and 3 for :math:`\Gamma_1`:
-
-.. code-block:: python
-
-        class LeftBoundary(SubDomain):
-            def inside(self, x, on_boundary):
-                tol = 1E-14   # tolerance for coordinate comparisons
                 return on_boundary and abs(x[0]) < tol
         
-        Gamma_0 = LeftBoundary()
-        Gamma_0.mark(boundary_parts, 2)
-        
-        class RightBoundary(SubDomain):
-            def inside(self, x, on_boundary):
-                tol = 1E-14   # tolerance for coordinate comparisons
-                return on_boundary and abs(x[0] - 1) < tol
-        
-        Gamma_1 = RightBoundary()
-        Gamma_1.mark(boundary_parts, 3)
+        bx0 = BoundaryX0()
+        bx0.mark(boundary_parts, 0)
 
-Specifying the ``DirichletBC`` objects may now make use of
-the mesh function (instead of a ``SubDomain`` subclass object)
-and an indicator for which subdomain each condition
-should be applied to:
+Similarly, we make the classes ``BoundaryX1`` for the :math:`x=1` boundary,
+``BoundaryY0`` for the :math:`y=0` boundary, and ``BoundaryY1`` for the :math:`y=1`
+boundary, and mark these as subdomains 1, 2, and 3, respectively.
+
+For generality of the implementation, we let the user specify
+what kind of boundary condition that applies to each of the four
+boundaries. We set up a Python dictionary for this purpose, with
+the key as subdomain number and the value as a dictionary specifying
+the kind of condition as key and a function as its value.
+For example,
+
+.. code-block:: text
+
+        boundary_conditions = {
+          0: {'Dirichlet': u0},
+          1: {'Robin': (r, s)},
+          2: {'Neumann: g}},
+          3: {'Neumann', 0}}
+
+specifies
+
+ * a Dirichlet condition, with values implemented by an ``Expression``
+   or ``Constant`` object
+   ``u0``, on subdomain 0, i.e., the :math:`x=1` boundary;
+
+ * a Robin condition :ref:`(39) <Eq:tut:poisson:multi:bc:Robin>`
+   on subdomain 1, :math:`x=1`, with ``Expression`` or ``Constant`` objects
+   ``r`` and ``s`` specifying :math:`r` and :math:`s`;
+
+ * a Neumann condition :math:`\partial u/\partial n=g` on subdomain 2, :math:`y=0`,
+   where an ``Expression`` or ``Constant`` object ``g`` implements the value :math:`g`;
+
+ * a homogeneous Neumann condition :math:`\partial u/\partial n=0` on
+   subdomain 3, :math:`y=1`.
+
+As explained in the section :ref:`tut:poisson:multiple:Dirichlet`,
+multiple Dirichlet conditions must be collected in a list of
+``DirichletBC`` objects. Based on the ``boundary_conditions`` data
+structure above, we can construct this list by the following snippet:
 
 .. code-block:: python
 
-        u_L = Expression('1 + 2*x[1]*x[1]')
-        u_R = Expression('2 + 2*x[1]*x[1]')
-        bcs = [DirichletBC(V, u_L, boundary_parts, 2),
-               DirichletBC(V, u_R, boundary_parts, 3)]
-
-Some functions need to be defined before we can go on with the
-``a`` and ``L`` of the variational problem:
-
-.. code-block:: python
-
-        g = Expression('-4*x[1]')
-        q = Expression('1 + x[0]*x[0] + 2*x[1]*x[1]')
-        p = Constant(100)  # arbitrary function can go here
-        u = TrialFunction(V)
-        v = TestFunction(V)
-        f = Constant(-6.0)
+        bcs = []  # List of Dirichlet conditions
+        for n in boundary_conditions:
+            if 'Dirichlet' in boundary_conditions[n]:
+                bcs.append(
+                    DirichletBC(V, boundary_conditions[n]['Dirichlet'],
+                                boundary_parts, n))
 
 The new aspect of the variational problem is the two distinct
-boundary integrals.
+boundary integrals over :math:`\Gamma_{N,i}` and :math:`\Gamma_{R,i}`.
 Having a mesh function over exterior cell facets (our
 ``boundary_parts`` object), where subdomains (boundary parts) are
 numbered as :math:`0,1,2,\ldots`, the special symbol ``ds(0)``
@@ -933,51 +944,298 @@ The idea of multiple ``ds``-type objects generalizes to volume
 integrals too: ``dx(0)``, ``dx(1)``, etc., are used to
 integrate over subdomain 0, 1, etc.,  inside :math:`\Omega`.
 
-The variational problem can be defined as
+Before we have ``ds(n)`` for integers ``n`` defined, we must do
 
 .. code-block:: python
 
-        a = inner(nabla_grad(u), nabla_grad(v))*dx + p*u*v*ds(0)
-        L = f*v*dx - g*v*ds(1) + p*q*v*ds(0)
+        ds = Measure('ds', domain=mesh, subdomain_data=boundaries_parts)
 
-For the ``ds(0)`` and ``ds(1)`` symbols to work we must obviously
-connect them (or ``a`` and ``L``) to the mesh function marking
-parts of the boundary. This is done by a certain keyword argument
-to the ``assemble`` function:
-
-
-.. warning::
-    The old code looked like
-    
-    .. code-block:: python
-    
-            A = assemble(a, exterior_facet_domains=boundary_parts)
-            b = assemble(L, exterior_facet_domains=boundary_parts)
-    
-    but the ``exterior_facet_domain`` argument is no longer legal.
-    The text must be updated! The associated code gives wrong results.
-
-
-
+Similarly, if we want integration of different parts of the domain,
+we redefine ``dx`` as
 
 .. code-block:: python
 
-        A = assemble(a)
-        b = assemble(L)
+        dx = Measure('dx', domain=mesh, subdomain_data=domains)
 
-Then essential boundary conditions are enforced, and the system can
-be solved in the usual way:
+where ``domains`` is a ``CellFunction`` defining subdomains in :math:`\Omega`.
+
+Suppose we have a Robin condition with values ``r`` and ``s`` on subdomain
+``R``, a Neumann condition with value ``g`` on subdomain ``N``, the
+variational form can be written
 
 .. code-block:: python
 
-        for bc in bcs:
-            bc.apply(A, b)
-        u = Function(V)
-        U = u.vector()
-        solve(A, U, b)
+        a = inner(nabla_grad(u), nabla_grad(v))*dx + r*u*v*ds(R)
+        L = f*v*dx - g*v*ds(N) + r*s*v*ds(R)
 
-The complete code is in the ``dnr_p2D.py`` file in the
-``poisson`` directory.
+In our case things get a bit more complicated since the
+information about integrals in Neumann and Robin conditions
+are in the ``boundary_conditions`` data structure. We can collect
+all Neumann conditions by the code
+
+.. code-block:: python
+
+        u = TrialFunction(V)
+        v = TestFunction(V)
+        Neumann_integrals = []
+        for n in boundary_conditions:
+            if 'Neumann' in boundary_conditions[n]:
+                if boundary_conditions[n]['Neumann'] != 0:
+                    g = boundary_conditions[n]['Neumann']
+                    Neumann_integrals.append(g*v*ds(n))
+
+Applying ``sum(Nemann_integrals)`` will apply the ``+`` operator to
+the variational forms in the ``Numeann_integrals`` list and result
+in the integrals we need for the right-hand side ``L`` of the
+variational form.
+
+The integrals in the Robin condition can similarly be collected
+in lists:
+
+.. code-block:: python
+
+        Robin_a_integrals = []
+        Robin_L_integrals = []
+        for n in boundary_conditions:
+            if 'Robin' in boundary_conditions[n]:
+                r, s = boundary_conditions[n]['Robin']
+                Robin_a_integrals.append(r*u*v*ds(n))
+                Robin_L_integrals.append(r*s*v*ds(n))
+
+We are now in a position to define the ``a`` and ``L`` expressions
+in the variational formulation:
+
+.. code-block:: python
+
+        a = inner(p*nabla_grad(u), nabla_grad(v))*dx + \ 
+            sum(Robin_a_integrals)
+        L = f*v*dx - sum(Neumann_integrals) + sum(Robin_L_integrals)
+
+Simplified handling of the variational formulation
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+We carefully ordered the terms in the variational formulation above
+into the :math:`a` and :math:`L` parts. This requires a splitting of the Robin
+condition and makes the ``a`` and ``L`` expressions less readable (still we
+think understanding this splitting is key for any finite element programmer!).
+Fortunately, UFL allow us to specify the complete variational form
+:ref:`(44) <Eq:tut:poisson:multi:bc:varform>` as *one expression* and offer tools to
+extract what goes into the bilinear form :math:`a(u,v)` and the linear form
+:math:`L(v)`:
+
+.. code-block:: python
+
+        F = inner(p*nabla_grad(u), nabla_grad(v))*dx + \ 
+            sum(Robin_integrals) - f*v*dx + sum(Neumann_integrals)
+        a, L = lhs(F), rhs(F)
+
+This time we can more naturally define the integrals from the
+Robin condition as ``r*(u-s)*v*ds(n)``:
+
+.. code-block:: python
+
+        Robin_integrals = []
+        for n in boundary_conditions:
+            if 'Robin' in boundary_conditions[n]:
+                r, s = boundary_conditions[n]['Robin']
+                Robin_integrals.append(r*(u-s)*v*ds(n))
+
+The complete code is in the ``solver_bc`` function in the
+``p2D_vc.py`` file.
+
+Test problem          (4)
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Let us continue to use :math:`{u_{\small\mbox{e}}}=1+x^2+2y^2` as the exact solution, and
+set :math:`p=1` and :math:`f=-6` in the PDE.  Our domain is the unit square, and
+we assign Dirichlet conditions at :math:`x=0` and :math:`x=1`, a Neumann condition
+at :math:`y=1`, and a Robin condition at :math:`y=0`. With the given :math:`{u_{\small\mbox{e}}}`, we
+realize that the Neumann condition is :math:`-4y` (which means :math:`-4` at
+:math:`y=1`), while the Robin
+condition can be selected in many ways. Since :math:`\partial u/\partial
+n=-\partial u/\partial y=0` at :math:`y=0`, we can select :math:`s=u` and have :math:`r`
+arbitrary in the Robin condition.
+
+The boundary parts are :math:`\Gamma_{D,0}`: :math:`x=0`, :math:`\Gamma_{D,1}`: :math:`x=1`,
+:math:`\Gamma_{R,0}`: :math:`y=0`, and :math:`\Gamma_{N,0}`: :math:`y=1`.
+
+When implementing this test problem (and especially other test problems
+with more complicated expressions), it is advantageous to use
+symbolic computing. Below we define :math:`{u_{\small\mbox{e}}}` as a ``sympy`` expression
+and derive other functions from their mathematical definitions.
+Then we turn these expressions into C/C++ code, which can be
+fed into ``Expression`` objects.
+
+.. code-block:: python
+
+        def application_bc_test():
+            import sympy as sym
+            x, y = sym.symbols('x[0] x[1]')
+            u = 1 + x**2 + 2*y**2
+            f = -sym.diff(u, x, 2) - sym.diff(u, y, 2)
+            f = sym.simplify(f)
+            u_00 = u.subs(x, 0)  # x=0 boundary
+            u_01 = u.subs(x, 1)  # x=1 boundary
+            g = -sym.diff(u, y).subs(y, 1)  # x=1 boundary
+            r = 1000 # arbitrary function can go here
+            s = u
+        
+            # Turn to C/C++ code for UFL expressions
+            f = sym.printing.ccode(f)
+            u_00 = sym.printing.ccode(u_00)
+            u_01 = sym.printing.ccode(u_01)
+            g = sym.printing.ccode(g)
+            r = sym.printing.ccode(r)
+            s = sym.printing.ccode(s)
+            print('Test problem (C/C++):\nu = %s\nf = %s' % (u, f))
+            print('u_00: %s\nu_01: %s\ng = %s\nr = %s\ns = %s' %
+                  (u_00, u_01, g, r, s))
+        
+            # Turn into FEniCS objects
+            u_00 = Expression(u_00)
+            u_01 = Expression(u_01)
+            f = Expression(f)
+            g = Expression(g)
+            r = Expression(r)
+            s = Expression(s)
+            u_exact = Expression(sym.printing.ccode(u))
+        
+            boundary_conditions = {
+                0: {'Dirichlet': u_00},
+                1: {'Dirichlet': u_01},
+                2: {'Robin': (r, s)},
+                3: {'Neumann': g}}
+        
+            p = Constant(1)
+            Nx = Ny = 2
+            u = solver_bc(
+                p, f, boundary_conditions, Nx, Ny, degree=1,
+                linear_solver='direct',
+                debug=2*Nx*Ny < 50)
+        
+            u_e = interpolate(u_exact, u.function_space())
+            import numpy as np
+            max_error = np.abs(u_e.vector().array() -
+                               u.vector().array()).max()
+            print('Max error:', max_error)
+        
+            # Print numerical and exact solution at the vertices
+            if u.function_space().dim() < 50:
+                u_e_at_vertices = u_e.compute_vertex_values()
+                u_at_vertices = u.compute_vertex_values()
+                coor = u.function_space().mesh().coordinates()
+                for i, x in enumerate(coor):
+                    print('vertex %2d (%9g,%9g): error=%g %g vs %g'
+                          % (i, x[0], x[1],
+                             u_e_at_vertices[i] - u_at_vertices[i],
+                             u_e_at_vertices[i], u_at_vertices[i]))
+        
+        def test_solvers_bc():
+            """Reproduce u=1+x^2+2y^2 to with different solvers."""
+            tol = 3E-12  # Appropriate tolerance for these tests (P2, 20x20 mesh)
+            import sympy as sym
+            x, y = sym.symbols('x[0] x[1]')
+            u = 1 + x**2 + 2*y**2
+            f = -sym.diff(u, x, 2) - sym.diff(u, y, 2)
+            f = sym.simplify(f)
+            u_00 = u.subs(x, 0)  # x=0 boundary
+            u_01 = u.subs(x, 1)  # x=1 boundary
+            g = -sym.diff(u, y).subs(y, 1)  # x=1 boundary
+            r = 1000 # arbitrary function can go here
+            s = u
+        
+            # Turn to C/C++ code for UFL expressions
+            f = sym.printing.ccode(f)
+            u_00 = sym.printing.ccode(u_00)
+            u_01 = sym.printing.ccode(u_01)
+            g = sym.printing.ccode(g)
+            r = sym.printing.ccode(r)
+            s = sym.printing.ccode(s)
+            print('Test problem (C/C++):\nu = %s\nf = %s' % (u, f))
+            print('u_00: %s\nu_01: %s\ng = %s\nr = %s\ns = %s' %
+                  (u_00, u_01, g, r, s))
+        
+            # Turn into FEniCS objects
+            u_00 = Expression(u_00)
+            u_01 = Expression(u_01)
+            f = Expression(f)
+            g = Expression(g)
+            r = Expression(r)
+            s = Expression(s)
+            u_exact = Expression(sym.printing.ccode(u))
+        
+            boundary_conditions = {
+                0: {'Dirichlet': u_00},
+                1: {'Dirichlet': u_01},
+                2: {'Robin': (r, s)},
+                3: {'Neumann': g}}
+        
+            p = Constant(1)
+        
+            for Nx, Ny in [(3,3), (3,5), (5,3), (20,20)]:
+                for degree in 1, 2, 3:
+                    for linear_solver in ['direct']:
+                        for solver_func in [solver_bc]:
+                            print('solving on 2(%dx%dx) mesh with P%d elements'
+                                  % (Nx, Ny, degree)),
+                            print(' %s solver, %s function' %
+                                  (linear_solver, solver_func.__name__))
+                            u = solver_func(
+                                 p, f, boundary_conditions, Nx, Ny, degree,
+                                 linear_solver=linear_solver,
+                                 abs_tol=0.1*tol,
+                                 rel_tol=0.1*tol,
+                                 debug=False)
+                            # Make a finite element function of the exact u0
+                            V = u.function_space()
+                            u_e_Function = interpolate(u_exact, V)  # exact solution
+                            # Check that dof arrays are equal
+                            u_e_array = u_e_Function.vector().array()  # dof values
+                            max_error = (u_e_array - u.vector().array()).max()
+                            msg = 'max error: %g for 2(%dx%d) mesh, degree=%d,'\ 
+                                  ' %s solver, %s' % \ 
+                              (max_error, Nx, Ny, degree, linear_solver,
+                               solver_func.__name__)
+                            print(msg)
+                            assert max_error < tol, msg
+
+This simple test problem is turned into a real unit test for different
+function spaces in the function ``test_solver_bc``.
+
+Debugging the setting of boundary conditions
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+It is easy to make mistakes when implementing a problem with many
+different types of boundary conditions, as in the present case. Some
+helpful debugging output is to run through all vertex coordinates and
+check if the ``SubDomain.inside`` method marks the vertex as on the
+boundary. Another useful printout is to list which degrees of freedom
+that are subject to Dirichlet conditions, and for first-order Lagrange
+elements, add the corresponding vertex coordinate to the output.
+
+.. code-block:: python
+
+        if debug:
+            # Print the vertices that are on the boundaries
+            coor = mesh.coordinates()
+            for x in coor:
+                if bx0.inside(x, True): print('%s is on x=0' % x)
+                if bx1.inside(x, True): print('%s is on x=1' % x)
+                if by0.inside(x, True): print('%s is on y=0' % x)
+                if by1.inside(x, True): print('%s is on y=1' % x)
+            # Print the Dirichlet conditions
+            print('No of Dirichlet conditions:', len(bcs))
+            d2v = dof_to_vertex_map(V)
+            for bc in bcs:
+                bc_dict = bc.get_boundary_values()
+                for dof in bc_dict:
+                    print('dof %2d: u=%g' % (dof, bc_dict[dof]))
+                    if V.ufl_element().degree() == 1:
+                        print('   at point %s' %
+                              (str(tuple(coor[d2v[dof]].tolist()))))
+
+In addition, it is helpful to print the exact and the numerical solution
+at all the vertices as shown in the section :ref:`tut:poisson1:verify1`.
 
 Handy methods in key FEniCS objects
 -----------------------------------
@@ -1012,6 +1270,9 @@ Let ``mesh`` be a ``Mesh`` object.
   * ``mesh.hmin()`` returns the minimum cell diameter ("smallest cell"),
 
   * ``mesh.hmax()`` returns the maximum cell diameter ("largest cell").
+
+  * ``mesh.topology().dim()`` returns the number of physical dimensions of
+    the mesh.
 
 Writing ``print(mesh)`` dumps a short, pretty-print description
 of the mesh (``print(mesh)`` actually displays the result of ``str(mesh)``,

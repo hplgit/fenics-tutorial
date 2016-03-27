@@ -1,8 +1,8 @@
-======= Troubleshooting =======
+========= Troubleshooting =========
 label{tut:trouble}
 idx{troubleshooting}
 
-===== Compilation Problems =====
+======= Compilation Problems =======
 idx{compilation problems}
 
 Expressions and variational forms in a FEniCS program need to be
@@ -25,21 +25,22 @@ understanding of the problem.
 A more fruitful approach is normally to examine the below list
 of common compilation problems and their remedies.
 
-=== Problems with the Instant cache ===
+===== Problems with the Instant cache =====
 
 Instant remembers information about previous compilations and versions
 of your program. Sometimes removal of this information can solve
 the problem. Just run
+
 !bc sys
 instant-clean
 !ec
 in a terminal window whenever you encounter a compilation problem.
 
-=== Syntax errors in expressions ===
+===== Syntax errors in expressions =====
 
 If the compilation problem arises from line with an `Expression`
 object, examine the syntax of the expression carefully. Section
-ref{tut:app:cpp:functions} contains some information on valid
+ref{tut:poisson1:impl:dissect} contains some information on valid
 syntax. You may also want to examine the log file, pointed to in the
 last line in the output of error messages. The compiler's message
 about the syntax problem may lead you to a solution.
@@ -54,7 +55,35 @@ Some common problems are
 Failure to initialize parameters in the expressions lead to a
 compilation error where this problem is explicitly pointed out.
 
-=== Problems in the solve step ===
+=== Example ===
+
+The implementation
+
+!bc pycod
+u_exact = Expression(
+    'x[1] <= 0.5? 2*x[1]*p_1/(p_0 + p_1) : '
+    '((2*x[1]-1)p_0 + p_1)/(p_0 + p_1)',
+    p_0=p_values[0], p_1=p_values[1])
+!ec
+fails with compilation error
+
+!bc
+RuntimeError: In instant.recompile: The module did not compile with
+command 'make VERBOSE=1', see '/some/path/.../compile.log'
+!ec
+Looking up the `compile.log` file and searching for `error`, we see
+the following message from the C++ compiler:
+
+!bc
+error: expected ‘)’ before ‘p_0’
+   values[0] = x[1] <= 0.5? 2*x[1]*p_1/(p_0 + p_1) :
+   ((2*x[1]-1)p_0 + p_1)/(p_0 + p_1);
+              ^
+!ec
+Now we realize that a `*` symbol is missing between `)` and `p_0`.
+
+
+===== Problems in the solve step =====
 
 Sometimes the problem lies in the solve step where a variational form
 is turned into a system of algebraic equations.
@@ -81,12 +110,12 @@ a test function (holding mesh and cell information) is missing.
 For example, a zero right-hand side `Constant(0)*dx` will generate
 this error.
 
-=== Unable to convert object to a UFL form ===
+===== Unable to convert object to a UFL form =====
 
 One common reason for the above error message is that a form is
 written without being multiplied by `dx` or `ds`.
 
-=== UFL reports that a numpy array cannot be converted to any UFL type ===
+===== UFL reports that a numpy array cannot be converted to any UFL type =====
 
 One reason may be that there are mathematical functions like `sin` and
 `exp` operating on `numpy` arrays. The problem is that
@@ -109,7 +138,7 @@ The problem usually arises when pure Python functions with, e.g., analytical
 solutions are introduced for, e.g., plotting.
 
 
-=== All programs fail to compile ===
+===== All programs fail to compile =====
 
 When encountering a compilation problem where the Instant log file says
 something about missing double quote in an `Expression`, try compiling
@@ -118,17 +147,9 @@ reboot Ubuntu and try again.  If the problem persists, try running the
 Update Manager (because unfinished updates can cause compiler
 problems), reboot and try again.
 
-===== Plotting Problems =====
-idx{plotting problems}
+======= Problems with Expression Objects =======
 
-=== The plot disapperas quickly from the screen ===
-
-You have forgotten to insert `interactive()` as the last statement in
-the program.
-
-===== Problems with Expression Objects =====
-
-=== There seems to be some bug in an Expression object ===
+===== There seems to be some bug in an Expression object =====
 
 Run the command `instant-clean` to ensure that everything is
 (re)compiled.  Check the formulas in string expressions carefully, and
@@ -136,7 +157,7 @@ make sure that divisions do not lead to integer division (i.e., at
 least one of the operands in a division must be a floating-point
 variable).
 
-=== I get a segmentation fault when using an Expression object ===
+===== Segmentation fault when using an Expression object =====
 
 One reason may be that the point vector `x` has indices out of
 bounds, e.g., that you access `x[2]` but the mesh is only a 2D mesh.
@@ -144,16 +165,38 @@ Also recall that the components of `x` are `x[0]`, `x[1]`, etc.
 Accessing `x[2]`  as the "y" coordinate is a common error.
 
 
-===== Other Problems =====
+======= Other Problems =======
 
-=== Only parts of the program are executed ===
+===== Very strange error message involving a `mesh` variable =====
+
+If you encounter a really strange error message, and the statement
+in question involves a variable with name `mesh`, check if this
+is really your mesh variable. When doing `from dolfin import *`, you
+get a `mesh` variable, which is actually a module, and sending
+this module to functions creates a `TypeError`. Substitute with
+the actual name of your mesh object.
+
+One should also note other names that get imported by `from dolfin import *`:
+`i`, `j`, `k`, `l`, `p`, `q`, `r`, `s`. It is easy to use such
+variables without initializing them, and strange error message arises
+(since the mentioned names are UFL `Index` objects).
+
+===== The plot disapperas quickly from the screen =====
+
+idx{plotting problems}
+
+You have forgotten to insert `interactive()` as the last statement in
+the program.
+
+
+===== Only parts of the program are executed =====
 
 Check if a call to `interactive()` appears in the middle of the program.
 The computations are halted by this call and not continued before
 you press `q` in a plot window. Most people thus prefer to
 have `interactive()` as the last statement.
 
-=== I get an error in the definition of the boundary ===
+===== Error in the definition of the boundary =====
 
 Consider this code and error message:
 
@@ -172,17 +215,15 @@ is that `x` is a point vector, not just a number.
 In the `inside` function one must work with the
 components of `x`: `x[0]`, `x[1]`, etc.
 
-=== The solver in a nonlinear problems does not converge ===
+===== The solver in a nonlinear problems does not converge =====
 
 There can be many reasons for this common problem:
 
   o The form (variational formulation) is not consistent with the
     PDE(s).
-
   o The boundary conditions in a Newton method are wrong. The
     correction vector must have vanishing essential conditions where
     the complete solution has zero or non-zero values.
-
   o The initial guess for the solution is not appropriate. In some
     problems, a simple function equal to 0 just leads to a zero
     solution or a divergent solver. Try 1 as initial guess, or
@@ -190,7 +231,7 @@ There can be many reasons for this common problem:
     compute an appropriate initial guess, see Section
     ref{tut:nonlinear:Newton:algebraic}.
 
-===== How To Debug a FEniCS Program? =====
+======= How To Debug a FEniCS Program? =======
 
 # A true case study with a few bugs would be really helpful here.
 # 1. Linear problem.
@@ -215,8 +256,8 @@ bc_dict = bc.get_boundary_values()
     for dof in bc_dict:
         print('dof %d: value=%s' % (dof, bc_dict[dof]))
 !ec
-See also an expanded version of this snippet in `${prog["dn2_p2D"]}.py`, located
-in the directory `poisson`.
+See also an expanded version of this snippet in the `solvers_bc`
+`${prog["p2D_vc"]}.py` file located in the directory `poisson`.
 
 A next step in the debugging, if these values are wrong, is to
 call the functions that define the boundary parts. For example,
