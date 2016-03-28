@@ -1,1056 +1,471 @@
 .. !split
 
-.. _tut:poisson1:impl:
+.. _tut:trouble:
 
-A basic Poisson solver
-======================
+Troubleshooting
+%%%%%%%%%%%%%%%
 
-The test problem so far has a general domain :math:`\Omega` and general functions
-:math:`u_0` and :math:`f`. For our first implementation we must decide on specific
-choices of :math:`\Omega`, :math:`u_0`, and :math:`f`.
-It will be wise to construct a specific problem where we can easily
-check that the computed solution is correct. Let us start with
-specifying an exact solution :math:`{u_{\small\mbox{e}}}(x,y)`:
+.. index:: troubleshooting
 
-.. _Eq:tut:poisson1:impl:uex:
+Compilation Problems
+====================
 
-.. math::
+.. index:: compilation problems
 
-    \tag{12}
-    \
-        {u_{\small\mbox{e}}}(x,y) = 1 +x^2 + 2y^2
-        
+Expressions and variational forms in a FEniCS program need to be
+compiled to C++ and linked with libraries if the expressions or forms
+have been modified since last time they were compiled.  The tool
+Instant, which is part of the FEniCS software suite, is used for
+compiling and linking C++ code so that it can be used with Python.
 
-on some 2D domain.  By inserting :ref:`(12) <Eq:tut:poisson1:impl:uex>` in
-our Poisson problem, we find that :math:`{u_{\small\mbox{e}}}(x,y)` is a solution if
+Sometimes the compilation fails. You can see from the
+series of error messages which statement in the Python program that
+led to a compilation problem. Make sure to scroll back and identify
+whether the problematic line is associated with an expression,
+variational form, or the solve step.
 
-.. math::
-         f(x,y) = -6,\quad u_0(x,y)={u_{\small\mbox{e}}}(x,y)=1 + x^2 + 2y^2,
+The final line in the output of error messages points to a log file
+from the compilation where one can examine the error messages from the
+compiler. It is usually the last lines of this log file that are of
+interest. Occasionally, the compiler's message can quickly lead to an
+understanding of the problem.
+A more fruitful approach is normally to examine the below list
+of common compilation problems and their remedies.
 
-regardless of the shape of the domain. We choose here, for simplicity,
-the domain to be the unit square,
+Problems with the Instant cache
+-------------------------------
 
-.. math::
-         \Omega = [0,1]\times [0,1] .
-
-The reason for specifying the solution :ref:`(12) <Eq:tut:poisson1:impl:uex>`
-is that the finite element method, with a rectangular domain uniformly
-partitioned into linear triangular elements, will exactly reproduce a
-second-order polynomial at the vertices of the cells, regardless of
-the size of the elements. This property allows us to verify the
-implementation by comparing the computed solution (:math:`u`) with the exact
-solution (:math:`{u_{\small\mbox{e}}}`). These quantities should be equal
-to machine precision *at the nodes*.
-Test problems with this property will be frequently constructed
-throughout this tutorial.
-
-.. _tut:poisson1:impl:code:
-
-A simple code
--------------
-
-A FEniCS program for solving the Poisson equation in 2D with the given
-choices of :math:`u_0`, :math:`f`, and :math:`\Omega` may look as follows:
-
-.. code-block:: python
-
-        from dolfin import *
-        
-        # Create mesh and define function space
-        mesh = UnitSquareMesh(6, 4)
-        V = FunctionSpace(mesh, 'Lagrange', 1)
-        
-        # Define boundary conditions
-        u0 = Expression('1 + x[0]*x[0] + 2*x[1]*x[1]')
-        
-        def u0_boundary(x, on_boundary):
-            return on_boundary
-        
-        bc = DirichletBC(V, u0, u0_boundary)
-        
-        # Define variational problem
-        u = TrialFunction(V)
-        v = TestFunction(V)
-        f = Constant(-6.0)
-        a = inner(nabla_grad(u), nabla_grad(v))*dx
-        L = f*v*dx
-        
-        # Compute solution
-        u = Function(V)
-        solve(a == L, u, bc)
-        
-        # Plot solution and mesh
-        plot(u)
-        
-        # Dump solution to file in VTK format
-        file = File("poisson.pvd")
-        file << u
-        
-        # Find max error
-        u0_Function = interpolate(u0, V)         # exact solution
-        u0_array = u0_Function.vector().array()  # dof values
-        max_error = (u0_array - u.vector().array()).max()
-        print('max error:', max_error)
-        
-        # Hold plot
-        interactive()
-
-The complete code can be found in the file `p2D_plain.py <https://github.com/hplgit/fenics-tutorial/blob/master/src/poisson/p2D_plain.py>`__ in the
-directory `src/poisson <https://github.com/hplgit/fenics-tutorial/blob/master/src/poisson>`__.
-
-.. _tut:poisson1:impl:run:
-
-Running the program
--------------------
-
-To run the program ``p2D_plain.py``, open a terminal window, move to
-the directory containing the program and write
+Instant remembers information about previous compilations and versions
+of your program. Sometimes removal of this information can solve
+the problem. Just run
 
 .. code-block:: text
 
-        Terminal> python p2D_plain.py
+        instant-clean
 
-A plot window pops up showing how the solution :math:`u` looks like as a surface.
-With the left mouse button you can tilt the figure. Click ``m`` to bring
-up the underlying mesh. Click ``p`` to save to a PNG file ``dolfin_plot_0.png``
-and ``P`` to save to a PDF file ``dolfin_plot_1.pdf``. To kill the
-plot window and terminate the application, click ``Ctrl+q`` (hold down
-the ``Ctrl`` key and press ``q``).
-Figure :ref:`tut:poisson:2D:fig:ex1:u` displays the surface and the mesh below.
-Since :math:`u` is a simple quadratic function,
-constructed for testing our solver, the
-surface looks quite boring.
+in a terminal window whenever you encounter a compilation problem.
 
-.. _tut:poisson:2D:fig:ex1:u:
+Syntax errors in expressions
+----------------------------
 
-.. figure:: ex1_u.png
-   :width: 600
+If the compilation problem arises from line with an ``Expression``
+object, examine the syntax of the expression carefully. The section :ref:`tut:poisson1:impl:dissect` contains some information on valid
+syntax. You may also want to examine the log file, pointed to in the
+last line in the output of error messages. The compiler's message
+about the syntax problem may lead you to a solution.
 
-   *Plot of the solution in the first FEniCS example*
+Some common problems are
 
-.. _tut:poisson1:impl:dissect:
+ 1. using ``a**b`` for exponentiation (illegal in C++) instead of ``pow(a, b)``,
 
-Dissection of the program
--------------------------
+ 2. forgetting that the spatial coordinates are denoted by a vector ``x``,
 
-We shall now dissect this FEniCS program in detail. The program is
-written in the Python programming language.  You may either take a
-quick look at the `official Python tutorial <http://docs.python.org/tutorial/>`__ to pick up the basics of Python if
-you are unfamiliar with the language, or you may learn enough Python
-as you go along with the examples in the present tutorial. The latter
-strategy has proven to work for many newcomers to FEniCS. (The
-requirement of using Python and an abstract mathematical formulation
-of the finite element problem may seem difficult for those who are
-unfamiliar with these topics.  However, the amount of mathematics and
-Python that is really demanded to get you productive with FEniCS is
-quite limited.  And Python is an easy-to-learn language that you
-certainly will love and use far beyond FEniCS programming.)  the section :ref:`tut:appendix:pybooks` lists some relevant Python books.
+ 3. forgetting that the :math:`x`, :math:`y`, and :math:`z` coordinates in space correspond
+    to ``x[0]``, ``x[1]``, and ``x[2]``, respectively.
 
-The listed FEniCS program defines a finite element mesh, the discrete
-function spaces :math:`V` and :math:`\hat{V}` corresponding to this mesh and the
-element type, boundary conditions for :math:`u` (the function :math:`u_0`),
-:math:`a(u,v)`, and :math:`L(v)`.  Thereafter, the unknown trial function :math:`u` is
-computed. Then we can compare the numerical and exact solution
-as well as investigate :math:`u` visually.
+Failure to initialize parameters in the expressions lead to a
+compilation error where this problem is explicitly pointed out.
 
-The key import line
-~~~~~~~~~~~~~~~~~~~
-
-The first line in the program,
-
-.. code-block:: python
-
-        from dolfin import *
-
-imports the key classes ``UnitSquareMesh``, ``FunctionSpace``, ``Function``,
-and so forth, from the DOLFIN library.  All FEniCS programs for
-solving PDEs by the finite element method normally start with this
-line. DOLFIN is a software library with efficient and convenient C++
-classes for finite element computing, and ``dolfin`` is a Python package
-providing access to this C++ library from Python programs.  You can
-think of FEniCS as an umbrella, or project name, for a set of
-computational components, where DOLFIN is one important component for
-writing finite element programs. The ``from dolfin import *`` statement
-imports other components too, but newcomers to FEniCS programming do
-not need to care about this.
-
-.. index:: Mesh
-
-.. index:: DOLFIN mesh
-
-Generating simple meshes
-~~~~~~~~~~~~~~~~~~~~~~~~
-
-The statement
-
-.. code-block:: python
-
-        mesh = UnitSquareMesh(6, 4)
-
-defines a uniform finite element mesh over the unit square
-:math:`[0,1]\times [0,1]`. The mesh consists of *cells*, which are triangles
-with straight sides. The parameters 6 and 4 tell that the square is
-first divided into :math:`6\times 4` rectangles, and then each rectangle is
-divided into two triangles. The total number of triangles then becomes
-48. The total number of vertices in this mesh is :math:`7\cdot 5=35`.
-DOLFIN offers some classes for creating meshes over very simple
-geometries. For domains of more complicated shape one needs to use a
-separate *preprocessor* program to create the mesh.  The FEniCS
-program will then read the mesh from file.
-
-.. index:: FunctionSpace
-
-.. index:: finite element specifications
-
-.. index:: CG finite element family
-
-.. index:: Lagrange finite element family
-
-.. index:: P1 element
-
-Defining a function space corresponding to a mesh
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-Having a mesh, we can define a discrete function space ``V`` over this mesh:
-
-.. code-block:: python
-
-        V = FunctionSpace(mesh, 'Lagrange', 1)
-
-The second argument reflects the type of element, while the third
-argument is the degree of the basis functions on the element.  The
-type of element is here "Lagrange", implying the standard Lagrange
-family of elements.  (Some FEniCS programs use ``'CG'``, for Continuous
-Galerkin, as a synonym for ``'Lagrange'``.)  With degree 1, we simply
-get the standard linear Lagrange element, which is a triangle with
-nodes at the three vertices.  Some finite element practitioners refer
-to this element as the "linear triangle" or the P1 element.  The
-computed :math:`u` will be continuous and linearly varying in :math:`x` and :math:`y`
-over each cell in the mesh.  Higher-degree polynomial approximations
-over each cell are trivially obtained by increasing the third
-parameter in ``FunctionSpace``, which will then generate P2, P3, and so
-forth, type of elements. Changing the second parameter to ``'DG'``
-creates a function space for discontinuous Galerkin methods.
-
-.. index:: TestFunction
-
-.. index:: TrialFunction
-
-.. index:: DirichletBC
-
-.. index:: Dirichlet boundary conditions
-
-Defining test and trial functions
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-In mathematics, we distinguish between the trial and test spaces :math:`V`
-and :math:`\hat{V}`. The only difference in the present problem is the
-boundary conditions. In FEniCS we do not specify the boundary
-conditions as part of the function space, so it is sufficient to work
-with one common space ``V`` for the and trial and test functions in the
-program:
-
-.. code-block:: python
-
-        u = TrialFunction(V)
-        v = TestFunction(V)
-
-.. index:: boundary specification (function)
-
-Specifying the boundary and boundary conditions
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-The next step is to specify the boundary condition: :math:`u=u_0` on
-:math:`\partial\Omega`. This is done by
-
-.. code-block:: python
-
-        bc = DirichletBC(V, u0, u0_boundary)
-
-where ``u0`` is an instance holding the :math:`u_0` values, and ``u0_boundary``
-is a function (or object) describing whether a point lies on the
-boundary where :math:`u` is specified.
-
-Boundary conditions of the type :math:`u=u_0` are known as *Dirichlet
-conditions*, and also as *essential boundary conditions* in a finite
-element context.  Naturally, the name of the DOLFIN class holding the
-information about Dirichlet boundary conditions is ``DirichletBC``.
-
-.. index:: Expression
-
-The ``u0`` variable refers to an ``Expression`` object, which is used to
-represent a mathematical function. The typical construction is
-
-.. code-block:: python
-
-        u0 = Expression(formula)
-
-where ``formula`` is a string containing the mathematical expression.
-This formula is written with C++ syntax (the expression is
-automatically turned into an efficient, compiled C++ function, see
-the section :ref:`tut:app:cpp:functions` for details on the syntax). The
-independent variables in the function expression are supposed to be
-available as a point vector ``x``, where the first element ``x[0]``
-corresponds to the :math:`x` coordinate, the second element ``x[1]`` to the
-:math:`y` coordinate, and (in a three-dimensional problem) ``x[2]`` to the :math:`z`
-coordinate. With our choice of :math:`u_0(x,y)=1 + x^2 + 2y^2`, the formula
-string must be written as ``1 + x[0]*x[0] + 2*x[1]*x[1]``:
-
-.. code-block:: python
-
-        u0 = Expression('1 + x[0]*x[0] + 2*x[1]*x[1]')
-
-.. index:: boundary specification (function)
-
-The information about where to apply the ``u0`` function as boundary
-condition is coded in a function ``u0_boundary``:
-
-.. code-block:: python
-
-        def u0_boundary(x, on_boundary):
-            return on_boundary
-
-A function like ``u0_boundary`` for marking the boundary must return a
-boolean value: ``True`` if the given point ``x`` lies on the Dirichlet
-boundary and ``False`` otherwise.  The argument ``on_boundary`` is ``True``
-if ``x`` is on the physical boundary of the mesh, so in the present
-case, where we are supposed to return ``True`` for all points on the
-boundary, we can just return the supplied value of ``on_boundary``.  The
-``u0_boundary`` function will be called for every discrete point in the
-mesh, which allows us to have boundaries where :math:`u` are known also
-inside the domain, if desired.
-
-One can also omit the ``on_boundary`` argument, but in that case we need
-to test on the value of the coordinates in ``x``:
-
-.. code-block:: python
-
-        def u0_boundary(x):
-            return x[0] == 0 or x[1] == 0 or x[0] == 1 or x[1] == 1
-
-As for the formula in ``Expression`` objects, ``x`` in the ``u0_boundary``
-function represents a point in space with coordinates ``x[0]``, ``x[1]``,
-etc. Comparing floating-point values using an exact match test with
-``==`` is not good programming practice, because small round-off errors
-in the computations of the ``x`` values could make a test ``x[0] == 1``
-become false even though ``x`` lies on the boundary.  A better test is
-to check for equality with a tolerance:
-
-.. code-block:: python
-
-        def u0_boundary(x):
-            tol = 1E-15
-            return abs(x[0]) < tol or \ 
-                   abs(x[1]) < tol or \ 
-                   abs(x[0] - 1) < tol or \ 
-                   abs(x[1] - 1) < tol
-
-.. index:: UFL
-
-Specifying the right-hand side function
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-Before defining :math:`a(u,v)` and :math:`L(v)` we have to specify the :math:`f` function:
-
-.. code-block:: python
-
-        f = Expression('-6')
-
-When :math:`f` is constant over the domain, ``f`` can be
-more efficiently represented as a ``Constant`` object:
-
-.. code-block:: python
-
-        f = Constant(-6.0)
-
-Specifying the variational formulation
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-Now we have all the objects we need in order to specify this problem's
-:math:`a(u,v)` and :math:`L(v)`:
-
-.. code-block:: python
-
-        a = inner(nabla_grad(u), nabla_grad(v))*dx
-        L = f*v*dx
-
-In essence, these two lines specify the PDE to be solved.  Note the
-very close correspondence between the Python syntax and the
-mathematical formulas :math:`\nabla u\cdot\nabla v {\, \mathrm{d}x}` and :math:`fv {\, \mathrm{d}x}`.  This
-is a key strength of FEniCS: the formulas in the variational
-formulation translate directly to very similar Python code, a feature
-that makes it easy to specify PDE problems with lots of PDEs and
-complicated terms in the equations.  The language used to express weak
-forms is called UFL (Unified Form Language) and is an integral part of
-FEniCS.
-
-Instead of ``nabla_grad`` we could also just have written ``grad`` in the
-examples in this tutorial. However, when taking gradients of vector
-fields, ``grad`` and ``nabla_grad`` differ. The latter is consistent with
-the tensor algebra commonly used to derive vector and tensor PDEs,
-where :math:`\nabla` ("nabla") acts as a vector operator, and therefore
-this author prefers to always use ``nabla_grad``.
-
-Forming and solving the linear system
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-Having ``a`` and ``L`` defined, and information about essential
-(Dirichlet) boundary conditions in ``bc``, we can compute the solution,
-a finite element function ``u``, by
-
-.. code-block:: python
-
-        u = Function(V)
-        solve(a == L, u, bc)
-
-Some prefer to replace ``a`` and ``L`` by an ``equation``
-variable, which is accomplished by this equivalent code:
-
-.. code-block:: python
-
-        equation = inner(nabla_grad(u), nabla_grad(v))*dx == f*v*dx
-        u = Function(V)
-        solve(equation, u, bc)
-
-Note that we first defined the variable ``u`` as a ``TrialFunction`` and
-used it to represent the unknown in the form ``a``.  Thereafter, we
-redefined ``u`` to be a ``Function`` object representing the solution,
-i.e., the computed finite element function :math:`u`.  This redefinition of
-the variable ``u`` is possible in Python and often done in FEniCS
-applications. The two types of objects that ``u`` refers to are equal
-from a mathematical point of view, and hence it is natural to use the
-same variable name for both objects. In a program, however,
-``TrialFunction`` objects must always be used for the unknowns in the
-problem specification (the form ``a``), while ``Function`` objects must be
-used for quantities that are computed (known).
-
-.. index:: degrees of freedom
-
-Examining the values of the solution
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-The present test problem should produce a numerical solution that
-equals the exact solution to machine precision. That is, there are
-no approximation errors in our test problem. We can use this property
-to "prove" that our implementation is correct, a necessary first step
-before we try to apply our code to more complicated problems.
-For such verification, we need
-to compare the computed ``u`` function to ``u0``.
-
-A finite element function like :math:`u` is expressed as a linear combination
-of basis functions :math:`\phi_j`, spanning the space :math:`V`:
-
-.. _Eq:tut:poisson1:ufem:
-
-.. math::
-
-    \tag{13}
-    u = \sum_{j=1}^N U_j \phi_j {\thinspace .}
-        
-
-By writing ``solve(a == L, u, bc)`` in the program, a linear system
-will be formed from :math:`a` and :math:`L`, and this system is solved for the
-:math:`U_1,\ldots,U_N` values. The :math:`U_1,\ldots,U_N` values are known
-as *degrees of freedom* of :math:`u`. For Lagrange elements (and many other
-element types) :math:`U_k` is simply the value of :math:`u` at the node
-with global number :math:`k`.
-The nodes and cell vertices coincide for linear Lagrange elements, while
-for higher-order elements there are additional nodes at
-the facets and maybe also in the interior of cells.
-
-Having ``u`` represented as a ``Function`` object, we can either evaluate
-``u(x)`` at any point ``x`` in the mesh (expensive operation!),
-or we can grab all the degrees of
-freedom values :math:`U_j` directly by
-
-.. code-block:: python
-
-        u_nodal_values = u.vector()
-
-The result is a DOLFIN ``Vector`` object, which is basically an
-encapsulation of the vector object used in the linear algebra package
-that is used to solve the linear system arising from the
-variational problem.
-Since we program in Python it is convenient to convert the
-``Vector`` object to a standard ``numpy`` array for further
-processing:
-
-.. index:: degrees of freedom array
-
-.. index:: nodal values array
-
-.. index::
-   single: numbering; degrees of freedom
-
-.. index::
-   single: numbering; cell vertices
-
-.. code-block:: python
-
-        u_array = u_nodal_values.array()
-
-With ``numpy`` arrays we can write MATLAB-like code to analyze
-the data. Indexing is done with square brackets: ``u_array[i]``,
-where the index ``i`` always starts at ``0``. However, ``i`` corresponds
-to :math:`u` at some point in the mesh and the correspondence requires
-knowledge of the numbering of degrees of freedom and the numbering of
-vertices in elements in the mesh, see the section :ref:`tut:poisson1:verify1`
-for details.
-
-.. index:: interpolate
-
-For now, we want to check that the values in ``u_array`` are correct:
-they should equal our ``u0`` function. The most natural approach is
-to interpolate our ``u0`` expression onto our space
-(i.e., the finite element mesh),
-
-.. code-block:: python
-
-        u0_Function = interpolate(u0, V)
-
-The ``interpolate`` function returns a ``Function`` object, whose degrees
-of freedom values can be obtained by ``.vector().array()``.  Our goal is
-to show that the degrees of freedom arrays of ``u`` and ``u0_Function``
-are equal. One safe of doing this is to compute the maximum error,
-
-.. code-block:: python
-
-        u0_array = u0_Function.vector().array()  # dof values
-        max_error = (u0_array - u.vector().array()).max()
-        print('max error:', max_error)
-
-
-.. admonition:: How to check that the error vanishes
-
-   With inexact arithmetics, as we always have on a computer,
-   this maximum error is not zero, but should be a small number.
-   The machine precision is about :math:`10^{-16}`, but in finite element
-   calculations, rounding errors of this size may accumulate, so
-   the expected accuracy of ``max_error`` smaller. Experiments show
-   that increasing the number of elements and increasing the degree
-   of the finite element polynomials increase ``max_error``.
-   For a mesh with :math:`2(20\times 20)` cubic Lagrange elements (degree 3)
-   ``max_error`` is about :math:`2\cdot 10^{-12}`, while for 18 linear elements
-   the maximum error is about :math:`2\cdot 10^{-15}`.
-
-
-
-
-Plotting the solution
-~~~~~~~~~~~~~~~~~~~~~
-
-The simplest way of quickly looking at ``u`` is to say
-
-.. code-block:: python
-
-        plot(u, interactive=True)
-        # or
-        plot(u)
-        interactive()
-
-Clicking on ``Help`` in the plot windows brings up a list of commands.
-For example, typing ``m`` brings up the mesh.  With the left, middle,
-and right mouse buttons you can rotate, translate, and zoom
-(respectively) the plotted surface to better examine what the solution
-looks like. You must click ``Ctrl+q`` to kill the plot window and
-continue execution beyond the ``plot(u, interactive=True)`` command or
-``interactive()``.  Figure :ref:`tut:poisson:2D:fig:ex1:u` displays the
-resulting :math:`u` function.
-
-Plotting both the solution and the mesh is accomplished by
-
-.. code-block:: python
-
-        plot(u)
-        plot(mesh)
-        # Hold plot
-        interactive()
-
-Type ``Ctrl+w`` to kill all plot windows and continue execution.
-
-It is also possible to dump the computed solution to file, e.g., in the
-VTK format:
-
-.. code-block:: python
-
-        file = File('poisson.pvd')
-        file << u
-
-The ``poisson.pvd`` file can now be loaded into any front-end to VTK,
-say ParaView or VisIt. The ``plot`` function is intended for quick
-examination of the solution during program development.  More in-depth
-visual investigations of finite element solutions will normally
-benefit from using highly professional tools such as ParaView and
-VisIt.
-
-.. _tut:poisson1:impl2:
-
-Refactored implementation
--------------------------
-
-Our initial program above is "flat". That is, it is not organized into
-logical, reusable units in terms of Python functions. Such flat programs are
-popular for quickly testing out some software, but not well suited for
-serious problem solving. We shall therefore at once *refactor* the program,
-meaning that we divide it into functions, but this is just a
-reordering of the existing statements. During refactoring, we try
-make functions as reusable as possible in other contexts, but
-statements specific to a certain problem or task are also encapsulated
-in (non-reusable) functions.
-Being able to distinguish reusable code from specialized code is a key issue
-when refactoring code, and this ability depends on a good mathematical
-understanding of the problem at hand ("what is general, what is special?").
-In a flat program, general and specialized code (and mathematics)
-is often mixed together.
-
-A general solver function
-~~~~~~~~~~~~~~~~~~~~~~~~~
-
-Some of the code in the previous flat program are needed to solve any
-Poisson problem :math:`-\nabla^2 u=f` on :math:`[0,1]\times [0,1]` with :math:`u=u_0` on
-the boundary. Let us collect this code in a reusable function
-``solver``.  Our special test problem will then just be an application
-of ``solver`` with some additional statements.
-We limit the ``solver`` function to just *compute the numerical
-solution*. Plotting and comparing the solution with the exact solution
-are considered to be problem-specific activities to be performed elsewhere.
-
-We parameterize ``solver`` by :math:`f`, :math:`u_0`, and the
-resolution of the mesh. Since it is so trivial to use higher-order
-finite element functions by changing the third argument to
-``FunctionSpace``, we let also the degree of the polynomials in the
-finite element basis functions be an argument to ``solver``.
-[**hpl 4**: The refactoring extends functionality. Should we be strict and keep linear elements? The test is better when it tests the degree parameter as well...]
-
-.. code-block:: python
-
-        from dolfin import *
-        
-        def solver(f, u0, Nx, Ny, degree=1):
-            """
-            Solve -Laplace(u)=f on [0,1]x[0,1] with 2*Nx*Ny Lagrange
-            elements of specified degree and u=u0 (Expresssion) on
-            the boundary.
-            """
-            # Create mesh and define function space
-            mesh = UnitSquareMesh(Nx, Ny)
-            V = FunctionSpace(mesh, 'Lagrange', degree)
-        
-            def u0_boundary(x, on_boundary):
-                return on_boundary
-        
-            bc = DirichletBC(V, u0, u0_boundary)
-        
-            # Define variational problem
-            u = TrialFunction(V)
-            v = TestFunction(V)
-            a = inner(nabla_grad(u), nabla_grad(v))*dx
-            L = f*v*dx
-        
-            # Compute solution
-            u = Function(V)
-            solve(a == L, u, bc)
-        
-            return u
-
-Plotting for the test problem
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-The additional tasks we did in our initial program can be placed in
-other functions. For example, plotting the solution in our particular
-test problem is placed in an
-``application_test`` function:
-
-.. code-block:: python
-
-        def application_test():
-            """Plot the solution in the test problem."""
-            u0 = Expression('1 + x[0]*x[0] + 2*x[1]*x[1]')
-            f = Constant(-6.0)
-            u = solver(f, u0, 6, 4, 1)
-            # Dump solution to file in VTK format
-            file = File("poisson.pvd")
-            file << u
-            # Plot solution and mesh
-            plot(u)
-
-Make a module!
-~~~~~~~~~~~~~~
-
-The refactored code is put in a file `p2D_func.py <https://github.com/hplgit/fenics-tutorial/blob/master/src/poisson/p2D_func.py>`__. We should make
-sure that such a file can be imported (and hence reused) in other programs.
-Then all statements in the main program should appear with a test
-``if __name__ == '__main__':``. This test is true if the file is executed
-as a program, but false if the file is imported.
-If we want to run this file in the same way as we can
-run ``p2D_func.py``, the main program is simply a call to
-``application_test()`` followed by a call ``interactive()`` to hold the plot:
-
-.. code-block:: python
-
-        if __name__ == '__main__':
-            application_test()
-            # Hold plot
-            interactive()
-
-.. index:: unit testing
-
-Verification
-~~~~~~~~~~~~
-
-The remaining part of our first program is to compare the numerical and
-the exact solution. Every time we edit the code we must rerun the test
-and examine that ``max_error`` is sufficiently small so we know that the
-code still works. To this end, we shall adopt *unit testing*, meaning
-that we create a mathematical test and corresponding software that
-can run all our tests automatically and check that all tests pass.
-Python has several tools for unit testing. Two very popular ones are
-pytest and nose. These are almost identical and very easy to use.
-More classical unit testing with test classes is offered by the built-in
-tool ``unittest``, but here we are going to use pytest (or nose) since it demands
-shorter and clearer code.
-
-Mathematically, our unit test is that the finite element solution of
-our problem when :math:`f=-6` equals the exact solution :math:`u=u_0=1+x^2+2y^2`.
-We have already created code that finds the maximum error in the
-numerical solution. Because of rounding errors, we cannot demand this
-maximum error to be zero, but we have to use a tolerance, which depends
-to the number of elements and the degrees of the polynomials in the finite
-element basis functions. In the section :ref:`tut:poisson1:impl:dissect` we
-reported some experiments with the size of the maximum error. If we want
-to test that ``solver`` works for meshes up to :math:`2(20\times 20)` elements
-and cubic Lagrange elements, :math:`10^{-11}` is
-an appropriate tolerance for testing that the maximum error vanishes.
-
-Only three statements are necessary to carry out the unit test. However,
-we shall embed these statements in software that the testing frameworks
-pytest and nose can recognize. This means that each unit test
-must be placed in a function that
-
- * has a name starting with ``test_``
-
- * has no arguments
-
- * implements the test as ``assert success, msg``
-
-Regarding the last point, ``success`` is a boolean expression that is ``False``
-if the test fails, and in that case the string ``msg`` is written to the
-screen. When the test fails, ``assert`` raises an ``AssertionError`` exception
-in Python, otherwise the statement runs silently. The ``msg`` string is
-optional, so ``assert success`` is the minimal test. In our case, we
-will do ``assert max_error < tol``, where ``tol`` is the tolerance (:math:`10^{-11}`)
-mentioned above.
-
-A proper *test function* for implementing this unit test in the pytest
-or nose testing frameworks has the following form. Note that we perform
-the test for different mesh resolutions and degrees of finite elements.
-
-.. code-block:: python
-
-        def test_solver():
-            """Reproduce u=1+x^2+2y^2 to "machine precision"."""
-            tol = 1E-11  # This problem's precision
-            u0 = Expression('1 + x[0]*x[0] + 2*x[1]*x[1]')
-            f = Constant(-6.0)
-            for Nx, Ny in [(3,3), (3,5), (5,3), (20,20)]:
-                for degree in 1, 2, 3:
-                    print('solving on 2(%dx%dx) mesh with P%d elements'
-                          % (Nx, Ny, degree))
-                    u = solver(f, u0, Nx, Ny, degree)
-                    # Make a finite element function of the exact u0
-                    V = u.function_space()
-                    u0_Function = interpolate(u0, V)  # exact solution
-                    # Check that dof arrays are equal
-                    u0_array = u0_Function.vector().array()  # dof values
-                    max_error = (u0_array - u.vector().array()).max()
-                    msg = 'max error: %g for 2(%dx%d) mesh and degree=%d' %\ 
-                          (max_error, Nx, Ny, degree)
-                    assert max_error < tol, msg
-
-We can at any time run
-
-.. code-block:: text
-
-        Terminal> py.test -s -v p2D_func.py
-
-and the pytest tool will run all functions ``test_*()`` in the file and report
-how the tests go.
-
-We shall make it a habit in this book to encapsulate numerical test
-problems in unit tests as done above, and we strongly encourage the
-reader to create similar unit tests whenever a FEniCS solver is
-implemented. We dare to assert that this is the only serious way
-do reliable computational science with FEniCS.
-
-
-.. admonition:: Tip: Print messages in test functions
-
-   The ``assert`` statement runs silently when the test passes so users may
-   become uncertain if all the statements in a test function are really
-   executed. A psychological help is to print out something before ``assert``
-   (as we do in the example above) such that it is clear that the
-   test really takes place.
-   (Note that ``py.test`` needs the ``-s`` option to show printout
-   from the test functions.)
-
-
-
-
-The next three sections deal with some technicalities about specifying
-the solution method for linear systems (so that you can solve large
-problems) and examining array data from the computed solution (so that
-you can check that the program is correct).  These technicalities are
-scattered around in forthcoming programs. However, the impatient
-reader who is more interested in seeing the previous program being
-adapted to a real physical problem, and play around with some
-interesting visualizations, can safely jump to the section :ref:`tut:poisson:membrane`.  Information in the intermediate sections
-can be studied on demand.
-
-.. --- begin exercise ---
-
-Exercise 1: Solve a Poisson problem
------------------------------------
-
-Solve the following problem
-
-.. _Eq:_auto3:
-
-.. math::
-
-    \tag{14}
-    \nabla^2 u = 2e^{-2x}\sin(\pi y)((4-5\pi^2)\sin(2\pi x) - 8\pi\cos(2\pi x)),
-        \quad\hbox{ in }\Omega = [0,1]\times [0,1]
-        
-        
-
-.. _Eq:_auto4:
-
-.. math::
-
-    \tag{15}
-    u = 0\quad\hbox{ on }\partial\Omega
-        
-        
-
-The exact solution is given by
-
-.. math::
-         {u_{\small\mbox{e}}} = 2e^{-2x}\sin(\pi x)\sin(\pi y){\thinspace .}
-
-Compute the maximum numerical approximation error in a mesh with
-:math:`2(N_x\times N_y)` elements and in a mesh with double resolution:
-:math:`4(N_x\times N_y)` elements. Show that the doubling the resolution
-reduces the error by a factor 4 when using Lagrange elements of degree one.
-(This is a good verification that the implementation is correct, but
-note that the result requires sufficiently fine mesh - here
-one may start with :math:`N_x=N_y=20`.)
-Make an illustrative plot of the solution too.
-
-**a)**
-Base your implementation on editing the program
-``p2D_plain.py``.
-
-.. --- begin hint in exercise ---
-
-**Hint.**
-In the string for an ``Expression`` object, ``DOLFIN_PI`` is the value of
-:math:`\pi`. Also note that :math:`\pi^2` must be expressed with syntax
-``pow(DOLFIN_PI,2)`` and not (the common Python syntax) ``DOLFIN_PI**2``.
-
-FEniCS will abort with a compilation error if you type the expressions
-in a wrong way syntax-wise.  Search for *error:* in the
-``/very/long/path/compile.log`` file mentioned in the error message to
-see what the C++ compiler reported as error in the expressions.
-
-.. --- end hint in exercise ---
-
-Filename: ``p2D_fsin_plain``.
-
-.. --- begin solution of exercise ---
-
-**Solution.**
-Looking at the ``p2D_plain.py`` code, we realize that
-the following edits are required:
-
- * Modify the ``mesh`` computation.
-
- * Modify ``u0`` and ``f``.
-
- * Add expression for the exact solution.
-
- * Modify the computation of the numerical error.
-
- * Insert a loop to enable solving the problem twice.
-
- * Put the error reduction computation and the plot statements after the loop.
-
-Here is the modified code:
-
-.. code-block:: python
-
-        from dolfin import *
-        
-        Nx = Ny = 20
-        error = []
-        for i in range(2):
-            Nx *= (i+1)
-            Ny *= (i+1)
-        
-            # Create mesh and define function space
-            mesh = UnitSquareMesh(Nx, Ny)
-            V = FunctionSpace(mesh, 'Lagrange', 1)
-        
-            # Define boundary conditions
-            u0 = Constant(0)
-        
-            def u0_boundary(x, on_boundary):
-                return on_boundary
-        
-            bc = DirichletBC(V, u0, u0_boundary)
-        
-            # Define variational problem
-            u = TrialFunction(V)
-            v = TestFunction(V)
-            f = Expression('-2*exp(-2*x[0])*sin(pi*x[1])*('
-                           '(4-5*pow(pi,2))*sin(2*pi*x[0]) '
-                           ' - 8*pi*cos(2*pi*x[0]))', pi=DOLFIN_PI)
-            a = inner(nabla_grad(u), nabla_grad(v))*dx
-            L = f*v*dx
-        
-            # Compute solution
-            u = Function(V)
-            solve(a == L, u, bc)
-        
-            u_e = Expression(
-                '2*exp(-2*x[0])*sin(2*DOLFIN_PI*x[0])*sin(DOLFIN_PI*x[1])')
-        
-            u_e_Function = interpolate(u_e, V)         # exact solution
-            u_e_array = u_e_Function.vector().array()  # dof values
-            max_error = (u_e_array - u.vector().array()).max()
-            print('max error:', max_error, '%dx%d mesh' % (Nx, Ny))
-            error.append(max_error)
-        
-        print('Error reduction:', error[1]/error[0])
-        
-        # Plot solution and mesh
-        plot(u)
-        
-        # Dump solution to file in VTK format
-        file = File("poisson.pvd")
-        file << u
-        
-        # Hold plot
-        interactive()
-
-The number :math:`\pi` has the symbol ``M_PI`` in C and C++, but in FEniCS C++
-expressions the symbol ``DOLFIN_PI`` must be used. Above, we introduce
-the variable ``pi`` in the expression for ``f``, since we find it more
-readable, and then we define ``pi`` as ``DOLFIN_PI`` as an extra parameter
-to ``Expression``. The alternative of using ``DOLFIN_PI`` inside the
-string ``f`` gives a more difficult-to-read expression.
-
-.. figure:: p2D_fsin.png
-   :width: 500
-
-.. --- end solution of exercise ---
-
-**b)**
-Base your implementation on a new file that imports functionality
-from the module ``p2D_func.py``. Embed the check of the
-reduction of the numerical approximation error in a unit test.
-Filename: ``p2D_fsin_func``.
-
-.. --- begin solution of exercise ---
-
-**Solution.**
-Solving the two problems is a matter of calling ``solver`` with
-different sets of arguments.
-To compute the numerical error,
-we need code that is close to what we have in ``test_solver``.
-
-.. code-block:: python
-
-        from p2D_func import (
-            solver, Expression, Constant, interpolate, File, plot,
-            interactive)
-        
-        def data():
-            """Return data for this Poisson problem."""
-            u0 = Constant(0)
-            u_e = Expression(
-                '2*exp(-2*x[0])*sin(2*DOLFIN_PI*x[0])*sin(DOLFIN_PI*x[1])')
-            f = Expression('-2*exp(-2*x[0])*sin(pi*x[1])*('
-                           '(4-5*pow(pi,2))*sin(2*pi*x[0]) '
-                           ' - 8*pi*cos(2*pi*x[0]))', pi=DOLFIN_PI)
-            return u0, f, u_e
-        
-        def test_solver():
-            """Check convergence rate of solver."""
-            u0, f, u_e = data()
-            Nx = 20
-            Ny = Nx
-            error = []
-            # Loop over refined meshes
-            for i in range(2):
-                Nx *= i+1
-                Ny *= i+1
-                print('solving on 2(%dx%d) mesh' % (Nx, Ny))
-                u = solver(f, u0, Nx, Ny, degree=1)
-                # Make a finite element function of the exact u_e
-                V = u.function_space()
-                u_e_array = interpolate(u_e, V).vector().array()
-                max_error = (u_e_array - u.vector().array()).max()  # Linf norm
-                error.append(max_error)
-                print('max error:', max_error)
-            for i in range(1, len(error)):
-                error_reduction = error[i]/error[i-1]
-                print('error reduction:', error_reduction)
-                assert abs(error_reduction - 0.25) < 0.1
-        
-        def application():
-            """Plot the solution."""
-            u0, f, u_e = data()
-            Nx = 40
-            Ny = Nx
-            u = solver(f, u0, Nx, Ny, 1)
-            # Dump solution to file in VTK format
-            file = File("poisson.pvd")
-            file << u
-            # Plot solution and mesh
-            plot(u)
-        
-        if __name__ == '__main__':
-            test_solver()
-            application()
-            # Hold plot
-            interactive()
-
-The unit test is embedded in a proper test function ``test_solver``
-for the pytest or
-nose testing frameworks. Visualization of the solution is encapsulated
-in the ``application`` function. Since we need ``u_e``, ``u0``, and ``f``
-in two functions, we place the definitions in a function ``data`` to
-avoid copies of these expressions.
-
-.. --- end solution of exercise ---
-
-.. Closing remarks for this Exercise
-
-Remarks
+Example
 ~~~~~~~
 
-This exercise demonstrates that changing a flat program to solve a new
-problem requires careful editing of statements scattered around in the
-file, while
-the solution in b), based on the ``solver`` function, requires *no modifications*
-of the ``p2D_func.py`` file, just
-*minimalistic additional new code* in a separate file. The Poisson solver
-remains in one place (``p2D_func.py``) while in a) we got two
-Poisson solvers. If you decide to switch to an iterative solution method
-for linear systems, you can do so in one place in b), and all applications
-can take advantage of the extension.
+The implementation
 
-.. --- end exercise ---
+.. code-block:: python
 
-.. Or Useful extensions and recipies?
+        u_exact = Expression(
+            'x[1] <= 0.5? 2*x[1]*p_1/(p_0 + p_1) : '
+            '((2*x[1]-1)p_0 + p_1)/(p_0 + p_1)',
+            p_0=p_values[0], p_1=p_values[1])
+
+fails with compilation error
+
+.. code-block:: text
+
+        RuntimeError: In instant.recompile: The module did not compile with
+        command 'make VERBOSE=1', see '/some/path/.../compile.log'
+
+Looking up the ``compile.log`` file and searching for ``error``, we see
+the following message from the C++ compiler:
+
+.. code-block:: text
+
+        error: expected ‘)’ before ‘p_0’
+           values[0] = x[1] <= 0.5? 2*x[1]*p_1/(p_0 + p_1) :
+           ((2*x[1]-1)p_0 + p_1)/(p_0 + p_1);
+                      ^
+
+Now we realize that a ``*`` symbol is missing between ``)`` and ``p_0``.
+
+Problems in the solve step
+--------------------------
+
+Sometimes the problem lies in the solve step where a variational form
+is turned into a system of algebraic equations.
+The error message *Unable to extract all indicies* points to a problem with the
+variational form. Common errors include
+
+ 1. missing either the ``TrialFunction`` or the ``TestFunction`` object,
+
+ 2. no terms without ``TrialFunction`` objects.
+
+ 3. mathematically invalid operations in the variational form.
+
+The first problem implies that one cannot make a matrix system or
+system of nonlinear algebraic equations out of the variational form.
+The second problem means that there is no "right-hand side" terms in the PDE
+with known quantities. Sometimes this is seemingly the case mathematically
+because the "right-hand side" is zero. Variational forms must represent this
+case as ``Constant(0)*v*dx`` where ``v`` is a ``TestFunction`` object.
+An example of the third problem is to take the ``inner`` product of
+a scalar and a vector (causing in this particular case
+the error message to be "Shape mismatch").
+
+The message *Unable to extract common cell; missing cell definition in
+form or expression* will typically arise from a term in the form where
+a test function (holding mesh and cell information) is missing.
+For example, a zero right-hand side ``Constant(0)*dx`` will generate
+this error.
+
+Unable to convert object to a UFL form
+--------------------------------------
+
+One common reason for the above error message is that a form is
+written without being multiplied by ``dx`` or ``ds``.
+
+UFL reports that a numpy array cannot be converted to any UFL type
+------------------------------------------------------------------
+
+One reason may be that there are mathematical functions like ``sin`` and
+``exp`` operating on ``numpy`` arrays. The problem is that
+the
+
+.. code-block:: python
+
+        from dolfin import *
+
+statement imports
+``sin``, ``cos``,
+and similar mathematical functions from UFL and these are aimed at
+taking ``Function`` or ``TrialFunction``
+objects as arguments and not ``numpy`` arrays.
+The remedy is to use prefix mathematical functions aimed at
+``numpy`` arrays with ``numpy``, or ``np`` if ``numpy`` is imported as ``np``:
+``numpy.exp`` or ``np.exp``, for instance.
+Normally, boundary conditions and analytical solutions are represented
+by ``Expression`` objects and then this problem does not arise.
+The problem usually arises when pure Python functions with, e.g., analytical
+solutions are introduced for, e.g., plotting.
+
+All programs fail to compile
+----------------------------
+
+When encountering a compilation problem where the Instant log file says
+something about missing double quote in an ``Expression``, try compiling
+a previously working program. If that program faces the same problem,
+reboot Ubuntu and try again.  If the problem persists, try running the
+Update Manager (because unfinished updates can cause compiler
+problems), reboot and try again.
+
+Problems with Expression Objects
+================================
+
+There seems to be some bug in an Expression object
+--------------------------------------------------
+
+Run the command ``instant-clean`` to ensure that everything is
+(re)compiled.  Check the formulas in string expressions carefully, and
+make sure that divisions do not lead to integer division (i.e., at
+least one of the operands in a division must be a floating-point
+variable).
+
+Segmentation fault when using an Expression object
+--------------------------------------------------
+
+One reason may be that the point vector ``x`` has indices out of
+bounds, e.g., that you access ``x[2]`` but the mesh is only a 2D mesh.
+Also recall that the components of ``x`` are ``x[0]``, ``x[1]``, etc.
+Accessing ``x[2]``  as the "y" coordinate is a common error.
+
+Other Problems
+==============
+
+Very strange error message involving a ``mesh`` variable
+--------------------------------------------------------
+
+If you encounter a really strange error message, and the statement
+in question involves a variable with name ``mesh``, check if this
+is really your mesh variable. When doing ``from dolfin import *``, you
+get a ``mesh`` variable, which is actually a module, and sending
+this module to functions creates a ``TypeError``. Substitute with
+the actual name of your mesh object.
+
+One should also note other names that get imported by ``from dolfin import *``:
+``i``, ``j``, ``k``, ``l``, ``p``, ``q``, ``r``, ``s``. It is easy to use such
+variables without initializing them, and strange error message arises
+(since the mentioned names are UFL ``Index`` objects).
+
+The plot disapperas quickly from the screen
+-------------------------------------------
+
+.. index:: plotting problems
+
+You have forgotten to insert ``interactive()`` as the last statement in
+the program.
+
+Only parts of the program are executed
+--------------------------------------
+
+Check if a call to ``interactive()`` appears in the middle of the program.
+The computations are halted by this call and not continued before
+you press ``q`` in a plot window. Most people thus prefer to
+have ``interactive()`` as the last statement.
+
+Error in the definition of the boundary
+---------------------------------------
+
+Consider this code and error message:
+
+.. code-block:: python
+
+        class DirichletBoundary(SubDomain):  # define the Dirichlet boundary
+            def inside(self, x, on_boundary):
+                return on_boundary and abs(x) < 1E-14
+        
+        bc = DirichletBC(V, u0, xleft_boundary)
+        
+        Error: ValueError: The truth value of an array with more than
+        one element is ambiguous. Use a.any() or a.all()
+
+The reason for this error message
+is that ``x`` is a point vector, not just a number.
+In the ``inside`` function one must work with the
+components of ``x``: ``x[0]``, ``x[1]``, etc.
+
+The solver in a nonlinear problems does not converge
+----------------------------------------------------
+
+There can be many reasons for this common problem:
+
+ 1. The form (variational formulation) is not consistent with the
+    PDE(s).
+
+ 2. The boundary conditions in a Newton method are wrong. The
+    correction vector must have vanishing essential conditions where
+    the complete solution has zero or non-zero values.
+
+ 3. The initial guess for the solution is not appropriate. In some
+    problems, a simple function equal to 0 just leads to a zero
+    solution or a divergent solver. Try 1 as initial guess, or
+    (better) try to identify a linear problem that can be used to
+    compute an appropriate initial guess, see the section :ref:`tut:nonlinear:Newton:algebraic`.
+
+How To Debug a FEniCS Program?
+==============================
+
+.. A true case study with a few bugs would be really helpful here.
+
+.. 1. Linear problem.
+
+.. 2. Nonlinear problem.
+
+.. 3. Time-dependent problem.
+
+.. 4. Time-dependent nonlinear problem.
+
+Here is an action list you may follow.
+
+**Step 1.**
+Examine the weak form and its implementation carefully.
+Check that all terms are multiplied by ``dx`` or ``ds``, and that the
+terms do not vanish; check that at least one term has both a
+``TrialFunction`` and a ``TestFunction`` (term with unknown); and check
+that at least one term has no ``TrialFunction`` (known term).
+
+**Step 2.**
+Check that Dirichlet boundary conditions are set correctly.
+
+.. code-block:: python
+
+        # bcs is list of DirichletBC objects
+        for bc in bcs:
+        bc_dict = bc.get_boundary_values()
+            for dof in bc_dict:
+                print('dof %d: value=%s' % (dof, bc_dict[dof]))
+
+See also an expanded version of this snippet in the ``solvers_bc``
+``p2D_vc.py`` file located in the directory ``poisson``.
+
+A next step in the debugging, if these values are wrong, is to
+call the functions that define the boundary parts. For example,
+
+.. code-block:: python
+
+        for coor in mesh.coordinates():
+            if my_boundary_function(coor, True):
+                print('%s is on the boundary' % coor)
+        
+        # or, in case of a SubDomain subclass my_subdomain_object,
+        for coor in mesh.coordinates():
+            if my_subdomain_object.inside(coor, True):
+                print('%s is on the boundary' % coor)
+
+You may map the solution to a structured grid with structured data,
+i.e., a ``BoxField``, see the chapters :ref:`tut:quickviz`
+and :ref:`tut:timedep:diffusion2:sin`, and then examine the solution field
+along grid lines in :math:`x` and :math:`y` directions. For example, you can
+easily check that correct
+Dirichlet conditions are set, e.g.,
+at the upper boundary (check ``u_box[:,-1]``).
+
+**Step 4.**
+Switching to a simple set of coefficients and boundary conditions,
+such that the solution becomes simple too,
+but still obeys the same PDE, may help since it is then easier to
+examine numerical values in the solution array.
+
+**Step 5.**
+Formulate a corresponding 1D problem. Often this can be
+done by just running the problem with a 1D mesh. Doing hand calculations
+of element matrices and vectors, and comparing the assembled system
+from these hand calculations with the assembled system from the
+FEniCS program can uncover bugs. For nonlinear problems, or problems
+with variable coefficients, it is usually wise to choose simple
+coefficients so that the problem becomes effectively linear and the
+hand calculations are doable.
+
+Bibliography
+============
+
+.. [Ref01]
+   **A. Logg, K.-A. Mardal and G. N. Wells**. Automated Solution of Partial Differential Equations by the Finite Element Method,
+   Springer,
+   2012.
+
+.. [Ref02]
+   **M. S. Alnæs, A. Logg, K. B. Ølgaard, M. E. Rognes and G. N. Wells**. Unified Form Language: A domain-specific language for weak formulations of partial differential equations,
+   *ACM Transactions on Mathematical Software*,
+   40(2),
+   2014.
+
+.. [Ref03]
+   **A. H. Squillacote**. The Paraview Guide,
+   Kitware,
+   2007,
+   `http://www.paraview.org/paraview-guide/ <http://www.paraview.org/paraview-guide/>`_.
+
+.. [Ref04]
+   **M. Mortensen, H. P. Langtangen and G. N. Wells**. A FEniCS-Based Programming Framework for Modeling Turbulent Flow by the Reynolds-Averaged Navier-Stokes Equations,
+   *Advances in Water Resources*,
+   2011.
+
+.. [Ref05]
+   **M. Mortensen, H. P. Langtangen and J. Myre**. Cbc.rans - a New Flexible, Programmable Software Framework for Computational Fluid Dynamics,
+   Sixth National Conference on Computational Mechanics (MekIT'11),
+   edited by **H. I. Andersson and B. Skallerud**,
+   Tapir,
+   2011.
+
+.. [Ref06]
+   **M. Gockenbach**. *Understanding and Implementing the Finite Element Method*,
+   SIAM,
+   2006.
+
+.. [Ref07]
+   **J. Donea and A. Huerta**. *Finite Element Methods for Flow Problems*,
+   Wiley Press,
+   2003.
+
+.. [Ref08]
+   **T. J. R. Hughes**. *The Finite Element Method: Linear Static and Dynamic Finite Element 	Analysis*,
+   Prentice-Hall,
+   1987.
+
+.. [Ref09]
+   **W. B. Bickford**. *A First Course in the Finite Element Method*,
+   2nd edition,
+   Irwin,
+   1994.
+
+.. [Ref10]
+   **K. Eriksson, D. Estep, P. Hansbo and C. Johnson**. *Computational Differential Equations*,
+   Cambridge University Press,
+   1996.
+
+.. [Ref11]
+   **S. C. Brenner and L. R. Scott**. *The Mathematical Theory of Finite Element Methods*,
+   third edition,
+   *Texts in Applied Mathematics*,
+   Springer,
+   2008.
+
+.. [Ref12]
+   **D. Braess**. *Finite Elements*,
+   third edition,
+   Cambridge University Press,
+   2007.
+
+.. [Ref13]
+   **A. Ern and J.-L. Guermond**. *Theory and Practice of Finite Elements*,
+   Springer,
+   2004.
+
+.. [Ref14]
+   **A. Quarteroni and A. Valli**. *Numerical Approximation of Partial Differential Equations*,
+   *Springer Series in Computational Mathematics*,
+   Springer,
+   1994.
+
+.. [Ref15]
+   **P. G. Ciarlet**. *The Finite Element Method for Elliptic Problems*,
+   *Classics in Applied Mathematics*,
+   SIAM,
+   2002.
+
+.. [Ref16]
+   **M. Lutz**. *Learning Python*,
+   third edition,
+   O'Reilly,
+   2007.
+
+.. [Ref17]
+   **M. L. Hetland**. *Practical Python*,
+   APress,
+   2002.
+
+.. [Ref18]
+   **M. Lutz**. *Programming Python*,
+   third edition,
+   O'Reilly,
+   2006.
+
+.. [Ref19]
+   **A. Martelli and D. Ascher**. *Python Cookbook*,
+   second edition,
+   O'Reilly,
+   2005.
+
+.. [Ref20]
+   **A. Martelli**. *Python in a Nutshell*,
+   second edition,
+   O'Reilly,
+   2006.
+
+.. [Ref21]
+   **H. P. Langtangen**. *Python Scripting for Computational Science*,
+   third edition,
+   Springer,
+   2009.
+
+.. [Ref22]
+   **H. P. Langtangen**. *A Primer on Scientific Programming With Python*,
+   second edition,
+   *Texts in Computational Science and Engineering, vol 6*,
+   Springer,
+   2011.
+
+.. [Ref23]
+   **J. Kiusalaas**. *Numerical Methods in Engineering With Python*,
+   Cambridge University Press,
+   2005.
 

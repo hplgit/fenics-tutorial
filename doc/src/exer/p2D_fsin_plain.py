@@ -24,7 +24,8 @@ for i in range(2):
     v = TestFunction(V)
     f = Expression('-2*exp(-2*x[0])*sin(pi*x[1])*('
                    '(4-5*pow(pi,2))*sin(2*pi*x[0]) '
-                   ' - 8*pi*cos(2*pi*x[0]))', pi=DOLFIN_PI)
+                   ' - 8*pi*cos(2*pi*x[0]))')
+    # Note: no need for pi=DOLFIN_PI in f, pi is valid variable
     a = inner(nabla_grad(u), nabla_grad(v))*dx
     L = f*v*dx
 
@@ -33,7 +34,7 @@ for i in range(2):
     solve(a == L, u, bc)
 
     u_e = Expression(
-        '2*exp(-2*x[0])*sin(2*DOLFIN_PI*x[0])*sin(DOLFIN_PI*x[1])')
+        '2*exp(-2*x[0])*sin(2*pi*x[0])*sin(pi*x[1])')
 
     u_e_Function = interpolate(u_e, V)         # exact solution
     u_e_array = u_e_Function.vector().array()  # dof values

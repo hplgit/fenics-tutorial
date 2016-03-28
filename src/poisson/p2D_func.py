@@ -39,7 +39,7 @@ def test_solver():
     f = Constant(-6.0)
     for Nx, Ny in [(3,3), (3,5), (5,3), (20,20)]:
         for degree in 1, 2, 3:
-            print('solving on 2(%dx%dx) mesh with P%d elements'
+            print('solving on 2(%dx%d) mesh with P%d elements'
                   % (Nx, Ny, degree))
             u = solver(f, u0, Nx, Ny, degree)
             # Make a finite element function of the exact u0
