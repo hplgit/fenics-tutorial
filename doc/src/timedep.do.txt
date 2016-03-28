@@ -83,9 +83,12 @@ label{tut:diffusion:pde1:BE}
 \end{equation}
 !et
 This is our time-discrete version of the diffusion PDE
-(ref{tut:diffusion:pde1}).  Reordering (ref{tut:diffusion:pde1:BE}) so
-that $u^k$ appears on the left-hand side only, shows that
-(ref{tut:diffusion:pde1:BE}) is a recursive set of spatial
+(ref{tut:diffusion:pde1}).
+
+We reorder (ref{tut:diffusion:pde1:BE}) so
+that the left-hand side contains the terms with the unknown $u^k$ and
+the right-hand side contains computed terms only. The result
+is a recursive set of spatial
 (stationary) problems for $u^k$ (assuming $u^{k-1}$ is known from
 computations at the previous time level):
 
@@ -104,9 +107,18 @@ requires turning the equations into weak forms.  As usual, we multiply
 by a test function $v\in \hat V$ and integrate second-derivatives by
 parts. Introducing the symbol $u$ for $u^k$ (which is natural in the
 program too), the resulting weak form can be conveniently written in
-the standard notation: $a_0(u,v)=L_0(v)$ for
-(ref{tut:diffusion:pde1:u0}) and $a(u,v)=L(v)$ for
-(ref{tut:diffusion:pde1:uk}), where
+the standard notation:
+
+!bt
+\[ a_0(u,v)=L_0(v)\]
+!et
+for
+(ref{tut:diffusion:pde1:u0}) and
+
+!bt
+\[ a(u,v)=L(v)\]
+!et
+for (ref{tut:diffusion:pde1:uk}), where
 
 !bt
 \begin{align}
@@ -154,21 +166,16 @@ rely on FEniCS to easily compute $a_0$, $L_0$, $a$, and $L$, and solve
 the linear systems for the unknowns.  We realize that $a$ does not
 depend on time, which means that its associated matrix also will be
 time independent. Therefore, it is wise to explicitly create matrices
-and vectors as in Section ref{tut:poisson1:linalg}.  The matrix $A$
-arising from $a$ can be computed prior to the time stepping, so that
-we only need to compute the right-hand side $b$, corresponding to $L$,
-in each pass in the time loop. Let us express the solution procedure
-in algorithmic form, writing $u$ for the unknown spatial function at
-the new time level ($u^k$) and $u_1$ for the spatial solution at one
-earlier time level ($u^{k-1}$):
+and vectors as demonstrated in Section ref{tut:poisson1:linalg}.  The
+matrix $A$ arising from $a$ can be computed prior to the time
+stepping, so that we only need to compute the right-hand side $b$,
+corresponding to $L$, in each pass in the time loop. Let us express
+the solution procedure in algorithmic form, writing $u$ for the
+unknown spatial function at the new time level ($u^k$) and $u_1$ for
+the spatial solution at one earlier time level ($u^{k-1}$):
 
  * define Dirichlet boundary condition ($u_0$, Dirichlet boundary, etc.)
- * if $u_1$ is to be computed by projecting $I$:
-   * define $a_0$ and $L_0$
-   * assemble matrix $M$ from $a_0$ and vector $b$ from $L_0$
-   * solve $MU=b$ and store $U$ in $u_1$
- * else:  (interpolation)
-   * let $u_1$ interpolate $I$
+ * let $u_1$ interpolate $I$ or be the projection of $I$
  * define $a$ and $L$
  * assemble matrix $A$ from $a$
  * set some stopping time $T$
@@ -191,7 +198,7 @@ with a linear term in time,
 label{tut:diffusion:pde1:u0test}
 \end{equation}
 !et
-yields a function whose computed values at the nodes may be exact,
+yields a function whose computed values at the nodes will be exact,
 regardless of the size of the elements and $\dt$, as long as the mesh
 is uniformly partitioned.  By inserting
 (ref{tut:diffusion:pde1:u0test}) in the PDE problem
@@ -207,16 +214,6 @@ space *and time*, such as the boundary condition $u_0$ given by
 `Expression` object with time $t$ as a parameter, in addition to the
 parameters $\alpha$ and $\beta$ (see Section ref{tut:poisson:membrane}
 for `Expression` objects with parameters):
-
-!bc pycod
-alpha = 3; beta = 1.2
-u0 = Expression('1 + x[0]*x[0] + alpha*x[1]*x[1] + beta*t',
-                alpha=alpha, beta=beta, t=0)
-!ec
-The time parameter can later be updated by assigning values to `u0.t`.
-
-Given a `mesh` and an associated function space `V`, we
-can specify the $u_0$ function as
 
 !bc pycod
 alpha = 3; beta = 1.2
@@ -254,13 +251,16 @@ u_1 = project(u0, V)
 !ec
 Note that we could, as an equivalent alternative to using `project`,
 define $a_0$ and $L_0$ as we did in Section ref{tut:poisson:gradu} and
-form the associated variational problem.  To actually recover the
+form the associated variational problem.
+
+!bwarning Projecting versus interpolating the initial condition
+To actually recover the
 exact solution (ref{tut:diffusion:pde1:u0test}) to machine precision,
 it is important not to compute the discrete initial condition by
 projecting $I$, but by interpolating $I$ so that the nodal values are
 exact at $t=0$ (projection results in approximative values at the
 nodes).
-
+!ewarning
 
 The definition of $a$ and $L$ goes as follows:
 
@@ -344,20 +344,22 @@ in the directory "`diffusion`": "${src_url}/diffusion".
 label{tut:timedep:diffusion1:noassemble}
 idx{assembly, increasing efficiency}
 
-The purpose of this section is to present a technique for speeding
-up FEniCS simulators for time-dependent problems where it is
-possible to perform all assembly operations prior to the time loop.
-There are two costly operations in the time loop: assembly of the
-right-hand side $b$ and solution of the linear system via the
-`solve` call. The assembly process involves work proportional to
-the number of degrees of freedom $N$, while the solve operation
-has a work estimate of $\mathcal{O}( N^{\alpha})$, for some $\alpha\geq 1$. As
-$N\rightarrow\infty$, the solve operation will dominate for $\alpha>1$,
-but for the values of $N$ typically used on smaller computers, the
-assembly step may still
-represent a considerable part of the total work at each
-time level. Avoiding repeated assembly can therefore contribute to a
-significant speed-up of a finite element code in time-dependent problems.
+The purpose of this section is to present a technique for speeding up
+FEniCS simulators for time-dependent problems where it is possible to
+perform all assembly operations prior to the time loop.  There are two
+costly operations in the time loop: assembly of the right-hand side
+$b$ and solution of the linear system via the `solve` call. The
+assembly process involves work proportional to the number of degrees
+of freedom $N$, while the solve operation has a work estimate of
+$\mathcal{O}( N^{\alpha})$, for some $\alpha\geq 1$.  Typically,
+$\alpha\in [1,2]$.  As $N\rightarrow\infty$, the solve operation will
+dominate for $\alpha>1$, but for the values of $N$ typically used on
+smaller computers, the assembly step may still represent a
+considerable part of the total work at each time level. Avoiding
+repeated assembly can therefore contribute to a significant speed-up
+of a finite element code in time-dependent problems.
+
+=== Deriving recursive linear systems ===
 
 To see how repeated assembly can be avoided, we look at the $L(v)$
 form in  (ref{tut:diffusion:pde1:L}),
@@ -450,7 +452,7 @@ the matrix $K$ with entries
 \begin{equation} K_{ij} = \int_\Omega \nabla\hat\phi_i\cdot\nabla\phi_j \dx\tp
 \end{equation}
 !et
-The matrix $M$ is often called the "mass matrix" while "stiffness matrix"
+The matrix $M$ is often called the ``mass matrix'' while ``stiffness matrix''
 is a common nickname for $K$. The associated bilinear forms for these
 matrices, as we need them for the assembly process in a FEniCS
 program, become
@@ -468,18 +470,18 @@ can now be computed by first computing $M$ and $K$, and then forming
 $A=M+{\dt} K$ at $t=0$, while $b$ is computed as
 $b=MU^{k-1} + {\dt}MF^k$ at each time level.
 
-idx{`${prog["d2_d2D"]}.py`}
+=== Implementation ===
 
 The following modifications are needed in the `${prog["d1_d2D"]}.py`
 program from the previous section in order to implement the new
 strategy of avoiding assembly at each time level:
 
-  * Define separate forms $a_M$ and $a_K$
-  * Assemble $a_M$ to $M$ and $a_K$ to $K$
-  * Compute $A=M+{\dt}$, $K$
-  * Define $f$ as an `Expression`
-  * Interpolate the formula for $f$ to a finite element function $F^k$
-  * Compute $b=MU^{k-1} + {\dt}MF^k$
+  o Define separate forms $a_M$ and $a_K$
+  o Assemble $a_M$ to $M$ and $a_K$ to $K$
+  o Compute $A=M+{\dt}$, $K$
+  o Define $f$ as an `Expression`
+  o Interpolate the formula for $f$ to a finite element function $F^k$
+  o Compute $b=MU^{k-1} + {\dt}MF^k$
 
 The relevant code segments become
 
@@ -487,6 +489,7 @@ The relevant code segments become
 # 1.
 a_K = inner(nabla_grad(u), nabla_grad(v))*dx
 a_M = u*v*dx
+# No need for L
 
 # 2. and 3.
 M = assemble(a_M)
@@ -502,7 +505,44 @@ while t <= T:
     F_k = f_k.vector()
     b = M*u_1.vector() + dt*M*F_k
 !ec
-The complete program appears in the file `${prog["d2_d2D"]}.py`.
+
+We implement these modification in a refactored version of the
+program `${prog["d2D_plain"]}.py`, where the solver is a function
+as explained in Section ref{tut:poisson1:impl2} rather than a
+flat program.
+
+@@@CODE ../../src/diffusion/d2D_func.py fromto: def solver_minimize_assembly@def solver_bc
+A special feature in this program is the `user_action` callback function:
+at every time level, the solution is sent to `user_action`, which is
+some function provided by the user where the solution can be processed, e.g.,
+stored, analyzed, or visualized. In a unit test for the test example without
+numerical approximation errors, we can write a call to the solver function,
+
+!bc pycod
+def test_solver():
+    import numpy as np
+    alpha = 3; beta = 1.2
+    u0 = Expression('1 + x[0]*x[0] + alpha*x[1]*x[1] + beta*t',
+                    alpha=alpha, beta=beta, t=0)
+    f = Constant(beta - 2 - 2*alpha)
+    dt = 0.3; T = 1.9
+    u0.t = 0
+    solver_minimize_assembly(
+        f, u0, u0, dt, T, Nx, Ny, degree,
+        user_action=assert_max_error, I_project=False)
+!ec
+The `user_action` function asserts equality of the
+exact and numerical solution at every time level:
+
+!bc pycod
+def assert_max_error(t, u, V):
+    u_e = interpolate(u0, V)
+    max_error= np.abs(u_e.vector().array() -
+                      u.vector().array()).max()
+    tol = 2E-12
+    assert max_error < tol, 'max_error: %g' % max_error
+!ec
+
 
 
 ===== A physical example =====
@@ -511,13 +551,13 @@ label{tut:timedep:diffusion2:sin}
 idx{`${prog["sin_daD"]}.py`}
 
 With the basic programming techniques for time-dependent problems from
-Sections ref{tut:timedep:diffusion1:noassemble}
-and ref{tut:timedep:diffusion1:impl}
-we are ready to attack more physically realistic examples.
-The next example concerns the question: How is the temperature in the
-ground affected by day and night variations at the earth's surface?
-We consider some box-shaped domain $\Omega$ in $d$ dimensions with
-coordinates $x_0,\ldots,x_{d-1}$ (the problem is meaningful in 1D, 2D, and 3D).
+Sections ref{tut:timedep:diffusion1:noassemble} and
+ref{tut:timedep:diffusion1:impl} we are ready to attack more
+physically realistic examples.  The next example concerns the
+question: How is the temperature in the ground affected by day and
+night variations at the earth's surface?  We consider some box-shaped
+domain $\Omega$ in $d$ dimensions with coordinates
+$x_0,\ldots,x_{d-1}$ (the problem is meaningful in 1D, 2D, and 3D).
 At the top of the domain, $x_{d-1}=0$, we have an oscillating
 temperature
 
@@ -588,6 +628,7 @@ L(v) &= \int_\Omega \left( \varrho c T^{k-1}v - (1-\theta){\dt}
 \kappa\nabla T^{k-1}\cdot \nabla v\right) \dx\tp
 \end{align}
 !et
+
 Observe that boundary integrals vanish because of the Neumann boundary
 conditions.
 
