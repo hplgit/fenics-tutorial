@@ -3496,14 +3496,69 @@ Physically, the present problem may correspond to heat conduction, where
 the heat conduction in $\Omega_1$ is more efficient than
 in $\Omega_0$. An alternative interpretation is flow in porous media
 with two geological layers, where the layers' ability to transport
-the fluid differs.
+the fluid differ.
+
+=== Expression objects with if test ===
+
+The simplest way of implementing a variable $k$ is to define an
+`Expression` object where we return the appropriate $k$ value
+depending on the position in space.  Since we need some testing on the
+coordinates, the most straightforward approach is to define a subclass
+of `Expression`, where we can use a full Python method instead of just
+a C++ string formula for specifying a function.  The method that
+defines the function is called `eval`:
+
+!bc pycod
+class K(Expression):
+    def set_k_values(self, k0, k1):
+        self.k0, self.k1 = k0, k1
+
+    def eval(self, value, x):
+        """x: spatial point, value[0]: function value."""
+	tol = 1E-14  # Tolerance for coordinate comparisons
+        if x[1] <= 0.5+tol:
+	    return self.k0
+	else:
+	    return self.k1
+
+# Initialize
+k = K()
+k.set_k_values(1, 0.01)
+!ec
+The `eval` method gives great flexibility in defining functions,
+but a downside is that C++ calls up `eval` in Python for
+each point `x`, which is a slow process, and the number of calls
+is proportional to the number of numerical
+integration points in the mesh (about
+the number of degrees of freedom).
+Function expressions in terms of strings are compiled to efficient
+C++ functions, being called from C++, so we should try to express functions
+as string expressions if possible. (The `eval` method can also be
+defined through C++ code, but this is much
+more complicated and not covered here.)
+The idea is to use inline if tests in C++:
+
+!bc pycod
+tol = 1E-14
+k0 = 1.0
+k1 = 0.01
+k = Expression('x[1] <= 0.5+tol? k0 : k1',
+               tol=tol, k0=k0, k1=k1)
+!ec
+The method with if tests on the location is feasible when the
+subdomains have very simple shapes. A completely general method,
+utilizing *mesh functions*, is described next.
+
 
 idx{boundary specification (class)}
 
-The new functionality in this subsection regards how to define the
-subdomains $\Omega_0$ and $\Omega_1$. For this purpose we need to use
-subclasses of class `SubDomain`, not only plain functions as we have
-used so far for specifying boundaries. Consider the boundary function
+=== Mesh functions ===
+
+We now address how to specify the subdomains $\Omega_0$ and $\Omega_1$
+so that the method also works for subdomains of any shape. For this
+purpose we need to use subclasses of class `SubDomain`, not only plain
+functions as we have used so far for specifying boundaries. Consider
+the boundary function
 
 !bc pycod
 def boundary(x, on_boundary):
@@ -3595,6 +3650,10 @@ subdomain0 = Omega0()
 subdomain0.mark(materials, 0)
 subdomain1 = Omega1()
 subdomain1.mark(materials, 1)
+
+# Alternative
+materials.set_all(0)
+subdomain1.mark(materials, 1)
 !ec
 
 Calling `materials.array()` returns a `numpy` array of the
@@ -3645,12 +3704,9 @@ The `help` array is required since `choose` cannot work with
 type `uint32`. We must therefore transform this array to an array
 `help` with standard `int32` integers.
 
-Having the `k` function ready for finite element computations, we
-can proceed in the normal manner with defining essential boundary
-conditions, as in Section ref{tut:poisson:multiple:Dirichlet},
-and the $a(u,v)$ and $L(v)$ forms, as in
-Section ref{tut:possion:2D:varcoeff}.
-##All the details can be found in the file `${prog["mat2_p2D"]}.py`.
+The next section exemplfies a complete solver with a piecewise
+constant coefficient, like $k$, defined through `SubDomain` objects,
+combined with different types of boundary conditions.
 
 
 ===== Multiple Neumann, Robin, and Dirichlet condition =====
