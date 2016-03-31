@@ -5,7 +5,7 @@ This yields a solution u(x,y)=x, regardless of the values of k.
 """
 
 from __future__ import print_function
-from dolfin import *
+from fenics import *
 import sys, math, numpy
 
 mesh = UnitSquareMesh(4, 6)

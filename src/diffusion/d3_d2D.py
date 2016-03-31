@@ -7,7 +7,7 @@ The script d3_d2D_script.py runs experiments with different start
 vectors and prints out the number of iterations.
 """
 
-from dolfin import *
+from fenics import *
 import numpy, sys
 numpy.random.seed(12)
 

@@ -4,7 +4,7 @@ conditions and a solution that will be exact at all nodes.
 """
 
 from __future__ import print_function
-from dolfin import *
+from fenics import *
 import numpy
 
 # Create mesh and define function space

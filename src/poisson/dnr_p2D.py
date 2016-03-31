@@ -9,7 +9,7 @@ and we have a Robin condition instead of a Neumann condition at y=0.
 """
 
 from __future__ import print_function
-from dolfin import *
+from fenics import *
 import numpy
 
 #-------------- Preprocessing step -----------------

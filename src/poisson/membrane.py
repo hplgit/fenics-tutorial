@@ -5,7 +5,7 @@ with w = 0 on the boundary.
 """
 
 from __future__ import print_function
-from dolfin import *
+from fenics import *
 from mshr import *
 import numpy as np
 

@@ -1,5 +1,5 @@
 from __future__ import print_function
-from dolfin import *
+from fenics import *
 import numpy as np
 
 class Solver(object):
@@ -156,7 +156,12 @@ class Problem(object):
 
 
 class Problem1(Problem):
-    def __init__(self, Nx, Ny):
+    def __init__(self, Nx, Ny, p_values):
+        self.init_mesh(Nx, Ny, p_values)
+        self.Dirichlet_bc = Expression('sin(t)', t=0)
+        self.file = File('temp.pvd')
+
+    def init_mesh(self, Nx, Ny, p_values=[1, 0.1]):
         """Initialize mesh, boundary parts, and p."""
         self.mesh = UnitSquareMesh(Nx, Ny)
 
@@ -194,8 +199,6 @@ class Problem1(Problem):
             'ds', domain=self.mesh,
             subdomain_data=self.boundary_parts)
 
-        self.Dirichlet_bc = Expression('sin(t)', t=0)
-
         # The domain is the unit square with an embedded rectangle
         class Rectangle(SubDomain):
             def inside(self, x, on_boundary):
@@ -208,10 +211,7 @@ class Problem1(Problem):
         self.V0 = FunctionSpace(self.mesh, 'DG', 0)
         self.p = Function(self.V0)
         help = np.asarray(self.materials.array(), dtype=np.int32)
-        p_values = [1, 1E-3]
         self.p.vector()[:] = np.choose(help, p_values)
-
-        self.file = File('temp.pvd')
 
     def time_step(self, t):
         return 0.1

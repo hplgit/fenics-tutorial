@@ -1,6 +1,6 @@
 """Refactored version of d2D_plain.py with functions."""
 from __future__ import print_function
-from dolfin import *
+from fenics import *
 
 def solver(f, u0, I, dt, T, Nx, Ny, degree=1,
            user_action=None, I_project=False):

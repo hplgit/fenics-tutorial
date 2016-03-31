@@ -1,5 +1,5 @@
 from __future__ import print_function
-from dolfin import *
+from fenics import *
 import numpy as np
 
 class Solver(object):

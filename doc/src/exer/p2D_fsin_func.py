@@ -1,5 +1,5 @@
 from __future__ import print_function
-#from dolfin import *  # not necessary, need only a few
+#from fenics import *  # not necessary, need only a few
 import os, sys
 path = os.path.join(os.pardir, os.pardir, os.pardir,
                     'src', 'stationary', 'poisson')
