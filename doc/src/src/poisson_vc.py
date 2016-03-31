@@ -4,7 +4,7 @@ from fenics import *
 
 def solver(
     kappa, f, u_D, Nx, Ny, degree=1,
-    linear_solver='Krylov', # Alt: 'direct'
+    linear_solver='Krylov', # Alternative: 'direct'
     abs_tol=1E-5,           # Absolute tolerance in Krylov solver
     rel_tol=1E-3,           # Relative tolerance in Krylov solver
     max_iter=1000,          # Max no of iterations in Krylov solver
@@ -142,7 +142,7 @@ def test_solvers():
                     print(msg)
                     assert max_error < tol[linear_solver][degree], msg
 
-def application_test():
+def demo_test():
     """Plot the solution in the test problem."""
     u_D = Expression('1 + x[0]*x[0] + 2*x[1]*x[1]')
     kappa = Expression('x[0] + x[1]')
@@ -203,7 +203,7 @@ def flux(u, kappa):
     flux_u.rename('flux(u)', 'continuous flux field')
     return flux_u
 
-def application_test_flux(Nx=6, Ny=4):
+def demo_test_flux(Nx=6, Ny=4):
     u_D = Expression('1 + x[0]*x[0] + 2*x[1]*x[1]')
     kappa = Expression('x[0] + x[1]')
     f = Expression('-8*x[0] - 10*x[1]')
@@ -375,7 +375,7 @@ def structured_mesh(u, divisions):
         u2, mesh, divisions, uniform_mesh=True)
     return u_box
 
-def application_structured_mesh(model_problem=1):
+def demo_structured_mesh(model_problem=1):
     if model_problem == 1:
         # Numerical solution is exact
         u_D = Expression('1 + x[0]*x[0] + 2*x[1]*x[1]')
@@ -500,7 +500,7 @@ def solver_bc(
     """
     Solve -div(kappa*grad(u)=f on [0,1]x[0,1] with 2*Nx*Ny Lagrange
     elements of specified degree and Dirichlet, Neumann, or Robin
-    conditions on the boundary. Piecewise constant p over subdomains
+    conditions on the boundary. Piecewise constant kappa over subdomains
     are also allowed.
     """
     # Create mesh and define function space
@@ -654,7 +654,7 @@ def solver_bc(
     solve(a == L, u, bcs, solver_parameters=solver_parameters)
     return u, kappa  # Note: kappa may be modified (Function on V0)
 
-def application_bc_test():
+def demo_bc_test():
 
     # Define manufactured solution in sympy and derive f, g, etc.
     import sympy as sym
@@ -714,7 +714,7 @@ def application_bc_test():
                      u_e_at_vertices[i], u_at_vertices[i]))
 
 def test_solvers_bc():
-    """Reproduce u=1+x^2+2y^2 to with different solvers."""
+    """Reproduce u=1+x^2+2y^2 to machince precision with different solvers."""
     tol = 3E-12  # Appropriate tolerance for these tests (P2, 20x20 mesh)
     import sympy as sym
     x, y = sym.symbols('x[0] x[1]')
@@ -779,58 +779,6 @@ def test_solvers_bc():
                 print(msg)
                 assert max_error < tol, msg
 
-def application_bc_test_2mat():
-    tol = 1E-14  # Tolerance for coordinate comparisons
-
-    class Omega0(SubDomain):
-        def inside(self, x, on_boundary):
-            return x[1] <= 0.5+tol
-
-    class Omega1(SubDomain):
-        def inside(self, x, on_boundary):
-            return x[1] >= 0.5-tol
-
-    subdomains = [Omega0(), Omega1()]
-    kappa_values = [2.0, 13.0]
-
-    u_exact = Expression(
-        'x[1] <= 0.5? 2*x[1]*k_1/(k_0+k_1) : '
-        '((2*x[1]-1)*k_0 + k_1)/(k_0+k_1)',
-        k_0=kappa_values[0], k_1=kappa_values[1])
-
-    boundary_conditions = {
-        0: {'Neumann': 0},
-        1: {'Neumann': 0},
-        2: {'Dirichlet': Constant(0)}, # y=0
-        3: {'Dirichlet': Constant(1)}, # y=1
-        }
-
-    f = Constant(0)
-    Nx = Ny = 2
-    u, kappa = solver_bc(
-        kappa_values, f, boundary_conditions, Nx, Ny, degree=1,
-        linear_solver='direct', subdomains=subdomains,
-        debug=2*Nx*Ny < 50,  # for small problems only
-        )
-
-    # Compute max error in infinity norm
-    u_e = interpolate(u_exact, u.function_space())
-    import numpy as np
-    max_error = np.abs(u_e.vector().array() -
-                       u.vector().array()).max()
-    print('Max error:', max_error)
-
-    # Print numerical and exact solution at the vertices
-    if u.function_space().dim() < 50:  # (small problems only)
-        u_e_at_vertices = u_e.compute_vertex_values()
-        u_at_vertices = u.compute_vertex_values()
-        coor = u.function_space().mesh().coordinates()
-        for i, x in enumerate(coor):
-            print('vertex %2d (%9g,%9g): error=%g %g vs %g'
-                  % (i, x[0], x[1],
-                     u_e_at_vertices[i] - u_at_vertices[i],
-                     u_e_at_vertices[i], u_at_vertices[i]))
-
 def test_solvers_bc_2mat():
     tol = 2E-13  # Tolerance for comparisons
 
@@ -871,49 +819,14 @@ def test_solvers_bc_2mat():
                            u.vector().array()).max()
             assert max_error < tol, 'max error: %g' % max_error
 
-def application_flow_around_circle(obstacle='rectangle'):
-    tol = 1E-14  # Tolerance for coordinate comparisons
-
-    class Circle(SubDomain):
-        def inside(self, x, on_boundary):
-            return ((x[0]-0.5)**2 + (x[1]-0.5)**2) <= 0.2**2
-
-    class Rectangle(SubDomain):
-        def inside(self, x, on_boundary):
-            return 0.3 <= x[0] <= 0.7 and 0.3 <= x[1] <= 0.7
-
-    obstacle = Circle() if obstacle == 'circle' else Rectangle()
-    subdomains = [None, obstacle]
-    kappa_values = [1.0, 1E-4]
-
-    boundary_conditions = {
-        0: {'Neumann': 0},
-        1: {'Neumann': 0},
-        2: {'Dirichlet': Constant(1)}, # y=0
-        3: {'Dirichlet': Constant(0)}, # y=1
-        }
-
-    f = Constant(0)
-    Nx = Ny = 50
-    u, kappa = solver_bc(
-        kappa_values, f, boundary_conditions, Nx, Ny, degree=1,
-        linear_solver='direct', subdomains=subdomains)
-
-    v = flux(u, kappa)
-    file = File('porous_media_flow.pvd')
-    file << u
-    file << v
-    plot(u)
-    plot(v)
 
 if __name__ == '__main__':
-    #application_test()
-    #application_test_flux(Nx=20, Ny=20)
+    #demo_test()
+    #demo_test_flux(Nx=20, Ny=20)
     #convergence_rate()
-    #application_structured_mesh(2)
-    #application_linalg()
-    #application_bc_test_2mat()
-    application_flow_around_circle()
+    #demo_structured_mesh(2)
+    #demo_linalg()
+    #demo_bc_test_2mat()
     #test_solvers_bc()
     # Hold plot
     interactive()

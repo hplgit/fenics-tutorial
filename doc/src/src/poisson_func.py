@@ -60,7 +60,7 @@ def test_solver():
             msg = 'error_max = %g' % error_max
             assert max_error < tol, msg
 
-def application_test():
+def demo_test():
     """Compute and post-process solution"""
 
     # Set up problem parameters and call solver

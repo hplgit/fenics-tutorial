@@ -142,7 +142,7 @@ def test_solvers():
                     print(msg)
                     assert max_error < tol[linear_solver][degree], msg
 
-def application_test():
+def demo_test():
     """Plot the solution in the test problem."""
     u_D = Expression('1 + x[0]*x[0] + 2*x[1]*x[1]')
     f = Constant(-6.0)
@@ -201,7 +201,7 @@ def gradient(u):
     grad_u.rename('grad(u)', 'continuous gradient field')
     return grad_u
 
-def application_test_gradient(Nx=6, Ny=4):
+def demo_test_gradient(Nx=6, Ny=4):
     u_D = Expression('1 + x[0]*x[0] + 2*x[1]*x[1]')
     f = Constant(-6.0)
     u = solver(f, u_D, Nx, Ny, 1, linear_solver='direct')
@@ -311,7 +311,7 @@ def solver_linalg(
                 solver.solve(A, U, b)
     return u, A
 
-def application_linalg():
+def demo_linalg():
     u_D = Expression('1 + x[0]*x[0] + 2*x[1]*x[1]')
     p = Expression('x[0] + x[1]')
     f = Expression('-8*x[0] - 10*x[1]')
@@ -381,8 +381,8 @@ def efficiency():
 
 
 if __name__ == '__main__':
-    #application_test()
-    #application_test_gradient()
+    #demo_test()
+    #demo_test_gradient()
     efficiency()
     # Hold plot
     interactive()
