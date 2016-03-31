@@ -1,7 +1,7 @@
 """Temperature variations in the ground."""
 
 from __future__ import print_function
-from dolfin import *
+from fenics import *
 import sys, numpy, time
 
 # Usage:   sin_daD.py degree D   nx ny nz
@@ -106,7 +106,7 @@ a = rho*c*T*v*dx + theta*dt*kappa*\
     inner(nabla_grad(v), nabla_grad(T))*dx
 L = (rho*c*T_1*v + dt*f*v -
      (1-theta)*dt*kappa*inner(nabla_grad(v), nabla_grad(T_1)))*dx
-# dolfin test examples applies T (not T_1) in L
+# fenics test examples applies T (not T_1) in L
 
 A = assemble(a)
 b = None  # variable used for memory savings in assemble calls
@@ -139,9 +139,9 @@ def line_plot():
         T2 = interpolate(T, FunctionSpace(mesh, 'Lagrange', 1))
     else:
         T2 = T
-    T_box = scitools.BoxField.dolfin_function2BoxField(
+    T_box = scitools.BoxField.fenics_function2BoxField(
             T2, mesh, divisions, uniform_mesh=True)
-    #T_box = scitools.BoxField.update_from_dolfin_array(
+    #T_box = scitools.BoxField.update_from_fenics_array(
     #        T.vector().array(), T_box)
     coor, Tval, fixed, snapped = \
             T_box.gridline(start_pt, direction=d-1)

@@ -5,7 +5,7 @@ As d1_d2D.py, but here we do all assembly prior to the time loop
 (for increased efficiency).
 """
 from __future__ import print_function
-from dolfin import *
+from fenics import *
 import numpy
 
 # Create mesh and define function space

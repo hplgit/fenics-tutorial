@@ -14,7 +14,7 @@ Solution method: automatic, i.e., by a NonlinearVariationalProblem/Solver
 """
 
 from __future__ import print_function
-from dolfin import *
+from fenics import *
 import numpy, sys
 
 # Usage:   ./vp2_np.py m|a |g|l degree nx ny nz

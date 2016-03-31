@@ -1,6 +1,6 @@
 """Refactored version of d2D_plain.py with functions."""
 from __future__ import print_function
-from dolfin import *
+from fenics import *
 
 def solver(f, u0, I, dt, T, Nx, Ny, degree=1,
            user_action=None, I_project=False):
@@ -53,10 +53,10 @@ def application():
 
     def print_max_error(t, u, V):
         u_e = interpolate(u0, V)
-        maxdiff = np.abs(u_e.vector().array() -
-                         u.vector().array()).max()
+        max_error = np.abs(u_e.vector().array() -
+                           u.vector().array()).max()
         print('t=%.2f, max error: %-10.3f max u: %-10.3f' %
-              (t, maxdiff, u.vector().array().max()))
+              (t, max_error, u.vector().array().max()))
 
     dt = 0.3; T = 1.9
     Nx = Ny = 20

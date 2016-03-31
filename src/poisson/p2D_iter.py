@@ -1,6 +1,6 @@
 """As p2D_func.py, but iterative linear solver."""
 from __future__ import print_function
-from dolfin import *
+from fenics import *
 
 def solver(
     f, u0, Nx, Ny, degree=1,

@@ -1,6 +1,6 @@
 # The following shows that the order in which the mesh coordinates are stored is
 # in general different from the ordering of the degrees of freedom.
-from dolfin import *
+from fenics import *
 
 mesh = UnitSquareMesh(2, 2)
 coor = mesh.coordinates()

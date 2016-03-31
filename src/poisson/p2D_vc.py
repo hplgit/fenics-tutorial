@@ -1,6 +1,6 @@
 """As p2D_iter.py, but the PDE is -div(p*grad(u)=f."""
 from __future__ import print_function
-from dolfin import *
+from fenics import *
 
 def solver(
     p, f, u0, Nx, Ny, degree=1,
@@ -261,12 +261,12 @@ def compute_errors(u, u_exact):
 
     # Explicit interpolation of u_exact to higher-order elements,
     # u will also be interpolated to the space Ve before integration
-    Ve = FunctionSpace(V.mesh(), 'Lagrange', 5)  # mesh here: BUG, module mesh in dolfin...make warning box
+    Ve = FunctionSpace(V.mesh(), 'Lagrange', 5)  # mesh here: BUG, module mesh in fenics...make warning box
     u_e = interpolate(u_exact, Ve)
     error = (u - u_e)**2*dx
     E3 = sqrt(abs(assemble(error)))
 
-    # dolfin.errornorm interpolates u and u_e to a space with
+    # fenics.errornorm interpolates u and u_e to a space with
     # given degree, and creates the error field by subtracting
     # the degrees of freedom, then the error field is integrated
     # TEMPORARY BUG - doesn't accept Expression for u_e
@@ -333,7 +333,7 @@ def convergence_rate(u_exact, f, u0, p, degrees,
                   (n, n, degree, u.function_space().dim(),
                    errors['u - u_exact']))
     # Convergence rates
-    from math import log as ln  # log is a dolfin name too
+    from math import log as ln  # log is a fenics name too
     error_types = list(E[1][0].keys())
     rates = {}
     for degree in P_degrees:
@@ -372,8 +372,8 @@ def structured_mesh(u, divisions):
     u2 = u if u.ufl_element().degree() == 1 else \
          interpolate(u, FunctionSpace(mesh, 'Lagrange', 1))
     mesh = u.function_space().mesh()
-    from BoxField import dolfin_function2BoxField
-    u_box = dolfin_function2BoxField(
+    from BoxField import fenics_function2BoxField
+    u_box = fenics_function2BoxField(
         u2, mesh, divisions, uniform_mesh=True)
     return u_box
 

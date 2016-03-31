@@ -32,7 +32,7 @@ a 2D or 3D mesh and insert the 1D solutions such that we get
 a complete velocity vector field u and scalar field p defined
 on the complete domain for the channel.
 """
-from dolfin import *
+from fenics import *
 
 def compute_v(H, mu, p, degree=1):
     nx = 15

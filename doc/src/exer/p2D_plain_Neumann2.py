@@ -14,7 +14,7 @@ u = 1 + x^2 + 2y^2, f = -6, g = -4y.
 """
 
 from __future__ import print_function
-from dolfin import *
+from fenics import *
 import numpy
 
 # Create mesh and define function space

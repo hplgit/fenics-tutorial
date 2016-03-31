@@ -10,7 +10,7 @@ Exact solution: u(x, ...) = x^2
 """
 
 from __future__ import print_function
-from dolfin import *
+from fenics import *
 import numpy, sys
 
 # Create mesh and define function space

@@ -3,7 +3,7 @@ FEniCS tutorial demo: Poisson problem in 2D with 2 materials.
 """
 
 from __future__ import print_function
-from dolfin import *
+from fenics import *
 import sys, math, numpy
 
 nx = 4;  ny = 6
