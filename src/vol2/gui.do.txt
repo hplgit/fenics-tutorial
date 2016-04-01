@@ -1,32 +1,32 @@
 ======= Integrating a FEniCS solver with interfaces =======
 label{ftut:gui}
 
-Everything in this book is about solving PDEs by creating FEniCS programs.
-The short set of powerful Python statements is what makes FEniCS so powerful.
-Users of your FEniCS software can just set some variables and call
-up your ready-made solver functions. However, this kind of scripting
-becomes much more powerful if we integrate the solver with an
-interface to quickly set parameters. Most people who like the FEniCS way
-of writing solvers in terms of small scripts also like to set the adjustable
-parameters on the command line and often embed that script in another
-script automate the investigation parameter variations, where results are
-recorded in
-reports together with plots, result files, etc. We shall refer to this
-as making a *command-line interface* to our solver.
+Everything in this book is about solving PDEs by creating FEniCS
+programs.  The short set of powerful Python statements is what makes
+FEniCS so powerful.  Users of your FEniCS software can just set some
+variables and call up your ready-made solver functions. However, this
+kind of scripting becomes much more powerful if we integrate the
+solver with an interface to quickly set parameters. Most people who
+like the FEniCS way of writing solvers in terms of small scripts also
+like to set the adjustable parameters on the command line and often
+embed that script in another script to automate the investigation
+parameter variations, where results are recorded in reports together
+with plots, result files, etc. We shall refer to this as making a
+*command-line interface* to our solver.
 
-Other users do not feel at home with FEniCS scripting at all as they are
-used to graphical applications rather programming. You can satisfy such
-a user group too, but that requires making a *graphical interface* to
-your solver. It appears that the tool
-"Parampool": "https://github.com/hplgit/parampool" can be integrated with
-your FEniCS solver to produce either a command-line interface or a
-complately graphical interface in just a few lines of code. Of course, short
-code also means a very restrictive graphical interface:
-set the parameters in the code, run the solver, present the solution,
-and archive the solution for later inspection.
-The present section explains how we can do this. As usual, we tie the
-explanation closely to an application, this time to what we think is the
-simplest possible: the 2D Poisson equation.
+Other users do not feel at home with FEniCS scripting at all as they
+are used to graphical applications rather programming. You can satisfy
+such a user group too, but that requires making a *graphical
+interface* to your solver. It appears that the tool "Parampool":
+"https://github.com/hplgit/parampool" can be integrated with your
+FEniCS solver to produce either a command-line interface or a
+complately graphical interface in just a few lines of code. Of course,
+short code also means a very restrictive graphical interface: set the
+parameters in the code, run the solver, present the solution, and
+archive the solution for later inspection.  The present section
+explains how we can do this. As usual, we tie the explanation closely
+to an application, this time to what we think is the simplest
+possible: the 2D Poisson equation.
 
 __Specific application.__
 [hpl: Show how easy it is to switch to elasticity.]
@@ -38,13 +38,15 @@ collection of user-adjustable parameters (the `parameters`
 dictionary). When the PDE is solved, we should see a plot of the
 solution and have a link to the VTK solution file.
 This minimalistic application is created in a about one page of Python code.
-Switching to any other stationary application is completely trivial, like
+Switching to any other stationary application is completely trivial,
 such as elasticity, but a time-dependent problem would require some extensions,
 especially regarding the presentation of results.
 
 The "Parampool documentation": "http://hplgit.github.io/parampool/doc/web/index.html" explains how to wrap Python solvers with different types of
 user interfaces: command-line, commands in a file, or a graphical web
-interface. Here we just list the necessary steps.
+interface. Here we just list the necessary steps necessary for FEniCS
+solvers -- that is just a subset of all the possibilities mentioned in the
+Paramtool tutorial.
 
 __Installing Parampool.__
 Parampool is pure Python 2.7 code. The easiest way to install the package
@@ -66,6 +68,7 @@ but it might be wise to have easy access to it.
 
 
 ===== Making a pool of parameters =====
+label{ftut:gui:pool}
 
 Parampool requires the user to make a module, typically called `compute.py`,
 with two functions, one defining a data tree structure for all input
@@ -101,6 +104,7 @@ this:
 @@@CODE src/gui/compute.py fromto: def define_pool@def compute
 
 ===== Make a compute function =====
+label{ftut:gui:compute}
 
 The `compute` function loads the parameters in the pool (after they are
 filled in from some kind of interface), runs the application based on these
@@ -162,18 +166,224 @@ vtkfile << u
 vtkfile << grad_u
 !ec
 
-@@@CODE src/gui/compute.py fromto: import sys@
-
 
 ===== Filling out the default design of results on the web page =====
+label{ftut:gui:results}
 
 The Parampool design has the input parameters in the left column of a
-two-column HTML table and puts *completely user-defined* results in the
-right column.
-By default, the compute function is supposed to a string with HTML that
-goes into the right column.
+two-column HTML table and puts *completely user-defined* results in
+the right column.  By default, the compute function is supposed to
+return a string with HTML that goes into the right column. The design
+is using an automatically generated template in `templates/view.html`,
+but Section ref{ftut:gui:bootstrap} tells you how easily you can change this
+template).
+
+We decide that the results to be reported consists of three paragraphs with
+
+  o the maximum value of $u$,
+  o a link to the VTK file for further inspection in ParaView,
+  o a plot of the surface.
+
+The two first ones are trivial. The last one requires plotting in batch,
+but it excludes the built-in `plot` command as it will usually not work
+in this context. The most obvious approach is to run Matplotlib, but that
+will require a structured representation of the mesh, and not the
+unstructured one used by `Mesh`. The Python Tutorial Volume I has
+a [Section ref{ftut:structviz}][ cite{ftut1}][section *Taking advantage of structured mesh data* in its chapter
+*Extensions: Improving the Poisson solver*] that describes how to
+extract the unstructured data as a structured set of Numerical Python arrays
+ready for being used
+with Matplotlib, Gnuplot, and other batch-oriented plotting programs for
+Numerical Python arrays.
+
+For this purpose, we need the `BoxField` module in `src/modules` that comes
+with this book. However, this is hidden if we just the `structured_mesh`
+function exemplified in `${prog['poisson_bcs']}.py` file.
+
+!bc pycod
+from poisson_bcs import structured_mesh
+u_box = structured_mesh(u, (Nx, Ny))
+u_ = u_box.values
+!ec
+The `u_box` object represents $u$ as Numerical Python arrays, while
+`u_` is the 2D array with function values on a structured square mesh.
+With this object, we can make the Matplotlib plot:
+
+!bc pycod
+import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
+from matplotlib import cm
+fig = plt.figure()
+ax = fig.gca(projection='3d')
+cv = u_box.grid.coorv  # vectorized mesh coordinates
+ax.plot_surface(cv[0], cv[1], u_, cmap=cm.coolwarm,
+                rstride=1, cstride=1)
+plt.title('Surface plot of solution')
+!ec
+
+We want to display the plot as an image. The most obvious way is now to
+make a hardcopy of the plot with `plt.savefig` and show the file
+in an `img` tag. However, if the view file makes use of other files,
+these must be stored in a subdirectory `static`, in parallel relative to
+`templates`. This is doable, but it is cleaner to just embed the plot
+as PNG code directly in the `img` code as this makes the output HTML
+code indendent of other *files*. The recipe for making Matplotlib generate
+the PNG code for embedding in HTML goes as follows:
+
+!bc pycod
+from io import BytesIO
+figfile = BytesIO()
+plt.savefig(figfile, format='png')
+
+figfile.seek(0)
+figdata_png = figfile.getvalue()  # get the bytes in PNG file
+import base64
+figdata_png = base64.b64encode(figdata_png)
+!ec
+The relevant `img` tag reads
+
+!bc htmlcod
+<img src="data:image/png;base64,XXX" width="600">
+!ec
+where `XXX` denotes a *very* long string stored in `figdata_png`.
+
+The final HTML code to be returned from the compute function is
+
+!bc pycod
+html = """
+<p>Maximum value of u: %g</p>
+<p><a href="posson2D.pvd">VTK file with data</a></p>
+<p><img src="data:image/png;base64,%s" width="600"></p>
+""" % (u.vector().array().max(), figdata_png)
+!ec
+
+We are now at a stage where it can be illustrative to present
+the complete compute function:
+
+@@@CODE src/gui/compute.py fromto: import sys@
+
+!bnotice Tip: Dealing with multiple FEniCS parameter objects
+
+The compute function is in general short, maybe apart from the HTML
+output part. The visible input part of the GUI on the screen may still
+easily be very comprehensive because we can insert various FEniCS
+parameters objects as subpools as we like.
+
+Suppose we have several parameter objects (beyond `Parameters`).  As
+long as you can dump these objects to XML files and load these into
+different subpools via `fenicsxml2pool`, you get the possibility to
+also set these parameters in the GUI, provided you do a symmetric load
+of data by `pool.traverse` for each FEniCS parameter object.
+
+For example, think of using a `LinearVariationalSolver`
+object:
+
+!bc pycod
+myproblem = LinearVariationalProblem(a, L, u, bc)
+mysolver = LinearVariationalSolver(problem)
+mysolver.parameters['linear_solver'] = 'gmres'
+mysolver.parameters['preconditioner'] = 'ilu'
+prm = mysolver.parameters['krylov_solver'] # short form
+prm['absolute_tolerance'] = 1E-7
+prm['relative_tolerance'] = 1E-4
+prm['maximum_iterations'] = 1000
+!ec
+Make sure you store the `mysolver.parameters` in an XML file in the
+solver function. Then, in `compute(pool)`, you must make `mysolver` a
+*global variable* in the file (module) that contains your PDE solver
+function. Suppose the module name is `p2D`. You need to write from the
+outside into an object in an external module. The relevant Python code
+is in the second part of the below snippet.
+
+
+!bc pycod
+from parampool.utils import set_dolfin_prm
+import dolfin
+# Write default Parameters object in FEniCS
+pool.traverse(set_dolfin_prm, user_data=dolfin.parameters)
+
+# Write to parameter object inside another FEniCS object
+import p2D
+pool.traverse(set_dolfin_prm, user_data=p2D.mysolver.parameters)
+!ec
+Use exactly this import and not any `import from`. Technically,
+`pool.traverse` applies the helper funtion `set_dolfin_prm`
+to fill each item in `p2D.mysolver.parameters` with parameter values
+from the pool, some of which the user may have set during execution.
+
+!enotice
+
+===== Generating the GUI =====
+label{ftut:gui:generate}
+
+You can rely on a Parampool feature to generate all necessary (Flask) files
+needed for the web-based GUI. Just write the following code in a file
+`generate.py`:
+
+!bc pycod
+from parampool.generator.flask import generate
+from compute import compute, define_pool
+
+generate(compute, pool_function=define_pool, MathJax=True)
+!ec
+Then, run
+
+!bc sys
+Terminal> python generate.py
+!ec
+The main program is now in the file `controller.py`.
+
+===== Running the graphical user interface =====
+label{ftut:gui:run}
+
+Due support of HTML5, we foremost recommend Opera for running
+Parampool applications, but you may also use Chrome. Do not use
+Safari.  First, start `controller.py` in the background,
+
+!bc sys
+Terminal> python controller.py &
+!ec
+Second, open the browser and load the address `http://127.0.0.1:5000/`.
+This results in a default interface as in Figure ref{ftut:gui:fig:view1}.
+Here, we can set basic parameters, but many are also hidded. Click on
+`dolfin` to unfold a set of parameters and subparameters in the default
+FEniCS menu (the term `dolfin` appears here of historic reasons as we
+are on the DOLFIN package of the total FEniCS umbrella).
+The current solver applies Gaussian elimination and there is no support
+for iterative Krylov solvers, so this part of the menu is unteresting, but
+it comes as a part of the `Parameters` object that is always available when
+you do `from fenics import *` (or equivalently: `from dolfin import *`).
+The `lu_solver` do have items we can set, but probably not of interest
+here.
+
+Let us try a grid with $30\times 30$ square cells divided into  1800
+P1 elements and solve the Laplace problem $\nabla^2 u=0$ with
+$u=\sin (\pi xy)$ on the boundary. The `u0` item is supposed to be
+the boundary values and it is specified directly with the FEniCS
+`Extension` object syntax in C++: `sin(pi*x[0]*x[1])`. The browser
+may easily report an error about the compilation to C++. If so, go to
+the terminal, copy the full path to the `compile.log` compile file,
+search for `error`, and you will quickly see that the compiler complained
+about some syntax in the C++ specification (writing
+`sin(pi*x[1]*x[2])` is common!). Reload the address, correct the input,
+and press `Compute`. Then you will see a view like that in Figure
+ref{ftut:gui:fig:results1}.
+
+We know from PDE theory that the solution of a Laplace problem is bounded
+by the boundary values, so a maximum of 1 is correct.
+If desired, we can click on `VTK file with data` and get our hands on
+the data file `poisson.pvd` for visualization in ParaView.
+And we have a simple static plot of the surface.
+
+FIGURE: [fig/guifig_view1, width=300 frac=0.4] Initial web view of GUI demo. label{ftut:gui:fig:view1}
+
+FIGURE: [fig/guifig_view_dolfin_krylov_solver, width=400 frac=0.5] Initial web view of GUI demo with more parameters visible. label{ftut:gui:fig:view1_krylov}
+
+FIGURE: [fig/guifig_view_results1, width=800 frac=1] Full web GUI of demo. label{ftut:gui:fig:results1}
+
 
 ===== Design your own output on the web page =====
+label{ftut:gui:bootstrap}
 
 The parameters in the left column of the web page
 are typeset simply as a file browser widget,
@@ -190,20 +400,42 @@ the browser functionality to look at the generated HTML source. This
 will give you an idea of the correctness of the HTML you write
 yourself. (Observe that if you use inline Matplotlib plots, a large
 portion of the file is filled up with PNG code.)  Parampool applies
-the Flask web framework (see cite{Langtangen:web4sciapps}) the base
-for the design is the `templates/view.html` page, so you can freely
-edit this file and let the compute function return any tuple `results`
-and use this tuple as you like in a, for instance, multi-column output
-table with results. The design is really up to you. However, each time
-you regenerate the interface, you overwrite the `view.html` file
+the Flask web framework (see cite{Langtangen:web4sciapps}), which has
+its page design in the `templates/view.html` page, so you can freely
+edit this file to control the layout. The view file applies the Jinja2
+template language. The automatically generated `controller.py` and
+`view.html` files takes all output from the compute function in terms
+of a tuple object `results` and applies its elements `results[0]`,
+`results[1]` and so on in the various pieces of the Jinja2 code.
+Right now one dumps `results` as a string in the right column of the
+two-column table, but one could think of more columns and rows and
+distributing the `results[i]` elements among these if there is a lot
+to report.
 
-===== Running the graphical user interface =====
+Just to make a quick demonstration here -- let's change the fonts
+and background from plain HTML to a more modern, fresh, Boostrap-style
+layout. We go into `templates/view.html` and add the following lines
+in the `<head >` part:
 
-Recommend Opera.
+!bc pycod
+<link href="http://netdna.bootstrapcdn.com/bootstrap/
+            3.1.1/css/bootstrap.min.css" rel="stylesheet">
+<link href="https://cdn.rawgit.com/hplgit/doconce/master/
+            bundled/html_styles/style_bootstrap/css/
+            bootstrap_bluegray.css" rel="stylesheet">
+!ec
+(You should not do the pagebreaks and indents in your code.)
 
-http://127.0.0.1:5000/
+If we now rerun[^rerun] the application, you will get the modern fonts
+as demonstrated in Figure refftut:gui:fig:view1}, where we solve a
+problem with a constant forcing $f$, $u=0$ on the boundary, and a
+coarse mesh.
 
-fallen out, can see `krylov_solver`, no effect, `lu_solver` no interest
+FIGURE: [fig/guifig_view_results1, width=800 frac=1] Full web GUI with grayish background and modern Bootstrap-style fonts. label{ftut:gui:fig:results1}
+
+[rerun]: Do not at all rerun `generate.py` as that will overwrite
+the `view.html` you edited!
+
 ===== Multiple parameters objects =====
 
 With `from fenics import *` comes the `parameters` database that we
@@ -248,3 +480,71 @@ is to have the solver available as a class. With an object of this
 class inside the compute function, and with all parameter objects as
 attributes in the class, we can easily call `pool.traverse` for
 each parameter object of interest.
+
+===== Logging in and acrchiving results =====
+
+===== Using the command-line interface =====
+
+You can strat the `controller.py` application without actually using the
+web interface, just the command-line interface. For example,
+
+!bc sys
+Terminal> python controller.py --Nx 30 --Ny 30 \
+          --f 'sin(pi*x[0]*x[1])' --u0 0
+!ec
+
+Script calling script...change constroller?
+
+% if EXV:
+
+===== Exercise: Report more results in a web gui with fresher fonts =====
+file=compute_bootstrap
+
+Take the GUI application in Chapter ref{ftut:gui} and extend it
+with
+
+ o a discription of the application, explaining that it solves $-\nabla^2=f$
+   with the finite elements and so on,
+ o Bootstrap fonts and a gray layout color as in DocOnce's `bootstrap_bluegray.css` file found in "path": `"https://cdn.rawgit.com/hplgit/doconce/master/bundled/html_styles/style_bootstrap/css/`" (there are many other color flavors here, like brownish and bloodish),
+ o a plot of the surface *and* the gradient field.
+
+!bsol
+We generate the GUI app by running `generate.py`, which makes `templates/view.html`. Load this file into an editor. To add a description, just add some
+appropriate HTML/MathJax code at the top of `view.html`, say
+
+!bc html
+This application solves \( -\nabla^2 u =f \) on the unit 2D
+square with \( u \) as a given function on the boundary.
+The solver applies the Galerkin finite element method with
+Lagrange elements of any degree (but the visualization is always
+done by interpolation back to linear elements).
+!ec
+
+To change the layout, add the Bootstrap fonts (before `</head>`):
+
+!bc pycod
+<link href="http://netdna.bootstrapcdn.com/bootstrap/
+            3.1.1/css/bootstrap.min.css" rel="stylesheet">
+<link href="https://cdn.rawgit.com/hplgit/doconce/master/
+            bundled/html_styles/style_bootstrap/css/
+            bootstrap_bluegray.css" rel="stylesheet">
+!ec
+(You should not do the pagebreaks and indents in your code.)
+Other files to try out could be `bootstrap_X.css` where `X` is
+`bloodish`, `blue`, `brown`, `FlatUI` (reduce font size by 80% in
+`<body>` style), and `red`.
+They all give a fresher view of the GUI than plain HTML.
+
+Use Matplotlib and the computed gradient field to make a plot of
+the gradient as vectors. Let the compute function return two
+elements: `results[0]` as a string with the plot of $u(x,y)$ as a
+surface, and `results[1]` as a string with $\nabla u$. Assume the
+output table has two rows and place the gradient in column two below
+the surface plot in the third row.
+
+Loading `http://127.0.0.1:5000/` into the browser should now run the
+new GUI.
+!esol
+
+% endif
+

@@ -367,9 +367,9 @@ def convergence_rate_sin():
 def structured_mesh(u, divisions):
     """Represent u on a structured mesh."""
     # u must have P1 elements, otherwise interpolate to P1 elements
+    mesh = u.function_space().mesh()
     u2 = u if u.ufl_element().degree() == 1 else \
          interpolate(u, FunctionSpace(mesh, 'P', 1))
-    mesh = u.function_space().mesh()
     from BoxField import fenics_function2BoxField
     u_box = fenics_function2BoxField(
         u2, mesh, divisions, uniform_mesh=True)
@@ -572,7 +572,7 @@ def solver_bc(
     for i in boundary_conditions:
         if 'Dirichlet' in boundary_conditions[i]:
             bc = DirichletBC(V, boundary_conditions[i]['Dirichlet'],
-                             boundary_markers, i))
+                             boundary_markers, i)
             bcs.append(bc)
 
     if debug:
