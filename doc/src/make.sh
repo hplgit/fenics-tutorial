@@ -17,8 +17,8 @@ function system {
 }
 
 rm -rf tmp_*.do.txt  # don't spellcheck old versions
-#system doconce spellcheck -d .dict4spell.txt *.do.txt
-doconce spellcheck -d .dict4spell.txt *.do.txt
+system doconce spellcheck -d .dict4spell.txt *.do.txt
+#doconce spellcheck -d .dict4spell.txt *.do.txt
 
 # EXV: Extended Version of the book (used for exercises and
 # advanced material not to appear in the 150 page printed SSBrief version)
@@ -59,8 +59,8 @@ cp $name.pdf fenics-tutorial-4screen.pdf
 # Make sphinx
 preprocess -DFORMAT=html newcommands.p.tex > newcommands.tex
 dir=sphinx-rootdir
-system doconce format sphinx $name --encoding=utf-8 EXV=$EXV
-system doconce split_rst $name.rst
+system doconce format sphinx $name --encoding=utf-8 EXV=$EXV --sphinx_keep_splits
+system doconce split_rst $name.rst  --no_abort
 system doconce sphinx_dir dirname=$dir version=$version theme=fenics $name
 system python automake_sphinx.py
 
