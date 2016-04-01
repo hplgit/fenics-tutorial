@@ -14,15 +14,10 @@ def define_pool():
     pool.add_data_item(name='u0',
                        default='1 + x[0]*x[0] + 2*x[1]*x[1]',
                        str2type=str)
+    # Subpool with built-in FEniCS parameters
     pool = fenicsxml2pool('prm.xml', pool)
     pool.update()
     return pool
-
-import sys, os
-sys.path.insert(0, os.pardir)
-from p2D_func import solver
-from p2D_iter import gradient
-from p2D_vc import structured_mesh
 
 def compute(pool):
     # Load pool into DOLFIN's parameters data structure
@@ -37,9 +32,12 @@ def compute(pool):
     u0_str = pool.get_value('u0')
     f = dolfin.Expression(f_str)
     u0 = dolfin.Expression(u0_str)
+
+    from poisson_solver import solver
     u = solver(f, u0, Nx, Ny, degree)
     #dolfin.plot(u, title='Solution', interactive=True)
 
+    from poisson_iterative import gradient
     grad_u = gradient(u)
     grad_u_x, grad_u_y = grad_u.split(deepcopy=True)
 
@@ -49,6 +47,7 @@ def compute(pool):
     vtkfile << grad_u
 
     # Make Matplotlib plots and inline them in the HTML code
+    from poisson_bcs import structured_mesh
     u_box = structured_mesh(u, (Nx, Ny))
     u_ = u_box.values
     import matplotlib.pyplot as plt
