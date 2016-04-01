@@ -203,7 +203,7 @@ def flux(u, p):
     flux_u.rename('flux(u)', 'continuous flux field')
     return flux_u
 
-def application_test_gradient(Nx=6, Ny=4):
+def application_test_flux(Nx=6, Ny=4):
     u0 = Expression('1 + x[0]*x[0] + 2*x[1]*x[1]')
     p = Expression('x[0] + x[1]')
     f = Expression('-8*x[0] - 10*x[1]')
@@ -261,7 +261,7 @@ def compute_errors(u, u_exact):
 
     # Explicit interpolation of u_exact to higher-order elements,
     # u will also be interpolated to the space Ve before integration
-    Ve = FunctionSpace(V.mesh(), 'Lagrange', 5)  # mesh here: BUG, module mesh in fenics...make warning box
+    Ve = FunctionSpace(V.mesh(), 'Lagrange', 5)
     u_e = interpolate(u_exact, Ve)
     error = (u - u_e)**2*dx
     E3 = sqrt(abs(assemble(error)))
@@ -1024,7 +1024,7 @@ def application_flow_around_circle(obstacle='rectangle'):
 
 if __name__ == '__main__':
     #application_test()
-    #application_test_gradient(Nx=20, Ny=20)
+    #application_test_flux(Nx=20, Ny=20)
     #convergence_rate()
     #application_structured_mesh(2)
     #application_linalg()
