@@ -52,7 +52,7 @@ pdflatex $name
 compile --device=paper EXV=False
 cp $name.pdf fenics-tutorial-4print.pdf
 cp $name.log fenics-tutorial-4print.log  # save to track the no of pages!
-exit
+
 # PDF online ebook (exetended version with exercises etc.)
 compile --device=screen EXV=True
 cp $name.pdf fenics-tutorial-4screen.pdf

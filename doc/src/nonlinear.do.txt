@@ -1,27 +1,34 @@
 ========= The nonlinear Poisson solver revisited =========
+label{tut:nonlinear}
 
-======= Nonlinear problems =======
-label{tut:poisson:nonlinear}
+!bquote
+FEniCS can be used in alternative ways for solving a nonlinear PDE
+problem. We shall in the following subsections go through three
+solution strategies:
 
-Now we shall address how to solve nonlinear PDEs in FEniCS. Our
-sample PDE for implementation is taken as a nonlinear Poisson equation:
+  * a simple Picard-type iteration
+  * a Newton method at the algebraic level
+  * a Newton method at the PDE level
 
-!bt
-\begin{equation}
--\nabla\cdot\left( q(u)\nabla u\right) = f\tp
-\end{equation}
-!et
-The coefficient $q(u)$ makes the equation nonlinear (unless $q(u)$
-is constant in $u$).
+The examples will show how tailored solution algorithms can easily be
+implemented in a FEniCS solver. (The exposition will hopefully also
+help newcomers to the finite element method to understand the method
+better.)
+However, first we provide more
+information for using the built-in automated Newton solver that
+was demonstrated in Section ref{tut:nonlinear:Newton:auto}.
+!equote
 
-To be able to easily verify our implementation,
-we choose the domain, $q(u)$, $f$, and the boundary
-conditions such that we have
-a simple, exact solution $u$. Let
-$\Omega$ be the unit hypercube $[0, 1]^d$
-in $d$ dimensions, $q(u)=(1+u)^m$, $f=0$, $u=0$ for $x_0=0$, $u=1$
-for $x_0=1$, and $\partial u/\partial n=0$ at all other boundaries
-$x_i=0$ and $x_i=1$, $i=1,\ldots,d-1$. The coordinates are now represented by
+=== Test problem ===
+
+We continue to
+address the nonlinear Poisson problem $-\nabla\cdot(q(u)\nabla u)=f$.
+To be able to easily verify our implementation, we choose the domain,
+$q(u)$, $f$, and the boundary conditions such that we have a simple,
+exact solution $u$. Let $\Omega$ be the unit hypercube $[0, 1]^d$ in
+$d$ dimensions, $q(u)=(1+u)^m$, $f=0$, $u=0$ for $x_0=0$, $u=1$ for
+$x_0=1$, and $\partial u/\partial n=0$ at all other boundaries $x_i=0$
+and $x_i=1$, $i=1,\ldots,d-1$. The coordinates are now represented by
 the symbols $x_0,\ldots,x_{d-1}$. The exact solution is then
 
 !bt
@@ -32,64 +39,237 @@ u(x_0,\ldots,x_{d-1}) = \left((2^{m+1}-1)x_0 + 1\right)^{1/(m+1)} - 1\tp
 We refer to Section ref{tut:poisson:nD} for details on formulating a PDE
 problem in $d$ space dimensions.
 
-The variational formulation of our model problem reads:
-Find $u \in V$ such that
 
-!bt
-\begin{equation} label{tut:poisson:nonlinear1}
-  F(u; v) = 0 \quad \forall v \in \hat{V},
-\end{equation}
-!et
-where
+======= The built-in automated Newton solver =======
+label{tut:poisson:nonlinear}
+
+Solving nonlinear problems in FEniCS is a matter of defining the
+nonlinear variational form `F` and calling `solve(F == 0, ...)` as
+explained in Section ref{tut:nonlinear:Newton:auto}.
+However, in real problems we will at least have control of the
+tolerance used in the stopping criterion in Newton's method.
+Sometimes we also want to derive the Jacobian ourselves or
+provide approximations. Such customizations are shown next.
+
+
+===== Computing the Jacobian =====
+
+idx{`${prog["np_anyD"]}.py`}
+
+idx{nonlinear variational problems}
+idx{`NonlinearVariationalProblem`}
+idx{`NonlinearVariationalSolver`}
+
+If we want to provide a Jacobian for Newton's method, we cannot use
+the `solve(F == 0, ...)` function, but have to rely on other
+objects:
+
+!bc pycod
+problem = NonlinearVariationalProblem(F, u, bcs, J)
+solver  = NonlinearVariationalSolver(problem)
+solver.solve()
+!ec
+Here, `F` corresponds to the nonlinear form $F(u;v)$,
+`u` is the unknown `Function` object, `bcs`
+represents the essential boundary conditions (in general a list of
+`DirichletBC` objects), and
+`J` is a variational form for the Jacobian of `F`.
+
+The `F` form corresponding to (ref{tut:poisson:nonlinear2})
+is straightforwardly defined as follows, assuming `q(u)` is
+coded as a Python function (see Section ref{tut:nonlinear:Newton:auto} for
+code):
+
+!bc pycod
+u_ = Function(V)     # most recently computed solution
+v  = TestFunction(V)
+F  = inner(q(u_)*nabla_grad(u_), nabla_grad(v))*dx
+!ec
+Note here that `u_` is a `Function` and not a `TrialFunction`.
+An alternative and perhaps more intuitive formula for $F$ is to
+define $F(u;v)$ directly in terms of
+a trial function for $u$ and a test function for $v$, and then
+create the proper `F` by
+
+!bc pycod
+u  = TrialFunction(V)
+v  = TestFunction(V)
+F  = inner(q(u)*nabla_grad(u), nabla_grad(v))*dx
+u_ = Function(V)     # the most recently computed solution
+F  = action(F, u_)
+!ec
+The latter statement is equivalent to $F(u=u_{-}; v)$, where $u_{-}$ is
+an existing finite element function representing the most recently
+computed approximation to the solution.
+(Note that $u^k$ and $u^{k+1}$ in the previous notation
+correspond to $u_{-}$ and $u$ in the present
+notation. We have changed notation to better align the mathematics with
+the associated UFL code.)
+
+idx{Gateaux derivative}
+
+The derivative $J$ (`J`) of $F$ (`F`) is formally the Gateaux
+derivative $DF(u^k; \delta u, v)$ of $F(u;v)$ at $u=u_{-}$ in the
+direction of $\delta u$.  Technically, this Gateaux derivative is
+derived by computing
 
 !bt
 \begin{equation}
-label{tut:poisson:nonlinear2}
-F(u; v) = \int_\Omega q(u)\nabla u\cdot \nabla v \dx,
+\lim_{\epsilon\rightarrow 0}{d\over d\epsilon} F_i(u_{-} + \epsilon\delta u; v)
+\tp  label{tut:poisson:nonlinear:Gateaux1}
 \end{equation}
 !et
-and
+The $\delta u$ is now the trial function and $u_{-}$ is the previous
+approximation to the solution $u$.  We start with
 
 !bt
-\begin{align*}
-    \hat{V} &= \{v \in H^1(\Omega) : v = 0 \mbox{ on } x_0=0\mbox{ and }x_0=1\}, \\
-     V      &= \{v \in H^1(\Omega) : v = 0 \mbox{ on } x_0=0\mbox{ and } v = 1\mbox{ on }x_0=1\}\tp
-\end{align*}
+\begin{equation*}
+{d\over d\epsilon}\int_\Omega \nabla v\cdot\left( q(u_{-} + \epsilon\delta u)
+\nabla (u_{-} + \epsilon\delta u)\right) \dx
+\end{equation*}
 !et
-The discrete problem arises as usual by restricting $V$ and $\hat V$ to a
-pair of discrete spaces. As usual, we omit any subscript on discrete
-spaces and simply say $V$ and $\hat V$ are chosen finite dimensional
-according to some mesh with some element type.
-Similarly, we let $u$ be the discrete solution and use $\uex$ for
-the exact solution if it becomes necessary to distinguish between the two.
+and obtain
 
-The discrete nonlinear problem is then written as: find $u\in V$ such that
+!bt
+\begin{equation*}
+\int_\Omega \nabla v\cdot\left\lbrack
+q'(u_{-} + \epsilon\delta u)\delta u
+\nabla (u_{-} + \epsilon\delta u)
++
+q(u_{-} + \epsilon\delta u)
+\nabla \delta u
+\right\rbrack \dx,
+\end{equation*}
+!et
+which leads to
 
 !bt
 \begin{equation}
-  F(u; v) = 0 \quad \forall v \in \hat{V},
-label{tut:poisson:nonlinear:d}
+\int_\Omega \nabla v\cdot\left\lbrack
+q'(u_{-})\delta u
+\nabla (u_{-})
++
+q(u_{-})
+\nabla \delta u
+\right\rbrack \dx,
 \end{equation}
 !et
-with $u = \sum_{j=1}^N U_j \phi_j$. Since $F$ is a nonlinear function
-of $u$, the variational statement gives rise to a system of
-nonlinear algebraic equations.
+as $\epsilon\rightarrow 0$.  This last expression is the Gateaux
+derivative of $F$. We may use $J$ or $a(\delta u, v)$ for this
+derivative, the latter having the advantage that we easily recognize
+the expression as a bilinear form. However, in the forthcoming code
+examples `J` is used as variable name for the Jacobian.
 
-FEniCS can be used in alternative ways for solving a nonlinear PDE
-problem. We shall in the following subsections go through four
-solution strategies:
+The specification of `J` goes as follows if `du` is the
+`TrialFunction`:
 
-  o a simple Picard-type iteration,
-  o a Newton method at the algebraic level,
-  o a Newton method at the PDE level, and
-  o an automatic approach where FEniCS attacks the nonlinear variational
-    problem directly.
+!bc pycod
+du = TrialFunction(V)
+v  = TestFunction(V)
+u_ = Function(V)      # the most recently computed solution
+F  = inner(q(u_)*nabla_grad(u_), nabla_grad(v))*dx
 
-The ``black box'' strategy 4 is definitely the simplest one from a
-programmer's point of view, but the others give more manual control of
-the solution process for nonlinear equations (which also has some
-pedagogical advantages, especially for newcomers to nonlinear finite
-element problems).
+J = inner(q(u_)*nabla_grad(du), nabla_grad(v))*dx + \
+    inner(Dq(u_)*du*nabla_grad(u_), nabla_grad(v))*dx
+!ec
+The alternative specification of `F`, with `u` as
+`TrialFunction`, leads to
+
+!bc pycod
+u  = TrialFunction(V)
+v  = TestFunction(V)
+u_ = Function(V)      # the most recently computed solution
+F  = inner(q(u)*nabla_grad(u), nabla_grad(v))*dx
+F  = action(F, u_)
+
+J = inner(q(u_)*nabla_grad(u), nabla_grad(v))*dx + \
+    inner(Dq(u_)*u*nabla_grad(u_), nabla_grad(v))*dx
+!ec
+
+idx{`derivative`}
+idx{automatic differentiation}
+idx{Jacobian, automatic computation}
+
+The UFL language, used to specify weak forms, supports differentiation
+of forms. This feature facilitates automatic *symbolic* computation of the
+Jacobian `J` by calling the function `derivative` with `F`, the most
+recently computed solution (`Function`), and the unknown
+(`TrialFunction`) as parameters:
+
+!bc pycod
+du = TrialFunction(V)
+v  = TestFunction(V)
+u_ = Function(V)      # the most recently computed solution
+F  = inner(q(u_)*nabla_grad(u_), nabla_grad(v))*dx
+
+J  = derivative(F, u_, du)  # Gateaux derivative in dir. of du
+!ec
+or
+
+!bc pycod
+u  = TrialFunction(V)
+v  = TestFunction(V)
+u_ = Function(V)      # the most recently computed solution
+F  = inner(q(u)*nabla_grad(u), nabla_grad(v))*dx
+F  = action(F, u_)
+
+J  = derivative(F, u_, u)   # Gateaux derivative in dir. of u
+!ec
+The `derivative` function is obviously very convenient in problems
+where differentiating `F` by hand implies lengthy calculations.
+
+===== Setting solver parameters =====
+
+The following code defines the nonlinear variational problem and
+an associated solver based on Newton's method. We here demonstrate
+how key parameters in
+Newton's method can be set, as well as the choice of
+solver and preconditioner, and associated parameters, for the
+linear system occurring in the Newton iterations.
+
+@@@CODE-4 src/np_anyD.py fromto: problem = NonlinearVar@set_log_level
+
+A list of available parameters and their default values can as
+usual be printed by calling `info(prm, True)`.
+The `u_` we feed to the nonlinear variational problem object
+is filled with the solution by the call `solver.solve()`.
+
+===== Implementation =====
+
+The preferred implementation of `F` and `J`, depending on whether `du`
+or `u` is the `TrialFunction` object, is a matter of personal
+taste. Derivation of the Gateaux derivative by hand, as shown above,
+is most naturally matched by an implementation where `du` is the
+`TrialFunction`, while use of automatic symbolic differentiation with
+the aid of the `derivative` function is most naturally matched by an
+implementation where `u` is the `TrialFunction`.  We have implemented
+both approaches in a `solver` function in
+the file "`${prog['np_anyD']}.py`":
+"${src_url}/${prog['np_anyD']}.py".
+An argument `TrialFunction_object`
+can be set to `u` if we want to have `u` as
+`TrialFunction`, otherwise it set to `du`.
+
+@@@CODE src/np_anyD.py fromto: def solver@# Create mesh
+
+Let us run the code for $m=2$ and three meshes corresponding to
+`divisions` as `10 10`, `20 20`, and `40 40`. The maximum errors
+are then $5\cdot 10^{-3}$, $1.7\cdot 10^{-3}\approx \frac{1}{4}5\cdot 10^{-3}$,
+$4.5\cdot 10^{-4}\approx\frac{1}{4}1.7\cdot 10^{-3}$, and
+$1.2\cdot 10^{-4}\approx\frac{1}{4}4.5\cdot 10^{-4}$, demonstrating
+second-order convergence in the cell size as expected for P1 elements.
+This test is turned into a proper unit test in the `test_solver` function.
+
+
+======= Manually implementation of solution algorithms =======
+
+We now show how we can implement the solution algorithm for
+handling nonlinear PDEs from scratch. First, we treat the
+common and popular Picard iteration method. Second, we look at
+a standard Newton method for solving nonlinear algebraic equations.
+And third, we demonstrate application of the Newton method directly
+to the PDE, which is an approach that is more attractive to
+FEniCS programmers than the second one.
 
 ===== Picard iteration =====
 label{tut:nonlinear:Picard}
@@ -99,12 +279,11 @@ idx{successive substitutions}
 Picard iteration is an easy way of handling nonlinear PDEs: we simply
 use a known, previous solution in the nonlinear terms so that these
 terms become linear in the unknown $u$. The strategy is also known as
-the method of successive substitutions.
-For our particular problem,
-we use a known, previous solution in the coefficient $q(u)$.
-More precisely, given a solution $u^k$ from iteration $k$, we seek a
-new (hopefully improved) solution $u^{k+1}$ in iteration $k+1$ such
-that $u^{k+1}$ solves the *linear problem*,
+the method of successive substitutions.  For our particular problem,
+we use a known, previous solution in the coefficient $q(u)$.  More
+precisely, given a solution $u^k$ from iteration $k$, we seek a new
+(hopefully improved) solution $u^{k+1}$ in iteration $k+1$ such that
+$u^{k+1}$ solves the *linear problem*,
 
 !bt
 \begin{equation}
@@ -592,236 +771,3 @@ the file `${prog["pde_newton_np"]}.py`. The reader is encouraged to go
 through this code to be convinced that the present method actually
 ends up with the same program as needed for the Newton method at
 the linear algebra level in Section ref{tut:nonlinear:Newton:algebraic}.
-
-
-===== Solving the nonlinear variational problem directly =====
-label{tut:nonlinear:Newton:auto}
-
-idx{`${prog["vp1_np"]}.py`}
-idx{`${prog["vp2_np"]}.py`}
-
-The previous hand-calculations and manual implementation of
-Picard or Newton methods can be automated by tools in FEniCS.
-In a nutshell, one can just write
-
-!bc pycod
-problem = NonlinearVariationalProblem(F, u, bcs, J)
-solver  = NonlinearVariationalSolver(problem)
-solver.solve()
-!ec
-where `F` corresponds to the nonlinear form $F(u;v)$,
-`u` is the unknown `Function` object, `bcs`
-represents the essential boundary conditions (in general a list of
-`DirichletBC` objects), and
-`J` is a variational form for the Jacobian of `F`.
-
-Let us explain in detail how to use the built-in tools for
-nonlinear variational problems and their solution.
-The `F` form corresponding to (ref{tut:poisson:nonlinear2})
-is straightforwardly defined as follows, assuming `q(u)` is
-coded as a Python function:
-
-!bc pycod
-u_ = Function(V)     # most recently computed solution
-v  = TestFunction(V)
-F  = inner(q(u_)*nabla_grad(u_), nabla_grad(v))*dx
-!ec
-Note here that `u_` is a `Function` (not a `TrialFunction`).
-An alternative and perhaps more intuitive formula for $F$ is to
-define $F(u;v)$ directly in terms of
-a trial function for $u$ and a test function for $v$, and then
-create the proper `F` by
-
-!bc pycod
-u  = TrialFunction(V)
-v  = TestFunction(V)
-F  = inner(q(u)*nabla_grad(u), nabla_grad(v))*dx
-u_ = Function(V)     # the most recently computed solution
-F  = action(F, u_)
-!ec
-The latter statement is equivalent to $F(u=u_{-}; v)$, where $u_{-}$ is
-an existing finite element function representing the most recently
-computed approximation to the solution.
-(Note that $u^k$ and $u^{k+1}$ in the previous notation
-correspond to $u_{-}$ and $u$ in the present
-notation. We have changed notation to better align the mathematics with
-the associated UFL code.)
-
-idx{Gateaux derivative}
-
-The derivative $J$ (`J`) of $F$ (`F`) is formally the
-Gateaux derivative $DF(u^k; \delta u, v)$
-of $F(u;v)$ at $u=u_{-}$ in the direction of $\delta u$.
-Technically, this Gateaux derivative is derived by computing
-
-!bt
-\begin{equation}
-\lim_{\epsilon\rightarrow 0}{d\over d\epsilon} F_i(u_{-} + \epsilon\delta u; v)
-\tp  label{tut:poisson:nonlinear:Gateaux1}
-\end{equation}
-!et
-The $\delta u$ is now the trial function and $u_{-}$ is the previous
-approximation to the solution $u$.
-We start with
-
-!bt
-\begin{equation*}
-{d\over d\epsilon}\int_\Omega \nabla v\cdot\left( q(u_{-} + \epsilon\delta u)
-\nabla (u_{-} + \epsilon\delta u)\right) \dx
-\end{equation*}
-!et
-and obtain
-
-!bt
-\begin{equation*}
-\int_\Omega \nabla v\cdot\left\lbrack
-q'(u_{-} + \epsilon\delta u)\delta u
-\nabla (u_{-} + \epsilon\delta u)
-+
-q(u_{-} + \epsilon\delta u)
-\nabla \delta u
-\right\rbrack \dx,
-\end{equation*}
-!et
-which leads to
-
-!bt
-\begin{equation}
-\int_\Omega \nabla v\cdot\left\lbrack
-q'(u_{-})\delta u
-\nabla (u_{-})
-+
-q(u_{-})
-\nabla \delta u
-\right\rbrack \dx,
-\end{equation}
-!et
-as $\epsilon\rightarrow 0$.
-This last expression is the Gateaux derivative of $F$. We may use $J$ or
-$a(\delta u, v)$ for this derivative, the latter having the advantage
-that we easily recognize the expression as a bilinear form. However, in
-the forthcoming code examples `J` is used as variable name for
-the Jacobian.
-
-The specification of `J`
-goes as follows if `du` is the `TrialFunction`:
-
-!bc pycod
-du = TrialFunction(V)
-v  = TestFunction(V)
-u_ = Function(V)      # the most recently computed solution
-F  = inner(q(u_)*nabla_grad(u_), nabla_grad(v))*dx
-
-J = inner(q(u_)*nabla_grad(du), nabla_grad(v))*dx + \
-    inner(Dq(u_)*du*nabla_grad(u_), nabla_grad(v))*dx
-!ec
-The alternative specification of `F`, with `u` as
-`TrialFunction`, leads to
-
-!bc pycod
-u  = TrialFunction(V)
-v  = TestFunction(V)
-u_ = Function(V)      # the most recently computed solution
-F  = inner(q(u)*nabla_grad(u), nabla_grad(v))*dx
-F  = action(F, u_)
-
-J = inner(q(u_)*nabla_grad(u), nabla_grad(v))*dx + \
-    inner(Dq(u_)*u*nabla_grad(u_), nabla_grad(v))*dx
-!ec
-
-idx{`derivative`}
-idx{automatic differentiation}
-idx{Jacobian, automatic computation}
-
-The UFL language, used to specify weak forms, supports differentiation
-of forms. This feature facilitates automatic *symbolic* computation of the
-Jacobian `J` by calling the function `derivative` with `F`, the most
-recently computed solution (`Function`), and the unknown
-(`TrialFunction`) as parameters:
-
-!bc pycod
-du = TrialFunction(V)
-v  = TestFunction(V)
-u_ = Function(V)      # the most recently computed solution
-F  = inner(q(u_)*nabla_grad(u_), nabla_grad(v))*dx
-
-J  = derivative(F, u_, du)  # Gateaux derivative in dir. of du
-!ec
-or
-
-!bc pycod
-u  = TrialFunction(V)
-v  = TestFunction(V)
-u_ = Function(V)      # the most recently computed solution
-F  = inner(q(u)*nabla_grad(u), nabla_grad(v))*dx
-F  = action(F, u_)
-
-J  = derivative(F, u_, u)   # Gateaux derivative in dir. of u
-!ec
-The `derivative` function is obviously
-very convenient in problems where differentiating `F` by hand
-implies lengthy calculations.
-
-The preferred implementation of `F` and `J`, depending on whether
-`du` or `u` is the `TrialFunction` object,
-is a matter of personal taste. Derivation of the Gateaux derivative
-by hand, as shown above, is most naturally matched by an
-implementation where `du` is the `TrialFunction`, while
-use of automatic symbolic differentiation with the aid of the `derivative`
-function is most naturally matched by an implementation where
-`u` is the `TrialFunction`.
-We have implemented both approaches in two files:
-`${prog["vp1_np"]}.py` with
-`u` as `TrialFunction`, and
-`${prog["vp2_np"]}.py` with `du` as `TrialFunction`.
-The first command-line argument determines if the Jacobian is to
-be automatically derived or computed from the hand-derived formula.
-
-
-
-idx{nonlinear variational problems}
-idx{`NonlinearVariationalProblem`}
-idx{`NonlinearVariationalSolver`}
-
-The following code defines the nonlinear variational problem and
-an associated solver based on Newton's method. We here demonstrate
-how key parameters in
-Newton's method can be set, as well as the choice of
-solver and preconditioner, and associated parameters, for the
-linear system occurring in the Newton iterations.
-
-!bc pycod
-problem = NonlinearVariationalProblem(F, u_, bcs, J)
-solver  = NonlinearVariationalSolver(problem)
-
-prm = solver.parameters
-info(prm, True)
-prm_n = prm['newton_solver']
-prm_n['absolute_tolerance'] = 1E-8
-prm_n['relative_tolerance'] = 1E-7
-prm_n['maximum_iterations'] = 25
-prm_n['relaxation_parameter'] = 1.0
-if iterative_solver:
-    prec = 'jacobi' if 'jacobi' in \
-           list(zip(*krylov_solver_preconditioners()))[0] \
-           else 'ilu'
-    prm_n['linear_solver'] = 'gmres'
-    prm_n['preconditioner'] = prec
-    prm_n['krylov_solver']['absolute_tolerance'] = 1E-9
-    prm_n['krylov_solver']['relative_tolerance'] = 1E-7
-    prm_n['krylov_solver']['maximum_iterations'] = 1000
-    prm_n['krylov_solver']['monitor_convergence'] = True
-    prm_n['krylov_solver']['nonzero_initial_guess'] = False
-    prm_n['krylov_solver']['gmres']['restart'] = 40
-    prm_n['krylov_solver']['preconditioner']['structure'] = \
-                                        'same_nonzero_pattern'
-    prm_n['krylov_solver']['preconditioner']['ilu']['fill_level'] = 0
-PROGRESS = 16
-set_log_level(PROGRESS)
-
-solver.solve()
-!ec
-A list of available parameters and their default values can as
-usual be printed by calling `info(prm, True)`.
-The `u_` we feed to the nonlinear variational problem object
-is filled with the solution by the call `solver.solve()`.
