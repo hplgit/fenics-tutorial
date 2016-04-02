@@ -6,7 +6,7 @@
   <head>
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
     
-    <title>Mathematical problem formulation</title>
+    <title>A simple implementation</title>
     
     <link rel="stylesheet" href="_static/fenics.css" type="text/css" />
     <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
@@ -42,7 +42,7 @@
 
     
     <link rel="top" title="The FEniCS Tutorial" href="index.html" />
-    <link rel="next" title="A basic Poisson solver" href="._ftut004.html" />
+    <link rel="next" title="The Poisson solver revisited" href="._ftut004.html" />
     <link rel="prev" title="The fundamentals" href="._ftut002.html" />
 
 <!--[if lte IE 6]>
@@ -132,196 +132,1148 @@
         <div class="bodywrapper">
           <div class="body" role="main">
             
-  <div class="section" id="mathematical-problem-formulation">
-<h1>Mathematical problem formulation<a class="headerlink" href="#mathematical-problem-formulation" title="Permalink to this headline">¶</a></h1>
-<p>[<strong>AL 3</strong>: I AM HERE]</p>
-<p>[<strong>hpl 4</strong>: Need a little intro.]</p>
-<div class="section" id="the-poisson-equation">
-<span id="tut-poisson1-bvp"></span><h2>The Poisson equation<a class="headerlink" href="#the-poisson-equation" title="Permalink to this headline">¶</a></h2>
-<p id="index-0">Let us start with a &#8220;Hello, World!&#8221; program in the world of PDEs - it
-must be a program that solves the Laplace or Poisson equation.
-Our first example regards the following Poisson problem,</p>
-<div class="math" id="eq-tut-poisson1">
-\[\tag{1}
-- \nabla^2 u(\boldsymbol{x}) = f(\boldsymbol{x}),\quad \boldsymbol{x}\mbox{ in } \Omega,\]</div>
-<div class="math" id="eq-tut-poisson1-bc">
-\[\tag{2}
-u(\boldsymbol{x}) = u_0(\boldsymbol{x}),\quad \boldsymbol{x}\mbox{ on } \partial \Omega{\thinspace .}\]</div>
-<p>Here, <span class="math">\(u(\boldsymbol{x})\)</span> is the unknown function, <span class="math">\(f(\boldsymbol{x})\)</span> is a
-prescribed function, <span class="math">\(\nabla^2\)</span> is the Laplace operator (also
-often written as <span class="math">\(\Delta\)</span>), <span class="math">\(\Omega\)</span> is the spatial domain, and
-<span class="math">\(\partial\Omega\)</span> is the boundary of <span class="math">\(\Omega\)</span>. A stationary PDE like
-this, together with a complete set of boundary conditions, constitute
-a <em>boundary-value problem</em>, which must be precisely stated before
-it makes sense to start solving it with FEniCS.</p>
-<p>In two space dimensions with coordinates <span class="math">\(x\)</span> and <span class="math">\(y\)</span>, we can write out
-the Poisson equation as</p>
-<div class="math" id="eq-auto1">
-\[\tag{3}
-- {\partial^2 u\over\partial x^2} -
-    {\partial^2 u\over\partial y^2} = f(x,y){\thinspace .}\]</div>
-<p>The unknown <span class="math">\(u\)</span> is now a function of two variables, <span class="math">\(u(x,y)\)</span>, defined
-over a two-dimensional domain <span class="math">\(\Omega\)</span>.</p>
-<p>The Poisson equation arises in numerous physical contexts, including
-heat conduction, electrostatics, diffusion of substances, twisting of
-elastic rods, inviscid fluid flow, and water waves. Moreover, the
-equation appears in numerical splitting strategies of more complicated
-systems of PDEs, in particular the Navier-Stokes equations.</p>
-<p>Solving a physical problem with FEniCS consists of the following steps:</p>
-<blockquote>
-<div><ol class="arabic simple">
-<li>Identify the PDE and its boundary conditions.</li>
-<li>Reformulate the PDE problem as a variational problem.</li>
-<li>Make a Python program where the formulas in the variational
-problem are coded, along with definitions of input data such as
-<span class="math">\(f\)</span>, <span class="math">\(u_0\)</span>, and a mesh for the spatial domain <span class="math">\(\Omega\)</span>.</li>
-<li>Add statements in the program for solving the variational
-problem, computing derived quantities such as <span class="math">\(\nabla u\)</span>, and
-visualizing the results.</li>
-</ol>
-</div></blockquote>
-<p>We shall now go through steps 2-4 in detail.  The key feature of
-FEniCS is that steps 3 and 4 result in fairly short code, while most
-other software frameworks for PDEs require much more code and more
-technically difficult programming.</p>
-</div>
-<div class="section" id="variational-formulation-1">
-<span id="tut-poisson1-varform"></span><h2>Variational formulation<a class="headerlink" href="#variational-formulation-1" title="Permalink to this headline">¶</a></h2>
-<p id="index-1">FEniCS makes it easy to solve PDEs if finite elements are used for
-discretization in space and the problem is expressed as a <em>variational
-problem</em>. Readers who are not familiar with variational problems will
-get a brief introduction to the topic in this tutorial, but getting
-and reading a proper book on the finite element method in addition is
-encouraged.  The section <a class="reference internal" href="._ftut015.html#tut-appendix-books"><span class="std std-ref">Books on the finite element method</span></a> contains a list of some
-suitable books.</p>
-<span class="target" id="index-2"></span><p id="index-3">The core of the recipe for turning a PDE into a variational problem is
-to multiply the PDE by a function <span class="math">\(v\)</span>, integrate the resulting
-equation over <span class="math">\(\Omega\)</span>, and perform integration by parts of terms with
-second-order derivatives. The function <span class="math">\(v\)</span> which multiplies the PDE is
-in the mathematical finite element literature called a <em>test
-function</em>. The unknown function <span class="math">\(u\)</span> to be approximated is referred to
-as a <em>trial function</em>. The terms test and trial function are used in
-FEniCS programs too.  Suitable function spaces must be specified for
-the test and trial functions.  For standard PDEs arising in physics
-and mechanics such spaces are well known.</p>
-<p>In the present case, we first multiply the Poisson equation
-by the test function <span class="math">\(v\)</span> and integrate,</p>
-<div class="math" id="eq-tut-poisson1-multbyv">
-\[\tag{4}
--\int_\Omega (\nabla^2 u)v {\, \mathrm{d}x} = \int_\Omega fv {\, \mathrm{d}x}{\thinspace .}\]</div>
-<p>Then we apply integration by parts to the integrand with
-second-order derivatives,</p>
-<div class="math" id="eq-tut-poisson1-eqbyparts">
-\[\tag{5}
--\int_\Omega (\nabla^2 u)v {\, \mathrm{d}x}
-    = \int_\Omega\nabla u\cdot\nabla v {\, \mathrm{d}x} - \int_{\partial\Omega}{\partial u\over
-    \partial n}v {\, \mathrm{d}s} ,\]</div>
-<p>where <span class="math">\(\frac{\partial u}{\partial n}\)</span> is the derivative of <span class="math">\(u\)</span> in the
-outward normal direction at the boundary.  The test function <span class="math">\(v\)</span> is
-required to vanish on the parts of the boundary where <span class="math">\(u\)</span> is known,
-which in the present problem implies that <span class="math">\(v=0\)</span> on the whole boundary
-<span class="math">\(\partial\Omega\)</span>.  The second term on the right-hand side of
-<a class="reference internal" href="#eq-tut-poisson1-eqbyparts"><span class="std std-ref">(5)</span></a> therefore vanishes.  From
-<a class="reference internal" href="#eq-tut-poisson1-multbyv"><span class="std std-ref">(4)</span></a> and <a class="reference internal" href="#eq-tut-poisson1-eqbyparts"><span class="std std-ref">(5)</span></a> it
-follows that</p>
-<div class="math" id="eq-tut-poisson1-weak1">
-\[\tag{6}
-\int_\Omega\nabla u\cdot\nabla v {\, \mathrm{d}x} = \int_\Omega fv {\, \mathrm{d}x}{\thinspace .}\]</div>
-<p>This equation is supposed to hold for all <span class="math">\(v\)</span> in some function space
-<span class="math">\(\hat V\)</span>. The trial function <span class="math">\(u\)</span> lies in some (possibly different)
-function space <span class="math">\(V\)</span>.  We refer to <a class="reference internal" href="#eq-tut-poisson1-weak1"><span class="std std-ref">(6)</span></a> as the
-<em>weak form</em> or <em>variational form</em> of the original boundary-value
-problem <a class="reference internal" href="#eq-tut-poisson1"><span class="std std-ref">(1)</span></a>-<a class="reference internal" href="#eq-tut-poisson1-bc"><span class="std std-ref">(2)</span></a>.</p>
-<p>The proper statement of
-our variational problem now goes as follows:
-Find <span class="math">\(u \in V\)</span> such that</p>
-<div class="math" id="eq-tut-poisson1-var">
-\[\tag{7}
-\int_{\Omega} \nabla u \cdot \nabla v {\, \mathrm{d}x} =
-      \int_{\Omega} fv {\, \mathrm{d}x}
-      \quad \forall v \in \hat{V}.\]</div>
-<p>The test and trial spaces <span class="math">\(\hat{V}\)</span> and <span class="math">\(V\)</span> are in the present
-problem defined as</p>
+  <div class="section" id="a-simple-implementation-1">
+<span id="tut-poisson1-impl"></span><h1>A simple implementation<a class="headerlink" href="#a-simple-implementation-1" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="test-problem-1">
+<h2>Test problem<a class="headerlink" href="#test-problem-1" title="Permalink to this headline">¶</a></h2>
+<p>The PDE problem has so far featured a general domain <span class="math">\(\Omega\)</span> and general
+functions <span class="math">\(u_0\)</span> and <span class="math">\(f\)</span>. For our first implementation we must decide
+on specific choices of <span class="math">\(\Omega\)</span>, <span class="math">\(u_0\)</span>, and <span class="math">\(f\)</span>.  It will be wise to
+construct a specific problem where we can easily check that the
+computed solution is correct. Let us start with specifying an exact
+solution <span class="math">\({u_{\small\mbox{e}}}(x,y)\)</span>:</p>
+<div class="math" id="eq-tut-poisson1-impl-uex">
+\[\tag{12}
+\
+    {u_{\small\mbox{e}}}(x,y) = 1 +x^2 + 2y^2\]</div>
+<p>on some 2D domain.  By inserting <a class="reference internal" href="#eq-tut-poisson1-impl-uex"><span class="std std-ref">(12)</span></a> in
+our Poisson problem, we find that <span class="math">\({u_{\small\mbox{e}}}(x,y)\)</span> is a solution if</p>
 <div class="math">
-\[\begin{split}\hat{V} &amp;= \{v \in H^1(\Omega) : v = 0 \mbox{ on } \partial\Omega\}, \\
- V      &amp;= \{v \in H^1(\Omega) : v = u_0 \mbox{ on } \partial\Omega\}{\thinspace .}\end{split}\]</div>
-<p>In short, <span class="math">\(H^1(\Omega)\)</span> is the mathematically well-known Sobolev space
-containing functions <span class="math">\(v\)</span> such that <span class="math">\(v^2\)</span> and <span class="math">\(||\nabla v||^2\)</span> have
-finite integrals over <span class="math">\(\Omega\)</span>. The solution of the underlying PDE
-must lie in a function space where also the derivatives are
-continuous, but the Sobolev space <span class="math">\(H^1(\Omega)\)</span> allows functions with
-discontinuous derivatives.  This weaker continuity requirement of <span class="math">\(u\)</span>
-in the variational statement <a class="reference internal" href="#eq-tut-poisson1-var"><span class="std std-ref">(7)</span></a>, caused by the
-integration by parts, has great practical consequences when it comes
-to constructing finite elements.</p>
-<p>To solve the Poisson equation numerically, we need to transform the
-continuous variational problem <a class="reference internal" href="#eq-tut-poisson1-var"><span class="std std-ref">(7)</span></a> to a discrete
-variational problem. This is done by introducing <em>finite-dimensional</em>
-test and trial spaces, often denoted as <span class="math">\(\hat{V}_h\subset\hat{V}\)</span> and
-<span class="math">\(V_h\subset{V}\)</span>. The discrete variational problem reads: Find <span class="math">\(u_h \in
-V_h \subset V\)</span> such that</p>
-<div class="math" id="eq-tut-poisson1-vard">
-\[\tag{8}
-\int_{\Omega} \nabla u_h \cdot \nabla v {\, \mathrm{d}x} =
-      \int_{\Omega} fv {\, \mathrm{d}x}
-      \quad \forall v \in \hat{V}_h \subset \hat{V}{\thinspace .}\]</div>
-<p>The choice of <span class="math">\(\hat{V}_h\)</span> and <span class="math">\(V_h\)</span> follows directly from the kind of
-finite elements we want to apply in our problem. For example, choosing
-the well-known linear triangular element with three nodes implies that
-<span class="math">\(\hat V_h\)</span> and <span class="math">\(V_h\)</span> are the spaces of all piecewise linear functions
-over a mesh of triangles, where the functions in <span class="math">\(\hat V_h\)</span> are zero
-on the boundary and those in <span class="math">\(V_h\)</span> equal <span class="math">\(u_0\)</span> on the boundary.</p>
-<div class="admonition-what-we-mean-by-the-notation-math-u-and-math-v admonition">
-<p class="first admonition-title">What we mean by the notation <span class="math">\(u\)</span> and <span class="math">\(V\)</span></p>
-<p>The mathematics literature on variational problems writes <span class="math">\(u_h\)</span> for
-the solution of the discrete problem and <span class="math">\(u\)</span> for the solution of the
-continuous problem. To obtain (almost) a one-to-one relationship
-between the mathematical formulation of a problem and the
-corresponding FEniCS program, we shall use <span class="math">\(u\)</span> for the solution of
-the discrete problem and <span class="math">\({u_{\small\mbox{e}}}\)</span> for the exact solution of the
-continuous problem, <em>if</em> we need to explicitly distinguish
-between the two.</p>
-<p class="last">In most cases, we will introduce the PDE problem with
-<span class="math">\(u\)</span> as unknown, derive a variational equation <span class="math">\(a(u,v)=L(v)\)</span> with <span class="math">\(u\in
-V\)</span> and <span class="math">\(v\in \hat V\)</span>, and then simply discretize the problem by saying
-that we choose finite-dimensional spaces for <span class="math">\(V\)</span> and <span class="math">\(\hat V\)</span>, without
-adding any subscript to <span class="math">\(V\)</span> or <span class="math">\(\hat V\)</span>. This
-restriction of <span class="math">\(V\)</span> simply implies that <span class="math">\(u\)</span> becomes a discrete finite element
-function.  In practice, this means that we turn our PDE problem into a
-continuous variational problem, create a mesh and specify an element
-type, and then let <span class="math">\(V\)</span> correspond to this mesh and element choice.
-Depending upon whether <span class="math">\(V\)</span> is infinite- or finite-dimensional, <span class="math">\(u\)</span>
-will be the exact or approximate solution.</p>
+\[f(x,y) = -6,\quad u_0(x,y)={u_{\small\mbox{e}}}(x,y)=1 + x^2 + 2y^2,\]</div>
+<p>regardless of the shape of the domain. We choose here, for simplicity,
+the domain to be the unit square,</p>
+<div class="math">
+\[\Omega = [0,1]\times [0,1] .\]</div>
+<p>The reason for specifying the solution <a class="reference internal" href="#eq-tut-poisson1-impl-uex"><span class="std std-ref">(12)</span></a> is
+that the finite element method, with a rectangular domain uniformly
+partitioned into linear triangular elements, will exactly reproduce a
+second-order polynomial at the vertices of the cells, regardless of
+the size of the elements. This property allows us to verify the
+implementation by comparing the computed solution (<span class="math">\(u\)</span>) with the exact
+solution (<span class="math">\({u_{\small\mbox{e}}}\)</span>). These quantities should be equal to machine
+precision <em>at the nodes</em>.</p>
+<div class="admonition-tip-try-to-verify-your-code-with-exact-numerical-solutions admonition">
+<p class="first admonition-title">Tip: Try to verify your code with exact numerical solutions</p>
+<p class="last">The classical way of testing a program is to compare the numerical
+solution with an exact analytical solution of the test problem
+and conclude that the program works if the error is &#8220;small enough&#8221;.
+Unfortunately, it is impossible to tell if an error <span class="math">\(10^{-5}\)</span> on
+a <span class="math">\(20\times 20\)</span> mesh of P1 elements is just all the numerical
+approximation errors in the method or if this error also contains
+the effect of a bug in the code. All we usually know about the
+numerical error is its <em>asymptotic properties</em>, for instance that
+it goes like <span class="math">\(h^2\)</span> if <span class="math">\(h\)</span> is the size of a cell in the mesh. Then we
+can compare the error on meshes with different <span class="math">\(h\)</span> values to see if
+the asymptotic behavior is correct. This is a very powerful
+verification technique and is explained in detail in the section <a class="reference internal" href="._ftut007.html#tut-poisson1-convrates"><span class="std std-ref">Computing convergence rates</span></a>. However, if we have a test problem where
+we know that there are no numerical approximation errors, we know that
+the analytical solution of the PDE problem should be reproduced to
+machine precision by the program. That is why we emphasize this kind
+of test problems throughout this tutorial.
+Typically, elements of degree <span class="math">\(d\)</span> can reproduce polynomials of
+degree <span class="math">\(d+1\)</span> exactly, so this is the starting point for constructing
+a solution without numerical approximation errors. Then we fit the
+data in the problem (like <span class="math">\(u_0\)</span> and <span class="math">\(f\)</span>) to this solution.</p>
 </div>
-<p>It turns out to be convenient to introduce the following unified
-notation for linear weak forms:</p>
-<div class="math" id="eq-auto2">
-\[\tag{9}
-a(u, v) = L(v){\thinspace .}\]</div>
-<p>In the present problem we have that</p>
-<div class="math" id="eq-tut-poisson1-vard-a">
-\[\tag{10}
-a(u, v) = \int_{\Omega} \nabla u \cdot \nabla v {\, \mathrm{d}x},\]</div>
-<div class="math" id="eq-tut-poisson1-vard-l">
-\[\tag{11}
-L(v) = \int_{\Omega} fv {\, \mathrm{d}x}{\thinspace .}\]</div>
-<p>From the mathematics literature, <span class="math">\(a(u,v)\)</span> is known as a <em>bilinear
-form</em> and <span class="math">\(L(v)\)</span> as a <em>linear form</em>.  We shall in every linear problem
-we solve identify the terms with the unknown <span class="math">\(u\)</span> and collect them in
-<span class="math">\(a(u,v)\)</span>, and similarly collect all terms with only known functions in
-<span class="math">\(L(v)\)</span>. The formulas for <span class="math">\(a\)</span> and <span class="math">\(L\)</span> are then coded directly in the
-program.</p>
-<p>To summarize, before making a FEniCS program for solving a PDE,
-we must first perform two steps:</p>
-<blockquote>
-<div><ul class="simple">
-<li>Turn the PDE problem into a discrete
-variational problem: find <span class="math">\(u\in V\)</span>
-such that <span class="math">\(a(u,v) = L(v)\quad\forall v\in \hat{V}\)</span>.</li>
-<li>Specify the choice of spaces (<span class="math">\(V\)</span> and <span class="math">\(\hat V\)</span>), which means
-specifying the mesh and type of finite elements.</li>
-</ul>
-</div></blockquote>
+</div>
+<div class="section" id="the-program">
+<span id="tut-poisson1-impl-code"></span><h2>The program<a class="headerlink" href="#the-program" title="Permalink to this headline">¶</a></h2>
+<p>A FEniCS program for solving the Poisson equation in 2D with the given
+choices of <span class="math">\(u_0\)</span>, <span class="math">\(f\)</span>, and <span class="math">\(\Omega\)</span> may look as follows:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="kn">from</span> <span class="nn">fenics</span> <span class="kn">import</span> <span class="o">*</span>
+
+<span class="c"># Create mesh and define function space</span>
+<span class="n">mesh</span> <span class="o">=</span> <span class="n">UnitSquareMesh</span><span class="p">(</span><span class="mi">6</span><span class="p">,</span> <span class="mi">4</span><span class="p">)</span>
+<span class="n">V</span> <span class="o">=</span> <span class="n">FunctionSpace</span><span class="p">(</span><span class="n">mesh</span><span class="p">,</span> <span class="s">&#39;Lagrange&#39;</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+
+<span class="c"># Define boundary conditions</span>
+<span class="n">u0</span> <span class="o">=</span> <span class="n">Expression</span><span class="p">(</span><span class="s">&#39;1 + x[0]*x[0] + 2*x[1]*x[1]&#39;</span><span class="p">)</span>
+
+<span class="k">def</span> <span class="nf">u0_boundary</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">on_boundary</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">on_boundary</span>
+
+<span class="n">bc</span> <span class="o">=</span> <span class="n">DirichletBC</span><span class="p">(</span><span class="n">V</span><span class="p">,</span> <span class="n">u0</span><span class="p">,</span> <span class="n">u0_boundary</span><span class="p">)</span>
+
+<span class="c"># Define variational problem</span>
+<span class="n">u</span> <span class="o">=</span> <span class="n">TrialFunction</span><span class="p">(</span><span class="n">V</span><span class="p">)</span>
+<span class="n">v</span> <span class="o">=</span> <span class="n">TestFunction</span><span class="p">(</span><span class="n">V</span><span class="p">)</span>
+<span class="n">f</span> <span class="o">=</span> <span class="n">Constant</span><span class="p">(</span><span class="o">-</span><span class="mf">6.0</span><span class="p">)</span>
+<span class="n">a</span> <span class="o">=</span> <span class="n">inner</span><span class="p">(</span><span class="n">nabla_grad</span><span class="p">(</span><span class="n">u</span><span class="p">),</span> <span class="n">nabla_grad</span><span class="p">(</span><span class="n">v</span><span class="p">))</span><span class="o">*</span><span class="n">dx</span>
+<span class="n">L</span> <span class="o">=</span> <span class="n">f</span><span class="o">*</span><span class="n">v</span><span class="o">*</span><span class="n">dx</span>
+
+<span class="c"># Compute solution</span>
+<span class="n">u</span> <span class="o">=</span> <span class="n">Function</span><span class="p">(</span><span class="n">V</span><span class="p">)</span>
+<span class="n">solve</span><span class="p">(</span><span class="n">a</span> <span class="o">==</span> <span class="n">L</span><span class="p">,</span> <span class="n">u</span><span class="p">,</span> <span class="n">bc</span><span class="p">)</span>
+
+<span class="c"># Plot solution and mesh</span>
+<span class="n">plot</span><span class="p">(</span><span class="n">u</span><span class="p">)</span>
+
+<span class="c"># Dump solution to file in VTK format</span>
+<span class="nb">file</span> <span class="o">=</span> <span class="n">File</span><span class="p">(</span><span class="s">&quot;poisson.pvd&quot;</span><span class="p">)</span>
+<span class="nb">file</span> <span class="o">&lt;&lt;</span> <span class="n">u</span>
+
+<span class="c"># Find max error</span>
+<span class="n">u0_Function</span> <span class="o">=</span> <span class="n">interpolate</span><span class="p">(</span><span class="n">u0</span><span class="p">,</span> <span class="n">V</span><span class="p">)</span>         <span class="c"># exact solution</span>
+<span class="n">u0_array</span> <span class="o">=</span> <span class="n">u0_Function</span><span class="o">.</span><span class="n">vector</span><span class="p">()</span><span class="o">.</span><span class="n">array</span><span class="p">()</span>  <span class="c"># dof values</span>
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="kn">as</span> <span class="nn">np</span>
+<span class="n">max_error</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">u0_array</span> <span class="o">-</span> <span class="n">u</span><span class="o">.</span><span class="n">vector</span><span class="p">()</span><span class="o">.</span><span class="n">array</span><span class="p">())</span><span class="o">.</span><span class="n">max</span><span class="p">()</span>
+<span class="k">print</span><span class="p">(</span><span class="s">&#39;max error:&#39;</span><span class="p">,</span> <span class="n">max_error</span><span class="p">)</span>
+
+<span class="c"># Hold plot</span>
+<span class="n">interactive</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>The complete code can be found in the file <a class="reference external" href="https://github.com/hplgit/fenics-tutorial/blob/master/src/fenics_tutorial_01_p2D_flat.py">fenics_tutorial_01_p2D_flat.py</a>.</p>
+</div>
+<div class="section" id="running-the-program">
+<span id="tut-poisson1-impl-run"></span><h2>Running the program<a class="headerlink" href="#running-the-program" title="Permalink to this headline">¶</a></h2>
+<p>The Python program must be available in a plain text file, written with a
+plain text editor such as Atom, Sublime Text, Emacs, Vim, or similar.</p>
+<p>To run the program <code class="docutils literal"><span class="pre">fenics_tutorial_01_p2D_flat.py</span></code>, open a terminal window, move to
+the directory containing the program and write</p>
+<div class="highlight-text"><div class="highlight"><pre>Terminal&gt; python fenics_tutorial_01_p2D_flat.py
+</pre></div>
+</div>
+<p>[<strong>hpl 3</strong>: Say something about this not working in Docker? Many will have Docker, and this is the first example...]
+A plot window pops up showing how the solution <span class="math">\(u\)</span> looks like as a
+surface.  With the left mouse button you can tilt the figure. Click
+<code class="docutils literal"><span class="pre">m</span></code> to bring up the underlying mesh. Click <code class="docutils literal"><span class="pre">p</span></code> to save to a PNG file
+<code class="docutils literal"><span class="pre">dolfin_plot_0.png</span></code> and <code class="docutils literal"><span class="pre">P</span></code> to save to a PDF file
+<code class="docutils literal"><span class="pre">dolfin_plot_1.pdf</span></code>. To kill the plot window and terminate the
+application, click <code class="docutils literal"><span class="pre">Ctrl+q</span></code> (hold down the <code class="docutils literal"><span class="pre">Ctrl</span></code> key and press <code class="docutils literal"><span class="pre">q</span></code>).
+Figure <a class="reference internal" href="#tut-poisson-2d-fig-ex1-u"><span class="std std-ref">Plot of the solution in the first FEniCS example</span></a> displays the surface and the mesh
+below.  Since <span class="math">\(u\)</span> is a simple quadratic function, constructed for
+testing our solver, the surface looks quite boring.</p>
+<div class="figure" id="id3">
+<span id="tut-poisson-2d-fig-ex1-u"></span><a class="reference internal image-reference" href="_images/ex1_u.png"><img alt="_images/ex1_u.png" src="_images/ex1_u.png" style="width: 600px;" /></a>
+<p class="caption"><span class="caption-text"><em>Plot of the solution in the first FEniCS example</em></span></p>
+</div>
+</div>
+<div class="section" id="dissection-of-the-program">
+<span id="tut-poisson1-impl-dissect"></span><h2>Dissection of the program<a class="headerlink" href="#dissection-of-the-program" title="Permalink to this headline">¶</a></h2>
+<p>We shall now dissect this FEniCS program in detail. The program is
+written in the Python programming language.  You may either take a
+quick look at the <a class="reference external" href="http://docs.python.org/tutorial/">official Python tutorial</a> to pick up the basics of Python if
+you are unfamiliar with the language, or you may learn enough Python
+as you go along with the examples in the present tutorial. The latter
+strategy has proven to work for many newcomers to FEniCS. (The
+requirement of using Python and an abstract mathematical formulation
+of the finite element problem may seem difficult for those who are
+unfamiliar with these topics.  However, the amount of mathematics and
+Python that is really demanded to get you productive with FEniCS is
+quite limited.  And Python is an easy-to-learn language that you
+certainly will love and use far beyond FEniCS programming.)  the section <a class="reference internal" href="._ftut001.html#tut-pybooks"><span class="std std-ref">Programming in Python</span></a> lists some relevant Python books.</p>
+<p>The listed FEniCS program defines a finite element mesh, the discrete
+function spaces <span class="math">\(V\)</span> and <span class="math">\(\hat{V}\)</span> corresponding to this mesh and the
+element type, boundary conditions for <span class="math">\(u\)</span> (the function <span class="math">\(u_0\)</span>),
+<span class="math">\(a(u,v)\)</span>, and <span class="math">\(L(v)\)</span>.  Thereafter, the unknown trial function <span class="math">\(u\)</span> is
+computed. Then we can compare the numerical and exact solution
+as well as investigate <span class="math">\(u\)</span> visually.</p>
+<div class="section" id="the-key-import-line">
+<h3>The key import line<a class="headerlink" href="#the-key-import-line" title="Permalink to this headline">¶</a></h3>
+<p>The first line in the program,</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="kn">from</span> <span class="nn">fenics</span> <span class="kn">import</span> <span class="o">*</span>
+</pre></div>
+</div>
+<p>imports the key classes <code class="docutils literal"><span class="pre">UnitSquareMesh</span></code>, <code class="docutils literal"><span class="pre">FunctionSpace</span></code>, <code class="docutils literal"><span class="pre">Function</span></code>,
+and so forth, from the FEniCS library.  All FEniCS programs for
+solving PDEs by the finite element method normally start with this
+line.</p>
+<p>[<strong>hpl 4</strong>: The following paragraph was natural when we did <code class="docutils literal"><span class="pre">from</span> <span class="pre">dolfin</span> <span class="pre">import</span> <span class="pre">*</span></code>, but is not longer relevant to explain that syntax. However, it should be somewhere: we should in the tutorial explain the various components of FEniCS since they appear so frequently in all the official demo programs.]</p>
+<p>DOLFIN is a software library with efficient and convenient C++
+classes for finite element computing, and <code class="docutils literal"><span class="pre">dolfin</span></code> is a Python package
+providing access to this C++ library from Python programs.  You can
+think of FEniCS as an umbrella, or project name, for a set of
+computational components, where DOLFIN is one important component for
+writing finite element programs. The <code class="docutils literal"><span class="pre">from</span> <span class="pre">fenics</span> <span class="pre">import</span> <span class="pre">*</span></code> statement
+imports other components too, but newcomers to FEniCS programming do
+not need to care about this.</p>
+</div>
+<div class="section" id="generating-simple-meshes">
+<span id="index-0"></span><h3>Generating simple meshes<a class="headerlink" href="#generating-simple-meshes" title="Permalink to this headline">¶</a></h3>
+<p>The statement</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">mesh</span> <span class="o">=</span> <span class="n">UnitSquareMesh</span><span class="p">(</span><span class="mi">6</span><span class="p">,</span> <span class="mi">4</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>defines a uniform finite element mesh over the unit square
+<span class="math">\([0,1]\times [0,1]\)</span>. The mesh consists of <em>cells</em>, which are triangles
+with straight sides. The parameters 6 and 4 tell that the square is
+first divided into <span class="math">\(6\times 4\)</span> rectangles, and then each rectangle is
+divided into two triangles. The total number of triangles then becomes
+48. The total number of vertices in this mesh is <span class="math">\(7\cdot 5=35\)</span>.
+FEniCS offers some classes for creating meshes over very simple
+geometries. For domains of more complicated shape one needs to use a
+separate <em>preprocessor</em> program to create the mesh.  The FEniCS
+program will then read the mesh from file.</p>
+<span class="target" id="index-1"></span><span class="target" id="index-2"></span><span class="target" id="index-3"></span><span class="target" id="index-4"></span></div>
+<div class="section" id="defining-a-function-space-corresponding-to-a-mesh">
+<span id="index-5"></span><h3>Defining a function space corresponding to a mesh<a class="headerlink" href="#defining-a-function-space-corresponding-to-a-mesh" title="Permalink to this headline">¶</a></h3>
+<p>Having a mesh, we can define a discrete function space <code class="docutils literal"><span class="pre">V</span></code> over this mesh:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">V</span> <span class="o">=</span> <span class="n">FunctionSpace</span><span class="p">(</span><span class="n">mesh</span><span class="p">,</span> <span class="s">&#39;Lagrange&#39;</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>The second argument reflects the type of element, while the third
+argument is the degree of the basis functions on the element.  The
+type of element is here &#8220;Lagrange&#8221;, implying the standard Lagrange
+family of elements.  (Some FEniCS programs use <code class="docutils literal"><span class="pre">'CG'</span></code>, for Continuous
+Galerkin, as a synonym for <code class="docutils literal"><span class="pre">'Lagrange'</span></code>.)  With degree 1, we simply
+get the standard linear Lagrange element, which is a triangle with
+nodes at the three vertices.  Some finite element practitioners refer
+to this element as the &#8220;linear triangle&#8221; or the P1 element.  The
+computed <span class="math">\(u\)</span> will be continuous and linearly varying in <span class="math">\(x\)</span> and <span class="math">\(y\)</span>
+over each cell in the mesh.  Higher-degree polynomial approximations
+over each cell are trivially obtained by increasing the third
+parameter in <code class="docutils literal"><span class="pre">FunctionSpace</span></code>, which will then generate P2, P3, and so
+forth, type of elements. Changing the second parameter to <code class="docutils literal"><span class="pre">'DG'</span></code>
+creates a function space for discontinuous Galerkin methods.</p>
+<span class="target" id="index-6"></span><span class="target" id="index-7"></span><span class="target" id="index-8"></span></div>
+<div class="section" id="defining-test-and-trial-functions">
+<span id="index-9"></span><h3>Defining test and trial functions<a class="headerlink" href="#defining-test-and-trial-functions" title="Permalink to this headline">¶</a></h3>
+<p>In mathematics, we distinguish between the trial and test spaces <span class="math">\(V\)</span>
+and <span class="math">\(\hat{V}\)</span>. The only difference in the present problem is the
+boundary conditions. In FEniCS we do not specify the boundary
+conditions as part of the function space, so it is sufficient to work
+with one common space <code class="docutils literal"><span class="pre">V</span></code> for the and trial and test functions in the
+program:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">u</span> <span class="o">=</span> <span class="n">TrialFunction</span><span class="p">(</span><span class="n">V</span><span class="p">)</span>
+<span class="n">v</span> <span class="o">=</span> <span class="n">TestFunction</span><span class="p">(</span><span class="n">V</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="specifying-the-boundary-and-boundary-conditions">
+<span id="index-10"></span><h3>Specifying the boundary and boundary conditions<a class="headerlink" href="#specifying-the-boundary-and-boundary-conditions" title="Permalink to this headline">¶</a></h3>
+<p>The next step is to specify the boundary condition: <span class="math">\(u=u_0\)</span> on
+<span class="math">\(\partial\Omega\)</span>. This is done by</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">bc</span> <span class="o">=</span> <span class="n">DirichletBC</span><span class="p">(</span><span class="n">V</span><span class="p">,</span> <span class="n">u0</span><span class="p">,</span> <span class="n">u0_boundary</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>where <code class="docutils literal"><span class="pre">u0</span></code> is an instance holding the <span class="math">\(u_0\)</span> values, and <code class="docutils literal"><span class="pre">u0_boundary</span></code>
+is a function (or object) describing whether a point lies on the
+boundary where <span class="math">\(u\)</span> is specified.</p>
+<p>Boundary conditions of the type <span class="math">\(u=u_0\)</span> are known as <em>Dirichlet
+conditions</em>, and also as <em>essential boundary conditions</em> in a finite
+element context.  Naturally, the name of the class holding the
+information about Dirichlet boundary conditions is <code class="docutils literal"><span class="pre">DirichletBC</span></code>.</p>
+<p id="index-11">The <code class="docutils literal"><span class="pre">u0</span></code> variable refers to an <code class="docutils literal"><span class="pre">Expression</span></code> object, which is used to
+represent a mathematical function. The typical construction is</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">u0</span> <span class="o">=</span> <span class="n">Expression</span><span class="p">(</span><span class="n">formula</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>where <code class="docutils literal"><span class="pre">formula</span></code> is a string containing the mathematical expression.
+This formula is written with C++ syntax. The expression is
+automatically turned into an efficient, compiled C++ function. The
+independent variables in the function expression are supposed to be
+available as a point vector <code class="docutils literal"><span class="pre">x</span></code>, where the first element <code class="docutils literal"><span class="pre">x[0]</span></code>
+corresponds to the <span class="math">\(x\)</span> coordinate, the second element <code class="docutils literal"><span class="pre">x[1]</span></code> to the
+<span class="math">\(y\)</span> coordinate, and (in a three-dimensional problem) <code class="docutils literal"><span class="pre">x[2]</span></code> to the <span class="math">\(z\)</span>
+coordinate. With our choice of <span class="math">\(u_0(x,y)=1 + x^2 + 2y^2\)</span>, the formula
+string must be written as <code class="docutils literal"><span class="pre">1</span> <span class="pre">+</span> <span class="pre">x[0]*x[0]</span> <span class="pre">+</span> <span class="pre">2*x[1]*x[1]</span></code>:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">u0</span> <span class="o">=</span> <span class="n">Expression</span><span class="p">(</span><span class="s">&#39;1 + x[0]*x[0] + 2*x[1]*x[1]&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<span class="target" id="index-12"></span><div class="admonition-string-expressions-must-have-valid-c-syntax admonition" id="index-13">
+<p class="first admonition-title">String expressions must have valid C++ syntax</p>
+<p>The string argument to an <code class="docutils literal"><span class="pre">Expression</span></code> object must obey C++ syntax.
+Most Python syntax for mathematical expressions are also valid C++ syntax,
+but power expressions make an exception: <code class="docutils literal"><span class="pre">p**a</span></code> must be written as
+<code class="docutils literal"><span class="pre">pow(p,a)</span></code> in C++ (this is also an alternative Python syntax).
+The following mathematical functions can be used directly
+in C++
+expressions when defining <code class="docutils literal"><span class="pre">Expression</span></code> objects:
+<code class="docutils literal"><span class="pre">cos</span></code>, <code class="docutils literal"><span class="pre">sin</span></code>, <code class="docutils literal"><span class="pre">tan</span></code>, <code class="docutils literal"><span class="pre">acos</span></code>, <code class="docutils literal"><span class="pre">asin</span></code>,
+<code class="docutils literal"><span class="pre">atan</span></code>, <code class="docutils literal"><span class="pre">atan2</span></code>, <code class="docutils literal"><span class="pre">cosh</span></code>, <code class="docutils literal"><span class="pre">sinh</span></code>, <code class="docutils literal"><span class="pre">tanh</span></code>, <code class="docutils literal"><span class="pre">exp</span></code>,
+<code class="docutils literal"><span class="pre">frexp</span></code>, <code class="docutils literal"><span class="pre">ldexp</span></code>, <code class="docutils literal"><span class="pre">log</span></code>, <code class="docutils literal"><span class="pre">log10</span></code>, <code class="docutils literal"><span class="pre">modf</span></code>,
+<code class="docutils literal"><span class="pre">pow</span></code>, <code class="docutils literal"><span class="pre">sqrt</span></code>, <code class="docutils literal"><span class="pre">ceil</span></code>, <code class="docutils literal"><span class="pre">fabs</span></code>, <code class="docutils literal"><span class="pre">floor</span></code>, and <code class="docutils literal"><span class="pre">fmod</span></code>.
+Moreover, the number <span class="math">\(\pi\)</span> is available as the symbol <code class="docutils literal"><span class="pre">pi</span></code>.
+All the listed functions are taken from the <code class="docutils literal"><span class="pre">cmath</span></code> C++ header file, and
+one may hence
+consult documentation of <code class="docutils literal"><span class="pre">cmath</span></code> for more information on the
+various functions.</p>
+<p>If tests are possible using the C syntax for inline branching. The
+function</p>
+<div class="math">
+\[\begin{split}f(x,y) = \left\lbrace\begin{array}{ll} x^2, &amp; x, y\geq 0\\
+2, &amp; \hbox{otherwise}\end{array}\right.\end{split}\]</div>
+<p>is implemented as</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">f</span> <span class="o">=</span> <span class="n">Expression</span><span class="p">(</span><span class="s">&#39;x[0] &gt;= 0 &amp;&amp; x[1] &gt;= 0? pow(x[0], 2) : 2&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Parameters in expression strings are allowed, but
+must be initialized via keyword
+arguments when creating the <code class="docutils literal"><span class="pre">Expression</span></code> object. For example, the
+function <span class="math">\(f(x)=e^{-\kappa\pi^2t}\sin(\pi k x)\)</span> can be coded as</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">f</span> <span class="o">=</span> <span class="n">Expression</span><span class="p">(</span><span class="s">&#39;exp(-kappa*pow(pi,2)*t)*sin(pi*k*x[0])&#39;</span><span class="p">,</span>
+               <span class="n">kappa</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span> <span class="n">t</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">k</span><span class="o">=</span><span class="mi">4</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>At any time, parameters can be updated:</p>
+<div class="last highlight-python"><div class="highlight"><pre><span class="n">f</span><span class="o">.</span><span class="n">t</span> <span class="o">+=</span> <span class="n">dt</span>
+<span class="n">f</span><span class="o">.</span><span class="n">k</span> <span class="o">=</span> <span class="mi">10</span>
+</pre></div>
+</div>
+</div>
+<p id="index-14">The information about where to apply the <code class="docutils literal"><span class="pre">u0</span></code> function as boundary
+condition is coded in a function <code class="docutils literal"><span class="pre">u0_boundary</span></code>:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="k">def</span> <span class="nf">u0_boundary</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">on_boundary</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">on_boundary</span>
+</pre></div>
+</div>
+<p>A function like <code class="docutils literal"><span class="pre">u0_boundary</span></code> for marking the boundary must return a
+boolean value: <code class="docutils literal"><span class="pre">True</span></code> if the given point <code class="docutils literal"><span class="pre">x</span></code> lies on the Dirichlet
+boundary and <code class="docutils literal"><span class="pre">False</span></code> otherwise.  The argument <code class="docutils literal"><span class="pre">on_boundary</span></code> is <code class="docutils literal"><span class="pre">True</span></code>
+if <code class="docutils literal"><span class="pre">x</span></code> is on the physical boundary of the mesh, so in the present
+case, where we are supposed to return <code class="docutils literal"><span class="pre">True</span></code> for all points on the
+boundary, we can just return the supplied value of <code class="docutils literal"><span class="pre">on_boundary</span></code>.  The
+<code class="docutils literal"><span class="pre">u0_boundary</span></code> function will be called for every discrete point in the
+mesh, which allows us to have boundaries where <span class="math">\(u\)</span> are known also
+inside the domain, if desired.</p>
+<p>One can also omit the <code class="docutils literal"><span class="pre">on_boundary</span></code> argument, but in that case we need
+to test on the value of the coordinates in <code class="docutils literal"><span class="pre">x</span></code>:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="k">def</span> <span class="nf">u0_boundary</span><span class="p">(</span><span class="n">x</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">x</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="mi">0</span> <span class="ow">or</span> <span class="n">x</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">==</span> <span class="mi">0</span> <span class="ow">or</span> <span class="n">x</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="mi">1</span> <span class="ow">or</span> <span class="n">x</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">==</span> <span class="mi">1</span>
+</pre></div>
+</div>
+<p>As for the formula in <code class="docutils literal"><span class="pre">Expression</span></code> objects, <code class="docutils literal"><span class="pre">x</span></code> in the <code class="docutils literal"><span class="pre">u0_boundary</span></code>
+function represents a point in space with coordinates <code class="docutils literal"><span class="pre">x[0]</span></code>, <code class="docutils literal"><span class="pre">x[1]</span></code>,
+etc. Comparing floating-point values using an exact match test with
+<code class="docutils literal"><span class="pre">==</span></code> is not good programming practice, because small round-off errors
+in the computations of the <code class="docutils literal"><span class="pre">x</span></code> values could make a test <code class="docutils literal"><span class="pre">x[0]</span> <span class="pre">==</span> <span class="pre">1</span></code>
+become false even though <code class="docutils literal"><span class="pre">x</span></code> lies on the boundary.  A better test is
+to check for equality with a tolerance:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="k">def</span> <span class="nf">u0_boundary</span><span class="p">(</span><span class="n">x</span><span class="p">):</span>
+    <span class="n">tol</span> <span class="o">=</span> <span class="mf">1E-15</span>
+    <span class="k">return</span> <span class="nb">abs</span><span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span> <span class="o">&lt;</span> <span class="n">tol</span> <span class="ow">or</span> \
+           <span class="nb">abs</span><span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span> <span class="o">&lt;</span> <span class="n">tol</span> <span class="ow">or</span> \
+           <span class="nb">abs</span><span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span> <span class="o">&lt;</span> <span class="n">tol</span> <span class="ow">or</span> \
+           <span class="nb">abs</span><span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span> <span class="o">&lt;</span> <span class="n">tol</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="specifying-the-right-hand-side-function">
+<span id="index-15"></span><h3>Specifying the right-hand side function<a class="headerlink" href="#specifying-the-right-hand-side-function" title="Permalink to this headline">¶</a></h3>
+<p>Before defining <span class="math">\(a(u,v)\)</span> and <span class="math">\(L(v)\)</span> we have to specify the <span class="math">\(f\)</span> function:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">f</span> <span class="o">=</span> <span class="n">Expression</span><span class="p">(</span><span class="s">&#39;-6&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>When <span class="math">\(f\)</span> is constant over the domain, <code class="docutils literal"><span class="pre">f</span></code> can be
+more efficiently represented as a <code class="docutils literal"><span class="pre">Constant</span></code> object:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">f</span> <span class="o">=</span> <span class="n">Constant</span><span class="p">(</span><span class="o">-</span><span class="mf">6.0</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="specifying-the-variational-formulation">
+<h3>Specifying the variational formulation<a class="headerlink" href="#specifying-the-variational-formulation" title="Permalink to this headline">¶</a></h3>
+<p>Now we have all the objects we need in order to specify this problem&#8217;s
+<span class="math">\(a(u,v)\)</span> and <span class="math">\(L(v)\)</span>:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">a</span> <span class="o">=</span> <span class="n">inner</span><span class="p">(</span><span class="n">nabla_grad</span><span class="p">(</span><span class="n">u</span><span class="p">),</span> <span class="n">nabla_grad</span><span class="p">(</span><span class="n">v</span><span class="p">))</span><span class="o">*</span><span class="n">dx</span>
+<span class="n">L</span> <span class="o">=</span> <span class="n">f</span><span class="o">*</span><span class="n">v</span><span class="o">*</span><span class="n">dx</span>
+</pre></div>
+</div>
+<p>In essence, these two lines specify the PDE to be solved.  Note the
+very close correspondence between the Python syntax and the
+mathematical formulas <span class="math">\(\nabla u\cdot\nabla v {\, \mathrm{d}x}\)</span> and <span class="math">\(fv {\, \mathrm{d}x}\)</span>.  This
+is a key strength of FEniCS: the formulas in the variational
+formulation translate directly to very similar Python code, a feature
+that makes it easy to specify PDE problems with lots of PDEs and
+complicated terms in the equations.  The language used to express weak
+forms is called UFL (Unified Form Language) <a class="reference internal" href="._ftut018.html#ref20" id="id1">[Ref20]</a> <a class="reference internal" href="._ftut018.html#ref01" id="id2">[Ref01]</a>
+and is an integral part of FEniCS.</p>
+<p>Instead of <code class="docutils literal"><span class="pre">nabla_grad</span></code> we could also just have written <code class="docutils literal"><span class="pre">grad</span></code> in the
+examples in this tutorial. However, when taking gradients of vector
+fields, <code class="docutils literal"><span class="pre">grad</span></code> and <code class="docutils literal"><span class="pre">nabla_grad</span></code> differ. The latter is consistent with
+the tensor algebra commonly used to derive vector and tensor PDEs,
+where <span class="math">\(\nabla\)</span> (&#8220;nabla&#8221;) acts as a vector operator, and therefore
+this author prefers to always use <code class="docutils literal"><span class="pre">nabla_grad</span></code>.</p>
+</div>
+<div class="section" id="forming-and-solving-the-linear-system">
+<h3>Forming and solving the linear system<a class="headerlink" href="#forming-and-solving-the-linear-system" title="Permalink to this headline">¶</a></h3>
+<p>Having <code class="docutils literal"><span class="pre">a</span></code> and <code class="docutils literal"><span class="pre">L</span></code> defined, and information about essential
+(Dirichlet) boundary conditions in <code class="docutils literal"><span class="pre">bc</span></code>, we can compute the solution,
+a finite element function <code class="docutils literal"><span class="pre">u</span></code>, by</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">u</span> <span class="o">=</span> <span class="n">Function</span><span class="p">(</span><span class="n">V</span><span class="p">)</span>
+<span class="n">solve</span><span class="p">(</span><span class="n">a</span> <span class="o">==</span> <span class="n">L</span><span class="p">,</span> <span class="n">u</span><span class="p">,</span> <span class="n">bc</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Some prefer to replace <code class="docutils literal"><span class="pre">a</span></code> and <code class="docutils literal"><span class="pre">L</span></code> by an <code class="docutils literal"><span class="pre">equation</span></code>
+variable, which is accomplished by this equivalent code:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">equation</span> <span class="o">=</span> <span class="n">inner</span><span class="p">(</span><span class="n">nabla_grad</span><span class="p">(</span><span class="n">u</span><span class="p">),</span> <span class="n">nabla_grad</span><span class="p">(</span><span class="n">v</span><span class="p">))</span><span class="o">*</span><span class="n">dx</span> <span class="o">==</span> <span class="n">f</span><span class="o">*</span><span class="n">v</span><span class="o">*</span><span class="n">dx</span>
+<span class="n">u</span> <span class="o">=</span> <span class="n">Function</span><span class="p">(</span><span class="n">V</span><span class="p">)</span>
+<span class="n">solve</span><span class="p">(</span><span class="n">equation</span><span class="p">,</span> <span class="n">u</span><span class="p">,</span> <span class="n">bc</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Note that we first defined the variable <code class="docutils literal"><span class="pre">u</span></code> as a <code class="docutils literal"><span class="pre">TrialFunction</span></code> and
+used it to represent the unknown in the form <code class="docutils literal"><span class="pre">a</span></code>.  Thereafter, we
+redefined <code class="docutils literal"><span class="pre">u</span></code> to be a <code class="docutils literal"><span class="pre">Function</span></code> object representing the solution,
+i.e., the computed finite element function <span class="math">\(u\)</span>.  This redefinition of
+the variable <code class="docutils literal"><span class="pre">u</span></code> is possible in Python and often done in FEniCS
+applications. The two types of objects that <code class="docutils literal"><span class="pre">u</span></code> refers to are equal
+from a mathematical point of view, and hence it is natural to use the
+same variable name for both objects. In a program, however,
+<code class="docutils literal"><span class="pre">TrialFunction</span></code> objects must always be used for the unknowns in the
+problem specification (the form <code class="docutils literal"><span class="pre">a</span></code>), while <code class="docutils literal"><span class="pre">Function</span></code> objects must be
+used for quantities that are computed (known).</p>
+</div>
+<div class="section" id="examining-the-values-of-the-solution">
+<span id="index-16"></span><h3>Examining the values of the solution<a class="headerlink" href="#examining-the-values-of-the-solution" title="Permalink to this headline">¶</a></h3>
+<p>The present test problem should produce a numerical solution that
+equals the exact solution to machine precision. That is, there are
+no approximation errors in our test problem. We can use this property
+to &#8220;prove&#8221; that our implementation is correct, a necessary first step
+before we try to apply our code to more complicated problems.
+For such verification, we need
+to compare the computed <code class="docutils literal"><span class="pre">u</span></code> function to <code class="docutils literal"><span class="pre">u0</span></code>.</p>
+<p>A finite element function like <span class="math">\(u\)</span> is expressed as a linear combination
+of basis functions <span class="math">\(\phi_j\)</span>, spanning the space <span class="math">\(V\)</span>:</p>
+<div class="math" id="eq-tut-poisson1-ufem">
+\[\tag{13}
+u = \sum_{j=1}^N U_j \phi_j {\thinspace .}\]</div>
+<p>By writing <code class="docutils literal"><span class="pre">solve(a</span> <span class="pre">==</span> <span class="pre">L,</span> <span class="pre">u,</span> <span class="pre">bc)</span></code> in the program, a linear system
+will be formed from <span class="math">\(a\)</span> and <span class="math">\(L\)</span>, and this system is solved for the
+<span class="math">\(U_1,\ldots,U_N\)</span> values. The <span class="math">\(U_1,\ldots,U_N\)</span> values are known
+as <em>degrees of freedom</em> of <span class="math">\(u\)</span>. For Lagrange elements (and many other
+element types) <span class="math">\(U_k\)</span> is simply the value of <span class="math">\(u\)</span> at the node
+with global number <span class="math">\(k\)</span>.
+The nodes and cell vertices coincide for linear Lagrange elements, while
+for higher-order elements there are additional nodes at
+the facets and maybe also in the interior of cells.</p>
+<p>Having <code class="docutils literal"><span class="pre">u</span></code> represented as a <code class="docutils literal"><span class="pre">Function</span></code> object, we can either evaluate
+<code class="docutils literal"><span class="pre">u(x)</span></code> at any point <code class="docutils literal"><span class="pre">x</span></code> in the mesh (expensive operation!),
+or we can grab all the degrees of
+freedom values <span class="math">\(U_j\)</span> directly by</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">u_nodal_values</span> <span class="o">=</span> <span class="n">u</span><span class="o">.</span><span class="n">vector</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>The result is a <code class="docutils literal"><span class="pre">Vector</span></code> object, which is basically an
+encapsulation of the vector object used in the linear algebra package
+that is used to solve the linear system arising from the
+variational problem.
+Since we program in Python it is convenient to convert the
+<code class="docutils literal"><span class="pre">Vector</span></code> object to a standard <code class="docutils literal"><span class="pre">numpy</span></code> array for further
+processing:</p>
+<span class="target" id="index-17"></span><span class="target" id="index-18"></span><span class="target" id="index-19"></span><div class="highlight-python" id="index-20"><div class="highlight"><pre><span class="n">u_array</span> <span class="o">=</span> <span class="n">u_nodal_values</span><span class="o">.</span><span class="n">array</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>With <code class="docutils literal"><span class="pre">numpy</span></code> arrays we can write MATLAB-like code to analyze
+the data. Indexing is done with square brackets: <code class="docutils literal"><span class="pre">u_array[i]</span></code>,
+where the index <code class="docutils literal"><span class="pre">i</span></code> always starts at <code class="docutils literal"><span class="pre">0</span></code>. However, <code class="docutils literal"><span class="pre">i</span></code> corresponds
+to <span class="math">\(u\)</span> at some point in the mesh and the correspondence requires
+knowledge of the numbering of degrees of freedom and the numbering of
+vertices in elements in the mesh, see the section <a class="reference internal" href="._ftut005.html#tut-poisson1-verify1"><span class="std std-ref">Writing out the discrete solution</span></a>
+for details.</p>
+<p id="index-21">For now, we want to check that the values in <code class="docutils literal"><span class="pre">u_array</span></code> are correct:
+they should equal our <code class="docutils literal"><span class="pre">u0</span></code> function. The most natural approach is
+to interpolate our <code class="docutils literal"><span class="pre">u0</span></code> expression onto our space
+(i.e., the finite element mesh),</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">u0_Function</span> <span class="o">=</span> <span class="n">interpolate</span><span class="p">(</span><span class="n">u0</span><span class="p">,</span> <span class="n">V</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>The <code class="docutils literal"><span class="pre">interpolate</span></code> function returns a <code class="docutils literal"><span class="pre">Function</span></code> object, whose degrees
+of freedom values can be obtained by <code class="docutils literal"><span class="pre">.vector().array()</span></code>.  Our goal is
+to show that the degrees of freedom arrays of <code class="docutils literal"><span class="pre">u</span></code> and <code class="docutils literal"><span class="pre">u0_Function</span></code>
+are equal. One safe of doing this is to compute the maximum error,</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">u0_array</span> <span class="o">=</span> <span class="n">u0_Function</span><span class="o">.</span><span class="n">vector</span><span class="p">()</span><span class="o">.</span><span class="n">array</span><span class="p">()</span>  <span class="c"># dof values</span>
+<span class="n">max_error</span> <span class="o">=</span> <span class="p">(</span><span class="n">u0_array</span> <span class="o">-</span> <span class="n">u</span><span class="o">.</span><span class="n">vector</span><span class="p">()</span><span class="o">.</span><span class="n">array</span><span class="p">())</span><span class="o">.</span><span class="n">max</span><span class="p">()</span>
+<span class="k">print</span><span class="p">(</span><span class="s">&#39;max error:&#39;</span><span class="p">,</span> <span class="n">max_error</span><span class="p">)</span>
+</pre></div>
+</div>
+<div class="admonition-how-to-check-that-the-error-vanishes admonition">
+<p class="first admonition-title">How to check that the error vanishes</p>
+<p class="last">With inexact arithmetics, as we always have on a computer,
+this maximum error is not zero, but should be a small number.
+The machine precision is about <span class="math">\(10^{-16}\)</span>, but in finite element
+calculations, rounding errors of this size may accumulate, so
+the expected accuracy of <code class="docutils literal"><span class="pre">max_error</span></code> smaller. Experiments show
+that increasing the number of elements and increasing the degree
+of the finite element polynomials increase <code class="docutils literal"><span class="pre">max_error</span></code>.
+For a mesh with <span class="math">\(2(20\times 20)\)</span> cubic Lagrange elements (degree 3)
+<code class="docutils literal"><span class="pre">max_error</span></code> is about <span class="math">\(2\cdot 10^{-12}\)</span>, while for 18 linear elements
+the maximum error is about <span class="math">\(2\cdot 10^{-15}\)</span>.</p>
+</div>
+</div>
+<div class="section" id="plotting-the-solution">
+<h3>Plotting the solution<a class="headerlink" href="#plotting-the-solution" title="Permalink to this headline">¶</a></h3>
+<p>The simplest way of quickly looking at <code class="docutils literal"><span class="pre">u</span></code> is to say</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">plot</span><span class="p">(</span><span class="n">u</span><span class="p">,</span> <span class="n">interactive</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+<span class="c"># or</span>
+<span class="n">plot</span><span class="p">(</span><span class="n">u</span><span class="p">)</span>
+<span class="n">interactive</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>Clicking on <code class="docutils literal"><span class="pre">Help</span></code> in the plot windows brings up a list of commands.
+For example, typing <code class="docutils literal"><span class="pre">m</span></code> brings up the mesh.  With the left, middle,
+and right mouse buttons you can rotate, translate, and zoom
+(respectively) the plotted surface to better examine what the solution
+looks like. You must click <code class="docutils literal"><span class="pre">Ctrl+q</span></code> to kill the plot window and
+continue execution beyond the <code class="docutils literal"><span class="pre">plot(u,</span> <span class="pre">interactive=True)</span></code> command or
+<code class="docutils literal"><span class="pre">interactive()</span></code>.  Figure <a class="reference internal" href="#tut-poisson-2d-fig-ex1-u"><span class="std std-ref">Plot of the solution in the first FEniCS example</span></a> displays the
+resulting <span class="math">\(u\)</span> function.</p>
+<p>Plotting both the solution and the mesh is accomplished by</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">plot</span><span class="p">(</span><span class="n">u</span><span class="p">)</span>
+<span class="n">plot</span><span class="p">(</span><span class="n">mesh</span><span class="p">)</span>
+<span class="c"># Hold plot</span>
+<span class="n">interactive</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>Type <code class="docutils literal"><span class="pre">Ctrl+w</span></code> to kill all plot windows and continue execution.</p>
+<p>It is also possible to dump the computed solution to file, e.g., in the
+VTK format:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="nb">file</span> <span class="o">=</span> <span class="n">File</span><span class="p">(</span><span class="s">&#39;poisson.pvd&#39;</span><span class="p">)</span>
+<span class="nb">file</span> <span class="o">&lt;&lt;</span> <span class="n">u</span>
+</pre></div>
+</div>
+<p>The <code class="docutils literal"><span class="pre">poisson.pvd</span></code> file can now be loaded into any front-end to VTK,
+say ParaView or VisIt. The <code class="docutils literal"><span class="pre">plot</span></code> function is intended for quick
+examination of the solution during program development.  More in-depth
+visual investigations of finite element solutions will normally
+benefit from using highly professional tools such as ParaView and
+VisIt.</p>
+</div>
+</div>
+<div class="section" id="deflection-of-a-membrane">
+<span id="ftut-poisson-membrane"></span><h2>Deflection of a membrane<a class="headerlink" href="#deflection-of-a-membrane" title="Permalink to this headline">¶</a></h2>
+<p>The previous problem and code targeted a simple test problem where we
+can easily verify the implementation. Now we turn the attention to
+a more physically relevant problem, in a non-trivial geometry, and
+that results in solutions of somewhat more exciting shape.</p>
+<p>We want to compute the deflection <span class="math">\(w\)</span> of a two-dimensional, circular membrane,
+subject to a load <span class="math">\(p\)</span> over the membrane.
+A scaled form of this problem
+(see the section <a class="reference internal" href="._ftut006.html#tut-poisson-membrane"><span class="std std-ref">Deflection of a circular membrane</span></a> for mathematical details) has
+the governing equation
+<span class="math">\(-\nabla^2 w = p\)</span> over the unit circle, with <span class="math">\(w=0\)</span> on the boundary, and
+the load given as</p>
+<div class="math">
+\[p = - 4\exp{\left(-\beta^2(x^2 + (y-R_0)^2)\right)},\]</div>
+<p>where <span class="math">\(\beta\)</span> and <span class="math">\(R_0\)</span> are dimensionless numbers reflecting the
+extent of the load and its location, respectively. Let us work with
+a quite peak-shaped load, for which <span class="math">\(\beta=8\)</span> and <span class="math">\(R_0=0.6\)</span> are
+relevant parameters.</p>
+<p>Just a few modifications are necessary in our previous program to solve
+this new problem.</p>
+<div class="section" id="generating-the-mesh">
+<h3>Generating the mesh<a class="headerlink" href="#generating-the-mesh" title="Permalink to this headline">¶</a></h3>
+<p>A mesh over the unit circle can be created by the <code class="docutils literal"><span class="pre">mshr</span></code> tool in
+FEniCS:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="kn">from</span> <span class="nn">mshr</span> <span class="kn">import</span> <span class="o">*</span>
+<span class="n">domain</span> <span class="o">=</span> <span class="n">Circle</span><span class="p">(</span><span class="n">Point</span><span class="p">(</span><span class="mf">0.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">),</span> <span class="mf">1.0</span><span class="p">)</span>
+<span class="n">mesh</span> <span class="o">=</span> <span class="n">generate_mesh</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">n</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>The <code class="docutils literal"><span class="pre">Circle</span></code> shape from <code class="docutils literal"><span class="pre">mshr</span></code> takes the center and radius of the circle
+as the two first arguments, while <code class="docutils literal"><span class="pre">n</span></code> is the resolution, here the
+suggested number of cells per radius.</p>
+</div>
+<div class="section" id="the-expression-for-the-load">
+<h3>The expression for the load<a class="headerlink" href="#the-expression-for-the-load" title="Permalink to this headline">¶</a></h3>
+<span class="target" id="index-22"></span><p id="index-23">The right-hand side pressure function
+is represented by an <code class="docutils literal"><span class="pre">Expression</span></code> object. There
+are two physical parameters in the formula for <span class="math">\(f\)</span> that enter the
+expression string and these parameters must have their values set
+by keyword arguments:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">p</span> <span class="o">=</span> <span class="n">Expression</span><span class="p">(</span>
+    <span class="s">&#39;4*exp(-pow(beta,2)*(pow(x[0], 2) + pow(x[1]-R0, 2)))&#39;</span><span class="p">,</span>
+    <span class="n">beta</span><span class="o">=</span><span class="n">beta</span><span class="p">,</span> <span class="n">R0</span><span class="o">=</span><span class="n">R0</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>The coordinates in <code class="docutils literal"><span class="pre">Expression</span></code> objects <em>must</em> be a vector
+with indices 0, 1, and 2, and with the name <code class="docutils literal"><span class="pre">x</span></code>. Otherwise
+we are free to introduce names of parameters as long as these are
+given default values by keyword arguments. All the parameters
+initialized by keyword arguments can at any time have their
+values modified. For example, we may set</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">f</span><span class="o">.</span><span class="n">beta</span> <span class="o">=</span> <span class="mi">12</span>
+<span class="n">f</span><span class="o">.</span><span class="n">R0</span> <span class="o">=</span> <span class="mf">0.3</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="variational-form">
+<span id="index-24"></span><h3>Variational form<a class="headerlink" href="#variational-form" title="Permalink to this headline">¶</a></h3>
+<p>We may introduce <code class="docutils literal"><span class="pre">w</span></code> instead of <code class="docutils literal"><span class="pre">u</span></code> as primary unknown and <code class="docutils literal"><span class="pre">p</span></code> instead
+of <code class="docutils literal"><span class="pre">f</span></code> as right-hand side function:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">w</span> <span class="o">=</span> <span class="n">TrialFunction</span><span class="p">(</span><span class="n">V</span><span class="p">)</span>
+<span class="n">v</span> <span class="o">=</span> <span class="n">TestFunction</span><span class="p">(</span><span class="n">V</span><span class="p">)</span>
+<span class="n">a</span> <span class="o">=</span> <span class="n">inner</span><span class="p">(</span><span class="n">nabla_grad</span><span class="p">(</span><span class="n">w</span><span class="p">),</span> <span class="n">nabla_grad</span><span class="p">(</span><span class="n">v</span><span class="p">))</span><span class="o">*</span><span class="n">dx</span>
+<span class="n">L</span> <span class="o">=</span> <span class="n">p</span><span class="o">*</span><span class="n">v</span><span class="o">*</span><span class="n">dx</span>
+
+<span class="n">w</span> <span class="o">=</span> <span class="n">Function</span><span class="p">(</span><span class="n">V</span><span class="p">)</span>
+<span class="n">solve</span><span class="p">(</span><span class="n">a</span> <span class="o">==</span> <span class="n">L</span><span class="p">,</span> <span class="n">w</span><span class="p">,</span> <span class="n">bc</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="visualization-1">
+<h3>Visualization<a class="headerlink" href="#visualization-1" title="Permalink to this headline">¶</a></h3>
+<p>It would be of interest to visualize <span class="math">\(p\)</span> along with <span class="math">\(w\)</span> so that we can
+examine the pressure force and the membrane&#8217;s response.  We must then transform
+the formula (<code class="docutils literal"><span class="pre">Expression</span></code>) to a finite element function
+(<code class="docutils literal"><span class="pre">Function</span></code>).  The most natural approach is to construct a finite
+element function whose degrees of freedom are
+calculated from <span class="math">\(p\)</span>. That is, we interpolate <span class="math">\(p\)</span>:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">p</span> <span class="o">=</span> <span class="n">interpolate</span><span class="p">(</span><span class="n">p</span><span class="p">,</span> <span class="n">V</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Calling <code class="docutils literal"><span class="pre">plot(p)</span></code> will produce a plot of <span class="math">\(p\)</span>. Note that the assignment
+to <code class="docutils literal"><span class="pre">p</span></code> destroys the previous <code class="docutils literal"><span class="pre">Expression</span></code> object <code class="docutils literal"><span class="pre">p</span></code>, so if
+it is of interest to still have access to this object, another name must be used
+for the <code class="docutils literal"><span class="pre">Function</span></code> object returned by <code class="docutils literal"><span class="pre">interpolate</span></code>.</p>
+<p>We can now plot <code class="docutils literal"><span class="pre">w</span></code> and <code class="docutils literal"><span class="pre">p</span></code> as well as dump the fields to file in VTK format:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">plot</span><span class="p">(</span><span class="n">w</span><span class="p">,</span> <span class="n">title</span><span class="o">=</span><span class="s">&#39;Deflection&#39;</span><span class="p">)</span>
+<span class="n">plot</span><span class="p">(</span><span class="n">p</span><span class="p">,</span> <span class="n">title</span><span class="o">=</span><span class="s">&#39;Load&#39;</span><span class="p">)</span>
+
+<span class="n">vtkfile</span> <span class="o">=</span> <span class="n">File</span><span class="p">(</span><span class="s">&#39;membrane.pvd&#39;</span><span class="p">)</span>
+<span class="n">vtkfile</span> <span class="o">&lt;&lt;</span> <span class="n">w</span>
+<span class="n">vtkfile</span> <span class="o">&lt;&lt;</span> <span class="n">p</span>
+</pre></div>
+</div>
+<p>Figure <a class="reference internal" href="#ftut-poisson-membrane-fig"><span class="std std-ref">Load (left) and resulting deflection (right) of a circular membrane</span></a> shows the result of the <code class="docutils literal"><span class="pre">plot</span></code>
+commands.</p>
+<div class="figure" id="id4">
+<span id="ftut-poisson-membrane-fig"></span><a class="reference internal image-reference" href="_images/membrane_fenics_viz.png"><img alt="_images/membrane_fenics_viz.png" src="_images/membrane_fenics_viz.png" style="width: 800px;" /></a>
+<p class="caption"><span class="caption-text"><em>Load (left) and resulting deflection (right) of a circular membrane</em></span></p>
+</div>
+</div>
+</div>
+</div>
+<div class="section" id="the-time-dependent-diffusion-equation">
+<span id="tut-timedep"></span><h1>The time-dependent diffusion equation<a class="headerlink" href="#the-time-dependent-diffusion-equation" title="Permalink to this headline">¶</a></h1>
+<p>The examples in the section <a class="reference internal" href="#tut-poisson1-impl"><span class="std std-ref">A simple implementation</span></a> illustrate that solving
+linear, stationary PDE problems with the aid of FEniCS is easy and
+requires little programming.  FEniCS clearly automates the spatial
+discretization by the finite element method. One can use a separate,
+one-dimensional finite element method in the domain as well, but very
+often, it is easier to just use a finite difference method, or to
+formulate the problem as an ODE system and leave the time-stepping to
+an ODE solver.</p>
+<p>[<strong>hpl 5</strong>: Should exemplify all three approaches? With emphasis on simple finite differences?]</p>
+<div class="section" id="variational-formulation-2">
+<span id="tut-timedep-diffusion1"></span><h2>Variational formulation<a class="headerlink" href="#variational-formulation-2" title="Permalink to this headline">¶</a></h2>
+<p id="index-25">Our time-dependent model problem for teaching purposes is naturally
+the simplest extension of the Poisson problem into the time domain,
+i.e., the diffusion problem</p>
+<div class="math" id="eq-tut-diffusion-pde1">
+\[\tag{14}
+{\partial u\over\partial t} = \nabla^2 u + f\hbox{ in }\Omega,\]</div>
+<div class="math" id="eq-tut-diffusion-pde1-bc">
+\[\tag{15}
+u = u_0\hbox{ on } \partial \Omega,\]</div>
+<div class="math" id="eq-tut-diffusion-pde1-ic">
+\[\tag{16}
+u = I \mbox{ at } t=0{\thinspace .}\]</div>
+<p>Here, <span class="math">\(u\)</span> varies with space and time, e.g., <span class="math">\(u=u(x,y,t)\)</span> if the spatial
+domain <span class="math">\(\Omega\)</span> is two-dimensional. The source function <span class="math">\(f\)</span> and the
+boundary values <span class="math">\(u_0\)</span> may also vary with space and time.
+The initial condition <span class="math">\(I\)</span> is a function of space only.</p>
+<p>A straightforward approach to solving time-dependent PDEs by the
+finite element method is to first discretize the time derivative by a
+finite difference approximation, which yields a recursive set of
+stationary problems, and then turn each stationary problem into a
+variational formulation.</p>
+<p>Let superscript <span class="math">\(k\)</span> denote a quantity at time <span class="math">\(t_k\)</span>, where <span class="math">\(k\)</span> is an
+integer counting time levels. For example, <span class="math">\(u^k\)</span> means <span class="math">\(u\)</span> at time
+level <span class="math">\(k\)</span>.  A finite difference discretization in time first consists
+in sampling the PDE at some time level, say <span class="math">\(k\)</span>:</p>
+<div class="math" id="eq-tut-diffusion-pde1-tk">
+\[\tag{17}
+{\partial \over\partial t}u^k = \nabla^2 u^k + f^k{\thinspace .}\]</div>
+<p>The time-derivative can be approximated by a finite difference.
+For simplicity and stability reasons we choose a
+simple backward difference:</p>
+<div class="math" id="eq-tut-diffusion-be">
+\[\tag{18}
+{\partial \over\partial t}u^k\approx {u^k - u^{k-1}\over{{\Delta t}}},\]</div>
+<p>where <span class="math">\({\Delta t}\)</span> is the time discretization parameter.
+Inserting <a class="reference internal" href="#eq-tut-diffusion-be"><span class="std std-ref">(18)</span></a> in <a class="reference internal" href="#eq-tut-diffusion-pde1-tk"><span class="std std-ref">(17)</span></a> yields</p>
+<div class="math" id="eq-tut-diffusion-pde1-be">
+\[\tag{19}
+{u^k - u^{k-1}\over{{\Delta t}}} = \nabla^2 u^k + f^k{\thinspace .}\]</div>
+<p>This is our time-discrete version of the diffusion PDE
+<a class="reference internal" href="#eq-tut-diffusion-pde1"><span class="std std-ref">(14)</span></a>.</p>
+<p>We may reorder <a class="reference internal" href="#eq-tut-diffusion-pde1-be"><span class="std std-ref">(19)</span></a> so
+that the left-hand side contains the terms with the unknown <span class="math">\(u^k\)</span> and
+the right-hand side contains computed terms only. The result
+is a recursive set of spatial
+(stationary) problems for <span class="math">\(u^k\)</span> (assuming <span class="math">\(u^{k-1}\)</span> is known from
+computations at the previous time level):</p>
+<div class="math" id="eq-tut-diffusion-pde1-u0">
+\[\tag{20}
+u^0 = I,\]</div>
+<div class="math" id="eq-tut-diffusion-pde1-uk">
+\[\tag{21}
+u^k - {{\Delta t}}\nabla^2 u^k =  u^{k-1} + {{\Delta t}} f^k,\quad k=1,2,\ldots\]</div>
+<p>Given <span class="math">\(I\)</span>, we can solve for <span class="math">\(u^0\)</span>, <span class="math">\(u^1\)</span>, <span class="math">\(u^2\)</span>, and so on.</p>
+<p>As an alternative to <a class="reference internal" href="#eq-tut-diffusion-pde1-uk"><span class="std std-ref">(21)</span></a>, which can be
+convenient in implementations, we may collect
+all terms on one side of the equality sign:</p>
+<div class="math" id="eq-tut-diffusion-pde1-uk2">
+\[\tag{22}
+u^k - {{\Delta t}}\nabla^2 u^k -  u^{k-1} - {{\Delta t}} f^k = ,\quad k=1,2,\ldots\]</div>
+<p>We use a finite element method to solve
+<a class="reference internal" href="#eq-tut-diffusion-pde1-u0"><span class="std std-ref">(20)</span></a> and either of the equations
+<a class="reference internal" href="#eq-tut-diffusion-pde1-uk"><span class="std std-ref">(21)</span></a> or <a class="reference internal" href="#eq-tut-diffusion-pde1-uk2"><span class="std std-ref">(22)</span></a>.  This
+requires turning the equations into weak forms.  As usual, we multiply
+by a test function <span class="math">\(v\in \hat V\)</span> and integrate second-derivatives by
+parts. Introducing the symbol <span class="math">\(u\)</span> for <span class="math">\(u^k\)</span> (which is natural in the
+program), the resulting weak form can be conveniently written in
+the standard notation:</p>
+<div class="math">
+\[a_0(u,v)=L_0(v),\]</div>
+<p>for
+<a class="reference internal" href="#eq-tut-diffusion-pde1-u0"><span class="std std-ref">(20)</span></a>. The formulation <a class="reference internal" href="#eq-tut-diffusion-pde1-uk"><span class="std std-ref">(21)</span></a>
+gives rise to</p>
+<div class="math">
+\[a(u,v)=L(v),\]</div>
+<p>where</p>
+<div class="math" id="eq-tut-diffusion-pde1-a0">
+\[\tag{23}
+a_0(u,v) = \int_\Omega uv {\, \mathrm{d}x},\]</div>
+<div class="math" id="eq-tut-diffusion-pde1-l0">
+\[\tag{24}
+L_0(v) = \int_\Omega Iv {\, \mathrm{d}x},\]</div>
+<div class="math" id="eq-tut-diffusion-pde1-a">
+\[\tag{25}
+a(u,v) = \int_\Omega\left( uv + {{\Delta t}}
+    \nabla u\cdot \nabla v\right) {\, \mathrm{d}x},\]</div>
+<div class="math" id="eq-tut-diffusion-pde1-l">
+\[\tag{26}
+L(v) = \int_\Omega \left(u^{k-1} + {{\Delta t}}  f^k\right)v {\, \mathrm{d}x}{\thinspace .}\]</div>
+<p>The alternative formulation <a class="reference internal" href="#eq-tut-diffusion-pde1-uk2"><span class="std std-ref">(22)</span></a>
+has a formulation</p>
+<div class="math">
+\[F(u,v) = 0,\]</div>
+<p>where</p>
+<div class="math" id="eq-tut-diffusion-pde1-f">
+\[\tag{27}
+F = \int_\Omega\left( uv + {{\Delta t}}
+    \nabla u\cdot \nabla v -
+    \left(u^{k-1} - {{\Delta t}}  f^k\right)v\right) {\, \mathrm{d}x}{\thinspace .}\]</div>
+<p>The continuous variational problem is to find
+<span class="math">\(u^0\in V\)</span> such that <span class="math">\(a_0(u^0,v)=L_0(v)\)</span> holds for all <span class="math">\(v\in\hat V\)</span>,
+and then find <span class="math">\(u^k\in V\)</span>
+such that <span class="math">\(a(u^k,v)=L(v)\)</span> for all <span class="math">\(v\in\hat V\)</span>,
+or alternatively, <span class="math">\(F(u^k,v)=0\)</span> for all <span class="math">\(v\in\hat V\)</span>,
+<span class="math">\(k=1,2,\ldots\)</span>.</p>
+<p>Approximate solutions in space are found by restricting the functional
+spaces <span class="math">\(V\)</span> and <span class="math">\(\hat V\)</span> to finite-dimensional spaces, exactly as we
+have done in the Poisson problems.  We shall use the symbol <span class="math">\(u\)</span> for
+the finite element approximation at time <span class="math">\(t_k\)</span>. In case we need to
+distinguish this space-time discrete approximation from the exact
+solution of the continuous diffusion problem, we use <span class="math">\({u_{\small\mbox{e}}}\)</span> for the
+latter.  By <span class="math">\(u^{k-1}\)</span> we mean the finite element approximation of the
+solution at time <span class="math">\(t_{k-1}\)</span>.</p>
+<p>Instead of
+solving <a class="reference internal" href="#eq-tut-diffusion-pde1-u0"><span class="std std-ref">(20)</span></a> by a finite element method, i.e.,
+projecting <span class="math">\(I\)</span> onto <span class="math">\(V\)</span> via the problem <span class="math">\(a_0(u,v)=L_0(v)\)</span>, we could
+simply interpolate <span class="math">\(u^0\)</span> from <span class="math">\(I\)</span>. That is, if <span class="math">\(u^0=\sum_{j=1}^N
+U^0_j\phi_j\)</span>, we simply set <span class="math">\(U_j=I(x_j,y_j)\)</span>, where <span class="math">\((x_j,y_j)\)</span> are
+the coordinates of node number <span class="math">\(j\)</span>. We refer to these two strategies
+as computing the initial condition by either projecting <span class="math">\(I\)</span> or
+interpolating <span class="math">\(I\)</span>.  Both operations are easy to compute through one
+statement, using either the <code class="docutils literal"><span class="pre">project</span></code> or <code class="docutils literal"><span class="pre">interpolate</span></code> function.</p>
+</div>
+<div class="section" id="a-simple-implementation-2">
+<span id="tut-timedep-diffusion1-impl"></span><h2>A simple implementation<a class="headerlink" href="#a-simple-implementation-2" title="Permalink to this headline">¶</a></h2>
+<p>Our program needs to implement the time stepping explicitly, but can
+rely on FEniCS to easily compute <span class="math">\(a_0\)</span>, <span class="math">\(L_0\)</span>, <span class="math">\(F\)</span>, <span class="math">\(a\)</span>, and <span class="math">\(L\)</span>, and solve
+the linear systems for the unknowns.</p>
+<div class="section" id="test-problem-2">
+<h3>Test problem<a class="headerlink" href="#test-problem-2" title="Permalink to this headline">¶</a></h3>
+<p>Before starting the coding, we shall construct a problem where it is
+easy to determine if the calculations are correct. The simple backward
+time difference is exact for linear functions, so we decide to have
+a linear variation in time. Combining a second-degree polynomial in space
+with a linear term in time,</p>
+<div class="math" id="eq-tut-diffusion-pde1-u0test">
+\[\tag{28}
+u = 1 + x^2 + \alpha y^2 + \beta t,\]</div>
+<p>yields a function whose computed values at the nodes will be exact,
+regardless of the size of the elements and <span class="math">\({\Delta t}\)</span>, as long as the mesh
+is uniformly partitioned.  By inserting
+<a class="reference internal" href="#eq-tut-diffusion-pde1-u0test"><span class="std std-ref">(28)</span></a> in the PDE problem
+<a class="reference internal" href="#eq-tut-diffusion-pde1"><span class="std std-ref">(14)</span></a>, it follows that <span class="math">\(u_0\)</span> must be given as
+<a class="reference internal" href="#eq-tut-diffusion-pde1-u0test"><span class="std std-ref">(28)</span></a> and that <span class="math">\(f(x,y,t)=\beta - 2 -
+2\alpha\)</span> and <span class="math">\(I(x,y)=1+x^2+\alpha y^2\)</span>.</p>
+</div>
+<div class="section" id="the-code">
+<span id="index-26"></span><h3>The code<a class="headerlink" href="#the-code" title="Permalink to this headline">¶</a></h3>
+<p>A new programming issue is how to deal with functions that vary in
+space <em>and time</em>, such as the boundary condition <span class="math">\(u_0\)</span> given by
+<a class="reference internal" href="#eq-tut-diffusion-pde1-u0test"><span class="std std-ref">(28)</span></a>.  A natural solution is to apply an
+<code class="docutils literal"><span class="pre">Expression</span></code> object with time <span class="math">\(t\)</span> as a parameter, in addition to the
+parameters <span class="math">\(\alpha\)</span> and <span class="math">\(\beta\)</span>
+for <code class="docutils literal"><span class="pre">Expression</span></code> objects with parameters):</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">alpha</span> <span class="o">=</span> <span class="mi">3</span><span class="p">;</span> <span class="n">beta</span> <span class="o">=</span> <span class="mf">1.2</span>
+<span class="n">u0</span> <span class="o">=</span> <span class="n">Expression</span><span class="p">(</span><span class="s">&#39;1 + x[0]*x[0] + alpha*x[1]*x[1] + beta*t&#39;</span><span class="p">,</span>
+                <span class="p">{</span><span class="s">&#39;alpha&#39;</span><span class="p">:</span> <span class="n">alpha</span><span class="p">,</span> <span class="s">&#39;beta&#39;</span><span class="p">:</span> <span class="n">beta</span><span class="p">})</span>
+<span class="n">u0</span><span class="o">.</span><span class="n">t</span> <span class="o">=</span> <span class="mi">0</span>
+</pre></div>
+</div>
+<p>This function expression has the components of <code class="docutils literal"><span class="pre">x</span></code> as independent
+variables, while <code class="docutils literal"><span class="pre">alpha</span></code>, <code class="docutils literal"><span class="pre">beta</span></code>, and <code class="docutils literal"><span class="pre">t</span></code> are parameters.  The
+parameters can either be set through a dictionary at construction
+time, as demonstrated for <code class="docutils literal"><span class="pre">alpha</span></code> and <code class="docutils literal"><span class="pre">beta</span></code>, or anytime through
+attributes in the function object, as shown for the <code class="docutils literal"><span class="pre">t</span></code> parameter.</p>
+<p>The essential boundary conditions, along the whole boundary in this case,
+are set in the usual way,</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="k">def</span> <span class="nf">boundary</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">on_boundary</span><span class="p">):</span>  <span class="c"># define the Dirichlet boundary</span>
+    <span class="k">return</span> <span class="n">on_boundary</span>
+
+<span class="n">bc</span> <span class="o">=</span> <span class="n">DirichletBC</span><span class="p">(</span><span class="n">V</span><span class="p">,</span> <span class="n">u0</span><span class="p">,</span> <span class="n">boundary</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>We shall use <code class="docutils literal"><span class="pre">u</span></code> for the unknown <span class="math">\(u\)</span> at the new time level and <code class="docutils literal"><span class="pre">u_1</span></code>
+for <span class="math">\(u\)</span> at the previous time level.  The initial value of <code class="docutils literal"><span class="pre">u_1</span></code>,
+implied by the initial condition on <span class="math">\(u\)</span>, can be computed by either
+projecting or interpolating <span class="math">\(I\)</span>.  The <span class="math">\(I(x,y)\)</span> function is available
+in the program through <code class="docutils literal"><span class="pre">u0</span></code>, as long as <code class="docutils literal"><span class="pre">u0.t</span></code> is zero.  We can then
+do</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">u_1</span> <span class="o">=</span> <span class="n">interpolate</span><span class="p">(</span><span class="n">u0</span><span class="p">,</span> <span class="n">V</span><span class="p">)</span>
+<span class="c"># or</span>
+<span class="n">u_1</span> <span class="o">=</span> <span class="n">project</span><span class="p">(</span><span class="n">u0</span><span class="p">,</span> <span class="n">V</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Note that we could, as an equivalent alternative to using <code class="docutils literal"><span class="pre">project</span></code>,
+define <span class="math">\(a_0\)</span> and <span class="math">\(L_0\)</span> as we did in the section <a class="reference internal" href="._ftut005.html#tut-poisson-gradu"><span class="std std-ref">Computing derivatives</span></a> and
+form the associated variational problem.</p>
+<div class="admonition-projecting-versus-interpolating-the-initial-condition admonition">
+<p class="first admonition-title">Projecting versus interpolating the initial condition</p>
+<p class="last">To actually recover the
+exact solution <a class="reference internal" href="#eq-tut-diffusion-pde1-u0test"><span class="std std-ref">(28)</span></a> to machine precision,
+it is important not to compute the discrete initial condition by
+projecting <span class="math">\(I\)</span>, but by interpolating <span class="math">\(I\)</span> so that the nodal values are
+exact at <span class="math">\(t=0\)</span> (projection results in approximative values at the
+nodes).</p>
+</div>
+<p>We may either define <span class="math">\(a\)</span> or <span class="math">\(L\)</span> according to the formulas above, or
+we may just define <span class="math">\(F\)</span> and ask FEniCS to figure out which terms that
+go into the bilinear form <span class="math">\(a\)</span> and which that go into the linear form
+<span class="math">\(L\)</span>. The latter is convenient, especially in more complicated problems,
+so we illustrate that construction:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">dt</span> <span class="o">=</span> <span class="mf">0.3</span>      <span class="c"># time step</span>
+
+<span class="n">u</span> <span class="o">=</span> <span class="n">TrialFunction</span><span class="p">(</span><span class="n">V</span><span class="p">)</span>
+<span class="n">v</span> <span class="o">=</span> <span class="n">TestFunction</span><span class="p">(</span><span class="n">V</span><span class="p">)</span>
+<span class="n">f</span> <span class="o">=</span> <span class="n">Constant</span><span class="p">(</span><span class="n">beta</span> <span class="o">-</span> <span class="mi">2</span> <span class="o">-</span> <span class="mi">2</span><span class="o">*</span><span class="n">alpha</span><span class="p">)</span>
+
+<span class="n">F</span> <span class="o">=</span> <span class="n">u</span><span class="o">*</span><span class="n">v</span><span class="o">*</span><span class="n">dx</span> <span class="o">+</span> <span class="n">dt</span><span class="o">*</span><span class="n">inner</span><span class="p">(</span><span class="n">nabla_grad</span><span class="p">(</span><span class="n">u</span><span class="p">),</span> <span class="n">nabla_grad</span><span class="p">(</span><span class="n">v</span><span class="p">))</span><span class="o">*</span><span class="n">dx</span> <span class="o">-</span> \
+    <span class="p">(</span><span class="n">u_1</span> <span class="o">+</span> <span class="n">dt</span><span class="o">*</span><span class="n">f</span><span class="p">)</span><span class="o">*</span><span class="n">v</span><span class="o">*</span><span class="n">dx</span>
+<span class="n">a</span><span class="p">,</span> <span class="n">L</span> <span class="o">=</span> <span class="n">lhs</span><span class="p">(</span><span class="n">F</span><span class="p">),</span> <span class="n">rhs</span><span class="p">(</span><span class="n">F</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Finally, we perform the time stepping in a loop:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">u</span> <span class="o">=</span> <span class="n">Function</span><span class="p">(</span><span class="n">V</span><span class="p">)</span>   <span class="c"># the unknown at a new time level</span>
+<span class="n">T</span> <span class="o">=</span> <span class="mi">2</span>             <span class="c"># total simulation time</span>
+<span class="n">t</span> <span class="o">=</span> <span class="n">dt</span>
+
+<span class="k">while</span> <span class="n">t</span> <span class="o">&lt;=</span> <span class="n">T</span><span class="p">:</span>
+    <span class="n">u0</span><span class="o">.</span><span class="n">t</span> <span class="o">=</span> <span class="n">t</span>
+    <span class="n">solve</span><span class="p">(</span><span class="n">a</span> <span class="o">==</span> <span class="n">L</span><span class="p">,</span> <span class="n">u</span><span class="p">,</span> <span class="n">bc</span><span class="p">)</span>
+
+    <span class="n">t</span> <span class="o">+=</span> <span class="n">dt</span>
+    <span class="n">u_1</span><span class="o">.</span><span class="n">assign</span><span class="p">(</span><span class="n">u</span><span class="p">)</span>
+</pre></div>
+</div>
+<div class="admonition-remember-to-update-expression-objects-with-the-current-time admonition">
+<p class="first admonition-title">Remember to update expression objects with the current time</p>
+<p class="last">Inside the time loop,
+observe that <code class="docutils literal"><span class="pre">u0.t</span></code> must be updated before the <code class="docutils literal"><span class="pre">solve</span></code> statement
+to enforce computation of Dirichlet conditions at the
+current time level. (The Dirichlet conditions look up the <code class="docutils literal"><span class="pre">u0</span></code> object
+for values.)</p>
+</div>
+<p>The time loop above does not contain any comparison of the numerical
+and the exact solution, which we must include in order to verify the
+implementation.  As in many previous examples, we compute the
+difference between the array of nodal values of <code class="docutils literal"><span class="pre">u</span></code> and the array of
+the interpolated exact solution.  The following code is to be included
+inside the loop, after <code class="docutils literal"><span class="pre">u</span></code> is found:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">u_e</span> <span class="o">=</span> <span class="n">interpolate</span><span class="p">(</span><span class="n">u0</span><span class="p">,</span> <span class="n">V</span><span class="p">)</span>
+<span class="n">max_error</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">u_e</span><span class="o">.</span><span class="n">vector</span><span class="p">()</span><span class="o">.</span><span class="n">array</span><span class="p">()</span> <span class="o">-</span>
+                   <span class="n">u</span><span class="o">.</span><span class="n">vector</span><span class="p">()</span><span class="o">.</span><span class="n">array</span><span class="p">())</span><span class="o">.</span><span class="n">max</span><span class="p">()</span>
+<span class="k">print</span><span class="p">(</span><span class="s">&#39;max error, t=</span><span class="si">%.2f</span><span class="s">: </span><span class="si">%-10.3g</span><span class="s">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">t</span><span class="p">,</span> <span class="n">max_error</span><span class="p">))</span>
+</pre></div>
+</div>
+<p>The complete program code for this time-dependent case goes as follows:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="kn">from</span> <span class="nn">fenics</span> <span class="kn">import</span> <span class="o">*</span>
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="kn">as</span> <span class="nn">np</span>
+
+<span class="c"># Create mesh and define function space</span>
+<span class="n">nx</span> <span class="o">=</span> <span class="n">ny</span> <span class="o">=</span> <span class="mi">4</span>
+<span class="n">mesh</span> <span class="o">=</span> <span class="n">UnitSquareMesh</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span> <span class="n">ny</span><span class="p">)</span>
+<span class="n">V</span> <span class="o">=</span> <span class="n">FunctionSpace</span><span class="p">(</span><span class="n">mesh</span><span class="p">,</span> <span class="s">&#39;Lagrange&#39;</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+
+<span class="c"># Define boundary conditions</span>
+<span class="n">alpha</span> <span class="o">=</span> <span class="mi">3</span><span class="p">;</span> <span class="n">beta</span> <span class="o">=</span> <span class="mf">1.2</span>
+<span class="n">u0</span> <span class="o">=</span> <span class="n">Expression</span><span class="p">(</span><span class="s">&#39;1 + x[0]*x[0] + alpha*x[1]*x[1] + beta*t&#39;</span><span class="p">,</span>
+                <span class="n">alpha</span><span class="o">=</span><span class="n">alpha</span><span class="p">,</span> <span class="n">beta</span><span class="o">=</span><span class="n">beta</span><span class="p">,</span> <span class="n">t</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+
+<span class="k">class</span> <span class="nc">Boundary</span><span class="p">(</span><span class="n">SubDomain</span><span class="p">):</span>  <span class="c"># define the Dirichlet boundary</span>
+    <span class="k">def</span> <span class="nf">inside</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">on_boundary</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">on_boundary</span>
+
+<span class="n">boundary</span> <span class="o">=</span> <span class="n">Boundary</span><span class="p">()</span>
+<span class="n">bc</span> <span class="o">=</span> <span class="n">DirichletBC</span><span class="p">(</span><span class="n">V</span><span class="p">,</span> <span class="n">u0</span><span class="p">,</span> <span class="n">boundary</span><span class="p">)</span>
+
+<span class="c"># Initial condition</span>
+<span class="n">u_1</span> <span class="o">=</span> <span class="n">interpolate</span><span class="p">(</span><span class="n">u0</span><span class="p">,</span> <span class="n">V</span><span class="p">)</span>
+<span class="c">#u_1 = project(u0, V)  # will not result in exact solution!</span>
+
+<span class="n">dt</span> <span class="o">=</span> <span class="mf">0.3</span>      <span class="c"># time step</span>
+
+<span class="c"># Define variational problem</span>
+<span class="n">u</span> <span class="o">=</span> <span class="n">TrialFunction</span><span class="p">(</span><span class="n">V</span><span class="p">)</span>
+<span class="n">v</span> <span class="o">=</span> <span class="n">TestFunction</span><span class="p">(</span><span class="n">V</span><span class="p">)</span>
+<span class="n">f</span> <span class="o">=</span> <span class="n">Constant</span><span class="p">(</span><span class="n">beta</span> <span class="o">-</span> <span class="mi">2</span> <span class="o">-</span> <span class="mi">2</span><span class="o">*</span><span class="n">alpha</span><span class="p">)</span>
+<span class="n">F</span> <span class="o">=</span> <span class="n">u</span><span class="o">*</span><span class="n">v</span><span class="o">*</span><span class="n">dx</span> <span class="o">+</span> <span class="n">dt</span><span class="o">*</span><span class="n">inner</span><span class="p">(</span><span class="n">nabla_grad</span><span class="p">(</span><span class="n">u</span><span class="p">),</span> <span class="n">nabla_grad</span><span class="p">(</span><span class="n">v</span><span class="p">))</span><span class="o">*</span><span class="n">dx</span> <span class="o">-</span> \
+    <span class="p">(</span><span class="n">u_1</span> <span class="o">+</span> <span class="n">dt</span><span class="o">*</span><span class="n">f</span><span class="p">)</span><span class="o">*</span><span class="n">v</span><span class="o">*</span><span class="n">dx</span>
+<span class="n">a</span><span class="p">,</span> <span class="n">L</span> <span class="o">=</span> <span class="n">lhs</span><span class="p">(</span><span class="n">F</span><span class="p">),</span> <span class="n">rhs</span><span class="p">(</span><span class="n">F</span><span class="p">)</span>
+
+<span class="c"># Compute solution</span>
+<span class="n">u</span> <span class="o">=</span> <span class="n">Function</span><span class="p">(</span><span class="n">V</span><span class="p">)</span>   <span class="c"># the unknown at a new time level</span>
+<span class="n">T</span> <span class="o">=</span> <span class="mf">1.9</span>           <span class="c"># total simulation time</span>
+<span class="n">t</span> <span class="o">=</span> <span class="n">dt</span>
+<span class="k">while</span> <span class="n">t</span> <span class="o">&lt;=</span> <span class="n">T</span><span class="p">:</span>
+    <span class="k">print</span><span class="p">(</span><span class="s">&#39;time =&#39;</span><span class="p">,</span> <span class="n">t</span><span class="p">)</span>
+    <span class="n">u0</span><span class="o">.</span><span class="n">t</span> <span class="o">=</span> <span class="n">t</span>
+    <span class="n">solve</span><span class="p">(</span><span class="n">a</span> <span class="o">==</span> <span class="n">L</span><span class="p">,</span> <span class="n">u</span><span class="p">,</span> <span class="n">bc</span><span class="p">)</span>
+
+    <span class="c"># Verify</span>
+    <span class="n">u_e</span> <span class="o">=</span> <span class="n">interpolate</span><span class="p">(</span><span class="n">u0</span><span class="p">,</span> <span class="n">V</span><span class="p">)</span>
+    <span class="n">max_error</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">u_e</span><span class="o">.</span><span class="n">vector</span><span class="p">()</span><span class="o">.</span><span class="n">array</span><span class="p">()</span> <span class="o">-</span>
+                       <span class="n">u</span><span class="o">.</span><span class="n">vector</span><span class="p">()</span><span class="o">.</span><span class="n">array</span><span class="p">())</span><span class="o">.</span><span class="n">max</span><span class="p">()</span>
+    <span class="k">print</span><span class="p">(</span><span class="s">&#39;max error, t=</span><span class="si">%.2f</span><span class="s">: </span><span class="si">%-10.3g</span><span class="s">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">t</span><span class="p">,</span> <span class="n">max_error</span><span class="p">))</span>
+
+    <span class="n">t</span> <span class="o">+=</span> <span class="n">dt</span>
+    <span class="n">u_1</span><span class="o">.</span><span class="n">assign</span><span class="p">(</span><span class="n">u</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>The code is available in the
+file <a class="reference external" href="https://github.com/hplgit/fenics-tutorial/blob/master/src/d2D_flat1.py">fenics_tutorial_02_d2D_flat1.py</a>.</p>
+</div>
+</div>
+<div class="section" id="diffusion-of-a-gaussian-function">
+<h2>Diffusion of a Gaussian function<a class="headerlink" href="#diffusion-of-a-gaussian-function" title="Permalink to this headline">¶</a></h2>
+<p>Add dumping to file and some plots.</p>
+</div>
+</div>
+<div class="section" id="a-nonlinear-poisson-equation">
+<h1>A nonlinear Poisson equation<a class="headerlink" href="#a-nonlinear-poisson-equation" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="variational-formulation-3">
+<h2>Variational formulation<a class="headerlink" href="#variational-formulation-3" title="Permalink to this headline">¶</a></h2>
+<p>Now we shall address how to solve nonlinear PDEs in FEniCS. Our
+sample PDE for implementation is taken as a nonlinear Poisson equation:</p>
+<div class="math" id="eq-auto3">
+\[\tag{29}
+-\nabla\cdot\left( q(u)\nabla u\right) = f,\]</div>
+<p>in <span class="math">\(\Omega\)</span>, with <span class="math">\(u=u_0\)</span> on the boundary <span class="math">\(\partial\Omega\)</span>.
+The coefficient <span class="math">\(q(u)\)</span> makes the equation nonlinear (unless <span class="math">\(q(u)\)</span>
+is constant in <span class="math">\(u\)</span>).</p>
+<p>The variational formulation of our model problem reads:
+Find <span class="math">\(u \in V\)</span> such that</p>
+<div class="math" id="eq-tut-poisson-nonlinear1">
+\[\tag{30}
+F(u; v) = 0 \quad \forall v \in \hat{V},\]</div>
+<p>where</p>
+<div class="math" id="eq-tut-poisson-nonlinear2">
+\[\tag{31}
+F(u; v) = \int_\Omega q(u)\nabla u\cdot \nabla v {\, \mathrm{d}x},\]</div>
+<p>and</p>
+<div class="math">
+\[\begin{split}\hat{V} &amp;= \{v \in H^1(\Omega) : v = 0 \mbox{ on } x_0=0\mbox{ and }x_0=1\}, \\
+ V      &amp;= \{v \in H^1(\Omega) : v = 0 \mbox{ on } x_0=0\mbox{ and } v = 1\mbox{ on }x_0=1\}{\thinspace .}\end{split}\]</div>
+<p>The discrete problem arises as usual by restricting <span class="math">\(V\)</span> and <span class="math">\(\hat V\)</span> to a
+pair of discrete spaces. As usual, we omit any subscript on discrete
+spaces and simply say <span class="math">\(V\)</span> and <span class="math">\(\hat V\)</span> are chosen finite dimensional
+according to some mesh with some element type.
+Similarly, we let <span class="math">\(u\)</span> be the discrete solution and use <span class="math">\({u_{\small\mbox{e}}}\)</span> for
+the exact solution if it becomes necessary to distinguish between the two.</p>
+<p>The discrete nonlinear problem is then written as: find <span class="math">\(u\in V\)</span> such that</p>
+<div class="math" id="eq-tut-poisson-nonlinear-d">
+\[\tag{32}
+F(u; v) = 0 \quad \forall v \in \hat{V},\]</div>
+<p>with <span class="math">\(u = \sum_{j=1}^N U_j \phi_j\)</span>. Since <span class="math">\(F\)</span> is a nonlinear function
+of <span class="math">\(u\)</span>, the variational statement gives rise to a system of
+nonlinear algebraic equations in the unknowns <span class="math">\(U_1,\ldots,U_N\)</span>.</p>
+</div>
+<div class="section" id="a-simple-implementation-3">
+<span id="tut-nonlinear-newton-auto"></span><h2>A simple implementation<a class="headerlink" href="#a-simple-implementation-3" title="Permalink to this headline">¶</a></h2>
+<div class="section" id="overview">
+<h3>Overview<a class="headerlink" href="#overview" title="Permalink to this headline">¶</a></h3>
+<p>A working solver for the nonlinear Poisson equation is as easy to
+implement as a solver for the corresponding linear problem.
+All we need to do is the state the formula for <span class="math">\(F\)</span> and call
+<code class="docutils literal"><span class="pre">solve(F</span> <span class="pre">==</span> <span class="pre">0,</span> <span class="pre">u,</span> <span class="pre">bc)</span></code> instead of <code class="docutils literal"><span class="pre">solve(a</span> <span class="pre">==</span> <span class="pre">L,</span> <span class="pre">u,</span> <span class="pre">bc)</span></code> as we did
+in the linear case. Here is a minimalistic code:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="kn">from</span> <span class="nn">fenics</span> <span class="kn">import</span> <span class="o">*</span>
+
+<span class="k">def</span> <span class="nf">q</span><span class="p">(</span><span class="n">u</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Nonlinear coefficient in the PDE.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="mi">1</span> <span class="o">+</span> <span class="n">u</span><span class="o">**</span><span class="mi">2</span>
+
+<span class="n">mesh</span> <span class="o">=</span> <span class="n">UnitSquareMesh</span><span class="p">(</span><span class="mi">60</span><span class="p">,</span> <span class="mi">40</span><span class="p">)</span>
+<span class="n">V</span> <span class="o">=</span> <span class="n">FunctionSpace</span><span class="p">(</span><span class="n">mesh</span><span class="p">,</span> <span class="s">&#39;Lagrange&#39;</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+<span class="n">u0</span> <span class="o">=</span> <span class="n">Expression</span><span class="p">(</span><span class="o">...</span><span class="p">)</span>
+
+<span class="k">def</span> <span class="nf">u0_boundary</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">on_boundary</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">on_boundary</span>
+
+<span class="n">bc</span> <span class="o">=</span> <span class="n">DirichletBC</span><span class="p">(</span><span class="n">V</span><span class="p">,</span> <span class="n">u0</span><span class="p">,</span> <span class="n">u0_boundary</span><span class="p">)</span>
+
+<span class="c"># Define variational problem</span>
+<span class="n">u</span> <span class="o">=</span> <span class="n">Function</span><span class="p">(</span><span class="n">V</span><span class="p">)</span>
+<span class="n">v</span> <span class="o">=</span> <span class="n">TestFunction</span><span class="p">(</span><span class="n">V</span><span class="p">)</span>
+<span class="n">f</span> <span class="o">=</span> <span class="n">Expression</span><span class="p">(</span><span class="n">f_code</span><span class="p">)</span>
+<span class="n">F</span> <span class="o">=</span> <span class="n">inner</span><span class="p">(</span><span class="n">q</span><span class="p">(</span><span class="n">u</span><span class="p">)</span><span class="o">*</span><span class="n">nabla_grad</span><span class="p">(</span><span class="n">u</span><span class="p">),</span> <span class="n">nabla_grad</span><span class="p">(</span><span class="n">v</span><span class="p">))</span><span class="o">*</span><span class="n">dx</span> <span class="o">-</span> <span class="n">f</span><span class="o">*</span><span class="n">v</span><span class="o">*</span><span class="n">dx</span>
+
+<span class="c"># Compute solution</span>
+<span class="n">solve</span><span class="p">(</span><span class="n">F</span> <span class="o">==</span> <span class="mi">0</span><span class="p">,</span> <span class="n">u</span><span class="p">,</span> <span class="n">bc</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>The major difference from a linear problem is that the unknown function
+<code class="docutils literal"><span class="pre">u</span></code> in the variational form is in the nonlinear case
+a <code class="docutils literal"><span class="pre">Function</span></code>, not a <code class="docutils literal"><span class="pre">TrialFunction</span></code>.</p>
+<p>The <code class="docutils literal"><span class="pre">solve</span></code> function takes the nonlinear equations and derives symbolically
+the Jacobian matrix and runs a Newton method.</p>
+</div>
+<div class="section" id="constructing-a-test-problem-with-sympy">
+<h3>Constructing a test problem with SymPy<a class="headerlink" href="#constructing-a-test-problem-with-sympy" title="Permalink to this headline">¶</a></h3>
+<p>Let us do a specific computation. We then need choices for <span class="math">\(f\)</span> and <span class="math">\(u_0\)</span>.
+Previously, we have worked with manufactured solutions that can be
+reproduced without approximation errors. This is more difficult in
+nonlinear problems, and the algebra is more tedious. However, we may
+utilize SymPy for symbolic computing and integrate such computations in the
+FEniCS solver. This allows us to easily experiment with different
+manufactured solutions. The forthcoming code with SymPy requires some
+basic familiarity with this package (here, defining symbols, <code class="docutils literal"><span class="pre">diff</span></code> for
+differentiation, <code class="docutils literal"><span class="pre">ccode</span></code> for C/C++ code generation).</p>
+<p>We try out a two-dimensional
+solution that is linear in the unknowns:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="c"># Warning: from fenics import * imports f, q, and sym</span>
+<span class="c"># (which overwrites the f and q (function) objects</span>
+<span class="c"># and also sym if we do import sympy as sym).</span>
+<span class="c"># Therefore, do fenics import first and then overwrite</span>
+<span class="kn">from</span> <span class="nn">fenics</span> <span class="kn">import</span> <span class="o">*</span>
+
+<span class="k">def</span> <span class="nf">q</span><span class="p">(</span><span class="n">u</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Nonlinear coefficient in the PDE.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="mi">1</span> <span class="o">+</span> <span class="n">u</span><span class="o">**</span><span class="mi">2</span>
+
+<span class="c"># Use sympy to compute f given manufactured solution u</span>
+<span class="kn">import</span> <span class="nn">sympy</span> <span class="kn">as</span> <span class="nn">sym</span>
+<span class="n">x</span><span class="p">,</span> <span class="n">y</span> <span class="o">=</span> <span class="n">sym</span><span class="o">.</span><span class="n">symbols</span><span class="p">(</span><span class="s">&#39;x[0] x[1]&#39;</span><span class="p">)</span>
+<span class="n">u</span> <span class="o">=</span> <span class="mi">1</span> <span class="o">+</span> <span class="n">x</span> <span class="o">+</span> <span class="mi">2</span><span class="o">*</span><span class="n">y</span>
+<span class="n">f</span> <span class="o">=</span> <span class="o">-</span> <span class="n">sym</span><span class="o">.</span><span class="n">diff</span><span class="p">(</span><span class="n">q</span><span class="p">(</span><span class="n">u</span><span class="p">)</span><span class="o">*</span><span class="n">sym</span><span class="o">.</span><span class="n">diff</span><span class="p">(</span><span class="n">u</span><span class="p">,</span> <span class="n">x</span><span class="p">),</span> <span class="n">x</span><span class="p">)</span> <span class="o">-</span> \
+      <span class="n">sym</span><span class="o">.</span><span class="n">diff</span><span class="p">(</span><span class="n">q</span><span class="p">(</span><span class="n">u</span><span class="p">)</span><span class="o">*</span><span class="n">sym</span><span class="o">.</span><span class="n">diff</span><span class="p">(</span><span class="n">u</span><span class="p">,</span> <span class="n">y</span><span class="p">),</span> <span class="n">y</span><span class="p">)</span>
+<span class="n">f</span> <span class="o">=</span> <span class="n">sym</span><span class="o">.</span><span class="n">simplify</span><span class="p">(</span><span class="n">f</span><span class="p">)</span>
+</pre></div>
+</div>
+<div class="admonition-define-symbolic-coordinates-as-required-in-expression-objects admonition">
+<p class="first admonition-title">Define symbolic coordinates as required in <code class="docutils literal"><span class="pre">Expression</span></code> objects</p>
+<p class="last">Note that we would normally write <code class="docutils literal"><span class="pre">x,</span> <span class="pre">y</span> <span class="pre">=</span> <span class="pre">sym.symbols('x</span> <span class="pre">y')</span></code>, but
+if we want the resulting expressions to be have valid syntax for
+<code class="docutils literal"><span class="pre">Expression</span></code> objects, and then <span class="math">\(x\)</span> reads <code class="docutils literal"><span class="pre">x[0]</span></code> and <span class="math">\(y\)</span> must be <code class="docutils literal"><span class="pre">x[1]</span></code>.
+This is easily accomplished with <code class="docutils literal"><span class="pre">sympy</span></code> by defining the names of <code class="docutils literal"><span class="pre">x</span></code> and
+<code class="docutils literal"><span class="pre">y</span></code> as <code class="docutils literal"><span class="pre">x[0]</span></code> and <code class="docutils literal"><span class="pre">x[1]</span></code>: <code class="docutils literal"><span class="pre">x,</span> <span class="pre">y</span> <span class="pre">=</span> <span class="pre">sym.symbols('x[0]</span> <span class="pre">x[1]')</span></code>.</p>
+</div>
+<p>Turning the expressions for <code class="docutils literal"><span class="pre">u</span></code> and <code class="docutils literal"><span class="pre">f</span></code> into C or C++ syntax for
+<code class="docutils literal"><span class="pre">Expression</span></code> objects needs two steps. First we ask for the C code of
+the expressions,</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">u_code</span> <span class="o">=</span> <span class="n">sym</span><span class="o">.</span><span class="n">printing</span><span class="o">.</span><span class="n">ccode</span><span class="p">(</span><span class="n">u</span><span class="p">)</span>
+<span class="n">f_code</span> <span class="o">=</span> <span class="n">sym</span><span class="o">.</span><span class="n">printing</span><span class="o">.</span><span class="n">ccode</span><span class="p">(</span><span class="n">f</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Sometimes we need some editing of the result to match the required syntax of
+<code class="docutils literal"><span class="pre">Expression</span></code> objects, but not in this case. (The primary example is
+that <code class="docutils literal"><span class="pre">M_PI</span></code> for <span class="math">\(\pi\)</span> in C/C++ must be replaced by <code class="docutils literal"><span class="pre">pi</span></code> for <code class="docutils literal"><span class="pre">Expression</span></code>
+objects.) In our case here,
+the output of <code class="docutils literal"><span class="pre">c_code</span></code> and <code class="docutils literal"><span class="pre">f_code</span></code> is</p>
+<div class="highlight-c"><div class="highlight"><pre><span class="n">x</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="mi">2</span><span class="o">*</span><span class="n">x</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">+</span> <span class="mi">1</span>
+<span class="o">-</span><span class="mi">10</span><span class="o">*</span><span class="n">x</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">-</span> <span class="mi">20</span><span class="o">*</span><span class="n">x</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">-</span> <span class="mi">10</span>
+</pre></div>
+</div>
+<p>After having defined the mesh, the function space, and the boundary,
+we define the boundary values, <code class="docutils literal"><span class="pre">u0</span></code>, as</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">u0</span> <span class="o">=</span> <span class="n">Expression</span><span class="p">(</span><span class="n">u_code</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Similarly, we define the right-hand side function as</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">f</span> <span class="o">=</span> <span class="n">Expression</span><span class="p">(</span><span class="n">f_code</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>The complete code is found in the file
+<code class="docutils literal"><span class="pre">fenics_tutorial_03_p2D_flat_nonlinear.py</span></code>.</p>
+<div class="admonition-name-clash-between-fenics-and-program-variables admonition">
+<p class="first admonition-title">Name clash between <code class="docutils literal"><span class="pre">fenics</span></code> and program variables</p>
+<p class="last">In a program like the one above, strange errors may occur due to
+name clashes. If you define <code class="docutils literal"><span class="pre">sym</span></code>, <code class="docutils literal"><span class="pre">q</span></code>, and <code class="docutils literal"><span class="pre">f</span></code> prior to doing
+<code class="docutils literal"><span class="pre">from</span> <span class="pre">fenics</span> <span class="pre">import</span> <span class="pre">*</span></code>, the latter statement will also import
+variables with the names <code class="docutils literal"><span class="pre">sym</span></code>, <code class="docutils literal"><span class="pre">q</span></code>, and <code class="docutils literal"><span class="pre">f</span></code> and overwrite
+the objects you had! This may lead to strange errors. The best
+solution is to do <code class="docutils literal"><span class="pre">import</span> <span class="pre">fenics</span> <span class="pre">as</span> <span class="pre">fe</span></code> and prefix all FEniCS
+object names by <code class="docutils literal"><span class="pre">fe</span></code>. The next best solution is to do the
+<code class="docutils literal"><span class="pre">from</span> <span class="pre">fenics</span> <span class="pre">import</span> <span class="pre">*</span></code> first and then define our own variables
+that overwrite those imported from <code class="docutils literal"><span class="pre">fenics</span></code>. This is acceptable
+if we do not need <code class="docutils literal"><span class="pre">f</span></code>, <code class="docutils literal"><span class="pre">q</span></code>, and <code class="docutils literal"><span class="pre">sym</span></code> from <code class="docutils literal"><span class="pre">fenics</span></code>.</p>
+</div>
+<p>Running the code gives output that tells how the Newton iteration
+progresses. With <span class="math">\(2(6\times 4)\)</span> cells we get convergence in 7
+iterations with a tolerance of <span class="math">\(10^{-9}\)</span>, and the error in the
+numerical solution is about <span class="math">\(10^{-11}\)</span>. Using more elements, e.g.,
+<span class="math">\(2(16\times 14)\)</span>, brings the error down to about <span class="math">\(10^{-15}\)</span>,
+which provides evidence for a correct implementation.</p>
+<p>The current example shows how easy it is to solve a nonlinear problem
+in FEniCS. However, experts on numerical solution of nonlinear PDEs
+know very well that automated procedures may fail in nonlinear
+problems, and that it is often necessary to have much more manual
+control of the solution process than what we have in the current
+case. Therefore, we return to this problem in the chapter <a class="reference internal" href="._ftut010.html#tut-nonlinear"><span class="std std-ref">The nonlinear Poisson solver revisited</span></a> and show how we can implement our own solution
+algorithms for nonlinear equations and also how we can steer the
+parameters in the automated Newton method used above. You will then
+realize how easy it is to implement tailored solution strategies for
+nonlinear problems in FEniCS.</p>
+</div>
+</div>
+</div>
+<div class="section" id="the-equations-of-linear-elasticity">
+<h1>The equations of linear elasticity<a class="headerlink" href="#the-equations-of-linear-elasticity" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="variational-formulation-4">
+<h2>Variational formulation<a class="headerlink" href="#variational-formulation-4" title="Permalink to this headline">¶</a></h2>
+<p>Work with simple constant <span class="math">\(\lambda\)</span> and <span class="math">\(\mu\)</span> formulation, stationary,
+with homogeneous Dirichlet or Neumann conditions, but include body force.
+Case: Deflection of
+a cantilever beam (could be lego box for the fun of it :-)
+Then <span class="math">\(x=0\)</span> end is clamped with <span class="math">\(u=0\)</span> and the rest of the boundary can
+be traction free (homogeneous Neumann condition).
+Let gravity deform the shape.</p>
+</div>
+<div class="section" id="a-simple-implementation-4">
+<h2>A simple implementation<a class="headerlink" href="#a-simple-implementation-4" title="Permalink to this headline">¶</a></h2>
+</div>
+</div>
+<div class="section" id="the-equations-of-hyperelasticity">
+<h1>The equations of hyperelasticity?<a class="headerlink" href="#the-equations-of-hyperelasticity" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="variational-formulation-5">
+<h2>Variational formulation<a class="headerlink" href="#variational-formulation-5" title="Permalink to this headline">¶</a></h2>
+</div>
+<div class="section" id="a-simple-implementation-5">
+<h2>A simple implementation<a class="headerlink" href="#a-simple-implementation-5" title="Permalink to this headline">¶</a></h2>
+</div>
+</div>
+<div class="section" id="the-navier-stokes-equations">
+<h1>The Navier-Stokes equations<a class="headerlink" href="#the-navier-stokes-equations" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="variational-formulation-6">
+<h2>Variational formulation<a class="headerlink" href="#variational-formulation-6" title="Permalink to this headline">¶</a></h2>
+</div>
+<div class="section" id="a-simple-implementation-6">
+<h2>A simple implementation<a class="headerlink" href="#a-simple-implementation-6" title="Permalink to this headline">¶</a></h2>
 </div>
 </div>
 

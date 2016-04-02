@@ -29,9 +29,6 @@ for filename in filenames:
     counter += 1
     prog[filename] = new_filename
 
-print prog
-# Write prog dictionary into ftut.do.txt
-
 # Copy source files
 
 os.chdir('src')
@@ -54,3 +51,9 @@ for dirpath, dirnames, filenames in os.walk('tmp'):
             os.rename(path, new_path)
 
 os.system('python rsync_git.py tmp ../../src')
+
+print 'prog = {'
+for p in prog:
+    print "  '%s': '%s'," % (p, prog[p])
+print '}'
+# Write prog dictionary into ftut.do.txt
