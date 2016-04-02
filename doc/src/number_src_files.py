@@ -22,7 +22,8 @@ for line in output.splitlines():
 counter = 1
 prog = collections.OrderedDict()
 for filename in filenames:
-    new_filename = 'fenics_tutorial_%02d_%s' % (counter, filename)
+    #new_filename = 'fenics_tutorial_%02d_%s' % (counter, filename)
+    new_filename = 'ft%02d_%s' % (counter, filename)
     print new_filename
     #shutil.copy(os.path.join('src', filename),
     #            os.path.join(os.pardir, os.pardir, 'src', new_filename))
