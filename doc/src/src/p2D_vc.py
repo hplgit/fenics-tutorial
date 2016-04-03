@@ -28,7 +28,7 @@ def solver(
     # Define variational problem
     u = TrialFunction(V)
     v = TestFunction(V)
-    a = inner(p*nabla_grad(u), nabla_grad(v))*dx
+    a = dot(p*grad(u), grad(v))*dx
     L = f*v*dx
 
     # Compute solution
@@ -74,7 +74,7 @@ def solver_objects(
     # Define variational problem
     u = TrialFunction(V)
     v = TestFunction(V)
-    a = inner(p*nabla_grad(u), nabla_grad(v))*dx
+    a = dot(p*grad(u), grad(v))*dx
     L = f*v*dx
 
     # Compute solution
@@ -290,7 +290,7 @@ def compute_errors(u, u_exact):
     E5 = abs(u_e.vector().array() - u.vector().array()).max()
 
     # H1 seminorm
-    error = inner(grad(e_Ve), grad(e_Ve))*dx
+    error = dot(grad(e_Ve), grad(e_Ve))*dx
     E6 = sqrt(abs(assemble(error)))
 
     # Collect error measures in a dictionary with self-explanatory keys
@@ -513,7 +513,7 @@ def solver_linalg(
     # Define variational problem
     u = TrialFunction(V)
     v = TestFunction(V)
-    a = inner(p*nabla_grad(u), nabla_grad(v))*dx
+    a = dot(p*grad(u), grad(v))*dx
     L = f*v*dx
 
     # Compute solution
@@ -733,12 +733,12 @@ def solver_bc(
             Robin_integrals.append(r*(u-s)*v*ds(n))
 
     # Define variational problem, solver_bc
-    a = inner(p*nabla_grad(u), nabla_grad(v))*dx + \
+    a = dot(p*grad(u), grad(v))*dx + \
         sum(Robin_a_integrals)
     L = f*v*dx - sum(Neumann_integrals) + sum(Robin_L_integrals)
 
     # Simpler variational formulation
-    F = inner(p*nabla_grad(u), nabla_grad(v))*dx + \
+    F = dot(p*grad(u), grad(v))*dx + \
         sum(Robin_integrals) - f*v*dx + sum(Neumann_integrals)
     a, L = lhs(F), rhs(F)
 

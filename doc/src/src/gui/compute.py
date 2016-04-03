@@ -1,5 +1,5 @@
 def define_pool():
-    from parampool.utils import dolfinxml2pool
+    from parampool.utils import fenicsxml2pool
     from parampool.pool.Pool import Pool
     pool = Pool()
     pool.subpool('Main menu')
@@ -14,7 +14,7 @@ def define_pool():
     pool.add_data_item(name='u0',
                        default='1 + x[0]*x[0] + 2*x[1]*x[1]',
                        str2type=str)
-    pool = dolfinxml2pool('prm.xml', pool)
+    pool = fenicsxml2pool('prm.xml', pool)
     pool.update()
     return pool
 

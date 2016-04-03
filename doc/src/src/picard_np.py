@@ -5,7 +5,7 @@ in x-direction and homogeneous Neumann (symmetry) conditions
 in all other directions. The domain is the unit hypercube in
 of a given dimension.
 
--div(q(u)*nabla_grad(u)) = 0,
+-div(q(u)*grad(u)) = 0,
 u = 0 at x=0, u=1 at x=1, du/dn=0 at all other boundaries.
 q(u) = (1+u)^m
 
@@ -47,7 +47,7 @@ def q(u):
 u = TrialFunction(V)
 v = TestFunction(V)
 u_k = interpolate(Constant(0.0), V)  # previous (known) u
-a = inner(q(u_k)*nabla_grad(u), nabla_grad(v))*dx
+a = dot(q(u_k)*grad(u), grad(v))*dx
 f = Constant(0.0)
 L = f*v*dx
 
@@ -70,7 +70,7 @@ if iter >= maxiter:
     convergence = 'no ' + convergence
 
 print("""
-Solution of the nonlinear Poisson problem div(q(u)*nabla_grad(u)) = f,
+Solution of the nonlinear Poisson problem div(q(u)*grad(u)) = f,
 with f=0, q(u) = (1+u)^m, u=0 at x=0 and u=1 at x=1.
 %s
 %s

@@ -81,7 +81,7 @@ bcs = [Gamma_0, Gamma_1]
 u = TrialFunction(V)
 v = TestFunction(V)
 f = Constant(0)
-a = k*inner(nabla_grad(u), nabla_grad(v))*dx
+a = k*dot(grad(u), grad(v))*dx
 L = f*v*dx
 
 # Compute solution

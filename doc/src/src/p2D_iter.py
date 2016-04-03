@@ -28,7 +28,7 @@ def solver(
     # Define variational problem
     u = TrialFunction(V)
     v = TestFunction(V)
-    a = inner(nabla_grad(u), nabla_grad(v))*dx
+    a = dot(grad(u), grad(v))*dx
     L = f*v*dx
 
     # Compute solution
@@ -74,7 +74,7 @@ def solver_objects(
     # Define variational problem
     u = TrialFunction(V)
     v = TestFunction(V)
-    a = inner(nabla_grad(u), nabla_grad(v))*dx
+    a = dot(grad(u), grad(v))*dx
     L = f*v*dx
 
     # Compute solution

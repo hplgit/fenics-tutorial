@@ -5,7 +5,7 @@ in x-direction and homogeneous Neumann (symmetry) conditions
 in all other directions. The domain is the unit hypercube in
 of a given dimension.
 
--div(q(u)*nabla_grad(u)) = 0,
+-div(q(u)*grad(u)) = 0,
 u = 0 at x=0, u=1 at x=1, du/dn=0 at all other boundaries.
 q(u) = (1+u)^m
 
@@ -39,7 +39,7 @@ bcs = [Gamma_0, Gamma_1]
 # Define variational problem for initial guess (q(u)=1, i.e., m=0)
 u = TrialFunction(V)
 v = TestFunction(V)
-a = inner(nabla_grad(u), nabla_grad(v))*dx
+a = dot(grad(u), grad(v))*dx
 f = Constant(0.0)
 L = f*v*dx
 A, b = assemble_system(a, L, bcs)
@@ -65,9 +65,9 @@ def Dq(u):
 # Define variational problem for the matrix and vector
 # in a Newton iteration
 du = TrialFunction(V) # u = u_k + omega*du
-a = inner(q(u_k)*nabla_grad(du), nabla_grad(v))*dx + \
-    inner(Dq(u_k)*du*nabla_grad(u_k), nabla_grad(v))*dx
-L = -inner(q(u_k)*nabla_grad(u_k), nabla_grad(v))*dx
+a = dot(q(u_k)*grad(du), grad(v))*dx + \
+    dot(Dq(u_k)*du*grad(u_k), grad(v))*dx
+L = -dot(q(u_k)*grad(u_k), grad(v))*dx
 
 # Newton iteration at the algebraic level
 du = Function(V)
@@ -99,7 +99,7 @@ if iter >= maxiter:
     convergence = 'no ' + convergence
 
 print("""
-Solution of the nonlinear Poisson problem div(q(u)*nabla_grad(u)) = f,
+Solution of the nonlinear Poisson problem div(q(u)*grad(u)) = f,
 with f=0, q(u) = (1+u)^m, u=0 at x=0 and u=1 at x=1.
 %s
 %s

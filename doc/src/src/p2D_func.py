@@ -23,7 +23,7 @@ def solver(f, u0, Nx, Ny, degree=1):
     # Define variational problem
     u = TrialFunction(V)
     v = TestFunction(V)
-    a = inner(nabla_grad(u), nabla_grad(v))*dx
+    a = dot(grad(u), grad(v))*dx
     L = f*v*dx
 
     # Compute solution

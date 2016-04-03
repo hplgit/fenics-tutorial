@@ -5,7 +5,7 @@ in x-direction and homogeneous Neumann (symmetry) conditions
 in all other directions. The domain is the unit hypercube in
 of a given dimension.
 
--div(q(u)*nabla_grad(u)) = 0,
+-div(q(u)*grad(u)) = 0,
 u = 0 at x=0, u=1 at x=1, du/dn=0 at all other boundaries.
 q(u) = (1+u)^m
 
@@ -54,23 +54,23 @@ def solver(
     if TrialFunction_object == 'u':
         v  = TestFunction(V)
         u  = TrialFunction(V)
-        F  = inner(q(u)*nabla_grad(u), nabla_grad(v))*dx
+        F  = dot(q(u)*grad(u), grad(v))*dx
         u_ = Function(V)  # most recently computed solution
         F  = action(F, u_)
         # J must be a Jacobian (Gateaux deriv. in direction of du)
         if J_comp == 'manual':
-            J = inner(q(u_)*nabla_grad(u), nabla_grad(v))*dx + \
-                inner(Dq(u_)*u*nabla_grad(u_), nabla_grad(v))*dx
+            J = dot(q(u_)*grad(u), grad(v))*dx + \
+                dot(Dq(u_)*u*grad(u_), grad(v))*dx
         else:
             J = derivative(F, u_, u)
     elif TrialFunction_object == 'du':
         v  = TestFunction(V)
         du = TrialFunction(V)
         u_ = Function(V)  # most recently computed solution
-        F  = inner(q(u_)*nabla_grad(u_), nabla_grad(v))*dx
+        F  = dot(q(u_)*grad(u_), grad(v))*dx
         if J_comp == 'm':
-            J = inner(q(u_)*nabla_grad(du), nabla_grad(v))*dx + \
-                inner(Dq(u_)*du*nabla_grad(u_), nabla_grad(v))*dx
+            J = dot(q(u_)*grad(du), grad(v))*dx + \
+                dot(Dq(u_)*du*grad(u_), grad(v))*dx
         else:
             J = derivative(F, u_, du)
 

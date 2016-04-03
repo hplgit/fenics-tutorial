@@ -75,7 +75,7 @@ u = TrialFunction(V)
 v = TestFunction(V)
 f = Constant(-6.0)
 ds = ds(0, subdomain_data=boundary_parts)
-a = inner(nabla_grad(u), nabla_grad(v))*dx \
+a = dot(grad(u), grad(v))*dx \
     + p*u*v*ds(0)
 L = f*v*dx - g*v*ds(1) \
     + p*q*v*ds(0)

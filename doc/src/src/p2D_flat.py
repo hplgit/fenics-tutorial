@@ -25,7 +25,7 @@ bc = DirichletBC(V, u0, u0_boundary)
 u = TrialFunction(V)
 v = TestFunction(V)
 f = Constant(-6.0)
-a = inner(nabla_grad(u), nabla_grad(v))*dx
+a = dot(grad(u), grad(v))*dx
 L = f*v*dx
 
 # Compute solution

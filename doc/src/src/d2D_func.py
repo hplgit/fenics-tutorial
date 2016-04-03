@@ -22,7 +22,7 @@ def solver(f, u0, I, dt, T, Nx, Ny, degree=1,
     # Define variational problem
     u = TrialFunction(V)
     v = TestFunction(V)
-    a = u*v*dx + dt*inner(nabla_grad(u), nabla_grad(v))*dx
+    a = u*v*dx + dt*dot(grad(u), grad(v))*dx
     L = (u_1 + dt*f)*v*dx
 
     A = assemble(a)   # assemble only once, before the time stepping
@@ -115,7 +115,7 @@ def solver_minimize_assembly(
     u = TrialFunction(V)
     v = TestFunction(V)
     a_M = u*v*dx
-    a_K = inner(nabla_grad(u), nabla_grad(v))*dx
+    a_K = dot(grad(u), grad(v))*dx
 
     M = assemble(a_M)
     K = assemble(a_K)
@@ -291,7 +291,7 @@ def solver_bc(
 
     # Define variational problem
     a_M = u*v*dx
-    a_K = p*inner(nabla_grad(u), nabla_grad(v))*dx + \
+    a_K = p*dot(grad(u), grad(v))*dx + \
           sum(Robin_a_integrals)
 
     M = assemble(a_M)

@@ -103,9 +103,9 @@ T = TrialFunction(V)
 v = TestFunction(V)
 f = Constant(0)
 a = rho*c*T*v*dx + theta*dt*kappa*\
-    inner(nabla_grad(v), nabla_grad(T))*dx
+    dot(grad(v), grad(T))*dx
 L = (rho*c*T_1*v + dt*f*v -
-     (1-theta)*dt*kappa*inner(nabla_grad(v), nabla_grad(T_1)))*dx
+     (1-theta)*dt*kappa*dot(grad(v), grad(T_1)))*dx
 # fenics test examples applies T (not T_1) in L
 
 A = assemble(a)
@@ -170,7 +170,7 @@ def T_exact(x):
     return T_R + T_A*exp(a*x)*numpy.sin(omega*t + a*x)
 
 n = FacetNormal(mesh)  # for flux computation at the top boundary
-flux = -kappa*dot(nabla_grad(T), n)*ds
+flux = -kappa*dot(grad(T), n)*ds
 
 t = dt
 counter = 0

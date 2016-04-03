@@ -34,8 +34,7 @@ dt = 0.3      # time step
 u = TrialFunction(V)
 v = TestFunction(V)
 f = Constant(beta - 2 - 2*alpha)
-F = u*v*dx + dt*inner(nabla_grad(u), nabla_grad(v))*dx - \
-    (u_1 + dt*f)*v*dx
+F = u*v*dx + dt*dot(grad(u), grad(v))*dx - (u_1 + dt*f)*v*dx
 a, L = lhs(F), rhs(F)
 
 # Compute solution

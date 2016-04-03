@@ -28,7 +28,7 @@ p = Expression(
 # Define variational problem
 w = TrialFunction(V)
 v = TestFunction(V)
-a = inner(nabla_grad(w), nabla_grad(v))*dx
+a = dot(grad(w), grad(v))*dx
 L = p*v*dx
 
 # Compute solution

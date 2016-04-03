@@ -23,7 +23,7 @@ class Solver(object):
         p = problem.p_coeff()
         self.p = p  # store for flux computations
         a_M = u*v*dx
-        a_K = inner(p*nabla_grad(u), nabla_grad(v))*dx
+        a_K = dot(p*grad(u), grad(v))*dx
         a_K += sum([r*u*v*ds_
                     for r, s, ds_ in problem.Robin_conditions()])
         self.M = assemble(a_M)

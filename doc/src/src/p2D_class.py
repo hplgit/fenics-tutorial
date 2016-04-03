@@ -38,7 +38,7 @@ class Solver(object):
         p = problem.p_coeff()
         self.p = p  # store for flux computations
         f = problem.f_rhs()
-        F = inner(p*nabla_grad(u), nabla_grad(v))*dx
+        F = dot(p*grad(u), grad(v))*dx
         F -= f*v*dx
         F -= sum([g*v*ds_
                   for g, ds_ in problem.Neumann_conditions()])

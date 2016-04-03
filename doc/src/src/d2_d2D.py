@@ -37,7 +37,7 @@ dt = 0.3      # time step
 # Laplace term
 u = TrialFunction(V)
 v = TestFunction(V)
-a_K = inner(nabla_grad(u), nabla_grad(v))*dx
+a_K = dot(grad(u), grad(v))*dx
 
 # "Mass matrix" term
 a_M = u*v*dx

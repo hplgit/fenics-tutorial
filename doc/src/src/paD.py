@@ -38,7 +38,7 @@ bcs = [bc0, bc1]
 u = TrialFunction(V)
 v = TestFunction(V)
 f = Constant(-2)
-a = inner(nabla_grad(u), nabla_grad(v))*dx
+a = dot(grad(u), grad(v))*dx
 L = f*v*dx
 
 # Compute solution

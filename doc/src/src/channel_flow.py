@@ -48,7 +48,7 @@ def compute_v(H, mu, p, degree=1):
 
     v = TrialFunction(V)
     v_test = TestFunction(V)
-    a = mu*inner(nabla_grad(v), nabla_grad(v_test))*dx
+    a = mu*dot(grad(v), grad(v_test))*dx
     L = -grad(p)*v_test*dx  # non-trivial, grad is _x for p
     v = Function(V)
     solve(a == L, v, bc)
@@ -73,7 +73,7 @@ def compute_p(L, p0, degree=1):
 
     p = TrialFunction(V)
     p_test = TestFunction(V)
-    a = inner(nabla_grad(p), nabla_grad(p_test))*dx
+    a = dot(grad(p), grad(p_test))*dx
     L = Constant(0)*p_test*dx
     p = Function(V)
     solve(a == L, p, bc)
