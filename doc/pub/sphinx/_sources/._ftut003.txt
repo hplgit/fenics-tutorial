@@ -1,5 +1,331 @@
 .. !split
 
+.. _ch:fundamentals:
+
+The fundamentals
+%%%%%%%%%%%%%%%%
+
+
+..
+
+    The goal of this chapter is to show how a range of important PDEs
+    from science and engineering can be quickly solved by a few lines
+    of FEniCS code. We introduce the most
+    fundamental FEniCS objects such as ``Mesh``, ``Function``,
+    ``FunctionSpace``, ``TrialFunction``,
+    and ``TestFunction``, and learn how to set up the variational formulation
+    of the PDE problem in a way that closely resembles the mathematics.
+    
+    The software is made as simple as possible, all linear systems are
+    solved by sparse Gaussian elimination, there is no problem-dependent
+    optimization of algorithms and code, and we only treat examples taking
+    place in homogeneous media. Subsequent chapters will extend the
+    examples here with more general, efficient, and sophisticated
+    implementations.
+
+
+
+The Laplace/Poisson equation
+============================
+
+Mathematical problem formulation
+--------------------------------
+
+[**AL 2**: I AM HERE]
+
+.. index:: Poisson's equation
+
+Let us start with a "Hello, World!" program in the world of PDEs - it
+must be a program that solves the Laplace or Poisson equation.
+Our first example regards the following Poisson problem,
+
+.. _Eq:tut:poisson1:
+
+.. math::
+
+    \tag{1}
+    - \nabla^2 u(\boldsymbol{x}) = f(\boldsymbol{x}),\quad \boldsymbol{x}\mbox{ in } \Omega,
+        
+        
+
+.. _Eq:tut:poisson1:bc:
+
+.. math::
+
+    \tag{2}
+    u(\boldsymbol{x}) = u_0(\boldsymbol{x}),\quad \boldsymbol{x}\mbox{ on } \partial \Omega{\thinspace .} 
+        
+
+Here, :math:`u(\boldsymbol{x})` is the unknown function, :math:`f(\boldsymbol{x})` is a
+prescribed function, :math:`\nabla^2` is the Laplace operator (also
+often written as :math:`\Delta`), :math:`\Omega` is the spatial domain, and
+:math:`\partial\Omega` is the boundary of :math:`\Omega`. A stationary PDE like
+this, together with a complete set of boundary conditions, constitute
+a *boundary-value problem*, which must be precisely stated before
+it makes sense to start solving it with FEniCS.
+
+In two space dimensions with coordinates :math:`x` and :math:`y`, we can write out
+the Poisson equation as
+
+.. _Eq:_auto1:
+
+.. math::
+
+    \tag{3}
+    - {\partial^2 u\over\partial x^2} -
+        {\partial^2 u\over\partial y^2} = f(x,y){\thinspace .}
+        
+        
+
+The unknown :math:`u` is now a function of two variables, :math:`u(x,y)`, defined
+over a two-dimensional domain :math:`\Omega`.
+
+The Poisson equation arises in numerous physical contexts, including
+heat conduction, electrostatics, diffusion of substances, twisting of
+elastic rods, inviscid fluid flow, and water waves. Moreover, the
+equation appears in numerical splitting strategies of more complicated
+systems of PDEs, in particular the Navier-Stokes equations.
+
+Solving a physical problem with FEniCS consists of the following steps:
+
+ 1. Identify the PDE and its boundary conditions.
+
+ 2. Reformulate the PDE problem as a variational problem.
+
+ 3. Make a Python program where the formulas in the variational
+    problem are coded, along with definitions of input data such as
+    :math:`f`, :math:`u_0`, and a mesh for the spatial domain :math:`\Omega`.
+
+ 4. Add statements in the program for solving the variational
+    problem, computing derived quantities such as :math:`\nabla u`, and
+    visualizing the results.
+
+We shall now go through steps 2-4 in detail.  The key feature of
+FEniCS is that steps 3 and 4 result in fairly short code, while most
+other software frameworks for PDEs require much more code and more
+technically difficult programming.
+
+.. _tut:poisson1:varform:
+
+Variational formulation          (1)
+------------------------------------
+
+.. index:: variational formulation
+
+FEniCS makes it easy to solve PDEs if finite elements are used for
+discretization in space and the problem is expressed as a *variational
+problem*. Readers who are not familiar with variational problems will
+get a brief introduction to the topic in this tutorial, but getting
+and reading a proper book on the finite element method in addition is
+encouraged.  The section :ref:`tut:fembooks` contains a list of some
+suitable books.
+
+.. index:: test function
+
+.. index:: trial function
+
+The core of the recipe for turning a PDE into a variational problem is
+to multiply the PDE by a function :math:`v`, integrate the resulting
+equation over :math:`\Omega`, and perform integration by parts of terms with
+second-order derivatives. The function :math:`v` which multiplies the PDE is
+in the mathematical finite element literature called a *test
+function*. The unknown function :math:`u` to be approximated is referred to
+as a *trial function*. The terms test and trial function are used in
+FEniCS programs too.  Suitable function spaces must be specified for
+the test and trial functions.  For standard PDEs arising in physics
+and mechanics such spaces are well known.
+
+In the present case, we first multiply the Poisson equation
+by the test function :math:`v` and integrate,
+
+.. _Eq:tut:poisson1:multbyv:
+
+.. math::
+
+    \tag{4}
+    -\int_\Omega (\nabla^2 u)v {\, \mathrm{d}x} = \int_\Omega fv {\, \mathrm{d}x}{\thinspace .} 
+
+Then we apply integration by parts to the integrand with
+second-order derivatives,
+
+.. _Eq:tut:poisson1:eqbyparts:
+
+.. math::
+
+    \tag{5}
+    -\int_\Omega (\nabla^2 u)v {\, \mathrm{d}x}
+        = \int_\Omega\nabla u\cdot\nabla v {\, \mathrm{d}x} - \int_{\partial\Omega}{\partial u\over
+        \partial n}v {\, \mathrm{d}s} ,
+        
+
+where :math:`\frac{\partial u}{\partial n}` is the derivative of :math:`u` in the
+outward normal direction at the boundary.  The test function :math:`v` is
+required to vanish on the parts of the boundary where :math:`u` is known,
+which in the present problem implies that :math:`v=0` on the whole boundary
+:math:`\partial\Omega`.  The second term on the right-hand side of
+:ref:`(5) <Eq:tut:poisson1:eqbyparts>` therefore vanishes.  From
+:ref:`(4) <Eq:tut:poisson1:multbyv>` and :ref:`(5) <Eq:tut:poisson1:eqbyparts>` it
+follows that
+
+.. _Eq:tut:poisson1:weak1:
+
+.. math::
+
+    \tag{6}
+    \int_\Omega\nabla u\cdot\nabla v {\, \mathrm{d}x} = \int_\Omega fv {\, \mathrm{d}x}{\thinspace .}
+        
+        
+
+This equation is supposed to hold for all :math:`v` in some function space
+:math:`\hat V`. The trial function :math:`u` lies in some (possibly different)
+function space :math:`V`.  We refer to :ref:`(6) <Eq:tut:poisson1:weak1>` as the
+*weak form* or *variational form* of the original boundary-value
+problem :ref:`(1) <Eq:tut:poisson1>`-:ref:`(2) <Eq:tut:poisson1:bc>`.
+
+The proper statement of
+our variational problem now goes as follows:
+Find :math:`u \in V` such that
+
+.. _Eq:tut:poisson1:var:
+
+.. math::
+
+    \tag{7}
+    \int_{\Omega} \nabla u \cdot \nabla v {\, \mathrm{d}x} =
+          \int_{\Omega} fv {\, \mathrm{d}x}
+          \quad \forall v \in \hat{V}.
+        
+
+The test and trial spaces :math:`\hat{V}` and :math:`V` are in the present
+problem defined as
+
+.. math::
+        
+            \hat{V} &= \{v \in H^1(\Omega) : v = 0 \mbox{ on } \partial\Omega\}, \\ 
+             V      &= \{v \in H^1(\Omega) : v = u_0 \mbox{ on } \partial\Omega\}{\thinspace .}
+        
+
+In short, :math:`H^1(\Omega)` is the mathematically well-known Sobolev space
+containing functions :math:`v` such that :math:`v^2` and :math:`||\nabla v||^2` have
+finite integrals over :math:`\Omega`. The solution of the underlying PDE
+must lie in a function space where also the derivatives are
+continuous, but the Sobolev space :math:`H^1(\Omega)` allows functions with
+discontinuous derivatives.  This weaker continuity requirement of :math:`u`
+in the variational statement :ref:`(7) <Eq:tut:poisson1:var>`, caused by the
+integration by parts, has great practical consequences when it comes
+to constructing finite elements.
+
+To solve the Poisson equation numerically, we need to transform the
+continuous variational problem :ref:`(7) <Eq:tut:poisson1:var>` to a discrete
+variational problem. This is done by introducing *finite-dimensional*
+test and trial spaces, often denoted as :math:`\hat{V}_h\subset\hat{V}` and
+:math:`V_h\subset{V}`. The discrete variational problem reads: Find :math:`u_h \in
+V_h \subset V` such that
+
+.. _Eq:tut:poisson1:vard:
+
+.. math::
+
+    \tag{8}
+    \int_{\Omega} \nabla u_h \cdot \nabla v {\, \mathrm{d}x} =
+          \int_{\Omega} fv {\, \mathrm{d}x}
+          \quad \forall v \in \hat{V}_h \subset \hat{V}{\thinspace .}
+        
+
+The choice of :math:`\hat{V}_h` and :math:`V_h` follows directly from the kind of
+finite elements we want to apply in our problem. For example, choosing
+the well-known linear triangular element with three nodes implies that
+:math:`\hat V_h` and :math:`V_h` are the spaces of all piecewise linear functions
+over a mesh of triangles, where the functions in :math:`\hat V_h` are zero
+on the boundary and those in :math:`V_h` equal :math:`u_0` on the boundary.
+
+
+.. admonition:: What we mean by the notation :math:`u` and :math:`V`
+
+   The mathematics literature on variational problems writes :math:`u_h` for
+   the solution of the discrete problem and :math:`u` for the solution of the
+   continuous problem. To obtain (almost) a one-to-one relationship
+   between the mathematical formulation of a problem and the
+   corresponding FEniCS program, we shall use :math:`u` for the solution of
+   the discrete problem and :math:`{u_{\small\mbox{e}}}` for the exact solution of the
+   continuous problem, *if* we need to explicitly distinguish
+   between the two.
+   
+   In most cases, we will introduce the PDE problem with
+   :math:`u` as unknown, derive a variational equation :math:`a(u,v)=L(v)` with :math:`u\in
+   V` and :math:`v\in \hat V`, and then simply discretize the problem by saying
+   that we choose finite-dimensional spaces for :math:`V` and :math:`\hat V`, without
+   adding any subscript to :math:`V` or :math:`\hat V`. This
+   restriction of :math:`V` simply implies that :math:`u` becomes a discrete finite element
+   function.  In practice, this means that we turn our PDE problem into a
+   continuous variational problem, create a mesh and specify an element
+   type, and then let :math:`V` correspond to this mesh and element choice.
+   Depending upon whether :math:`V` is infinite- or finite-dimensional, :math:`u`
+   will be the exact or approximate solution.
+
+
+
+
+It turns out to be convenient to introduce the following unified
+notation for linear weak forms:
+
+.. _Eq:_auto2:
+
+.. math::
+
+    \tag{9}
+    a(u, v) = L(v){\thinspace .}
+        
+        
+
+In the present problem we have that
+
+.. _Eq:tut:poisson1:vard:a:
+
+.. math::
+
+    \tag{10}
+    a(u, v) = \int_{\Omega} \nabla u \cdot \nabla v {\, \mathrm{d}x},
+        
+        
+
+.. _Eq:tut:poisson1:vard:L:
+
+.. math::
+
+    \tag{11}
+    L(v) = \int_{\Omega} fv {\, \mathrm{d}x}{\thinspace .}  
+        
+
+From the mathematics literature, :math:`a(u,v)` is known as a *bilinear
+form* and :math:`L(v)` as a *linear form*.  We shall in every linear problem
+we solve identify the terms with the unknown :math:`u` and collect them in
+:math:`a(u,v)`, and similarly collect all terms with only known functions in
+:math:`L(v)`. The formulas for :math:`a` and :math:`L` are then coded directly in the
+program.
+
+To summarize, before making a FEniCS program for solving a PDE,
+we must first perform two steps:
+
+  * Turn the PDE problem into a discrete
+    variational problem: find :math:`u\in V`
+    such that :math:`a(u,v) = L(v)\quad\forall v\in \hat{V}`.
+
+  * Specify the choice of spaces (:math:`V` and :math:`\hat V`), which means
+    specifying the mesh and type of finite elements.
+
+.. Suggested: var coeff as early as possible!
+
+.. A basic Poisson solver
+
+.. Useful extensions/Useful stuff/: var coeff here
+
+.. Visualization: membrane, vtk, paraview, structured mesh
+
+.. Postprocessing computations: var coeff, functionals, conv rates
+
+.. Multiple domains and boundaries
+
 .. _tut:poisson1:impl:
 
 A simple implementation          (1)
@@ -1548,6 +1874,156 @@ a cantilever beam (could be lego box for the fun of it :-)
 Then :math:`x=0` end is clamped with :math:`u=0` and the rest of the boundary can
 be traction free (homogeneous Neumann condition).
 Let gravity deform the shape.
+
+The equations governing small elastic deformations of a body :math:`\Omega`
+are
+
+.. _Eq:tut:elast:varform:equilibrium:
+
+.. math::
+
+    \tag{33}
+    \nabla\cdot\sigma = \varrho f\hbox{ in }\Omega,
+        
+        
+
+.. _Eq:tut:elast:varform:stresstrain:
+
+.. math::
+
+    \tag{34}
+    \sigma = \lambda\,\hbox{tr}\,\varepsilon I + 2\mu\varepsilon,
+        
+        
+
+.. _Eq:tut:elast:varform:strainu:
+
+.. math::
+
+    \tag{35}
+    \varepsilon = \frac{1}{2}\left(\nabla u + (nabla u)^T\right),
+        
+        
+
+where :math:`u` is the displacement vector field, :math:`\sigma` is the stress
+tensor, :math:`I` is the identity tensor, :math:`\varepsilon` is the strain tensor,
+and :math:`\lambda` and :math:`\mu` are Lame's elasticity coefficients for the material
+in :math:`\Omega`.
+We shall combine :ref:`(34) <Eq:tut:elast:varform:stresstrain>` and
+:ref:`(35) <Eq:tut:elast:varform:strainu>` to
+
+.. _Eq:tut:elast:varform:stressu:
+
+.. math::
+
+    \tag{36}
+    \sigma = \lambda\nabla\cdot u I + \mu(\nabla u + (\nabla u)^T){\thinspace .}
+        
+        
+
+Note that :ref:`(33) <Eq:tut:elast:varform:equilibrium>`-:ref:`(35) <Eq:tut:elast:varform:strainu>`
+can easily be transformed to a vector PDE for :math:`u`, which is the governing
+PDE for the unknown :math:`u`. In the derivation of the variational formulation,
+however, the splitting of the equations as done above is convenient.
+
+The variational formulation of
+:ref:`(33) <Eq:tut:elast:varform:equilibrium>`-:ref:`(35) <Eq:tut:elast:varform:strainu>`
+consists of forming the inner product of :ref:`(33) <Eq:tut:elast:varform:equilibrium>`
+and a *vector* test function :math:`v\in \hat{V}`, where :math:`\hat{V}`
+is a test vector function space,
+and integrating over the domain :math:`\Omega`:
+
+.. math::
+         \int_\Omega (\nabla\cdot\sigma) \cdot v {\, \mathrm{d}x} =
+        \int_\Omega \varrho f\cdot v{\, \mathrm{d}x}{\thinspace .}
+
+Since :math:`\nabla\cdot\sigma` contains second-order derivatives of the primary
+unknown :math:`u`, we integrate this term by parts:
+
+.. math::
+         \int_\Omega (\nabla\cdot\sigma) \cdot \nabla v {\, \mathrm{d}x}
+        -\int_\Omega \sigma : \nabla v{\, \mathrm{d}x} + \int_{\partial\Omega} v\cdot sigma\cdot n {\, \mathrm{d}s},
+
+where the colon operator is the inner product between tensors, and :math:`n`
+is the outward unit normal at the boundary. The quantity :math:`\sigma\cdot n`
+is known as the *traction* or stress vector at the boundary, and is often
+prescribed as a boundary condition. We assume that it is prescribed
+at a part :math:`\partial\Omega_T` of the boundary and set :math:`T = \sigma\cdot n`.
+We then have
+
+.. math::
+        
+        \int_\Omega (\sigma : \nabla v + \varrho f\cdot v) = \int_{\partial\Omega_T}
+        v\cdot T{\, \mathrm{d}s}{\thinspace .}
+
+Inserting :ref:`(36) <Eq:tut:elast:varform:stressu>` for :math:`\sigma` gives the
+variational form with :math:`u` as unknown.
+
+We can then summarize the variational formulation as find :math:`u\in V` such that
+
+.. _Eq:_auto4:
+
+.. math::
+
+    \tag{37}
+    a(u,v) = L(v)\quad\forall v\in\hat{V},
+        
+        
+
+where
+
+.. _Eq:_auto5:
+
+.. math::
+
+    \tag{38}
+    a(u,v) = \int_\Omega\sigma :\nabla v {\, \mathrm{d}x},
+        
+        
+
+.. _Eq:_auto6:
+
+.. math::
+
+    \tag{39}
+    \sigma = \lambda\nabla\cdot u I + \mu(\nabla u + (\nabla u)^T),
+        
+        
+
+.. _Eq:_auto7:
+
+.. math::
+
+    \tag{40}
+    L(v) = -\int_\Omega \varrho f\cdot v{\, \mathrm{d}x} + \int_{\partial\Omega_T}
+        v\cdot T{\, \mathrm{d}s}{\thinspace .}
+        
+        
+
+.. _Eq:_auto8:
+
+.. math::
+
+    \tag{41}
+    One can show that the inner product of a symmetric tensor :math:`A` and a non-symmetric
+tensor :math:`B` vanishes. If we express :math:`\nabla v` as a sum of its symmetric
+and non-symmetric parts, only the symmetric part will survive in
+the product :math:`\sigma :\nabla v` since :math:`\sigma` is a symmetric tensor. This
+gives rise to the slightly different variational form
+
+.. _Eq:_auto9:
+
+.. math::
+
+    \tag{42}
+    a(u,v) = \int_\Omega\sigma :\varepsilon(v) {\, \mathrm{d}x},
+        
+        
+
+and :math:`\varepsilon(v)` is the symmetric part of :math:`v`:
+
+.. math::
+         \varepsilon(v) = \frac{1}{2}(\nabla v + (\nabla v)^T){\thinspace .}
 
 A simple implementation          (4)
 ------------------------------------

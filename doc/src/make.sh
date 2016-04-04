@@ -60,8 +60,8 @@ cp $name.pdf fenics-tutorial-4screen.pdf
 # Make sphinx
 preprocess -DFORMAT=html newcommands.p.tex > newcommands.tex
 dir=sphinx-rootdir
-system doconce format sphinx $name --encoding=utf-8 EXV=$EXV --sphinx_keep_splits
-system doconce split_rst $name.rst  --no_abort
+system doconce format sphinx $name --encoding=utf-8 EXV=$EXV
+system doconce split_rst $name.rst
 system doconce sphinx_dir dirname=$dir version=$version theme=fenics $name
 system python automake_sphinx.py
 
