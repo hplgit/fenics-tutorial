@@ -266,7 +266,7 @@ perform only two steps:
   * Express the PDE as a (discrete) variational problem: find $u\in V$
     such that $a(u,v) = L(v)$ for all $v\in \hat{V}$.
   * Choose the finite element spaces $V$ and $\hat V$ by specifying
-    the domain (as a mesh) and the type of function space (polynomial
+    the domain (the mesh) and the type of function space (polynomial
     degree and type).
 
 # Suggested: var coeff as early as possible!
@@ -279,22 +279,21 @@ perform only two steps:
 [AL: I AM HERE]
 
 !split
-===== A simple implementation =====
-label{tut:poisson1:impl}
+===== Choosing a test problem =====
+label{tut:poisson1:testproblem}
 
-=== Test problem ===
-
-The PDE problem has so far featured a general domain $\Omega$ and
-general functions $u_0$ and $f$. For our first implementation we must
-decide on specific choices of $\Omega$, $u_0$, and $f$.  It will be
-wise to construct a specific problem where we can easily check that
-the computed solution is correct. Solutions that are lower-order polynomials
-are primary candidates. Lagrange elements of degree $d$ will exactly
-reproduce polynomials of degree $d$. And even P1 elements are able to
-exactly reproduce a quadratic polynomial on a uniformly partitioned mesh.
-This
-important result can be used to very our implementation. We just
-manufacture some quadratic function in 2D as the exact solution, say
+The Poisson equation (ref{tut:poisson1}) has so far featured a general
+domain $\Omega$ and general functions $u_0$ and $f$. For our first
+implementation, we must decide on specific choices of $\Omega$, $u_0$,
+and $f$.  It will be wise to construct a specific problem where we can
+easily check that the computed solution is correct. Solutions that are
+lower-order polynomials are primary candidates. Standard finite
+element function spaces of degree $r$ will exactly reproduce
+polynomials of degree $r$. And piecewise linear elements ($r=1$) are
+able to exactly reproduce a quadratic polynomial on a uniformly
+partitioned mesh. This important result can be used to verify our
+implementation. We just manufacture some quadratic function in 2D as
+the exact solution, say
 
 !bt
 \begin{equation}
@@ -302,8 +301,8 @@ manufacture some quadratic function in 2D as the exact solution, say
 \uex(x,y) = 1 +x^2 + 2y^2\tp
 \end{equation}
 !et
-By inserting (ref{tut:poisson1:impl:uex}) in
-our Poisson problem, we find that $\uex(x,y)$ is a solution if
+By inserting (ref{tut:poisson1:impl:uex}) into the Poisson equation
+(ref{tut:poisson1}), we find that $\uex(x,y)$ is a solution if
 
 !bt
 \[ f(x,y) = -6,\quad u_0(x,y)=\uex(x,y)=1 + x^2 + 2y^2,\]
@@ -315,68 +314,91 @@ the domain to be the unit square,
 !bt
 \[ \Omega = [0,1]\times [0,1] \tp\]
 !et
+This simple but very powerful method for constructing test problems
+is called the *method of manufactured solutions*: pick a simple
+expression for the exact solution, plug it into the equation to obtain
+the right-hand side (source term $f$), then solve the equation with
+this right-hand side and try to reproduce the exact solution.
 
 !bnotice Tip: Try to verify your code with exact numerical solutions!
-The classical way of testing a program is to compare the numerical
-solution with an exact analytical solution of the test problem
-and conclude that the program works if the error is ``small enough''.
-Unfortunately, it is impossible to tell if an error $10^{-5}$ on
-a $20\times 20$ mesh of P1 elements is just all the numerical
-approximation errors in the method or if this error also contains
-the effect of a bug in the code. All we usually know about the
-numerical error is its *asymptotic properties*, for instance that
-it goes like $h^2$ if $h$ is the size of a cell in the mesh. Then we
-can compare the error on meshes with different $h$ values to see if
-the asymptotic behavior is correct. This is a very powerful
-verification technique and is explained in detail in Section
-ref{tut:poisson1:convrates}. However, if we have a test problem where
-we know that there are no numerical approximation errors, we know that
+A common approach to testing the implementation of a numerical method
+is to compare the numerical
+solution with an exact analytical solution of the test problem and
+conclude that the program works if the error is ``small enough''.
+Unfortunately, it is impossible to tell if an error of size $10^{-5}$ on a
+$20\times 20$ mesh of linear elements is the expected (in)accuracy of the
+numerical approximation or if the error also contains the effect of a
+bug in the code. All we usually know about the numerical error is its
+*asymptotic properties*, for instance that it is proportional to $h^2$
+if $h$ is the size of a cell in the mesh. Then we can compare the
+error on meshes with different $h$ values to see if the asymptotic
+behavior is correct. This is a very powerful verification technique
+and is explained in detail in Section
+ref{tut:poisson1:convrates}. However, if we have a test problem for which
+we know that there should be no approximation errors, we know that
 the analytical solution of the PDE problem should be reproduced to
 machine precision by the program. That is why we emphasize this kind
-of test problems throughout this tutorial.
-Typically, elements of degree $d$ can reproduce polynomials of
-degree $d+1$ exactly, so this is the starting point for constructing
-a solution without numerical approximation errors. Then we fit the
-data in the problem (like $u_0$ and $f$) to this solution.
+of test problems throughout this tutorial. Typically, elements of
+degree $r$ can reproduce polynomials of degree $r+1$ exactly, so this
+is the starting point for constructing a solution without numerical
+approximation errors.
 !enotice
 
-=== The program ===
+[AL: Unsure of this $r + 1$ property.]
+
+!split
+===== FEniCS implementation =====
+label{tut:poisson1:impl}
 label{tut:poisson1:impl:code}
 
-A FEniCS program for solving the Poisson equation in 2D with the given
-choices of $u_0$, $f$, and $\Omega$ may look as follows:
+A FEniCS program for solving our test problem for the Poisson equation
+in 2D with the given choices of $u_0$, $f$, and $\Omega$ may look as
+follows:
 
-@@@CODE src/p2D_flat.py fromto: from fenics import@
+@@@CODE src/poisson_2d_flat.py fromto: from fenics import@
 
-The complete code can be found in the file "`${prog['p2D_flat']}.py`":
-"${src_url}/${prog['p2D_flat']}.py".
+The complete code can be found in the file "`${prog['poisson_2d_flat']}.py`":
+"${src_url}/${prog['poisson_2d_flat']}.py".
 
 ===== Running the program =====
 label{tut:poisson1:impl:run}
 
 The Python program must be available in a plain text file, written with a
-plain text editor such as Atom, Sublime Text, Emacs, Vim, or similar.
+text editor such as Atom, Sublime Text, Emacs, Vim, or similar.
 
-To run the program `${prog["p2D_flat"]}.py`, open a terminal window, move to
-the directory containing the program and write
+To run the program `${prog["poisson_2d_flat"]}.py`, open a terminal
+window, move to the directory containing the program and type the
+following command:
 
 !bc sys
-Terminal> python ${prog['p2D_flat']}.py
+Terminal> python ${prog['poisson_2d_flat']}.py
 !ec
-[hpl: Say something about this not working in Docker? Many will have Docker,
-and this is the first example...]
-A plot window pops up showing how the solution $u$ looks like as a
-surface.  With the left mouse button you can tilt the figure. Click
-`m` to bring up the underlying mesh. Click `p` to save to a PNG file
-`dolfin_plot_0.png` and `P` to save to a PDF file
-`dolfin_plot_1.pdf`. To kill the plot window and terminate the
-application, click `Ctrl+q` (hold down the `Ctrl` key and press `q`).
-Figure ref{tut:poisson:2D:fig:ex1:u} displays the surface and the mesh
-below.  Since $u$ is a simple quadratic function, constructed for
-testing our solver, the surface looks quite boring.
+Note that this command must be run in a FEniCS-enabled terminal. For
+users of the FEniCS Docker containers, this means that you must type
+this command after you have started a FEniCS session using
+`fenicsproject run`.
+
+When running the above command, FEniCS will run the program to compute
+the approximate solution $u$. The approximate solution $u$ will be
+compared to the exact solution $\uex$ and the error in the maximum
+norm will be printed. Since we know that our approximate solution
+should reproduce the exact solution to within machine precision, this
+error should be small, something on the order of $10^{-15}$.
+
+[AL: Add text here discussing what to expect in terms of plotting.
+ Perhaps we have seamless notebook plotting working soon...]
+
+#A plot window pops up showing how the solution $u$ looks like as a
+#surface.  With the left mouse button you can tilt the figure. Click
+#`m` to bring up the underlying mesh. Click `p` to save to a PNG file
+#`dolfin_plot_0.png` and `P` to save to a PDF file
+#`dolfin_plot_1.pdf`. To kill the plot window and terminate the
+#application, click `Ctrl+q` (hold down the `Ctrl` key and press `q`).
+#Figure ref{tut:poisson:2D:fig:ex1:u} displays the surface and the mesh
+#below.  Since $u$ is a simple quadratic function, constructed for
+#testing our solver, the surface looks quite boring.
 
 FIGURE:[fig/ex1_u, width=600 frac=0.8] Plot of the solution in the first FEniCS example. label{tut:poisson:2D:fig:ex1:u}
-
 
 ===== Dissection of the program =====
 label{tut:poisson1:impl:dissect}
