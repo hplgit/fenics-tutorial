@@ -38,6 +38,7 @@ system doconce format pdflatex $name --exercise_numbering=chapter --latex_style=
 
 # Fix layout for admons: gray box, light gray background for title
 doconce replace 'linecolor=black,' 'linecolor=gray,' $name.tex
+doconce replace 'Released under CC Attr' '\\ Released under CC Attr' $name.tex
 doconce subst 'frametitlebackgroundcolor=.*?,' 'frametitlebackgroundcolor=gray!5,' $name.tex
 
 # Compile latex
