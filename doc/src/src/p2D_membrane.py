@@ -79,9 +79,10 @@ def application(beta, R0, num_elements_radial_dir):
     plot(p, title='Scaled ' + p.label())
 
     # Dump p and w to file in VTK format
-    vtkfile = File('membrane.pvd')
-    vtkfile << w
-    vtkfile << p
+    vtkfile1 = File('membrane_displacement.pvd')
+    vtkfile1 << w
+    vtkfile2 = File('membrane_load.pvd')
+    vtkfile2 << p
 
 def test_membrane():
     """Verification for constant pressure."""
@@ -143,9 +144,10 @@ def application2(
     viz_p.write_pdf('pressure')
 
     # Dump w and p to file in VTK format
-    vtkfile = File('membrane.pvd')
-    vtkfile << w
-    vtkfile << p
+    vtkfile1 = File('membrane_displacement.pvd')
+    vtkfile1 << w
+    vtkfile2 = File('membrane_load.pvd')
+    vtkfile2 << p
 
 if __name__ == '__main__':
     application2(8, 0.6, 20)

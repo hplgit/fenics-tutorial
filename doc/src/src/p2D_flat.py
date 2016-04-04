@@ -32,12 +32,13 @@ L = f*v*dx
 u = Function(V)
 solve(a == L, u, bc)
 
-# Plot solution and mesh
+# Plot solution on the screen
+u.rename('u', 'solution')
 plot(u)
 
 # Dump solution to file in VTK format
-file = File("poisson.pvd")
-file << u
+vtkfile = File("poisson.pvd")
+vtkfile << u
 
 # Find max error
 u0_Function = interpolate(u0, V)         # exact solution

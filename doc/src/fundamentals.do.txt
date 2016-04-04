@@ -824,8 +824,8 @@ It is also possible to dump the computed solution to file, e.g., in the
 VTK format:
 
 !bc pycod
-file = File('poisson.pvd')
-file << u
+vtkfile = File('poisson.pvd')
+vtkfile << u
 !ec
 The `poisson.pvd` file can now be loaded into any front-end to VTK,
 say ParaView or VisIt. The `plot` function is intended for quick
@@ -833,6 +833,14 @@ examination of the solution during program development.  More in-depth
 visual investigations of finite element solutions will normally
 benefit from using highly professional tools such as ParaView and
 VisIt.
+
+idx{`rename`}
+
+Prior to plotting and storing solutions to file it is wise to
+give `u` a proper name by `u.rename('u', 'solution')`. Then
+`u` will be used as name in plots (rather than the more cryptic
+default names like `f_7`).
+
 
 ===== Deflection of a membrane =====
 label{ftut:poisson:membrane}
@@ -1131,15 +1139,15 @@ solution of the continuous diffusion problem, we use $\uex$ for the
 latter.  By $u^{k-1}$ we mean the finite element approximation of the
 solution at time $t_{k-1}$.
 
-Instead of
-solving (ref{tut:diffusion:pde1:u0}) by a finite element method, i.e.,
-projecting $I$ onto $V$ via the problem $a_0(u,v)=L_0(v)$, we could
-simply interpolate $u^0$ from $I$. That is, if $u^0=\sum_{j=1}^N
-U^0_j\phi_j$, we simply set $U_j=I(x_j,y_j)$, where $(x_j,y_j)$ are
-the coordinates of node number $j$. We refer to these two strategies
-as computing the initial condition by either projecting $I$ or
-interpolating $I$.  Both operations are easy to compute through one
-statement, using either the `project` or `interpolate` function.
+Instead of solving (ref{tut:diffusion:pde1:u0}) by a finite element
+method, i.e., projecting $I$ onto $V$ via the problem
+$a_0(u,v)=L_0(v)$, we could simply interpolate $u^0$ from $I$. That
+is, if $u^0=\sum_{j=1}^N U^0_j\phi_j$, we simply set $U_j=I(x_j,y_j)$,
+where $(x_j,y_j)$ are the coordinates of node number $j$. We refer to
+these two strategies as computing the initial condition by either
+projecting $I$ or interpolating $I$.  Both operations are easy to
+compute through one statement, using either the `project` or
+`interpolate` function.
 
 ===== A simple implementation =====
 label{tut:timedep:diffusion1:impl}
@@ -1173,6 +1181,20 @@ idx{`${prog["d2D_flat1"]}.py`}
 
 === The code ===
 
+% if FORMAT == 'ipynb':
+We first create a mesh:
+
+!bc pycod
+from __future__ import print_function
+from fenics import *
+
+# Create mesh and define function space
+nx = ny = 4
+mesh = UnitSquareMesh(nx, ny)
+V = FunctionSpace(mesh, 'Lagrange', 1)
+!ec
+% endif
+
 A new programming issue is how to deal with functions that vary in
 space *and time*, such as the boundary condition $u_0$ given by
 (ref{tut:diffusion:pde1:u0test}).  A natural solution is to apply an
@@ -1181,6 +1203,9 @@ parameters $\alpha$ and $\beta$
 for `Expression` objects with parameters):
 
 !bc pycod
+% if FORMAT == 'ipynb':
+# Create mesh and define function space
+% endif
 alpha = 3; beta = 1.2
 u0 = Expression('1 + x[0]*x[0] + alpha*x[1]*x[1] + beta*t',
                 {'alpha': alpha, 'beta': beta})
@@ -1209,7 +1234,7 @@ projecting or interpolating $I$.  The $I(x,y)$ function is available
 in the program through `u0`, as long as `u0.t` is zero.  We can then
 do
 
-!bc pycod
+!bc pycod-t
 u_1 = interpolate(u0, V)
 # or
 u_1 = project(u0, V)
@@ -1217,6 +1242,10 @@ u_1 = project(u0, V)
 Note that we could, as an equivalent alternative to using `project`,
 define $a_0$ and $L_0$ as we did in Section ref{tut:poisson:gradu} and
 form the associated variational problem.
+
+!bc pyhid
+u_1 = interpolate(u0, V)
+!ec
 
 !bwarning Projecting versus interpolating the initial condition
 To actually recover the
@@ -1255,6 +1284,13 @@ while t <= T:
     u0.t = t
     solve(a == L, u, bc)
 
+% if FORMAT == 'ipynb':
+    # Verify
+    u_e = interpolate(u0, V)
+    max_error = np.abs(u_e.vector().array() -
+                       u.vector().array()).max()
+    print('max error, t=%.2f: %-10.3g' % (t, max_error))
+% endif
     t += dt
     u_1.assign(u)
 !ec
@@ -1267,6 +1303,7 @@ current time level. (The Dirichlet conditions look up the `u0` object
 for values.)
 !ewarning
 
+% if FORMAT != 'ipynb':
 The time loop above does not contain any comparison of the numerical
 and the exact solution, which we must include in order to verify the
 implementation.  As in many previous examples, we compute the
@@ -1286,6 +1323,7 @@ The complete program code for this time-dependent case goes as follows:
 @@@CODE src/d2D_flat1.py fromto: from fenics import@
 The code is available in the
 file "`${prog['d2D_flat1']}.py`": "${src_url}/d2D_flat1.py".
+% endif
 
 
 ===== Diffusion of a Gaussian function =====
@@ -1384,7 +1422,7 @@ bc = DirichletBC(V, u0, u0_boundary)
 # Define variational problem
 u = Function(V)
 v = TestFunction(V)
-f = Expression(f_code)
+f = Expression(...)
 F = dot(q(u)*grad(u), grad(v))*dx - f*v*dx
 
 # Compute solution
@@ -1409,8 +1447,7 @@ manufactured solutions. The forthcoming code with SymPy requires some
 basic familiarity with this package (here, defining symbols, `diff` for
 differentiation, `ccode` for C/C++ code generation).
 
-We try out a two-dimensional
-solution that is linear in the unknowns:
+We try out a two-dimensional solution that is linear in the unknowns:
 
 @@@CODE src/p2D_flat_nonlinear.py fromto: from fenics import *@u_code =
 
@@ -1452,7 +1489,7 @@ Similarly, we define the right-hand side function as
 f = Expression(f_code)
 !ec
 The complete code is found in the file
-`${prog["p2D_flat_nonlinear"]}.py`.
+"`${prog["p2D_flat_nonlinear"]}.py`": "${src_url}/${prog['p2D_flat_nonlinear']}.py".
 
 !bwarning Name clash between `fenics` and program variables
 In a program like the one above, strange errors may occur due to
@@ -1493,14 +1530,6 @@ label{tut:elast}
 ===== Variational formulation =====
 label{tut:elast:varform}
 
-Work with simple constant $\lambda$ and $\mu$ formulation, stationary,
-with homogeneous Dirichlet or Neumann conditions, but include body force.
-Case: Deflection of
-a cantilever beam (could be lego box for the fun of it :-)
-Then $x=0$ end is clamped with $u=0$ and the rest of the boundary can
-be traction free (homogeneous Neumann condition).
-Let gravity deform the shape.
-
 The equations governing small elastic deformations of a body $\Omega$
 are
 
@@ -1510,14 +1539,16 @@ are
 label{tut:elast:varform:equilibrium}\\
 \sigma &= \lambda\,\hbox{tr}\,\varepsilon I + 2\mu\varepsilon,
 label{tut:elast:varform:stresstrain}\\
-\varepsilon &= \frac{1}{2}\left(\nabla u + (nabla u)^T\right),
+\varepsilon &= \frac{1}{2}\left(\nabla u + (\nabla u)^T\right),
 label{tut:elast:varform:strainu}
 \end{align}
 !et
-where $u$ is the displacement vector field, $\sigma$ is the stress
-tensor, $I$ is the identity tensor, $\varepsilon$ is the strain tensor,
-and $\lambda$ and $\mu$ are Lame's elasticity coefficients for the material
-in $\Omega$.
+where $\sigma$ is the stress tensor, $\varrho$ is the density of the
+material, $f$ is the body force, $\lambda$ and $\mu$ are Lame's
+elasticity coefficients for the material in $\Omega$ $I$ is the
+identity tensor, tr is the trace operator on a tensor, $\varepsilon$
+is the strain tensor, and $u$ is the displacement vector field.
+
 We shall combine (ref{tut:elast:varform:stresstrain}) and
 (ref{tut:elast:varform:strainu}) to
 
@@ -1534,10 +1565,10 @@ however, the splitting of the equations as done above is convenient.
 
 The variational formulation of
 (ref{tut:elast:varform:equilibrium})-(ref{tut:elast:varform:strainu})
-consists of forming the inner product of (ref{tut:elast:varform:equilibrium})
-and a *vector* test function $v\in \hat{V}$, where $\hat{V}$
-is a test vector function space,
-and integrating over the domain $\Omega$:
+consists of forming the inner product of
+(ref{tut:elast:varform:equilibrium}) and a *vector* test function
+$v\in \hat{V}$, where $\hat{V}$ is a test vector function space, and
+integrating over the domain $\Omega$:
 
 !bt
 \[ \int_\Omega (\nabla\cdot\sigma) \cdot v \dx =
@@ -1548,7 +1579,8 @@ unknown $u$, we integrate this term by parts:
 
 !bt
 \[ \int_\Omega (\nabla\cdot\sigma) \cdot \nabla v \dx
--\int_\Omega \sigma : \nabla v\dx + \int_{\partial\Omega} v\cdot sigma\cdot n \ds,\]
+-\int_\Omega \sigma : \nabla v\dx + \int_{\partial\Omega}
+(\sigma\cdot n)\cdot v \ds,\]
 !et
 where the colon operator is the inner product between tensors, and $n$
 is the outward unit normal at the boundary. The quantity $\sigma\cdot n$
@@ -1560,12 +1592,12 @@ We then have
 !bt
 \[
 \int_\Omega (\sigma : \nabla v + \varrho f\cdot v) = \int_{\partial\Omega_T}
-v\cdot T\ds\tp\]
+T\cdot v\ds\tp\]
 !et
 Inserting (ref{tut:elast:varform:stressu}) for $\sigma$ gives the
 variational form with $u$ as unknown.
 
-We can then summarize the variational formulation as find $u\in V$ such that
+We can now summarize the variational formulation as find $u\in V$ such that
 
 !bt
 \begin{equation}
@@ -1576,25 +1608,26 @@ where
 
 !bt
 \begin{align}
-a(u,v) &= \int_\Omega\sigma :\nabla v \dx,\\
-\sigma &= \lambda\nabla\cdot u I + \mu(\nabla u + (\nabla u)^T),\\
+a(u,v) &= \int_\Omega\sigma(u) :\nabla v \dx,\\
+\sigma(u) &= \lambda\nabla\cdot u I + \mu(\nabla u + (\nabla u)^T),\\
 L(v) &= -\int_\Omega \varrho f\cdot v\dx + \int_{\partial\Omega_T}
-v\cdot T\ds\tp\\
+T\cdot v\ds\tp
 \end{align}
 !et
 
-One can show that the inner product of a symmetric tensor $A$ and a non-symmetric
-tensor $B$ vanishes. If we express $\nabla v$ as a sum of its symmetric
-and non-symmetric parts, only the symmetric part will survive in
-the product $\sigma :\nabla v$ since $\sigma$ is a symmetric tensor. This
-gives rise to the slightly different variational form
+One can show that the inner product of a symmetric tensor $A$ and a
+non-symmetric tensor $B$ vanishes. If we express $\nabla v$ as a sum
+of its symmetric and non-symmetric parts, only the symmetric part will
+survive in the product $\sigma :\nabla v$ since $\sigma$ is a
+symmetric tensor. This gives rise to the slightly different
+variational form
 
 !bt
 \begin{equation}
-a(u,v) = \int_\Omega\sigma :\varepsilon(v) \dx,
+a(u,v) = \int_\Omega\sigma(u) :\varepsilon(v) \dx,
 \end{equation}
 !et
-and $\varepsilon(v)$ is the symmetric part of $v$:
+where $\varepsilon(v)$ is the symmetric part of $v$:
 
 !bt
 \[ \varepsilon(v) = \frac{1}{2}(\nabla v + (\nabla v)^T)\tp\]
@@ -1603,18 +1636,61 @@ and $\varepsilon(v)$ is the symmetric part of $v$:
 
 ===== A simple implementation =====
 
-As test example, we may look at a cantilever beam deformed under its own weight.
-Then $f=(0,0,-g)$ is the body force with $g$ as the acceleration
-of gravity. If the beam is box-shaped, we set $u=(0,0,0)$ at the clamped end,
-$x=0$. The rest of the boundaries are traction free.
+=== Test problem ===
 
-======= The equations of hyperelasticity? =======
+As test example, we may look at a clamped beam deformed under its
+own weight.  Then $f=(0,0,-g)$ is the body force with $g$ as the
+acceleration of gravity. The beam is box-shaped with length $L$ and
+square cross section of width $W$. We set $u=(0,0,0)$ at the clamped
+end, $x=0$. The rest of the boundaries is traction free.
 
-===== Variational formulation =====
+Let us scale the problem. [hpl: This was meant to simplify the problem
+so we don't need values for $\lambda$, $\mu$, $\varrho$, etc for a
+specific material, but the scaling requires some care.]
+In the equation for $u$,
 
-===== A simple implementation =====
+!bt
+\[ \nabla\cdot(\lambda\nabla\cdot u) + \mu\nabla^2 u = \varrho f,\]
+!et
+we insert coordinates made dimensionless by $L$, and $\bar u=u/u_c$,
+which results in the dimensionless governing equation
+
+!bt
+\[
+\bar\nabla\cdot(\bar\nabla\cdot \bar u) + \beta\bar\nabla^2 \bar u =
+(0,0,\gamma),\]
+!et
+where $\beta = \mu/\lambda$ and
+
+!bt
+\[ \gamma = \frac{\varrho gL^2}{u_c\lambda}\tp\]
+!et
+Often, one will chose $u_c$ to make $\gamma$ unity, $u_c = \varrho
+gL^2/\lambda$. The aim is to give us a displacement of order unity and
+a geometry of order unity, but then plotting the deformed shape may
+look very strange.  We therefore want the characteristic displacement
+to be a small fraction of the characteristic length of the geometry.
+Moreover, for a clamped beam, one has a deflection formula which
+gives $u_c = \frac{3}{2}\varrho gL^2\delta^2/E$, where $\delta = L/W$
+and $E$ can be viewed to be of the order of $\lambda$. Thus, the
+dimensionless parameter $\delta$ is very important in the problem. The
+most appropriate choice is therefore to have $\gamma \sim
+\delta^{-2}$. Experiments point to $\gamma = 0.25\delta^{-2}$ as a
+choice.  In a solver with physical parameters $\lambda$, $\mu$,
+$\varrho$, $g$, $L$, and $W$, the scaled problem is obtained by
+setting $\lambda = \varrho = L = 1$, $W$ as $W/L$, $g=\gamma$, and
+$\mu=\beta$.
+
+=== Code ===
+
+@@@CODE src/e2D_flat.py fromto: from fenics import@# Dump solution
+
+FIGURE: [ref/beam1, width=800 frac=1] Deflection of a beam computed by 3D elasticity.
 
 ======= The Navier-Stokes equations =======
+
+Should we here also include coupling to a transport equation? It shows
+multi-physics capabilities.
 
 ===== Variational formulation =====
 

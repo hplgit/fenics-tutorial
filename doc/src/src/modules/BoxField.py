@@ -1030,7 +1030,8 @@ u2 = interpolate(u, V2)
 
 """ % (str(fenics_function.ufl_element()), fenics_function.ufl_element().degree()))
 
-    if fenics.__version__[:3] == "1.0":
+    import dolfin
+    if dolfin.__version__[:3] == "1.0":
         nodal_values = fenics_function.vector().array().copy()
     else:
         #map = fenics_function.function_space().dofmap().vertex_to_dof_map(fenics_mesh)

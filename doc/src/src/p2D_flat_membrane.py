@@ -36,6 +36,8 @@ w = Function(V)
 solve(a == L, w, bc)
 
 p = interpolate(p, V)
+w.rename('w', 'deflection')
+p.rename('p', 'load')
 plot(w, title='Deflection')
 plot(p, title='Load')
 

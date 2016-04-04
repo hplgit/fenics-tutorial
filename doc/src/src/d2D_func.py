@@ -17,6 +17,7 @@ def solver(f, u0, I, dt, T, Nx, Ny, degree=1,
 
     # Initial condition
     u_1 = project(I, V) if I_project else interpolate(I, V)
+    u_1.rename('u', 'initial condition')
     user_action(0, u_1, V)
 
     # Define variational problem
@@ -30,6 +31,7 @@ def solver(f, u0, I, dt, T, Nx, Ny, degree=1,
 
     # Compute solution
     u = Function(V)   # the unknown at a new time level
+    u.rename('u', 'solution')
     t = dt
     while t <= T:
         b = assemble(L, tensor=b)
@@ -81,6 +83,8 @@ def application_animate(model_problem):
         u0 = Constant(0)
         dt = 0.05; T = 2
 
+    vtkfile = File('diffusion.pvd')
+
     def animate(t, u, V):
         global p
         if t == 0:
@@ -88,6 +92,7 @@ def application_animate(model_problem):
         else:
             p.plot(u)
         time.sleep(0.1)
+        vtkfile << (u, float(t))  # store time-dep Function
 
     Nx = Ny = 20
     solver(f, u0, I, dt, T, Nx, Ny, degree=2,
@@ -389,6 +394,6 @@ def test_solver_vs_solver_minimize_assembly():
 
 if __name__ == '__main__':
     #application()
-    test_solvers()
-    #application_animate(2)
+    #test_solvers()
+    application_animate(2)
     interactive()

@@ -195,9 +195,12 @@ def demo():
     problem = Problem1(Nx=20, Ny=20)
     problem.solve(linear_solver='direct')
     u = problem.solution()
+    u.rename('u', 'potential')  # name 'u' is used in plot
     plot(u)
     flux_u = problem.solver.flux()
     plot(flux_u)
+    vtkfile = File('poisson.pvd')
+    vtkfile << u
     interactive()
 
 def test_Solver():

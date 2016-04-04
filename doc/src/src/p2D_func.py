@@ -58,8 +58,9 @@ def application_test():
     f = Constant(-6.0)
     u = solver(f, u0, 6, 4, 1)
     # Dump solution to file in VTK format
-    file = File("poisson.pvd")
-    file << u
+    u.rename('u', 'u')  # name 'u' is used in plot
+    vtkfile = File("poisson.pvd")
+    vtkfile << u
     # Plot solution and mesh
     plot(u)
 

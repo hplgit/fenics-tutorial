@@ -1,6 +1,7 @@
 from __future__ import print_function
 from fenics import *
 import numpy as np
+import matplotlib.pyplot as plt
 
 class Solver(object):
     def __init__(self, problem):
@@ -15,6 +16,7 @@ class Solver(object):
             I_project = False
         self.u_1 = project(problem.I(), V) if I_project \
                    else interpolate(problem.I(), V)
+        self.u_1.rename('u', 'initial condition')
         problem.user_action(0, self.u_1)
 
         # Define variational problem
@@ -40,6 +42,7 @@ class Solver(object):
         # does not change these a_* and L expressions.
         self.b_surface_int = assemble(L)
         self.u = Function(V)   # the unknown at a new time level
+        self.u.rename('u', 'solution')
         self.T = problem.end_time()
 
     def step(self, t, linear_solver='direct',
@@ -156,7 +159,9 @@ class Problem(object):
 
 
 class Problem1(Problem):
+    """Evolving boundary layer, I=0, but u=1 at x=0."""
     def __init__(self, Nx, Ny, p_values):
+        Problem.__init__(self)
         self.init_mesh(Nx, Ny, p_values)
         self.Dirichlet_bc = Expression('sin(t)', t=0)
         self.file = File('temp.pvd')
@@ -164,6 +169,7 @@ class Problem1(Problem):
     def init_mesh(self, Nx, Ny, p_values=[1, 0.1]):
         """Initialize mesh, boundary parts, and p."""
         self.mesh = UnitSquareMesh(Nx, Ny)
+        self.divisions = (Nx, Ny)
 
         tol = 1E-14
 
@@ -214,16 +220,35 @@ class Problem1(Problem):
         self.p.vector()[:] = np.choose(help, p_values)
 
     def time_step(self, t):
-        return 0.1
+        return 0.025
 
     def end_time(self):
-        return 1
+        return 0.25
 
     def user_action(self, t, u):
         """Post process solution u at time t."""
         print('user_action: t=%g, umax=%g' % (t, u.vector().array().max()))
         plot(u, interactive=True)
-        self.file << u
+        self.file << (u, float(t))
+
+        if not hasattr(self, 'solver'):
+            return
+        if not hasattr(self.solver, 'u'):
+            print('no u in self.solver', dir(self.solver))
+            return
+        u2 = self.solver.u if u.ufl_element().degree() == 1 else \
+             interpolate(self.u, FunctionSpace(mesh, 'Lagrange', 1))
+        import sys
+        sys.path.insert(0, 'modules')
+        from BoxField import fenics_function2BoxField
+        u_box = fenics_function2BoxField(
+            u2, u.function_space().mesh(), self.divisions)
+        u_ = u_box.values
+        X = 0; Y = 1
+        start = (0, 0.5)
+        x, u_val, y_fixed, snapped = u_box.gridline(start, direction=X)
+        plt.plot(x, u_val) #, 'r-')
+        plt.xlabel('x');  plt.ylabel('y')
 
     def mesh_degree(self):
         return self.mesh, 1
@@ -237,18 +262,33 @@ class Problem1(Problem):
     def Dirichlet_conditions(self):
         """Return list of (value,boundary) pairs."""
         # return [(DirichletBC, self.boundary_parts, 2),
-        return [(1.0, self.boundary_parts, 2),
-                (0.0, self.boundary_parts, 3)]
+        return [(1.0, self.boundary_parts, 0),
+                (0.0, self.boundary_parts, 1)]
 
-    def Neumann_conditions(self):
+    def Neumann_conditions(self, t):
         """Return list of g*ds(n) values."""
         return [(0, self.ds(0)), (0, self.ds(1))]
 
+class Problem2(Problem1):
+    """Oscillating surface temperature."""
+    def __init__(self, Nx, Ny, p_values):
+        Problem1.__init__(self, Nx, Ny, p_values)
+        self.surface_temp = lambda t: T_A*sin(w*t)
+
+    def Dirichlet_conditions(self):
+        """Return list of (value,boundary) pairs."""
+        # return [(DirichletBC, self.boundary_parts, 2),
+        # t: self.solver.t
+        return [(self.surface_temp(self.solver.t),
+                 self.boundary_parts, 0),
+                (0.0, self.boundary_parts, 1)]
+
 def demo():
-    problem = Problem1(Nx=20, Ny=5)
+    problem = Problem1(Nx=20, Ny=5, p_values=[1,1])
     problem.solve(linear_solver='direct')
     u = problem.solution()
-    interactive()
+    plt.savefig('tmp1.png')
+    plt.show()
 
 def test_Solver():
     class TestProblemExact(Problem):
@@ -298,3 +338,4 @@ def test_Solver():
 if __name__ == '__main__':
     demo()
     #test_Solver()
+    interactive()
