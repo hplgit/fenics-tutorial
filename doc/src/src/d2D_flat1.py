@@ -17,16 +17,14 @@ alpha = 3; beta = 1.2
 u0 = Expression('1 + x[0]*x[0] + alpha*x[1]*x[1] + beta*t',
                 alpha=alpha, beta=beta, t=0)
 
-class Boundary(SubDomain):  # define the Dirichlet boundary
-    def inside(self, x, on_boundary):
-        return on_boundary
+def boundary(x, on_boundary):
+    return on_boundary
 
-boundary = Boundary()
 bc = DirichletBC(V, u0, boundary)
 
 # Initial condition
 u_1 = interpolate(u0, V)
-#u_1 = project(u0, V)  # will not result in exact solution!
+#project(u0, V) will not result in exact solution at the nodes!
 
 dt = 0.3      # time step
 

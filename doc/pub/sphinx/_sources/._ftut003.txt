@@ -8,12 +8,17 @@ A simple implementation          (1)
 Test problem          (1)
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
-The PDE problem has so far featured a general domain :math:`\Omega` and general
-functions :math:`u_0` and :math:`f`. For our first implementation we must decide
-on specific choices of :math:`\Omega`, :math:`u_0`, and :math:`f`.  It will be wise to
-construct a specific problem where we can easily check that the
-computed solution is correct. Let us start with specifying an exact
-solution :math:`{u_{\small\mbox{e}}}(x,y)`:
+The PDE problem has so far featured a general domain :math:`\Omega` and
+general functions :math:`u_0` and :math:`f`. For our first implementation we must
+decide on specific choices of :math:`\Omega`, :math:`u_0`, and :math:`f`.  It will be
+wise to construct a specific problem where we can easily check that
+the computed solution is correct. Solutions that are lower-order polynomials
+are primary candidates. Lagrange elements of degree :math:`d` will exactly
+reproduce polynomials of degree :math:`d`. And even P1 elements are able to
+exactly reproduce a quadratic polynomial on a uniformly partitioned mesh.
+This
+important result can be used to very our implementation. We just
+manufacture some quadratic function in 2D as the exact solution, say
 
 .. _Eq:tut:poisson1:impl:uex:
 
@@ -21,29 +26,21 @@ solution :math:`{u_{\small\mbox{e}}}(x,y)`:
 
     \tag{12}
     \
-        {u_{\small\mbox{e}}}(x,y) = 1 +x^2 + 2y^2
+        {u_{\small\mbox{e}}}(x,y) = 1 +x^2 + 2y^2{\thinspace .}
         
 
-on some 2D domain.  By inserting :ref:`(12) <Eq:tut:poisson1:impl:uex>` in
+By inserting :ref:`(12) <Eq:tut:poisson1:impl:uex>` in
 our Poisson problem, we find that :math:`{u_{\small\mbox{e}}}(x,y)` is a solution if
 
 .. math::
          f(x,y) = -6,\quad u_0(x,y)={u_{\small\mbox{e}}}(x,y)=1 + x^2 + 2y^2,
 
-regardless of the shape of the domain. We choose here, for simplicity,
+regardless of the shape of the domain as long as :math:`{u_{\small\mbox{e}}}` is prescribed along
+the boundary. We choose here, for simplicity,
 the domain to be the unit square,
 
 .. math::
-         \Omega = [0,1]\times [0,1] .
-
-The reason for specifying the solution :ref:`(12) <Eq:tut:poisson1:impl:uex>` is
-that the finite element method, with a rectangular domain uniformly
-partitioned into linear triangular elements, will exactly reproduce a
-second-order polynomial at the vertices of the cells, regardless of
-the size of the elements. This property allows us to verify the
-implementation by comparing the computed solution (:math:`u`) with the exact
-solution (:math:`{u_{\small\mbox{e}}}`). These quantities should be equal to machine
-precision *at the nodes*.
+         \Omega = [0,1]\times [0,1] {\thinspace .}
 
 
 .. admonition:: Tip: Try to verify your code with exact numerical solutions
@@ -1251,16 +1248,14 @@ The complete program code for this time-dependent case goes as follows:
         u0 = Expression('1 + x[0]*x[0] + alpha*x[1]*x[1] + beta*t',
                         alpha=alpha, beta=beta, t=0)
         
-        class Boundary(SubDomain):  # define the Dirichlet boundary
-            def inside(self, x, on_boundary):
-                return on_boundary
+        def boundary(x, on_boundary):
+            return on_boundary
         
-        boundary = Boundary()
         bc = DirichletBC(V, u0, boundary)
         
         # Initial condition
         u_1 = interpolate(u0, V)
-        #u_1 = project(u0, V)  # will not result in exact solution!
+        #project(u0, V) will not result in exact solution at the nodes!
         
         dt = 0.3      # time step
         
@@ -1536,8 +1531,12 @@ parameters in the automated Newton method used above. You will then
 realize how easy it is to implement tailored solution strategies for
 nonlinear problems in FEniCS.
 
+.. _tut:elast:
+
 The equations of linear elasticity
 ==================================
+
+.. _tut:elast:varform:
 
 Variational formulation          (4)
 ------------------------------------
@@ -1552,6 +1551,11 @@ Let gravity deform the shape.
 
 A simple implementation          (4)
 ------------------------------------
+
+As test example, we may look at a cantilever beam deformed under its own weight.
+Then :math:`f=(0,0,-g)` is the body force with :math:`g` as the acceleration
+of gravity. If the beam is box-shaped, we set :math:`u=(0,0,0)` at the clamped end,
+:math:`x=0`. The rest of the boundaries are traction free.
 
 The equations of hyperelasticity?
 =================================
