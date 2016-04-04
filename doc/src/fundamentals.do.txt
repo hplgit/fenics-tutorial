@@ -1,37 +1,33 @@
 !split
-========= The fundamentals =========
+========= Fundamentals =========
 label{ch:fundamentals}
 
 !bquote
 The goal of this chapter is to show how a range of important PDEs
-from science and engineering can be quickly solved by a few lines
+from science and engineering can be quickly solved with a few lines
 of FEniCS code. We introduce the most
 fundamental FEniCS objects such as `Mesh`, `Function`,
 `FunctionSpace`, `TrialFunction`,
 and `TestFunction`, and learn how to set up the variational formulation
 of the PDE problem in a way that closely resembles the mathematics.
 
-The software is made as simple as possible, all linear systems are
-solved by sparse Gaussian elimination, there is no problem-dependent
-optimization of algorithms and code, and we only treat examples taking
+The code is made as simple as possible, we solve all linear systems
+by (sparse) Gaussian elimination, we don't use any problem-dependent
+optimizations of algorithms and code, and we only treat examples taking
 place in homogeneous media. Subsequent chapters will extend the
 examples here with more general, efficient, and sophisticated
 implementations.
 !equote
 
-
-======= The Laplace/Poisson equation =======
+======= The Poisson equation =======
 
 ===== Mathematical problem formulation =====
-
-[AL: I AM HERE]
 
 label{tut:poisson1:bvp}
 idx{Poisson's equation}
 
-Let us start with a ``Hello, World!'' program in the world of PDEs - it
-must be a program that solves the Laplace or Poisson equation.
-Our first example regards the following Poisson problem,
+Let us start by writing a ``Hello, World!'' program. In the world of
+PDEs, thus must be a program that solves the Poisson equation:
 
 !bt
 \begin{align}
@@ -40,7 +36,7 @@ label{tut:poisson1}\\
 u(\x) &= u_0(\x),\quad \x\mbox{ on } \partial \Omega\tp label{tut:poisson1:bc}
 \end{align}
 !et
-Here, $u(\x)$ is the unknown function, $f(\x)$ is a
+Here, $u = u(\x)$ is the unknown function, $f = f(\x)$ is a
 prescribed function, $\nabla^2$ is the Laplace operator (also
 often written as $\Delta$), $\Omega$ is the spatial domain, and
 $\partial\Omega$ is the boundary of $\Omega$. A stationary PDE like
@@ -57,70 +53,70 @@ the Poisson equation as
 {\partial^2 u\over\partial y^2} = f(x,y)\tp
 \end{equation}
 !et
-The unknown $u$ is now a function of two variables, $u(x,y)$, defined
+The unknown $u$ is now a function of two variables, $u = u(x,y)$, defined
 over a two-dimensional domain $\Omega$.
 
 The Poisson equation arises in numerous physical contexts, including
 heat conduction, electrostatics, diffusion of substances, twisting of
 elastic rods, inviscid fluid flow, and water waves. Moreover, the
 equation appears in numerical splitting strategies of more complicated
-systems of PDEs, in particular the Navier-Stokes equations.
+systems of PDEs, in particular the Navier--Stokes equations.
 
+Solving a PDE such as the Poisson equation in FEniCS consists of the
+following steps:
 
-Solving a physical problem with FEniCS consists of the following steps:
+  o Identify the computational domain ($\Omega$), the PDE, its
+    boundary conditions, and source terms ($f$).
+  o Reformulate the PDE as a finite element variational problem.
+  o Write a Python program which defines the computational domain,
+    the variational problem, the boundary conditions, and source
+    terms, using the corresponding FEniCS abstractions.
+  o Call FEniCS to solve the PDE and, optionally, extend the program
+    to compute derived quantities such as fluxes and averages, and
+    visualize the results.
 
-  o Identify the PDE and its boundary conditions.
-  o Reformulate the PDE problem as a variational problem.
-  o Make a Python program where the formulas in the variational
-    problem are coded, along with definitions of input data such as
-    $f$, $u_0$, and a mesh for the spatial domain $\Omega$.
-  o Add statements in the program for solving the variational
-    problem, computing derived quantities such as $\nabla u$, and
-    visualizing the results.
-
-We shall now go through steps 2-4 in detail.  The key feature of
+We shall now go through steps 2--4 in detail.  The key feature of
 FEniCS is that steps 3 and 4 result in fairly short code, while most
 other software frameworks for PDEs require much more code and more
 technically difficult programming.
 
-
-===== Variational formulation =====
+===== Finite element variational formulation =====
 label{tut:poisson1:varform}
 idx{variational formulation}
 
-FEniCS makes it easy to solve PDEs if finite elements are used for
-discretization in space and the problem is expressed as a *variational
-problem*. Readers who are not familiar with variational problems will
-get a brief introduction to the topic in this tutorial, but getting
-and reading a proper book on the finite element method in addition is
-encouraged.  Section ref{tut:fembooks} contains a list of some
-suitable books.
-
+FEniCS is based on the finite element method, which is a general and
+efficient mathematical machinery for numerical solution of PDEs. The
+starting point for the finite element methods is a PDE expressed in
+*variational form*. Readers who are not familiar with variational
+problems will get a brief introduction to the topic in this tutorial,
+but getting and reading a proper book on the finite element method in
+addition is encouraged. Section ref{tut:fembooks} contains a list of
+some suitable books.
 
 idx{test function}
 idx{trial function}
 
-The core of the recipe for turning a PDE into a variational problem is
-to multiply the PDE by a function $v$, integrate the resulting
-equation over $\Omega$, and perform integration by parts of terms with
-second-order derivatives. The function $v$ which multiplies the PDE is
-in the mathematical finite element literature called a *test
-function*. The unknown function $u$ to be approximated is referred to
-as a *trial function*. The terms test and trial function are used in
-FEniCS programs too.  Suitable function spaces must be specified for
-the test and trial functions.  For standard PDEs arising in physics
-and mechanics such spaces are well known.
+The basic recipe for turning a PDE into a variational problem is to
+multiply the PDE by a function $v$, integrate the resulting equation
+over the domain $\Omega$, and perform integration by parts of terms
+with second-order derivatives. The function $v$ which multiplies the
+PDE is called a *test function*. The unknown function $u$ to be
+approximated is referred to as a *trial function*. The terms test and
+trial function are used in FEniCS programs too. Suitable function
+spaces must be specified for the test and trial functions. For
+standard PDEs arising in physics and mechanics such spaces are well
+known.
 
 In the present case, we first multiply the Poisson equation
-by the test function $v$ and integrate,
+by the test function $v$ and integrate over $\Omega$:
 
 !bt
 \begin{equation}
 label{tut:poisson1:multbyv}
  -\int_\Omega (\nabla^2 u)v \dx = \int_\Omega fv \dx\tp \end{equation}
 !et
-Then we apply integration by parts to the integrand with
-second-order derivatives,
+We then apply integration by parts to the integrand with
+second-order derivatives. We find that
 
 !bt
 \begin{equation}
@@ -130,12 +126,13 @@ label{tut:poisson1:eqbyparts}
 \partial n}v \ds ,
 \end{equation}
 !et
-where $\frac{\partial u}{\partial n}$ is the derivative of $u$ in the
-outward normal direction at the boundary.  The test function $v$ is
-required to vanish on the parts of the boundary where $u$ is known,
-which in the present problem implies that $v=0$ on the whole boundary
-$\partial\Omega$.  The second term on the right-hand side of
-(ref{tut:poisson1:eqbyparts}) therefore vanishes.  From
+where $\frac{\partial u}{\partial n} = \nabla u \cdot n$ is the
+derivative of $u$ in the outward normal direction $n$ on the
+boundary. The test function $v$ is required to vanish on the parts of
+the boundary where the solution $u$ is known, which in the present
+problem implies that $v=0$ on the whole boundary $\partial\Omega$.
+The second term on the right-hand side of
+(ref{tut:poisson1:eqbyparts}) therefore vanishes. From
 (ref{tut:poisson1:multbyv}) and (ref{tut:poisson1:eqbyparts}) it
 follows that
 
@@ -145,11 +142,14 @@ follows that
 label{tut:poisson1:weak1}
 \end{equation}
 !et
-This equation is supposed to hold for all $v$ in some function space
-$\hat V$. The trial function $u$ lies in some (possibly different)
-function space $V$.  We refer to (ref{tut:poisson1:weak1}) as the
-*weak form* or *variational form* of the original boundary-value
-problem (ref{tut:poisson1})-(ref{tut:poisson1:bc}).
+If we require that this equation holds for all test functions $v$ in
+some suitable space $\hat V$, the so-called *test space*, we obtain a
+well-defined mathematical problem that uniquely determines the
+solution $u$ which lies in some (possibly different) function space
+$V$, the so-called *trial space*.  We refer to
+(ref{tut:poisson1:weak1}) as the *weak form* or *variational form* of
+the original boundary-value problem
+(ref{tut:poisson1})--(ref{tut:poisson1:bc}).
 
 The proper statement of
 our variational problem now goes as follows:
@@ -162,30 +162,37 @@ Find $u \in V$ such that
   \quad \forall v \in \hat{V}.
 \end{equation}
 !et
-The test and trial spaces $\hat{V}$ and $V$ are in the present
+The trial and test spaces $V$ and $\hat V$ are in the present
 problem defined as
 
 !bt
 \begin{align*}
-    \hat{V} &= \{v \in H^1(\Omega) : v = 0 \mbox{ on } \partial\Omega\}, \\
-     V      &= \{v \in H^1(\Omega) : v = u_0 \mbox{ on } \partial\Omega\}\tp
+     V      &= \{v \in H^1(\Omega) : v = u_0 \mbox{ on } \partial\Omega\}, \\
+    \hat{V} &= \{v \in H^1(\Omega) : v = 0 \mbox{ on } \partial\Omega\}\tp
 \end{align*}
 !et
-In short, $H^1(\Omega)$ is the mathematically well-known Sobolev space
-containing functions $v$ such that $v^2$ and $||\nabla v||^2$ have
-finite integrals over $\Omega$. The solution of the underlying PDE
-must lie in a function space where also the derivatives are
-continuous, but the Sobolev space $H^1(\Omega)$ allows functions with
-discontinuous derivatives.  This weaker continuity requirement of $u$
-in the variational statement (ref{tut:poisson1:var}), caused by the
-integration by parts, has great practical consequences when it comes
-to constructing finite elements.
 
-To solve the Poisson equation numerically, we need to transform the
-continuous variational problem (ref{tut:poisson1:var}) to a discrete
-variational problem. This is done by introducing *finite-dimensional*
-test and trial spaces, often denoted as $\hat{V}_h\subset\hat{V}$ and
-$V_h\subset{V}$. The discrete variational problem reads: Find $u_h \in
+In short, $H^1(\Omega)$ is the mathematically well-known Sobolev space
+containing functions $v$ such that $v^2$ and $|\nabla v|^2$ have
+finite integrals over $\Omega$ (essentially meaning that the functions
+are continuos). The solution of the underlying PDE must lie in a
+function space where also the derivatives are continuous, but the
+Sobolev space $H^1(\Omega)$ allows functions with discontinuous
+derivatives. This weaker continuity requirement of $u$ in the
+variational statement (ref{tut:poisson1:var}), as a result of the
+integration by parts, has great practical consequences when it comes
+to constructing finite element function spaces. In particular, it
+allows the use of piecewise polynomial function spaces; i.e., function
+spaces constructed by stiching together polynomial functions on simple
+domains such as intervals, triangles, or tetrahedrons.
+
+The variational problem (ref{tut:poisson1:var}) is a *continuous
+problem*: it defines the solution $u$ in the infinite-dimensional
+function space $V$. The finite element method for the Poisson equation
+finds an approximate solution of the variational problem
+(ref{tut:poisson1:var}) by replacing the infinite-dimensional function
+spaces $V$ and $\hat{V}$ by *discrete* (finite-dimensional) trial and
+test spaces $V_h\subset{V}$ and $\hat{V}_h\subset\hat{V}$. The discrete variational problem reads: Find $u_h \in
 V_h \subset V$ such that
 
 !bt
@@ -195,45 +202,47 @@ V_h \subset V$ such that
   \quad \forall v \in \hat{V}_h \subset \hat{V}\tp
 \end{equation}
 !et
-The choice of $\hat{V}_h$ and $V_h$ follows directly from the kind of
-finite elements we want to apply in our problem. For example, choosing
-the well-known linear triangular element with three nodes implies that
-$\hat V_h$ and $V_h$ are the spaces of all piecewise linear functions
-over a mesh of triangles, where the functions in $\hat V_h$ are zero
-on the boundary and those in $V_h$ equal $u_0$ on the boundary.
+This variational problem, together with a suitable definition of the
+function spaces $V_h$ and $\hat{V}_h$, uniquely defines our approximate
+numerical solution of Poisson's equation (ref{tut:poisson1}). The
+mathematical framework may seem complicated at first glance, but the
+good news is the finite element variational problem
+(ref{tut:poisson1:vard}) looks the same as the continuous variational
+problem (ref{tut:poisson1:var}), and FEniCS can automatically solve
+variational problems like (ref{tut:poisson1:vard})!
+
+#The choice of $\hat{V}_h$ and $V_h$ follows directly from the kind of
+#finite elements we want to apply in our problem. For example, choosing
+#the well-known linear triangular element with three nodes implies that
+#$\hat V_h$ and $V_h$ are the spaces of all piecewise linear functions
+#over a mesh of triangles, where the functions in $\hat V_h$ are zero
+#on the boundary and those in $V_h$ equal $u_0$ on the boundary.
 
 !bwarning What we mean by the notation $u$ and $V$
 The mathematics literature on variational problems writes $u_h$ for
 the solution of the discrete problem and $u$ for the solution of the
 continuous problem. To obtain (almost) a one-to-one relationship
 between the mathematical formulation of a problem and the
-corresponding FEniCS program, we shall use $u$ for the solution of
-the discrete problem and $\uex$ for the exact solution of the
-continuous problem, *if* we need to explicitly distinguish
-between the two.
-
-In most cases, we will introduce the PDE problem with
-$u$ as unknown, derive a variational equation $a(u,v)=L(v)$ with $u\in
-V$ and $v\in \hat V$, and then simply discretize the problem by saying
-that we choose finite-dimensional spaces for $V$ and $\hat V$, without
-adding any subscript to $V$ or $\hat V$. This
-restriction of $V$ simply implies that $u$ becomes a discrete finite element
-function.  In practice, this means that we turn our PDE problem into a
-continuous variational problem, create a mesh and specify an element
-type, and then let $V$ correspond to this mesh and element choice.
-Depending upon whether $V$ is infinite- or finite-dimensional, $u$
-will be the exact or approximate solution.
+corresponding FEniCS program, we shall drop the subscript $_h$ and use
+$u$ for the solution of the discrete problem and $\uex$ for the exact
+solution of the continuous problem, *if* we need to explicitly distinguish
+between the two. Similarly, we will let $V$ denote the discrete finite
+element function space in which we seek our solution.
 !ewarning
 
-It turns out to be convenient to introduce the following unified
-notation for linear weak forms:
+===== Abstract finite element variational formulation =====
+label{tut:poisson1:abstrat}
+idx{abstract variational formulation}
+
+It turns out to be convenient to introduce the following canonical
+notation for variational problems:
 
 !bt
 \begin{equation}
 a(u, v) = L(v)\tp
 \end{equation}
 !et
-In the present problem we have that
+For the Poisson equation, we have:
 
 !bt
 \begin{align}
@@ -249,15 +258,16 @@ $a(u,v)$, and similarly collect all terms with only known functions in
 $L(v)$. The formulas for $a$ and $L$ are then coded directly in the
 program.
 
-To summarize, before making a FEniCS program for solving a PDE,
-we must first perform two steps:
+FEniCS provies all the necessary mathematical notation needed to
+express the variational problem $a(u, v) = L(v)$. To solve a linear
+PDE in FEniCS, such as the Poisson equation, a user thus needs to
+perform only two steps:
 
-  * Turn the PDE problem into a discrete
-    variational problem: find $u\in V$
-    such that $a(u,v) = L(v)\quad\forall v\in \hat{V}$.
-  * Specify the choice of spaces ($V$ and $\hat V$), which means
-    specifying the mesh and type of finite elements.
-
+  * Express the PDE as a (discrete) variational problem: find $u\in V$
+    such that $a(u,v) = L(v)$ for all $v\in \hat{V}$.
+  * Choose the finite element spaces $V$ and $\hat V$ by specifying
+    the domain (as a mesh) and the type of function space (polynomial
+    degree and type).
 
 # Suggested: var coeff as early as possible!
 # A basic Poisson solver
@@ -265,6 +275,8 @@ we must first perform two steps:
 # Visualization: membrane, vtk, paraview, structured mesh
 # Postprocessing computations: var coeff, functionals, conv rates
 # Multiple domains and boundaries
+
+[AL: I AM HERE]
 
 !split
 ===== A simple implementation =====
@@ -1614,7 +1626,7 @@ $x=0$. The rest of the boundaries are traction free.
 
 ===== A simple implementation =====
 
-======= The Navier-Stokes equations =======
+======= The Navier--Stokes equations =======
 
 ===== Variational formulation =====
 
