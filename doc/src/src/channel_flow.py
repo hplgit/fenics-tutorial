@@ -37,7 +37,7 @@ from fenics import *
 def compute_v(H, mu, p, degree=1):
     nx = 15
     mesh = IntervalMesh(nx, 0, H)
-    V = FunctionSpace(mesh, 'Lagrange', degree)
+    V = FunctionSpace(mesh, 'P', degree)
 
     def boundary(x, on_boundary):
         tol = 1E-14
@@ -57,7 +57,7 @@ def compute_v(H, mu, p, degree=1):
 def compute_p(L, p0, degree=1):
     nx = 13
     mesh = IntervalMesh(nx, 0, L)
-    V = FunctionSpace(mesh, 'Lagrange', degree)
+    V = FunctionSpace(mesh, 'P', degree)
 
     def boundary_0(x, on_boundary):
         tol = 1E-14
@@ -138,8 +138,8 @@ n_flow = 3
 n_perp = 3
 degree = 1
 mesh2D = RectangleMesh(0, 0, L, H, n_flow, n_perp)
-Vu2D = VectorFunctionSpace(mesh2D, 'Lagrange', degree)
-Vp2D = FunctionSpace(mesh2D, 'Lagrange', degree)
+Vu2D = VectorFunctionSpace(mesh2D, 'P', degree)
+Vp2D = FunctionSpace(mesh2D, 'P', degree)
 
 p = interpolate(p_expression, Vp2D)
 print '2D p:', p.vector().array()
@@ -154,8 +154,8 @@ sys.exit(0)
 W = 3
 nz = 3
 mesh3D = BoxMesh(0, 0, 0, L, W, H, n_flow, n_perp, nz)
-Vu3D = VectorFunctionSpace(mesh3D, 'Lagrange', degree)
-Vp3D = FunctionSpace(mesh3D, 'Lagrange', degree)
+Vu3D = VectorFunctionSpace(mesh3D, 'P', degree)
+Vp3D = FunctionSpace(mesh3D, 'P', degree)
 u_expression = v_interpolator(v, 3)
 
 p = interpolate(p_expression, Vp2D)

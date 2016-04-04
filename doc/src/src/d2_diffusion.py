@@ -11,7 +11,7 @@ import numpy
 # Create mesh and define function space
 nx = ny = 2
 mesh = UnitSquareMesh(nx, ny)
-V = FunctionSpace(mesh, 'Lagrange', 1)
+V = FunctionSpace(mesh, 'P', 1)
 
 # Define boundary conditions
 alpha = 3; beta = 1.2

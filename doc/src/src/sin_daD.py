@@ -24,7 +24,7 @@ elif d == 2:
 elif d == 3:
     mesh = BoxMesh(-W/2, -W/2, -D, W/2, W/2, 0,
                    divisions[0], divisions[1], divisions[2])
-V = FunctionSpace(mesh, 'Lagrange', degree)
+V = FunctionSpace(mesh, 'P', degree)
 
 # Define boundary conditions
 
@@ -136,7 +136,7 @@ import scitools.easyviz as ev
 def line_plot():
     """Make a line plot of T along the vertical direction."""
     if T.ufl_element().degree() != 1:
-        T2 = interpolate(T, FunctionSpace(mesh, 'Lagrange', 1))
+        T2 = interpolate(T, FunctionSpace(mesh, 'P', 1))
     else:
         T2 = T
     T_box = scitools.BoxField.fenics_function2BoxField(

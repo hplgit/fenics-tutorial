@@ -6,7 +6,7 @@ def solver(f, u0, I, dt, T, Nx, Ny, degree=1,
            user_action=None, I_project=False):
     # Create mesh and define function space
     mesh = UnitSquareMesh(Nx, Ny)
-    V = FunctionSpace(mesh, 'Lagrange', degree)
+    V = FunctionSpace(mesh, 'P', degree)
 
     class Boundary(SubDomain):  # define the Dirichlet boundary
         def inside(self, x, on_boundary):
@@ -103,7 +103,7 @@ def solver_minimize_assembly(
     user_action=None, I_project=False):
     # Create mesh and define function space
     mesh = UnitSquareMesh(Nx, Ny)
-    V = FunctionSpace(mesh, 'Lagrange', degree)
+    V = FunctionSpace(mesh, 'P', degree)
 
     class Boundary(SubDomain):  # define the Dirichlet boundary
         def inside(self, x, on_boundary):
@@ -167,7 +167,7 @@ def solver_bc(
     """
     # Create mesh and define function space
     mesh = UnitSquareMesh(Nx, Ny)
-    V = FunctionSpace(mesh, 'Lagrange', degree)
+    V = FunctionSpace(mesh, 'P', degree)
 
     tol = 1E-14
 

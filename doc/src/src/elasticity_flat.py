@@ -21,7 +21,7 @@ g = gamma
 
 # Create mesh and define function space
 mesh = BoxMesh(Point(0,0,0), Point(L,W,W), 10, 3, 3)
-V = VectorFunctionSpace(mesh, 'Lagrange', 1)
+V = VectorFunctionSpace(mesh, 'P', 1)
 
 # Define boundary conditions
 tol = 1E-14
@@ -55,7 +55,7 @@ solve(a == L, u, bc)
 plot(u, title='Displacement', mode='displacement')
 
 von_Mises = inner(sigma(u), sigma(u)) - div(u)
-V = FunctionSpace(mesh, 'Lagrange', 1)
+V = FunctionSpace(mesh, 'P', 1)
 von_Mises = project(von_Mises, V)
 plot(von_Mises, title='Stress intensity', mode='displacement')
 u_magnitude = sqrt(dot(u,u))

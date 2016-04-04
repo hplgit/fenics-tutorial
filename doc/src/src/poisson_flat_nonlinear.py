@@ -31,7 +31,7 @@ print('f=', f_code)
 
 # Create mesh and define function space
 mesh = UnitSquareMesh(16, 14)
-V = FunctionSpace(mesh, 'Lagrange', 1)
+V = FunctionSpace(mesh, 'P', 1)
 
 # Define boundary conditions
 u0 = Expression(u_code)

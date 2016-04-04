@@ -13,7 +13,7 @@ def solver(f, u0, Nx, Ny, degree=1):
     """
     # Create mesh and define function space
     mesh = UnitSquareMesh(Nx, Ny)
-    V = FunctionSpace(mesh, 'Lagrange', degree)
+    V = FunctionSpace(mesh, 'P', degree)
 
     def u0_boundary(x, on_boundary):
         return on_boundary

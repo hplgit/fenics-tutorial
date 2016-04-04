@@ -1,4 +1,4 @@
-"""As p2D_iter.py, but the PDE is -div(p*grad(u)=f."""
+"""As poisson_iter.py, but the PDE is -div(p*grad(u)=f."""
 from __future__ import print_function
 from fenics import *
 
@@ -18,7 +18,7 @@ def solver(
     """
     # Create mesh and define function space
     mesh = UnitSquareMesh(Nx, Ny)
-    V = FunctionSpace(mesh, 'Lagrange', degree)
+    V = FunctionSpace(mesh, 'P', degree)
 
     def u0_boundary(x, on_boundary):
         return on_boundary
@@ -64,7 +64,7 @@ def solver_objects(
     and solver."""
     # Create mesh and define function space
     mesh = UnitSquareMesh(Nx, Ny)
-    V = FunctionSpace(mesh, 'Lagrange', degree)
+    V = FunctionSpace(mesh, 'P', degree)
 
     def u0_boundary(x, on_boundary):
         return on_boundary
@@ -198,7 +198,7 @@ def flux(u, p):
     V = u.function_space()
     mesh = V.mesh()
     degree = u.ufl_element().degree()
-    V_g = VectorFunctionSpace(mesh, 'Lagrange', degree)
+    V_g = VectorFunctionSpace(mesh, 'P', degree)
     flux_u = project(-p*grad(u), V_g)
     flux_u.rename('flux(u)', 'continuous flux field')
     return flux_u
@@ -261,7 +261,7 @@ def compute_errors(u, u_exact):
 
     # Explicit interpolation of u_exact to higher-order elements,
     # u will also be interpolated to the space Ve before integration
-    Ve = FunctionSpace(V.mesh(), 'Lagrange', 5)
+    Ve = FunctionSpace(V.mesh(), 'P', 5)
     u_e = interpolate(u_exact, Ve)
     error = (u - u_e)**2*dx
     E3 = sqrt(abs(assemble(error)))
@@ -370,7 +370,7 @@ def structured_mesh(u, divisions):
     """Represent u on a structured mesh."""
     # u must have P1 elements, otherwise interpolate to P1 elements
     u2 = u if u.ufl_element().degree() == 1 else \
-         interpolate(u, FunctionSpace(mesh, 'Lagrange', 1))
+         interpolate(u, FunctionSpace(mesh, 'P', 1))
     mesh = u.function_space().mesh()
     from BoxField import fenics_function2BoxField
     u_box = fenics_function2BoxField(
@@ -469,7 +469,7 @@ def application_structured_mesh(model_problem=1):
     flux2_x = flux_u_x if flux_u_x.ufl_element().degree() == 1 \
               else interpolate(flux_x,
                    FunctionSpace(u.function_space().mesh(),
-                                 'Lagrange', 1))
+                                 'P', 1))
     flux_u_x_box = structured_mesh(flux_u_x, (nx,ny))
     x, flux_u_val, y_fixed, snapped = \
        flux_u_x_box.gridline(start, direction=X)
@@ -503,7 +503,7 @@ def solver_linalg(
     """
     # Create mesh and define function space
     mesh = UnitSquareMesh(Nx, Ny)
-    V = FunctionSpace(mesh, 'Lagrange', degree)
+    V = FunctionSpace(mesh, 'P', degree)
 
     def u0_boundary(x, on_boundary):
         return on_boundary
@@ -609,7 +609,7 @@ def solver_bc(
     """
     # Create mesh and define function space
     mesh = UnitSquareMesh(Nx, Ny)
-    V = FunctionSpace(mesh, 'Lagrange', degree)
+    V = FunctionSpace(mesh, 'P', degree)
 
     tol = 1E-14
 

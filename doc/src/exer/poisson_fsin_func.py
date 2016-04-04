@@ -4,7 +4,7 @@ import os, sys
 path = os.path.join(os.pardir, os.pardir, os.pardir,
                     'src', 'stationary', 'poisson')
 sys.path.insert(0, path)
-from p2D_func import (
+from poisson_func import (
     solver, Expression, Constant, interpolate, File, plot,
     interactive)
 

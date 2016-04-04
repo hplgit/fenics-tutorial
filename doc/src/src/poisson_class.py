@@ -5,7 +5,7 @@ import numpy as np
 class Solver(object):
     def __init__(self, problem, debug=False):
         self.mesh, degree = problem.mesh_degree()
-        self.V = V = FunctionSpace(self.mesh, 'Lagrange', degree)
+        self.V = V = FunctionSpace(self.mesh, 'P', degree)
         Dirichlet_cond = problem.Dirichlet_conditions()
         if isinstance(Dirichlet_cond, (Expression)):
             # Just one Expression for Dirichlet conditions on
@@ -70,7 +70,7 @@ class Solver(object):
         """Compute and return flux -p*grad(u)."""
         mesh = self.u.function_space().mesh()
         degree = self.u.ufl_element().degree()
-        V_g = VectorFunctionSpace(mesh, 'Lagrange', degree)
+        V_g = VectorFunctionSpace(mesh, 'P', degree)
         self.flux_u = project(-self.p*grad(self.u), V_g)
         self.flux_u.rename('flux(u)', 'continuous flux field')
         return self.flux_u

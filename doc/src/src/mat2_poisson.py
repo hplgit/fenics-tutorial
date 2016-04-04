@@ -51,7 +51,7 @@ print('k degree of freedoms:', k.vector().array())
 
 #plot(subdomains, title='subdomains')
 
-V = FunctionSpace(mesh, 'Lagrange', 1)
+V = FunctionSpace(mesh, 'P', 1)
 
 # Define Dirichlet conditions for y=0 boundary
 

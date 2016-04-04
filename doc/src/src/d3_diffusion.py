@@ -22,7 +22,7 @@ parameters['linear_algebra_backend'] = la_backend
 # Create mesh and define function space
 nx = ny = 40
 mesh = UnitSquareMesh(nx, ny)
-V = FunctionSpace(mesh, 'Lagrange', 1)
+V = FunctionSpace(mesh, 'P', 1)
 
 # Define boundary conditions
 alpha = 3; beta = 1.2

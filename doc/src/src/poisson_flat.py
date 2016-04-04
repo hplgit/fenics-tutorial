@@ -2,19 +2,22 @@
 FEniCS tutorial demo program: Poisson equation with Dirichlet conditions.
 Simplest example of computation and visualization with FEniCS.
 
--Laplace(u) = f on the unit square.
-u = u0 on the boundary.
-u0 = u = 1 + x^2 + 2y^2, f = -6.
+  -Laplace(u) = f  on the unit square
+            u = u0 on the boundary
+
+  u = 1 + x^2 + 2y^2 = u0
+  f = -6
 """
+
 from __future__ import print_function
 from fenics import *
 
 # Create mesh and define function space
-mesh = UnitSquareMesh(6, 4)
-V = FunctionSpace(mesh, 'Lagrange', 1)
+mesh = UnitSquareMesh(8, 8)
+V = FunctionSpace(mesh, 'P', 1)
 
 # Define boundary conditions
-u0 = Expression('1 + x[0]*x[0] + 2*x[1]*x[1]')
+u0 = Expression('1 + x[0]*x[0] + 2*x[1]*x[1]', degree=1)
 
 def u0_boundary(x, on_boundary):
     return on_boundary
@@ -35,17 +38,18 @@ solve(a == L, u, bc)
 # Plot solution on the screen
 u.rename('u', 'solution')
 plot(u)
+plot(mesh)
 
 # Dump solution to file in VTK format
-vtkfile = File("poisson.pvd")
+vtkfile = File('poisson.pvd')
 vtkfile << u
 
-# Find max error
-u0_Function = interpolate(u0, V)         # exact solution
-u0_array = u0_Function.vector().array()  # dof values
+# Compute and print error
+u_e = interpolate(u0, V)
+error = max(abs(u_e.vector().array() - u.vector().array()))
 import numpy as np
-max_error = np.abs(u0_array - u.vector().array()).max()
-print('max error:', max_error)
+error = np.abs(u_e.vector().array() - u.vector().array()).max()
+print('error =', error)
 
 # Hold plot
 interactive()

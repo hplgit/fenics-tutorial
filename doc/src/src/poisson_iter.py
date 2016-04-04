@@ -1,4 +1,4 @@
-"""As p2D_func.py, but iterative linear solver."""
+"""As poisson_func.py, but iterative linear solver."""
 from __future__ import print_function
 from fenics import *
 
@@ -18,7 +18,7 @@ def solver(
     """
     # Create mesh and define function space
     mesh = UnitSquareMesh(Nx, Ny)
-    V = FunctionSpace(mesh, 'Lagrange', degree)
+    V = FunctionSpace(mesh, 'P', degree)
 
     def u0_boundary(x, on_boundary):
         return on_boundary
@@ -64,7 +64,7 @@ def solver_objects(
     and solver."""
     # Create mesh and define function space
     mesh = UnitSquareMesh(Nx, Ny)
-    V = FunctionSpace(mesh, 'Lagrange', degree)
+    V = FunctionSpace(mesh, 'P', degree)
 
     def u0_boundary(x, on_boundary):
         return on_boundary
@@ -195,7 +195,7 @@ def gradient(u):
     """Return grad(u) projected onto same space as u."""
     V = u.function_space()
     mesh = V.mesh()
-    V_g = VectorFunctionSpace(mesh, 'Lagrange', 1)
+    V_g = VectorFunctionSpace(mesh, 'P', 1)
     grad_u = project(grad(u), V_g)
     grad_u.rename('grad(u)', 'continuous gradient field')
     return grad_u

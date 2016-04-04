@@ -36,7 +36,7 @@ def solver(
     d = len(divisions)
     domain_type = [UnitIntervalMesh, UnitSquareMesh, UnitCubeMesh]
     mesh = domain_type[d-1](*divisions)
-    V = FunctionSpace(mesh, 'Lagrange', degree)
+    V = FunctionSpace(mesh, 'P', degree)
 
     # Define boundary conditions
     tol = 1E-14

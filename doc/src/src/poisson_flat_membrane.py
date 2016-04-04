@@ -11,7 +11,7 @@ import numpy as np
 
 domain = Circle(Point(0.0, 0.0), 1.0)
 mesh = generate_mesh(domain, 20)
-V = FunctionSpace(mesh, 'Lagrange', 2)
+V = FunctionSpace(mesh, 'P', 2)
 
 def u0_boundary(x, on_boundary):
     return on_boundary

@@ -22,7 +22,7 @@ def solver(
     Solve -Laplace(u)=f on given mesh with Lagrange elements
     of specified degree and u=u0 (Expresssion) on the boundary.
     """
-    V = FunctionSpace(mesh, 'Lagrange', degree)
+    V = FunctionSpace(mesh, 'P', degree)
 
     def u0_boundary(x, on_boundary):
         return on_boundary

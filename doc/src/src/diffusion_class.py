@@ -7,7 +7,7 @@ class Solver(object):
     def __init__(self, problem):
         self.problem = problem
         self.mesh, degree = problem.mesh_degree()
-        self.V = V = FunctionSpace(self.mesh, 'Lagrange', degree)
+        self.V = V = FunctionSpace(self.mesh, 'P', degree)
 
         # Initial condition
         if hasattr(problem, 'I_project'):
@@ -96,7 +96,7 @@ class Solver(object):
         """Compute and return flux -p*grad(u)."""
         mesh = self.u.function_space().mesh()
         degree = self.u.ufl_element().degree()
-        V_g = VectorFunctionSpace(mesh, 'Lagrange', degree)
+        V_g = VectorFunctionSpace(mesh, 'P', degree)
         self.flux_u = project(-self.p*grad(self.u), V_g)
         self.flux_u.rename('flux(u)', 'continuous flux field')
         return self.flux_u
@@ -237,7 +237,7 @@ class Problem1(Problem):
             print('no u in self.solver', dir(self.solver))
             return
         u2 = self.solver.u if u.ufl_element().degree() == 1 else \
-             interpolate(self.u, FunctionSpace(mesh, 'Lagrange', 1))
+             interpolate(self.u, FunctionSpace(mesh, 'P', 1))
         import sys
         sys.path.insert(0, 'modules')
         from BoxField import fenics_function2BoxField

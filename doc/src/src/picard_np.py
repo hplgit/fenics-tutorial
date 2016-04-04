@@ -22,7 +22,7 @@ divisions = [int(arg) for arg in sys.argv[2:]]
 d = len(divisions)
 domain_type = [UnitIntervalMesh, UnitSquareMesh, UnitCubeMesh]
 mesh = domain_type[d-1](*divisions)
-V = FunctionSpace(mesh, 'Lagrange', degree)
+V = FunctionSpace(mesh, 'P', degree)
 
 # Define boundary conditions
 

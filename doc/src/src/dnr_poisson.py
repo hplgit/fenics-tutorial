@@ -16,7 +16,7 @@ import numpy
 
 # Create mesh and define function space
 mesh = UnitSquareMesh(3, 2)
-V = FunctionSpace(mesh, 'Lagrange', 1)
+V = FunctionSpace(mesh, 'P', 1)
 
 # Define boundary segments for Neumann, Robin and Dirichlet conditions
 
