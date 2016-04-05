@@ -1,0 +1,858 @@
+======= The Poisson equation =======
+
+===== Mathematical problem formulation =====
+
+label{tut:poisson1:bvp}
+idx{Poisson's equation}
+
+Let us start by writing a ``Hello, World!'' program. In the world of
+PDEs, this must be a program that solves the Poisson equation:
+
+!bt
+\begin{align}
+- \nabla^2 u(\x) &= f(\x),\quad \x\mbox{ in } \Omega,
+label{tut:poisson1}\\
+u(\x) &= u_0(\x),\quad \x\mbox{ on } \partial \Omega\tp label{tut:poisson1:bc}
+\end{align}
+!et
+Here, $u = u(\x)$ is the unknown function, $f = f(\x)$ is a
+prescribed function, $\nabla^2$ is the Laplace operator (also
+often written as $\Delta$), $\Omega$ is the spatial domain, and
+$\partial\Omega$ is the boundary of $\Omega$. A stationary PDE like
+this, together with a complete set of boundary conditions, constitute
+a *boundary-value problem*, which must be precisely stated before
+it makes sense to start solving it with FEniCS.
+
+In two space dimensions with coordinates $x$ and $y$, we can write out
+the Poisson equation as
+
+!bt
+\begin{equation}
+- {\partial^2 u\over\partial x^2} -
+{\partial^2 u\over\partial y^2} = f(x,y)\tp
+\end{equation}
+!et
+The unknown $u$ is now a function of two variables, $u = u(x,y)$, defined
+over a two-dimensional domain $\Omega$.
+
+The Poisson equation arises in numerous physical contexts, including
+heat conduction, electrostatics, diffusion of substances, twisting of
+elastic rods, inviscid fluid flow, and water waves. Moreover, the
+equation appears in numerical splitting strategies of more complicated
+systems of PDEs, in particular the Navier--Stokes equations.
+
+Solving a PDE such as the Poisson equation in FEniCS consists of the
+following steps:
+
+  o Identify the computational domain ($\Omega$), the PDE, its
+    boundary conditions, and source terms ($f$).
+  o Reformulate the PDE as a finite element variational problem.
+  o Write a Python program which defines the computational domain,
+    the variational problem, the boundary conditions, and source
+    terms, using the corresponding FEniCS abstractions.
+  o Call FEniCS to solve the PDE and, optionally, extend the program
+    to compute derived quantities such as fluxes and averages, and
+    visualize the results.
+
+We shall now go through steps 2--4 in detail. The key feature of
+FEniCS is that steps 3 and 4 result in fairly short code, while most
+other software frameworks for PDEs require much more code and more
+technically difficult programming.
+
+===== Finite element variational formulation =====
+label{tut:poisson1:varform}
+idx{variational formulation}
+
+FEniCS is based on the finite element method, which is a general and
+efficient mathematical machinery for numerical solution of PDEs. The
+starting point for the finite element methods is a PDE expressed in
+*variational form*. Readers who are not familiar with variational
+problems will get a brief introduction to the topic in this tutorial,
+but getting and reading a proper book on the finite element method in
+addition is encouraged. Section ref{tut:fembooks} contains a list of
+some suitable books.
+
+idx{test function}
+idx{trial function}
+
+The basic recipe for turning a PDE into a variational problem is to
+multiply the PDE by a function $v$, integrate the resulting equation
+over the domain $\Omega$, and perform integration by parts of terms
+with second-order derivatives. The function $v$ which multiplies the
+PDE is called a *test function*. The unknown function $u$ to be
+approximated is referred to as a *trial function*. The terms test and
+trial function are used in FEniCS programs too. Suitable function
+spaces must be specified for the test and trial functions. For
+standard PDEs arising in physics and mechanics such spaces are well
+known.
+
+In the present case, we first multiply the Poisson equation
+by the test function $v$ and integrate over $\Omega$:
+
+!bt
+\begin{equation}
+label{tut:poisson1:multbyv}
+ -\int_\Omega (\nabla^2 u)v \dx = \int_\Omega fv \dx\tp \end{equation}
+!et
+We then apply integration by parts to the integrand with
+second-order derivatives. We find that
+
+!bt
+\begin{equation}
+label{tut:poisson1:eqbyparts}
+ -\int_\Omega (\nabla^2 u)v \dx
+= \int_\Omega\nabla u\cdot\nabla v \dx - \int_{\partial\Omega}{\partial u\over
+\partial n}v \ds ,
+\end{equation}
+!et
+where $\frac{\partial u}{\partial n} = \nabla u \cdot n$ is the
+derivative of $u$ in the outward normal direction $n$ on the
+boundary. The test function $v$ is required to vanish on the parts of
+the boundary where the solution $u$ is known, which in the present
+problem implies that $v=0$ on the whole boundary $\partial\Omega$.
+The second term on the right-hand side of
+(ref{tut:poisson1:eqbyparts}) therefore vanishes. From
+(ref{tut:poisson1:multbyv}) and (ref{tut:poisson1:eqbyparts}) it
+follows that
+
+!bt
+\begin{equation}
+\int_\Omega\nabla u\cdot\nabla v \dx = \int_\Omega fv \dx\tp
+label{tut:poisson1:weak1}
+\end{equation}
+!et
+If we require that this equation holds for all test functions $v$ in
+some suitable space $\hat V$, the so-called *test space*, we obtain a
+well-defined mathematical problem that uniquely determines the
+solution $u$ which lies in some (possibly different) function space
+$V$, the so-called *trial space*.  We refer to
+(ref{tut:poisson1:weak1}) as the *weak form* or *variational form* of
+the original boundary-value problem
+(ref{tut:poisson1})--(ref{tut:poisson1:bc}).
+
+The proper statement of
+our variational problem now goes as follows:
+Find $u \in V$ such that
+
+!bt
+\begin{equation} label{tut:poisson1:var}
+  \int_{\Omega} \nabla u \cdot \nabla v \dx =
+  \int_{\Omega} fv \dx
+  \quad \forall v \in \hat{V}.
+\end{equation}
+!et
+The trial and test spaces $V$ and $\hat V$ are in the present
+problem defined as
+
+!bt
+\begin{align*}
+     V      &= \{v \in H^1(\Omega) : v = u_0 \mbox{ on } \partial\Omega\}, \\
+    \hat{V} &= \{v \in H^1(\Omega) : v = 0 \mbox{ on } \partial\Omega\}\tp
+\end{align*}
+!et
+
+In short, $H^1(\Omega)$ is the mathematically well-known Sobolev space
+containing functions $v$ such that $v^2$ and $|\nabla v|^2$ have
+finite integrals over $\Omega$ (essentially meaning that the functions
+are continuous). The solution of the underlying PDE must lie in a
+function space where also the derivatives are continuous, but the
+Sobolev space $H^1(\Omega)$ allows functions with discontinuous
+derivatives. This weaker continuity requirement of $u$ in the
+variational statement (ref{tut:poisson1:var}), as a result of the
+integration by parts, has great practical consequences when it comes
+to constructing finite element function spaces. In particular, it
+allows the use of piecewise polynomial function spaces; i.e., function
+spaces constructed by stitching together polynomial functions on simple
+domains such as intervals, triangles, or tetrahedrons.
+
+The variational problem (ref{tut:poisson1:var}) is a *continuous
+problem*: it defines the solution $u$ in the infinite-dimensional
+function space $V$. The finite element method for the Poisson equation
+finds an approximate solution of the variational problem
+(ref{tut:poisson1:var}) by replacing the infinite-dimensional function
+spaces $V$ and $\hat{V}$ by *discrete* (finite-dimensional) trial and
+test spaces $V_h\subset{V}$ and $\hat{V}_h\subset\hat{V}$. The discrete variational problem reads: Find $u_h \in
+V_h \subset V$ such that
+
+!bt
+\begin{equation} label{tut:poisson1:vard}
+  \int_{\Omega} \nabla u_h \cdot \nabla v \dx =
+  \int_{\Omega} fv \dx
+  \quad \forall v \in \hat{V}_h \subset \hat{V}\tp
+\end{equation}
+!et
+This variational problem, together with a suitable definition of the
+function spaces $V_h$ and $\hat{V}_h$, uniquely defines our approximate
+numerical solution of Poisson's equation (ref{tut:poisson1}). The
+mathematical framework may seem complicated at first glance, but the
+good news is the finite element variational problem
+(ref{tut:poisson1:vard}) looks the same as the continuous variational
+problem (ref{tut:poisson1:var}), and FEniCS can automatically solve
+variational problems like (ref{tut:poisson1:vard})!
+
+#The choice of $\hat{V}_h$ and $V_h$ follows directly from the kind of
+#finite elements we want to apply in our problem. For example, choosing
+#the well-known linear triangular element with three nodes implies that
+#$\hat V_h$ and $V_h$ are the spaces of all piecewise linear functions
+#over a mesh of triangles, where the functions in $\hat V_h$ are zero
+#on the boundary and those in $V_h$ equal $u_0$ on the boundary.
+
+!bwarning What we mean by the notation $u$ and $V$
+The mathematics literature on variational problems writes $u_h$ for
+the solution of the discrete problem and $u$ for the solution of the
+continuous problem. To obtain (almost) a one-to-one relationship
+between the mathematical formulation of a problem and the
+corresponding FEniCS program, we shall drop the subscript $_h$ and use
+$u$ for the solution of the discrete problem and $\uex$ for the exact
+solution of the continuous problem, *if* we need to explicitly distinguish
+between the two. Similarly, we will let $V$ denote the discrete finite
+element function space in which we seek our solution.
+!ewarning
+
+===== Abstract finite element variational formulation =====
+label{tut:poisson1:abstrat}
+idx{abstract variational formulation}
+
+It turns out to be convenient to introduce the following canonical
+notation for variational problems:
+
+!bt
+\begin{equation}
+a(u, v) = L(v)\tp
+\end{equation}
+!et
+For the Poisson equation, we have:
+
+!bt
+\begin{align}
+a(u, v) &= \int_{\Omega} \nabla u \cdot \nabla v \dx,
+label{tut:poisson1:vard:a}\\
+L(v) &= \int_{\Omega} fv \dx\tp  label{tut:poisson1:vard:L}
+\end{align}
+!et
+From the mathematics literature, $a(u,v)$ is known as a *bilinear
+form* and $L(v)$ as a *linear form*.  We shall in every linear problem
+we solve identify the terms with the unknown $u$ and collect them in
+$a(u,v)$, and similarly collect all terms with only known functions in
+$L(v)$. The formulas for $a$ and $L$ are then coded directly in the
+program.
+
+FEniCS provides all the necessary mathematical notation needed to
+express the variational problem $a(u, v) = L(v)$. To solve a linear
+PDE in FEniCS, such as the Poisson equation, a user thus needs to
+perform only two steps:
+
+  * Express the PDE as a (discrete) variational problem: find $u\in V$
+    such that $a(u,v) = L(v)$ for all $v\in \hat{V}$.
+  * Choose the finite element spaces $V$ and $\hat V$ by specifying
+    the domain (the mesh) and the type of function space (polynomial
+    degree and type).
+
+# Suggested: var coeff as early as possible!
+# A basic Poisson solver
+# Useful extensions/Useful stuff/: var coeff here
+# Visualization: membrane, vtk, paraview, structured mesh
+# Postprocessing computations: var coeff, functionals, conv rates
+# Multiple domains and boundaries
+
+!split
+===== Choosing a test problem =====
+label{tut:poisson1:testproblem}
+
+The Poisson equation (ref{tut:poisson1}) has so far featured a general
+domain $\Omega$ and general functions $u_0$ and $f$. For our first
+implementation, we must decide on specific choices of $\Omega$, $u_0$,
+and $f$.  It will be wise to construct a specific problem where we can
+easily check that the computed solution is correct. Solutions that are
+lower-order polynomials are primary candidates. Standard finite
+element function spaces of degree $r$ will exactly reproduce
+polynomials of degree $r$. And piecewise linear elements ($r=1$) are
+able to exactly reproduce a quadratic polynomial on a uniformly
+partitioned mesh. This important result can be used to verify our
+implementation. We just manufacture some quadratic function in 2D as
+the exact solution, say
+
+!bt
+\begin{equation}
+\label{tut:poisson1:impl:uex}
+\uex(x,y) = 1 +x^2 + 2y^2\tp
+\end{equation}
+!et
+By inserting (ref{tut:poisson1:impl:uex}) into the Poisson equation
+(ref{tut:poisson1}), we find that $\uex(x,y)$ is a solution if
+
+!bt
+\[ f(x,y) = -6,\quad u_0(x,y)=\uex(x,y)=1 + x^2 + 2y^2,\]
+!et
+regardless of the shape of the domain as long as $\uex$ is prescribed along
+the boundary. We choose here, for simplicity,
+the domain to be the unit square,
+
+!bt
+\[ \Omega = [0,1]\times [0,1] \tp\]
+!et
+This simple but very powerful method for constructing test problems
+is called the *method of manufactured solutions*: pick a simple
+expression for the exact solution, plug it into the equation to obtain
+the right-hand side (source term $f$), then solve the equation with
+this right-hand side and try to reproduce the exact solution.
+
+!bnotice Tip: Try to verify your code with exact numerical solutions!
+A common approach to testing the implementation of a numerical method
+is to compare the numerical
+solution with an exact analytical solution of the test problem and
+conclude that the program works if the error is ``small enough''.
+Unfortunately, it is impossible to tell if an error of size $10^{-5}$ on a
+$20\times 20$ mesh of linear elements is the expected (in)accuracy of the
+numerical approximation or if the error also contains the effect of a
+bug in the code. All we usually know about the numerical error is its
+*asymptotic properties*, for instance that it is proportional to $h^2$
+if $h$ is the size of a cell in the mesh. Then we can compare the
+error on meshes with different $h$ values to see if the asymptotic
+behavior is correct. This is a very powerful verification technique
+and is explained in detail in Section
+ref{tut:poisson1:convrates}. However, if we have a test problem for which
+we know that there should be no approximation errors, we know that
+the analytical solution of the PDE problem should be reproduced to
+machine precision by the program. That is why we emphasize this kind
+of test problems throughout this tutorial. Typically, elements of
+degree $r$ can reproduce polynomials of degree $r$ exactly, so this
+is the starting point for constructing a solution without numerical
+approximation errors.
+!enotice
+
+!split
+===== FEniCS implementation =====
+label{tut:poisson1:impl}
+label{tut:poisson1:impl:code}
+
+A FEniCS program for solving our test problem for the Poisson equation
+in 2D with the given choices of $u_0$, $f$, and $\Omega$ may look as
+follows:
+
+@@@CODE src/poisson_flat.py fromto: from fenics import@
+
+The complete code can be found in the file "`${prog['poisson_flat']}.py`":
+"${src_url}/${prog['poisson_flat']}.py".
+
+===== Running the program =====
+label{tut:poisson1:impl:run}
+
+The FEniCS program must be available in a plain text file, written with a
+text editor such as Atom, Sublime Text, Emacs, Vim, or similar.
+
+To run the program `${prog["poisson_flat"]}.py`, open a terminal
+window, move to the directory containing the program and type the
+following command:
+
+!bc sys
+Terminal> python ${prog['poisson_flat']}.py
+!ec
+Note that this command must be run in a FEniCS-enabled terminal. For
+users of the FEniCS Docker containers, this means that you must type
+this command after you have started a FEniCS session using
+`fenicsproject run`.
+
+When running the above command, FEniCS will run the program to compute
+the approximate solution $u$. The approximate solution $u$ will be
+compared to the exact solution $\uex$ and the error in the maximum
+norm will be printed. Since we know that our approximate solution
+should reproduced the exact solution to within machine precision, this
+error should be small, something on the order of $10^{-15}$.
+
+[AL: Add text here discussing what to expect in terms of plotting.
+ Perhaps we have seamless notebook plotting working soon...]
+
+#A plot window pops up showing how the solution $u$ looks like as a
+#surface.  With the left mouse button you can tilt the figure. Click
+#`m` to bring up the underlying mesh. Click `p` to save to a PNG file
+#`dolfin_plot_0.png` and `P` to save to a PDF file
+#`dolfin_plot_1.pdf`. To kill the plot window and terminate the
+#application, click `Ctrl+q` (hold down the `Ctrl` key and press `q`).
+#Figure ref{tut:poisson:2D:fig:ex1:u} displays the surface and the mesh
+#below.  Since $u$ is a simple quadratic function, constructed for
+#testing our solver, the surface looks quite boring.
+
+FIGURE:[fig/ex1_u, width=600 frac=0.8] Plot of the solution in the first FEniCS example. label{tut:poisson:2D:fig:ex1:u}
+
+===== Dissection of the program =====
+label{tut:poisson1:impl:dissect}
+
+We shall now dissect this FEniCS program in detail. The program is
+written in the Python programming language. You may either take a
+quick look at the "official Python tutorial":
+"http://docs.python.org/tutorial/" to pick up the basics of Python if
+you are unfamiliar with the language, or you may learn enough Python
+as you go along with the examples in the present tutorial. The latter
+strategy has proven to work for many newcomers to FEniCS. This is
+because both the amount of abstract mathematical formalism and the
+amount of Python expertise that is actually needed to be productive
+with FEniCS is quite limited. And Python is an easy-to-learn language
+that you will certainly come to love and use far beyond FEniCS
+programming. Section ref{tut:pybooks} lists some relevant Python
+books.
+
+The listed FEniCS program defines a finite element mesh, a the finite
+element function space $V$ on this mesh, boundary conditions for $u$
+(the function $u_0$), and the bilinear and linear forms $a(u,v)$ and
+$L(v)$.  Thereafter, the unknown trial function $u$ is computed. Then
+we can compare the numerical and exact solution as well as visualize
+the computed solution $u$.
+
+=== The important first line ===
+
+The first line in the program,
+
+!bc pycod
+from fenics import *
+!ec
+imports the key classes `UnitSquareMesh`, `FunctionSpace`, `Function`,
+and so forth, from the FEniCS library.  All FEniCS programs for
+solving PDEs by the finite element method normally start with this
+line.
+
+## NOTE: index entries *must* become before paragraph/subsubsection
+## headings, otherwise sphinx output will be malformed
+
+idx{`Mesh`}
+
+=== Generating simple meshes ===
+
+The statement
+
+!bc pycod
+mesh = UnitSquareMesh(8, 8)
+!ec
+defines a uniform finite element mesh over the unit square
+$[0,1]\times [0,1]$. The mesh consists of *cells*, which in 2D are triangles
+with straight sides. The parameters 8 and 8 specify that the square
+should be divided into $8\times 8$ rectangles, each divided into a pair of
+triangles. The total number of triangles (cells) thus becomes
+128. The total number of vertices in the mesh is $9\cdot 9=81$.
+In later chapters, you will learn how to generate more complex meshes.
+
+[hpl: Note that plot was made by the old partitioning $6\times 4$. Probably
+no issue.]
+
+
+idx{`FunctionSpace`}
+idx{finite element specifications}
+idx{CG finite element family}
+idx{Lagrange finite element family}
+idx{P1 element}
+
+=== Defining the finite element function space ===
+
+Having a mesh, we can define a finite element function space `V` over
+this mesh:
+
+!bc pycod
+V = FunctionSpace(mesh, 'P', 1)
+!ec
+
+The second argument `'P`' specifies the type of element, while the third
+argument is the degree of the basis functions of the element. The type
+of element is here ``P'', implying the standard Lagrange family of
+elements. You may also use `'Lagrange'` to specify this type of
+element. FEniCS supports all simplex element families and the notation
+defined in the "Periodic Table of the Finite Elements":
+"http://femtable.org" cite{ArnoldLogg2014}.
+
+idx{Periodic Table of the Finite Elements}
+
+The third argument `1` specifies the degree of the finite element.  In
+this case, the standard $\mathsf{P}_1$ linear Lagrange element, which
+is a triangle with nodes at the three vertices. Some finite element
+practitioners refer to this element as the ``linear triangle''. The
+computed solution $u$ will be continuous and linearly varying in $x$
+and $y$ over each cell in the mesh. Higher-degree polynomial
+approximations over each cell are trivially obtained by increasing the
+third parameter to `FunctionSpace`, which will then generate function
+spaces of type $\mathsf{P}_2$, $\mathsf{P}_3$, and so forth.
+Changing the second parameter to `'DP'` creates a function
+space for discontinuous Galerkin methods.
+
+idx{`TestFunction`} idx{`TrialFunction`}
+idx{`DirichletBC`}
+idx{Dirichlet boundary conditions}
+
+=== Defining the trial and test functions ===
+
+In mathematics, we distinguish between the trial and test spaces $V$
+and $\hat{V}$. The only difference in the present problem is the
+boundary conditions. In FEniCS we do not specify the boundary
+conditions as part of the function space, so it is sufficient to work
+with one common space `V` for the and trial and test functions in the
+program:
+
+!bc pycod
+u = TrialFunction(V)
+v = TestFunction(V)
+!ec
+
+idx{boundary specification (function)}
+
+=== Defining the boundary and the boundary conditions ===
+
+The next step is to specify the boundary condition: $u=u_0$ on
+$\partial\Omega$. This is done by
+
+!bc pycod
+bc = DirichletBC(V, u0, u0_boundary)
+!ec
+where `u0` is an expression defining the solution values on the
+boundary, and `u0_boundary` is a function (or object) defining
+which points belong to the boundary.
+
+Boundary conditions of the type $u=u_0$ are known as *Dirichlet
+conditions*. For the present finite element method for the Poisson
+problem, they are also called *essential boundary conditions*, as they
+need to be imposed explicitly as part of the trial space (in contrast
+to being defined implicitly as part of the variational formulation).
+Naturally, the FEniCS class used to define Dirichlet boundary
+conditions is named `DirichletBC`.
+
+idx{`Expression`}
+
+The variable `u0` refers to an `Expression` object, which is used to
+represent a mathematical function. The typical construction is
+
+!bc pycod
+u0 = Expression(formula)
+!ec
+where `formula` is a string containing the mathematical expression.
+This formula is written with C++ syntax. The expression is
+automatically turned into an efficient, compiled C++ function.
+The expression may depend on the variables `x[0]` and `x[1]`
+corresponding to the $x$ and $y$ coordinates. In 3D, the expression
+may also depend on the variable `x[2]` corresponding to the $z$
+coordinate. With our choice of $u_0(x,y)=1 + x^2 + 2y^2$, the formula
+string can be written as `1 + x[0]*x[0] + 2*x[1]*x[1]`:
+
+!bc pycod
+u0 = Expression('1 + x[0]*x[0] + 2*x[1]*x[1]')
+!ec
+
+[hpl: In the code there is a degree parameter that is not included above. Why?]
+
+idx{C++ expression syntax}
+idx{expression syntax (C++)}
+
+!bnotice String expressions must have valid C++ syntax!
+The string argument to an `Expression` object must obey C++ syntax.
+Most Python syntax for mathematical expressions are also valid C++ syntax,
+but power expressions make an exception: `p**a` must be written as
+`pow(p,a)` in C++ (this is also an alternative Python syntax).
+The following mathematical functions can be used directly
+in C++
+expressions when defining `Expression` objects:
+`cos`, `sin`, `tan`, `acos`, `asin`,
+`atan`, `atan2`, `cosh`, `sinh`, `tanh`, `exp`,
+`frexp`, `ldexp`, `log`, `log10`, `modf`,
+`pow`, `sqrt`, `ceil`, `fabs`, `floor`, and `fmod`.
+Moreover, the number $\pi$ is available as the symbol `pi`.
+All the listed functions are taken from the `cmath` C++ header file, and
+one may hence
+consult the documentation of `cmath` for more information on the
+various functions.
+
+If/else tests are possible using the C syntax for inline branching. The
+function
+
+!bt
+\[ f(x,y) = \left\lbrace\begin{array}{ll} x^2, & x, y\geq 0\\
+2, & \hbox{otherwise}\end{array}\right.\]
+!et
+is implemented as
+
+!bc pycod
+f = Expression('x[0] >= 0 && x[1] >= 0? pow(x[0], 2) : 2')
+!ec
+
+Parameters in expression strings are allowed, but
+must be initialized via keyword
+arguments when creating the `Expression` object. For example, the
+function $f(x)=e^{-\kappa\pi^2t}\sin(\pi k x)$ can be coded as
+
+!bc pycod
+f = Expression('exp(-kappa*pow(pi,2)*t)*sin(pi*k*x[0])',
+               kappa=1.0, t=0, k=4)
+!ec
+At any time, parameters can be updated:
+
+!bc pycod
+f.t += dt
+f.k = 10
+!ec
+!enotice
+
+idx{boundary specification (function)}
+
+The function `u0_boundary` specifies which points that belong to the
+part of the boundary where the boundary condition should be applied:
+
+!bc pycod
+def u0_boundary(x, on_boundary):
+    return on_boundary
+!ec
+A function like `u0_boundary` for marking the boundary must return a
+boolean value: `True` if the given point `x` lies on the Dirichlet
+boundary and `False` otherwise.  The argument `on_boundary` is `True`
+if `x` is on the physical boundary of the mesh, so in the present
+case, where we are supposed to return `True` for all points on the
+boundary, we can just return the supplied value of `on_boundary`. The
+`u0_boundary` function will be called for every discrete point in the
+mesh, which allows us to have boundaries where $u$ are known also
+inside the domain, if desired.
+
+One way to think about the specification of boundaries in FEniCS is
+that FEniCS will ask you (or rather the function `u0_boundary` which
+you have implemented) whether or not a specific point `x` is part of
+the boundary. FEniCS already knows whether the point belongs to the
+*actual* boundary (the mathematical boundary of the domain) and kindly
+shares this information with you in the variable `on_boundary`. You
+may choose to use this information (as we do here), or ignore it
+completely.
+
+The argument `on_boundary` may also be omitted, but in that case we need
+to test on the value of the coordinates in `x`:
+
+!bc pycod
+def u0_boundary(x):
+    return x[0] == 0 or x[1] == 0 or x[0] == 1 or x[1] == 1
+!ec
+Comparing floating-point values using an exact match test with
+`==` is not good programming practice, because small round-off errors
+in the computations of the `x` values could make a test `x[0] == 1`
+become false even though `x` lies on the boundary.  A better test is
+to check for equality with a tolerance, either explicitly
+
+!bc pycod
+def u0_boundary(x):
+    return abs(x[0]) < tol or abs(x[1]) < tol \
+        or abs((x[0] - 1) < tol or abs(x[1] - 1) < tol
+!ec
+or with the `near` command in FEniCS:
+
+!bc pycod
+def u0_boundary(x):
+    return near(x[0], 0, tol) or near(x[1], 0, tol) \
+        or near(x[0], 1, tol) or near(x[1], 1, tol)
+!ec
+
+idx{UFL}
+
+=== Defining the source term ===
+
+Before defining the bilinear and linear forms $a(u,v)$ and $L(v)$ we
+have to specify the source term $f$:
+
+!bc pycod
+f = Expression('-6')
+!ec
+When $f$ is constant over the domain, `f` can be
+more efficiently represented as a `Constant`:
+
+!bc pycod
+f = Constant(-6)
+!ec
+
+=== Defining the variational problem ===
+
+We now have all the ingredients we need to define the
+variational problem:
+
+!bc pycod
+a = dot(grad(u), grad(v))*dx
+L = f*v*dx
+!ec
+In essence, these two lines specify the PDE to be solved.  Note the
+very close correspondence between the Python syntax and the
+mathematical formulas $\nabla u\cdot\nabla v \dx$ and $fv \dx$.  This
+is a key strength of FEniCS: the formulas in the variational
+formulation translate directly to very similar Python code, a feature
+that makes it easy to specify and solve complicated PDE problems.  The
+language used to express weak forms is called UFL (Unified Form
+Language) cite{UFL_2014,FEniCS} and is an integral part of FEniCS.
+
+#Instead of `grad` we could also just have written `grad` in the
+#examples in this tutorial. However, when taking gradients of vector
+#fields, `grad` and `grad` differ. The latter is consistent with
+#the tensor algebra commonly used to derive vector and tensor PDEs,
+#where $\nabla$ (``nabla'') acts as a vector operator, and therefore
+#this author prefers to always use `grad`.
+
+=== Forming and solving the linear system ===
+
+Having defined the finite element variational problem and boundary
+condition, we can now ask FEniCS to compute the solution:
+
+!bc pycod
+u = Function(V)
+solve(a == L, u, bc)
+!ec
+#Some prefer to replace `a` and `L` by an `equation`
+#variable, which is accomplished by this equivalent code:
+
+#!bc pycod
+#equation = dot(grad(u), grad(v))*dx == f*v*dx
+#u = Function(V)
+#solve(equation, u, bc)
+#!ec
+
+Note that we first defined the variable `u` as a `TrialFunction` and
+used it to represent the unknown in the form `a`. Thereafter, we
+redefined `u` to be a `Function` object representing the solution;
+i.e., the computed finite element function $u$. This redefinition of
+the variable `u` is possible in Python and often done in FEniCS
+applications for linear problems. The two types of objects that `u`
+refers to are equal from a mathematical point of view, and hence it is
+natural to use the same variable name for both objects.
+
+idx{degrees of freedom}
+
+[AL: I AM HERE]
+
+=== Examining the values of the solution ===
+
+The present test problem should produce a numerical solution that
+equals the exact solution to machine precision. That is, there are
+no approximation errors in our test problem. We can use this property
+to ``prove'' that our implementation is correct, a necessary first step
+before we try to apply our code to more complicated problems.
+For such verification, we need
+to compare the computed `u` function to `u0`.
+
+A finite element function like $u$ is expressed as a linear combination
+of basis functions $\phi_j$, spanning the space $V$:
+
+!bt
+\begin{equation}
+u = \sum_{j=1}^N U_j \phi_j label{tut:poisson1:ufem}\tp
+\end{equation}
+!et
+By writing `solve(a == L, u, bc)` in the program, a linear system
+will be formed from $a$ and $L$, and this system is solved for the
+$U_1,\ldots,U_N$ values. The $U_1,\ldots,U_N$ values are known
+as *degrees of freedom* of $u$. For Lagrange elements (and many other
+element types) $U_k$ is simply the value of $u$ at the node
+with global number $k$.
+The nodes and cell vertices coincide for linear Lagrange elements, while
+for higher-order elements there are additional nodes at
+the facets and maybe also in the interior of cells.
+
+Having `u` represented as a `Function` object, we can either evaluate
+`u(x)` at any point `x` in the mesh (expensive operation!),
+or we can grab all the degrees of
+freedom values $U_j$ directly by
+
+!bc pycod
+u_nodal_values = u.vector()
+!ec
+The result is a `Vector` object, which is basically an
+encapsulation of the vector object used in the linear algebra package
+that is used to solve the linear system arising from the
+variational problem.
+Since we program in Python it is convenient to convert the
+`Vector` object to a standard `numpy` array for further
+processing:
+
+idx{degrees of freedom array}
+idx{nodal values array}
+idx{numbering!degrees of freedom}
+idx{numbering!cell vertices}
+
+!bc pycod
+u_array = u_nodal_values.array()
+!ec
+With `numpy` arrays we can write MATLAB-like code to analyze
+the data. Indexing is done with square brackets: `u_array[i]`,
+where the index `i` always starts at `0`. However, `i` corresponds
+to $u$ at some point in the mesh and the correspondence requires
+knowledge of the numbering of degrees of freedom and the numbering of
+vertices in elements in the mesh, see Section ref{tut:poisson1:verify1}
+for details.
+
+idx{`interpolate`}
+
+For now, we want to check that the values in `u_array` are correct:
+they should equal our `u0` function. The most natural approach is
+to interpolate our `u0` expression onto our space
+(i.e., the finite element mesh),
+
+!bc pycod
+u0_Function = interpolate(u0, V)
+!ec
+The `interpolate` function returns a `Function` object, whose degrees
+of freedom values can be obtained by `.vector().array()`.  Our goal is
+to show that the degrees of freedom arrays of `u` and `u0_Function`
+are equal. One safe of doing this is to compute the maximum error,
+
+!bc pycod
+u0_array = u0_Function.vector().array()  # dof values
+max_error = (u0_array - u.vector().array()).max()
+print('max error:', max_error)
+!ec
+
+!bnotice How to check that the error vanishes?
+With inexact arithmetics, as we always have on a computer,
+this maximum error is not zero, but should be a small number.
+The machine precision is about $10^{-16}$, but in finite element
+calculations, rounding errors of this size may accumulate, so
+the expected accuracy of `max_error` smaller. Experiments show
+that increasing the number of elements and increasing the degree
+of the finite element polynomials increase `max_error`.
+For a mesh with $2(20\times 20)$ cubic Lagrange elements (degree 3)
+`max_error` is about $2\cdot 10^{-12}$, while for 18 linear elements
+the maximum error is about $2\cdot 10^{-15}$.
+!enotice
+
+=== Plotting the solution ===
+
+The simplest way of quickly looking at `u` is to say
+
+!bc pycod
+plot(u, interactive=True)
+# or
+plot(u)
+interactive()
+!ec
+Clicking on `Help` in the plot windows brings up a list of commands.
+For example, typing `m` brings up the mesh.  With the left, middle,
+and right mouse buttons you can rotate, translate, and zoom
+(respectively) the plotted surface to better examine what the solution
+looks like. You must click `Ctrl+q` to kill the plot window and
+continue execution beyond the `plot(u, interactive=True)` command or
+`interactive()`.  Figure ref{tut:poisson:2D:fig:ex1:u} displays the
+resulting $u$ function.
+
+Plotting both the solution and the mesh is accomplished by
+
+!bc pycod
+plot(u)
+plot(mesh)
+# Hold plot
+interactive()
+!ec
+Type `Ctrl+w` to kill all plot windows and continue execution.
+
+It is also possible to dump the computed solution to file, e.g., in the
+VTK format:
+
+!bc pycod
+vtkfile = File('poisson.pvd')
+vtkfile << u
+!ec
+The `poisson.pvd` file can now be loaded into any front-end to VTK,
+say ParaView or VisIt. The `plot` function is intended for quick
+examination of the solution during program development.  More in-depth
+visual investigations of finite element solutions will normally
+benefit from using highly professional tools such as ParaView and
+VisIt.
+
+idx{`rename`}
+
+Prior to plotting and storing solutions to file it is wise to
+give `u` a proper name by `u.rename('u', 'solution')`. Then
+`u` will be used as name in plots (rather than the more cryptic
+default names like `f_7`).
