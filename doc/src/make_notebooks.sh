@@ -13,7 +13,7 @@ function system {
 EXV=True
 
 system preprocess -DFORMAT=html newcommands.p.tex > newcommands.tex
-filenames='poisson0 diffusion0'
+filenames='poisson0 membrane0 diffusion0'
 for filename in $filenames; do
     doconce format ipynb $filename --encoding=utf-8 EXV=$EXV
 done
