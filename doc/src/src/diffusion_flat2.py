@@ -51,9 +51,9 @@ while t <= T:
 
     # Verify
     u_e = interpolate(u0, V)
-    max_error = np.abs(u_e.vector().array() -
-                       u.vector().array()).max()
-    print('max error, t=%.2f: %-10.3g' % (t, max_error))
+    error = np.abs(u_e.vector().array() -
+                   u.vector().array()).max()
+    print('error, t=%.2f: %-10.3g' % (t, max_error))
 
     t += dt
     u_1.assign(u)

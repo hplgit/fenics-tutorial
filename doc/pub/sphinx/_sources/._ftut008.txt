@@ -1,0 +1,649 @@
+.. !split
+
+.. _tut:trouble:
+
+Troubleshooting
+%%%%%%%%%%%%%%%
+
+.. index:: troubleshooting
+
+Compilation Problems
+====================
+
+.. index:: compilation problems
+
+Expressions and variational forms in a FEniCS program need to be
+compiled to C++ and linked with libraries if the expressions or forms
+have been modified since last time they were compiled.  The tool
+Instant, which is part of the FEniCS software suite, is used for
+compiling and linking C++ code so that it can be used with Python.
+
+Sometimes the compilation fails. You can see from the
+series of error messages which statement in the Python program that
+led to a compilation problem. Make sure to scroll back and identify
+whether the problematic line is associated with an expression,
+variational form, or the solve step.
+
+The final line in the output of error messages points to a log file
+from the compilation where one can examine the error messages from the
+compiler. It is usually the last lines of this log file that are of
+interest. Occasionally, the compiler's message can quickly lead to an
+understanding of the problem.
+A more fruitful approach is normally to examine the below list
+of common compilation problems and their remedies.
+
+Problems with the Instant cache
+-------------------------------
+
+Instant remembers information about previous compilations and versions
+of your program. Sometimes removal of this information can solve
+the problem. Just run
+
+.. code-block:: text
+
+        instant-clean
+
+in a terminal window whenever you encounter a compilation problem.
+
+Syntax errors in expressions
+----------------------------
+
+If the compilation problem arises from line with an ``Expression``
+object, examine the syntax of the expression carefully. The section :ref:`tut:poisson1:impl:dissect` contains some information on valid
+syntax. You may also want to examine the log file, pointed to in the
+last line in the output of error messages. The compiler's message
+about the syntax problem may lead you to a solution.
+
+Some common problems are
+
+ 1. using ``a**b`` for exponentiation (illegal in C++) instead of ``pow(a, b)``,
+
+ 2. forgetting that the spatial coordinates are denoted by a vector ``x``,
+
+ 3. forgetting that the :math:`x`, :math:`y`, and :math:`z` coordinates in space correspond
+    to ``x[0]``, ``x[1]``, and ``x[2]``, respectively.
+
+Failure to initialize parameters in the expressions lead to a
+compilation error where this problem is explicitly pointed out.
+
+Example
+~~~~~~~
+
+The implementation
+
+.. code-block:: python
+
+        u_exact = Expression(
+            'x[1] <= 0.5? 2*x[1]*p_1/(p_0 + p_1) : '
+            '((2*x[1]-1)p_0 + p_1)/(p_0 + p_1)',
+            p_0=p_values[0], p_1=p_values[1])
+
+fails with compilation error
+
+.. code-block:: text
+
+        RuntimeError: In instant.recompile: The module did not compile with
+        command 'make VERBOSE=1', see '/some/path/.../compile.log'
+
+Looking up the ``compile.log`` file and searching for ``error``, we see
+the following message from the C++ compiler:
+
+.. code-block:: text
+
+        error: expected ‘)’ before ‘p_0’
+           values[0] = x[1] <= 0.5? 2*x[1]*p_1/(p_0 + p_1) :
+           ((2*x[1]-1)p_0 + p_1)/(p_0 + p_1);
+                      ^
+
+Now we realize that a ``*`` symbol is missing between ``)`` and ``p_0``.
+
+Problems in the solve step
+--------------------------
+
+Sometimes the problem lies in the solve step where a variational form
+is turned into a system of algebraic equations.
+The error message *Unable to extract all indicies* points to a problem with the
+variational form. Common errors include
+
+ 1. missing either the ``TrialFunction`` or the ``TestFunction`` object,
+
+ 2. no terms without ``TrialFunction`` objects.
+
+ 3. mathematically invalid operations in the variational form.
+
+The first problem implies that one cannot make a matrix system or
+system of nonlinear algebraic equations out of the variational form.
+The second problem means that there is no "right-hand side" terms in the PDE
+with known quantities. Sometimes this is seemingly the case mathematically
+because the "right-hand side" is zero. Variational forms must represent this
+case as ``Constant(0)*v*dx`` where ``v`` is a ``TestFunction`` object.
+An example of the third problem is to take the ``inner`` product of
+a scalar and a vector (causing in this particular case
+the error message to be "Shape mismatch").
+
+The message *Unable to extract common cell; missing cell definition in
+form or expression* will typically arise from a term in the form where
+a test function (holding mesh and cell information) is missing.
+For example, a zero right-hand side ``Constant(0)*dx`` will generate
+this error.
+
+Unable to convert object to a UFL form
+--------------------------------------
+
+One common reason for the above error message is that a form is
+written without being multiplied by ``dx`` or ``ds``.
+
+UFL reports that a numpy array cannot be converted to any UFL type
+------------------------------------------------------------------
+
+One reason may be that there are mathematical functions like ``sin`` and
+``exp`` operating on ``numpy`` arrays. The problem is that
+the
+
+.. code-block:: python
+
+        from fenics import *
+
+statement imports
+``sin``, ``cos``,
+and similar mathematical functions from UFL and these are aimed at
+taking ``Function`` or ``TrialFunction``
+objects as arguments and not ``numpy`` arrays.
+The remedy is to use prefix mathematical functions aimed at
+``numpy`` arrays with ``numpy``, or ``np`` if ``numpy`` is imported as ``np``:
+``numpy.exp`` or ``np.exp``, for instance.
+Normally, boundary conditions and analytical solutions are represented
+by ``Expression`` objects and then this problem does not arise.
+The problem usually arises when pure Python functions with, e.g., analytical
+solutions are introduced for, e.g., plotting.
+
+All programs fail to compile
+----------------------------
+
+When encountering a compilation problem where the Instant log file says
+something about missing double quote in an ``Expression``, try compiling
+a previously working program. If that program faces the same problem,
+reboot Ubuntu and try again.  If the problem persists, try running the
+Update Manager (because unfinished updates can cause compiler
+problems), reboot and try again.
+
+Problems with Expression Objects
+================================
+
+There seems to be some bug in an Expression object
+--------------------------------------------------
+
+Run the command ``instant-clean`` to ensure that everything is
+(re)compiled.  Check the formulas in string expressions carefully, and
+make sure that divisions do not lead to integer division (i.e., at
+least one of the operands in a division must be a floating-point
+variable).
+
+Segmentation fault when using an Expression object
+--------------------------------------------------
+
+One reason may be that the point vector ``x`` has indices out of
+bounds, e.g., that you access ``x[2]`` but the mesh is only a 2D mesh.
+Also recall that the components of ``x`` are ``x[0]``, ``x[1]``, etc.
+Accessing ``x[2]``  as the "y" coordinate is a common error.
+
+Other Problems
+==============
+
+Very strange error message involving a ``mesh`` variable
+--------------------------------------------------------
+
+If you encounter a really strange error message, and the statement
+in question involves a variable with name ``mesh``, check if this
+is really your mesh variable. When doing ``from fenics import *``, you
+get a ``mesh`` variable, which is actually a module, and sending
+this module to functions creates a ``TypeError``. Substitute with
+the actual name of your mesh object.
+
+One should also note other names that get imported by ``from fenics import *``:
+``e``, ``f``, ``i``, ``j``, ``k``, ``l``, ``p``, ``q``, ``r``, ``s``. It is easy to use such
+variables without initializing them, and strange error message arises
+(since the mentioned names are UFL ``Index`` objects).
+
+The plot disappears quickly from the screen
+-------------------------------------------
+
+.. index:: plotting problems
+
+You have forgotten to insert ``interactive()`` as the last statement in
+the program.
+
+Only parts of the program are executed
+--------------------------------------
+
+Check if a call to ``interactive()`` appears in the middle of the program.
+The computations are halted by this call and not continued before
+you press ``q`` in a plot window. Most people thus prefer to
+have ``interactive()`` as the last statement.
+
+Error in the definition of the boundary
+---------------------------------------
+
+Consider this code and error message:
+
+.. code-block:: python
+
+        class DirichletBoundary(SubDomain):  # define the Dirichlet boundary
+            def inside(self, x, on_boundary):
+                return on_boundary and abs(x) < 1E-14
+        
+        bc = DirichletBC(V, u0, xleft_boundary)
+        
+        Error: ValueError: The truth value of an array with more than
+        one element is ambiguous. Use a.any() or a.all()
+
+The reason for this error message
+is that ``x`` is a point vector, not just a number.
+In the ``inside`` function one must work with the
+components of ``x``: ``x[0]``, ``x[1]``, etc.
+
+The solver in a nonlinear problems does not converge
+----------------------------------------------------
+
+There can be many reasons for this common problem:
+
+ 1. The form (variational formulation) is not consistent with the
+    PDE(s).
+
+ 2. The boundary conditions in a Newton method are wrong. The
+    correction vector must have vanishing essential conditions where
+    the complete solution has zero or non-zero values.
+
+ 3. The initial guess for the solution is not appropriate. In some
+    problems, a simple function equal to 0 just leads to a zero
+    solution or a divergent solver. Try 1 as initial guess, or
+    (better) try to identify a linear problem that can be used to
+    compute an appropriate initial guess, see the section :ref:`tut:nonlinear:Newton:algebraic`.
+
+How To Debug a FEniCS Program?
+==============================
+
+.. A true case study with a few bugs would be really helpful here.
+
+.. 1. Linear problem.
+
+.. 2. Nonlinear problem.
+
+.. 3. Time-dependent problem.
+
+.. 4. Time-dependent nonlinear problem.
+
+Here is an action list you may follow.
+
+**Step 1.**
+Examine the weak form and its implementation carefully.
+Check that all terms are multiplied by ``dx`` or ``ds``, and that the
+terms do not vanish; check that at least one term has both a
+``TrialFunction`` and a ``TestFunction`` (term with unknown); and check
+that at least one term has no ``TrialFunction`` (known term).
+
+**Step 2.**
+Check that Dirichlet boundary conditions are set correctly.
+
+.. code-block:: python
+
+        # bcs is list of DirichletBC objects
+        for bc in bcs:
+        bc_dict = bc.get_boundary_values()
+            for dof in bc_dict:
+                print('dof %d: value=%s' % (dof, bc_dict[dof]))
+
+See also an expanded version of this snippet in the ``solvers_bc``
+``ft06_poisson_vc.py`` file located in the directory ``poisson``.
+
+A next step in the debugging, if these values are wrong, is to
+call the functions that define the boundary parts. For example,
+
+.. code-block:: python
+
+        for coor in mesh.coordinates():
+            if my_boundary_function(coor, True):
+                print('%s is on the boundary' % coor)
+        
+        # or, in case of a SubDomain subclass my_subdomain_object,
+        for coor in mesh.coordinates():
+            if my_subdomain_object.inside(coor, True):
+                print('%s is on the boundary' % coor)
+
+You may map the solution to a structured grid with structured data,
+i.e., a ``BoxField``, see the chapters :ref:`tut:quickviz`
+and :ref:`tut:timedep:diffusion2:sin`, and then examine the solution field
+along grid lines in :math:`x` and :math:`y` directions. For example, you can
+easily check that correct
+Dirichlet conditions are set, e.g.,
+at the upper boundary (check ``u_box[:,-1]``).
+
+**Step 4.**
+Switching to a simple set of coefficients and boundary conditions,
+such that the solution becomes simple too,
+but still obeys the same PDE, may help since it is then easier to
+examine numerical values in the solution array.
+
+**Step 5.**
+Formulate a corresponding 1D problem. Often this can be
+done by just running the problem with a 1D mesh. Doing hand calculations
+of element matrices and vectors, and comparing the assembled system
+from these hand calculations with the assembled system from the
+FEniCS program can uncover bugs. For nonlinear problems, or problems
+with variable coefficients, it is usually wise to choose simple
+coefficients so that the problem becomes effectively linear and the
+hand calculations are doable.
+
+To-do list
+==========
+
+AL list
+-------
+
+ * Title?: Writing State-of-the-Art Finite Element Solvers in Minutes
+   (HPL: Yes - let's have this for a while)
+
+ * Title: "Writing... in minutes" sounds more like a good subtitle
+   than an actual title. We already have a good subtitle in "The
+   FEniCS tutorial" so let's try to find a more "serious" main title.
+   (HPL: What about switching?)
+
+ * Title?: Introduction to Finite Element Programming
+
+ * Add 2nd author
+
+ * Rewrite abstract to reflect new title and non-initial state of book
+
+ * Rename and expand Chapter 5: Boundary conditions, markers and subdomains
+   (many and confusing ways to do this, ``MeshFunctions``, ``MeshData``, etc)
+   (HPL: This is important and confusing, but very much needed early on)
+
+ * DONE: Add chapter on installation (difficult, still in flux)
+
+ * Installation chapter should be number 0
+
+ * Remove capitalization of sections in Chapter 8
+
+ * Add new chapter: "Advanced example: Linear elasticity"
+   (HPL: do this first - important for many courses)
+
+ * Add new chapter: "Advanced example: Hyperelasticity"
+
+ * Add new chapter: "Advanced example: Incompressible Navier-Stokes"
+
+ * Place these chapters near end of book so progression becomes:
+
+    * Installation
+
+    * Fundamentals (3 chapters: Fundamentals, Time-dependent, Nonlinear)
+
+    * Misc technical chapters (boundary conditions, geometries etc)
+      (HPL: Think we need these things before time-dependent, or maybe
+      split the very simplest things from time-dependent (1st example)
+      and nonlinear (``solve(F==0, ...)``) and place in fundamentals?)
+
+    * Advanced examples (using previously discussed techniques)
+
+ * Add chapter on performance and profiling? HPL: Yes!
+
+ * Move source code links to ``http://fenisproject.org/tutorial`` (we can
+   set up a cron job to copy files from ``hplgit``)
+
+ * Number examples sequentially, something like
+
+    * ``fenics_tutorial_01_poisson_first.py``
+
+    * ``fenics_tutorial_05_poisson_nonlinear.py``
+
+   Hierarchic structure becomes complicated, better with flat structure
+   (HPL: These filenames are too long, giving too long lines in the text
+   and the need for lots of rewrites. We have an automated scheme to
+   assign new filenames to the logical files that we use for the text.
+   Right now the names are ``ft01_poisson_flat.py``.)
+
+ * Add command ``fenics-version``
+
+ * DONE: Use dot and grad in Poisson example (not ``inner`` and ``nabla_grad``)
+
+ * Use new notation ``'P'`` instead of ``'Lagrange'`` in ``FunctionSpace``. HPL: Done.
+   (HPL: Not yet documented in ``FunctionSpace`` ;-)
+
+ * DONE: Use ``from fenics import *``
+
+ * Fix copyright footer so we avoid the linebreak. HPL: Fixed. This and similar adjustments in the latex file is easily done by auto editing in ``make.sh``.
+
+ * How does doconce handle - and ---? HPL: Like latex. Just use ndash if you want. ndash and mdash are ignored in other formats than latex and html where there is no support for this. Just introduce ndash where you like, as in Navier - Stokes.
+
+ * When to use :math:`{\thinspace .}` and when to use . ? HPL: Springer had a rule with thinspace. I don't know if it applies to the brief series, but it became a habit of mine since other styles demanded it.
+
+ * When to specify floats as 2 or 2.0? HPL: In code? Anytime there is a danger of integer division.
+
+HPL list
+--------
+
+Remember: cannot exceed 150 pages (as reported at the end of ``ftut.log``).
+Solutions to exercises will not appear in the printed book. If we run
+out of pages, we can also remove the exercises by putting if-else
+constructs around them. There will be one short printed tutorial and
+then extended e-versions with exercises (and optionally solution) on our
+github web site.
+
+Regarding layout, we must use ``svmono.cls`` for the printed book, but
+are allowed to use gray background in code boxes and lmodern instead
+of Courier for monospace font. Springer's official ebook has exactly
+the same layout. For all other versions on our github
+web site, we can choose whatever layout we want.
+
+ * ``mshr`` must align subdomains with cell facets!! Important feature.
+
+ * Programs are now flat demos. Educate the reader with
+   better software engineering habits: functions, classes, unit tests.
+   Avoid copy-and-edit flat programs implied by today's collection. (HPL)
+
+ * Find successful exercises from various tutorials (AL) and add as
+   exercises in the book (HPL/AL). Exercises are key for learning
+   software so having them (in an extended version?) sends an important
+   signal about their relevance.
+
+ * Meshr domains. Set up some common continuum mechanics examples first. (HPL/AL)
+
+ * Decide on an elasticity problem.
+
+ * Simple Navier-Stokes solver. Do backward facing step and flow around a
+   cylinder.
+
+ * According to the ``plot`` doc string, it should be easy to
+   plot the element a la ``plot(u.function_space().ufl_element())`` but I
+   did not get this to work. Not crucial, but plotting the element is a
+   nice feature :-)
+
+ * Show how the definition of boundaries can be done via strings
+   compiled to C++ (as soon as we have an example with non-trivial
+   boundary segments), cf. Navier-Stokes FEniCS demo.
+
+ * Comment regarding FEniCS demos: The documented demos mention a lot
+   of packages: DOLFIN, FFC, Fiat, ... Make sure the reader of the tutorial
+   does not get lost in the jungle of packages and make sure the names are
+   explained somewhere in the text
+   such that the tutorial is a good background for
+   understanding every demo in every detail.
+
+ * Should we say "in this book" or "in this tutorial"?
+
+ * Introduce ``near(x, x0, eps``)` earlier? Not used until it got the ``eps``
+   argument, but is more readable. Important to understand the
+   underlying problem with rounding which is more explicit when doing
+   ``abs(x-x0) < eps``.
+
+ * Can we change the value of ``DOLFIN_EPS``? ``imort fenics; fenics.DOLFIN_EPS=...`` will work, but then all modules in the simulator must do ``import fenics``. Note that its value is very strict, e.g., ``10.1+10.2`` has rounding :math:`3.5 10^{-15}`, so ``DOLFIN_EPS`` is strictly for scaled problems only, where all variables are in :math:`[0,1]`.
+
+HPL questions
+-------------
+
+Iterative linear solvers info
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+We can get this printed out on the screen, but is there any method to
+extract this text inside the program, such that we can see how many
+Krylov iterations we do etc.? Any way for Python to capture the standard
+output stream in C++?
+
+Easy to write a script that post-processes
+the output, but we have to wait until the simulator has terminated, or
+we can pipe to a script ``process.py`` that treats the output in some
+desired way (could append some into to a file and that is reopened
+by the simulator):
+
+.. code-block:: text
+
+        Terminal> python mysolver.py | process.py
+
+where the simplest ``process.py`` is
+
+.. code-block:: python
+
+        import sys, time
+        t0 = time.clock()
+        while True:
+            line = sys.stdin.readline()
+            if not line:
+                break
+            t1 = time.clock()
+            print 'after %g seconds: %s' % (t1-t0, line.rstrip())
+        print 'END'
+
+Bibliography
+============
+
+.. [Ref01]
+   **A. Logg, K.-A. Mardal and G. N. Wells**. Automated Solution of Partial Differential Equations by the Finite Element Method,
+   Springer,
+   2012.
+
+.. [Ref02]
+   **P. S. Foundation**. The Python Tutorial.
+
+.. [Ref03]
+   **H. P. Langtangen and L. R. Hellevik**. Brief Tutorials on Scientific Python,
+   `http://hplgit.github.io/bumpy/doc/web/index.html <http://hplgit.github.io/bumpy/doc/web/index.html>`_.
+
+.. [Ref04]
+   **M. Pilgrim**. *Dive into Python*,
+   Apress,
+   2004,
+   `http://www.diveintopython.net <http://www.diveintopython.net>`_.
+
+.. [Ref05]
+   **H. P. Langtangen**. *Python Scripting for Computational Science*,
+   third edition,
+   Springer,
+   2009.
+
+.. [Ref06]
+   **H. P. Langtangen**. *A Primer on Scientific Programming With Python*,
+   second edition,
+   *Texts in Computational Science and Engineering, vol 6*,
+   Springer,
+   2011.
+
+.. [Ref07]
+   **J. M. Kinder and P. Nelson**. *A Student's Guide to Python for Physical Modeling*,
+   Princeton University Press,
+   2015.
+
+.. [Ref08]
+   **J. Kiusalaas**. *Numerical Methods in Engineering With Python*,
+   Cambridge University Press,
+   2005.
+
+.. [Ref09]
+   **R. H. Landau, M. J. Paez and C. C. Bordeianu**. *Computational Physics: Problem Solving with Python*,
+   third edition,
+   Wiley,
+   2015.
+
+.. [Ref10]
+   **M. Gockenbach**. *Understanding and Implementing the Finite Element Method*,
+   SIAM,
+   2006.
+
+.. [Ref11]
+   **J. Donea and A. Huerta**. *Finite Element Methods for Flow Problems*,
+   Wiley Press,
+   2003.
+
+.. [Ref12]
+   **T. J. R. Hughes**. *The Finite Element Method: Linear Static and Dynamic Finite Element 	Analysis*,
+   Prentice-Hall,
+   1987.
+
+.. [Ref13]
+   **W. B. Bickford**. *A First Course in the Finite Element Method*,
+   2nd edition,
+   Irwin,
+   1994.
+
+.. [Ref14]
+   **K. Eriksson, D. Estep, P. Hansbo and C. Johnson**. *Computational Differential Equations*,
+   Cambridge University Press,
+   1996.
+
+.. [Ref15]
+   **S. C. Brenner and L. R. Scott**. *The Mathematical Theory of Finite Element Methods*,
+   third edition,
+   *Texts in Applied Mathematics*,
+   Springer,
+   2008.
+
+.. [Ref16]
+   **D. Braess**. *Finite Elements*,
+   third edition,
+   Cambridge University Press,
+   2007.
+
+.. [Ref17]
+   **A. Ern and J.-L. Guermond**. *Theory and Practice of Finite Elements*,
+   Springer,
+   2004.
+
+.. [Ref18]
+   **A. Quarteroni and A. Valli**. *Numerical Approximation of Partial Differential Equations*,
+   *Springer Series in Computational Mathematics*,
+   Springer,
+   1994.
+
+.. [Ref19]
+   **P. G. Ciarlet**. *The Finite Element Method for Elliptic Problems*,
+   *Classics in Applied Mathematics*,
+   SIAM,
+   2002.
+
+.. [Ref20]
+   **D. N. Arnold and A. Logg**. Periodic Table of the Finite Elements,
+   *SIAM News*,
+   2014.
+
+.. [Ref21]
+   **M. S. Alnæs, A. Logg, K. B. Ølgaard, M. E. Rognes and G. N. Wells**. Unified Form Language: A domain-specific language for weak formulations of partial differential equations,
+   *ACM Transactions on Mathematical Software*,
+   40(2),
+   2014.
+
+.. [Ref22]
+   **A. H. Squillacote**. The Paraview Guide,
+   Kitware,
+   2007,
+   `http://www.paraview.org/paraview-guide/ <http://www.paraview.org/paraview-guide/>`_.
+
+.. [Ref23]
+   **M. Mortensen, H. P. Langtangen and G. N. Wells**. A FEniCS-Based Programming Framework for Modeling Turbulent Flow by the Reynolds-Averaged Navier-Stokes Equations,
+   *Advances in Water Resources*,
+   2011.
+
+.. [Ref24]
+   **M. Mortensen, H. P. Langtangen and J. Myre**. Cbc.rans - a New Flexible, Programmable Software Framework for Computational Fluid Dynamics,
+   Sixth National Conference on Computational Mechanics (MekIT'11),
+   edited by **H. I. Andersson and B. Skallerud**,
+   Tapir,
+   2011.
+

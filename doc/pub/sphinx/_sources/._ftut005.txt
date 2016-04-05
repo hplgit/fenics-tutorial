@@ -1,0 +1,750 @@
+.. !split
+
+.. _ch:diffusion:
+
+The diffusion solver revisited
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+.. Pointers backward...what is needed to be recaptured?
+
+Optimization of algorithms and implementations
+==============================================
+
+Avoiding some assembly
+----------------------
+
+We realize that :math:`a` does not depend on time, which means that its
+associated matrix also will be time independent. Therefore, it is wise
+to explicitly create matrices and vectors as demonstrated in the section :ref:`tut:poisson1:linalg`.  The matrix :math:`A` arising from :math:`a` can be
+computed prior to the time stepping, so that we only need to compute
+the right-hand side :math:`b`, corresponding to :math:`L`, in each pass in the
+time loop. Let us express the solution procedure in algorithmic form,
+writing :math:`u` for the unknown spatial function at the new time level
+(:math:`u^k`) and :math:`u_1` for the spatial solution at one earlier time level
+(:math:`u^{k-1}`):
+
+ * define Dirichlet boundary condition (:math:`u_0`, Dirichlet boundary, etc.)
+
+ * let :math:`u_1` interpolate :math:`I` or be the projection of :math:`I`
+
+ * define :math:`a` and :math:`L`
+
+ * assemble matrix :math:`A` from :math:`a`
+
+ * set some stopping time :math:`T`
+
+ * :math:`t={{\Delta t}}`
+
+ * while :math:`t\leq T`
+
+   * assemble vector :math:`b` from :math:`L`
+
+   * apply essential boundary conditions
+
+   * solve :math:`AU=b` for :math:`U` and store in :math:`u`
+
+   * :math:`t\leftarrow t + {{\Delta t}}`
+
+   * :math:`u_1 \leftarrow u` (be ready for next step)
+
+The code features the following changes from the ``ft02_diffusion_flat1.py``
+program. We may define :math:`a` and :math:`L` from :math:`F` as before, or do it explicitly:
+
+.. code-block:: python
+
+        a = u*v*dx + dt*dot(grad(u), grad(v))*dx
+        L = (u_1 + dt*f)*v*dx
+
+Prior to the time loop we assemble the coefficient matrix :math:`A` once and
+for all:
+
+.. index:: assemble
+
+.. code-block:: python
+
+        A = assemble(a)   # assemble only once, before the time stepping
+
+At each time level we can do a similar ``b = assemble(L)``. With this
+construction, a new vector for ``b`` is allocated in memory in every
+pass of the time loop.  It would be much more memory friendly to reuse
+the storage of the ``b`` we already have.  This is easily accomplished
+by
+
+.. code-block:: python
+
+        b = assemble(L, tensor=b)
+
+That is, we send in our previous ``b``, which is then filled with new values
+and returned from ``assemble``. Now there will be only a single
+memory allocation of the right-hand side vector. Before the time loop
+we set ``b = None`` such that ``b`` is defined in the first call to
+``assemble``.
+
+The necessary changes inside the time loop go as follows:
+
+.. code-block:: python
+
+        while t <= T:
+            b = assemble(L, tensor=b)
+            u0.t = t
+            bc.apply(A, b)
+            solve(A, u.vector(), b)
+
+The update ``u0.t = t`` is of key importance as ``bc.apply(A, b)`` will
+look up the ``u0`` object to find the proper values in the Dirichlet condition,
+and these change with time in our test problem!
+
+The complete program is found in the file
+``ft09_diffusion_flat2.py``.
+
+.. _tut:timedep:diffusion1:noassemble:
+
+Avoiding all assembly
+---------------------
+
+.. index::
+   single: assembly, increasing efficiency
+
+The purpose of this section is to present a technique for speeding up
+FEniCS simulators for time-dependent problems where it is possible to
+perform all assembly operations prior to the time loop.  There are two
+costly operations in the time loop: assembly of the right-hand side
+:math:`b` and solution of the linear system via the ``solve`` call. The
+assembly process involves work proportional to the number of degrees
+of freedom :math:`N`, while the solve operation has a work estimate of
+:math:`\mathcal{O}( N^{\alpha})`, for some :math:`\alpha\geq 1`.  Typically,
+:math:`\alpha\in [1,2]`.  As :math:`N\rightarrow\infty`, the solve operation will
+dominate for :math:`\alpha>1`, but for the values of :math:`N` typically used on
+smaller computers, the assembly step may still represent a
+considerable part of the total work at each time level. Avoiding
+repeated assembly can therefore contribute to a significant speed-up
+of a finite element code in time-dependent problems.
+
+Deriving recursive linear systems
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+To see how repeated assembly can be avoided, we look at the :math:`L(v)`
+form in  :ref:`(26) <Eq:tut:diffusion:pde1:L>`,
+which in general varies with
+time through :math:`u^{k-1}`, :math:`f^k`, and possibly also with :math:`{\Delta t}`
+if the time step is adjusted during the simulation.
+The technique for avoiding repeated assembly consists in
+expanding the finite element functions in sums over the basis functions
+:math:`\phi_i`, as explained
+in the section :ref:`tut:poisson1:linalg`, to identify matrix-vector
+products that build up the complete system. We have
+:math:`u^{k-1}=\sum_{j=1}^NU^{k-1}_j\phi_j`, and we can expand :math:`f^k` as
+:math:`f^{k}=\sum_{j=1}^NF^{k}_j\phi_j`. Inserting these expressions in :math:`L(v)`
+and using
+:math:`v=\hat\phi_i` result in
+
+.. math::
+        
+        \int_\Omega \left(u^{k-1} + {{\Delta t}}f^k\right)v {\, \mathrm{d}x} &=
+        \int_\Omega \left(\sum_{j=1}^N U^{k-1}_j\phi_j + {{\Delta t}}\sum_{j=1}^N F^{k}_j\phi_j\right)\hat\phi_i {\, \mathrm{d}x},\\ 
+        &=\sum_{j=1}^N\left(\int_\Omega \hat\phi_i\phi_j {\, \mathrm{d}x}\right)U^{k-1}_j
+         + {{\Delta t}}\sum_{j=1}^N\left(\int_\Omega \hat\phi_i\phi_j {\, \mathrm{d}x}\right)F^{k}_j{\thinspace .}
+        
+
+Introducing :math:`M_{ij} = \int_\Omega \hat\phi_i\phi_j {\, \mathrm{d}x}`, we see that
+the last expression can be written
+
+.. math::
+        
+        \sum_{j=1}^NM_{ij}U^{k-1}_j + {{\Delta t}} \sum_{j=1}^NM_{ij}F^{k}_j,
+        
+
+which is nothing but two matrix-vector products,
+
+.. math::
+        
+        MU^{k-1} + {{\Delta t}} MF^k,
+        
+
+if :math:`M` is the matrix with entries :math:`M_{ij}`,
+
+.. math::
+        
+        U^{k-1}=(U^{k-1}_1,\ldots,U^{k-1}_N)^T,
+        
+
+and
+
+.. math::
+        
+        F^k=(F^{k}_1,\ldots,F^{k}_N)^T{\thinspace .}
+        
+
+We have immediate access to :math:`U^{k-1}`
+in the program since that is the vector
+in the ``u_1`` function. The :math:`F^k` vector can easily be
+computed by interpolating the prescribed :math:`f` function (at each time level if
+:math:`f` varies with time). Given :math:`M`, :math:`U^{k-1}`, and :math:`F^k`, the right-hand side
+:math:`b` can be calculated as
+
+.. math::
+        
+        b = MU^{k-1} + {{\Delta t}} MF^k {\thinspace .}
+        
+
+That is, no assembly is necessary to compute :math:`b`.
+
+The coefficient matrix :math:`A` can also be split into two terms.
+We insert :math:`v=\hat\phi_i` and :math:`u^k = \sum_{j=1}^N U^k_j\phi_j` in
+the expression :ref:`(25) <Eq:tut:diffusion:pde1:a>` to get
+
+.. math::
+        
+        \sum_{j=1}^N \left(\int_\Omega \hat\phi_i\phi_j {\, \mathrm{d}x}\right)U^k_j + {{\Delta t}}
+        \sum_{j=1}^N \left(\int_\Omega \nabla\hat\phi_i\cdot\nabla\phi_j {\, \mathrm{d}x}\right)U^k_j,
+        
+
+which can be written as a sum of matrix-vector products,
+
+.. math::
+        
+        MU^k + {{\Delta t}} KU^k = (M + {{\Delta t}} K)U^k,
+        
+
+if we identify the matrix :math:`M` with entries :math:`M_{ij}` as above and
+the matrix :math:`K` with entries
+
+.. _Eq:_auto25:
+
+.. math::
+
+    \tag{75}
+    K_{ij} = \int_\Omega \nabla\hat\phi_i\cdot\nabla\phi_j {\, \mathrm{d}x}{\thinspace .}
+        
+        
+
+The matrix :math:`M` is often called the "mass matrix" while "stiffness matrix"
+is a common nickname for :math:`K`. The associated bilinear forms for these
+matrices, as we need them for the assembly process in a FEniCS
+program, become
+
+.. _Eq:tut:diffusion:pde1:aK:
+
+.. math::
+
+    \tag{76}
+    a_K(u,v) = \int_\Omega\nabla u\cdot\nabla v {\, \mathrm{d}x},
+        
+        
+
+.. _Eq:tut:diffusion:pde1:aM:
+
+.. math::
+
+    \tag{77}
+    a_M(u,v) = \int_\Omega uv {\, \mathrm{d}x} {\thinspace .}
+        
+
+The linear system at each time level, written as :math:`AU^k=b`,
+can now be computed by first computing :math:`M` and :math:`K`, and then forming
+:math:`A=M+{{\Delta t}} K` at :math:`t=0`, while :math:`b` is computed as
+:math:`b=MU^{k-1} + {{\Delta t}}MF^k` at each time level.
+
+Implementation          (4)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The following modifications are needed in the ``ft10_diffusion_func.py``
+program from the previous section in order to implement the new
+strategy of avoiding assembly at each time level:
+
+ 1. Define separate forms :math:`a_M` and :math:`a_K`
+
+ 2. Assemble :math:`a_M` to :math:`M` and :math:`a_K` to :math:`K`
+
+ 3. Compute :math:`A=M+{{\Delta t}}`, :math:`K`
+
+ 4. Define :math:`f` as an ``Expression``
+
+ 5. Interpolate the formula for :math:`f` to a finite element function :math:`F^k`
+
+ 6. Compute :math:`b=MU^{k-1} + {{\Delta t}}MF^k`
+
+The relevant code segments become
+
+.. code-block:: python
+
+        # 1.
+        a_K = dot(grad(u), grad(v))*dx
+        a_M = u*v*dx
+        # No need for L
+        
+        # 2. and 3.
+        M = assemble(a_M)
+        K = assemble(a_K)
+        A = M + dt*K
+        
+        # 4.
+        f = Expression('beta - 2 - 2*alpha', beta=beta, alpha=alpha)
+        
+        # 5. and 6.
+        while t <= T:
+            f_k = interpolate(f, V)
+            F_k = f_k.vector()
+            b = M*u_1.vector() + dt*M*F_k
+
+[**hpl 19**: I wonder if the refactoring should have a function first and then a class or if we jump right to the class. From now on we could use classes as the packaging of FEniCS programs.]
+
+We implement these modification in a refactored version of the
+program ``ft09_diffusion_flat2.py``, where the solver is a function
+as explained in the section :ref:`tut:poisson1:impl2` rather than a
+flat program.
+
+.. code-block:: python
+
+        def solver_minimize_assembly(
+            f, u0, I, dt, T, Nx, Ny, degree=1,
+            user_action=None, I_project=False):
+            # Create mesh and define function space
+            mesh = UnitSquareMesh(Nx, Ny)
+            V = FunctionSpace(mesh, 'P', degree)
+        
+            class Boundary(SubDomain):  # define the Dirichlet boundary
+                def inside(self, x, on_boundary):
+                    return on_boundary
+        
+            boundary = Boundary()
+            bc = DirichletBC(V, u0, boundary)
+        
+            # Initial condition
+            u_1 = project(I, V) if I_project else interpolate(I, V)
+            user_action(0, u_1, V)
+        
+            # Define variational problem
+            u = TrialFunction(V)
+            v = TestFunction(V)
+            a_M = u*v*dx
+            a_K = dot(grad(u), grad(v))*dx
+        
+            M = assemble(a_M)
+            K = assemble(a_K)
+            A = M + dt*K
+            # Compute solution
+            u = Function(V)   # the unknown at a new time level
+            t = dt
+            while t <= T:
+                f_k = interpolate(f, V)
+                F_k = f_k.vector()
+                b = M*u_1.vector() + dt*M*F_k
+                try:
+                    u0.t = t
+                except AttributeError:
+                    pass  # ok if no t attribute in u0
+                bc.apply(A, b)
+                solve(A, u.vector(), b)
+        
+                user_action(t, u, V)
+                t += dt
+                u_1.assign(u)
+
+A special feature in this program is the ``user_action`` callback function:
+at every time level, the solution is sent to ``user_action``, which is
+some function provided by the user where the solution can be processed, e.g.,
+stored, analyzed, or visualized. In a unit test for the test example without
+numerical approximation errors, we can write a call to the solver function,
+
+.. code-block:: python
+
+        def test_solver():
+            import numpy as np
+            alpha = 3; beta = 1.2
+            u0 = Expression('1 + x[0]*x[0] + alpha*x[1]*x[1] + beta*t',
+                            alpha=alpha, beta=beta, t=0)
+            f = Constant(beta - 2 - 2*alpha)
+            dt = 0.3; T = 1.9
+            u0.t = 0
+            solver_minimize_assembly(
+                f, u0, u0, dt, T, Nx, Ny, degree,
+                user_action=assert_max_error, I_project=False)
+
+The ``user_action`` function asserts equality of the
+exact and numerical solution at every time level:
+
+.. code-block:: python
+
+        def assert_max_error(t, u, V):
+            u_e = interpolate(u0, V)
+            max_error= np.abs(u_e.vector().array() -
+                              u.vector().array()).max()
+            tol = 2E-12
+            assert max_error < tol, 'max_error: %g' % max_error
+
+Refactored implementation          (2)
+======================================
+
+A class-based solver for a general diffusion problem
+----------------------------------------------------
+
+When you want to apply some software tool for solving a PDE problem,
+you usually want to explore a family of related problems. To this end,
+you need to formulate some general form of the PDE problem and then
+
+[**hpl 20**: I AM HERE!]
+
+.. _tut:timedep:diffusion2:sin:
+
+A physical example
+------------------
+
+.. index:: ft11_sin_daD.py
+
+With the basic programming techniques for time-dependent problems from
+the sections :ref:`tut:timedep:diffusion1:noassemble` and
+:ref:`tut:timedep:diffusion1:impl` we are ready to attack more
+physically realistic examples.  The next example concerns the
+question: How is the temperature in the ground affected by day and
+night variations at the earth's surface?  We consider some box-shaped
+domain :math:`\Omega` in :math:`d` dimensions with coordinates
+:math:`x_0,\ldots,x_{d-1}` (the problem is meaningful in 1D, 2D, and 3D).
+At the top of the domain, :math:`x_{0}=0`, we have an oscillating
+temperature
+
+.. math::
+        
+        T_0(t) = T_R + T_A\sin (\omega t),
+        
+
+where :math:`T_R` is some reference temperature, :math:`T_A` is the amplitude of
+the temperature variations at the surface, and :math:`\omega` is the
+frequency of the temperature oscillations.  At all other boundaries we
+assume that the temperature does not change anymore when we move away
+from the boundary, i.e., the normal derivative is zero.  Initially,
+the temperature can be taken as :math:`T_R` everywhere.  The heat
+conductivity properties of the soil in the ground may vary with space
+so we introduce a variable coefficient :math:`\kappa` reflecting this
+property.  Figure :ref:`tut:timedep:diffusion2:sin:fig1` shows a sketch
+of the problem, with a small region where the heat conductivity is
+much lower.  [**hpl 21**: All parameters :math:`\varrho`, :math:`c`, and :math:`\kappa` are different!]
+
+.. _tut:timedep:diffusion2:sin:fig1:
+
+.. figure:: daynight.png
+   :width: 480
+
+   *Sketch of a (2D) problem involving heating and cooling of the ground due to an oscillating surface temperature*
+
+The initial-boundary value problem for this problem reads
+
+.. _Eq:_auto26:
+
+.. math::
+
+    \tag{78}
+    \varrho c{\partial T\over\partial t} = \nabla\cdot\left( \kappa\nabla T\right)\hbox{ in }\Omega\times (0,t_{\hbox{stop}}],
+        
+        
+
+.. _Eq:_auto27:
+
+.. math::
+
+    \tag{79}
+    T = T_0(t)\hbox{ on }\Gamma_0,
+        
+        
+
+.. _Eq:_auto28:
+
+.. math::
+
+    \tag{80}
+    {\partial T\over\partial n} = 0\hbox{ on }\partial\Omega\backslash\Gamma_0,
+        
+        
+
+.. _Eq:_auto29:
+
+.. math::
+
+    \tag{81}
+    T = T_R\hbox{ at }t =0{\thinspace .}
+        
+        
+
+Here, :math:`\varrho` is the density of the soil, :math:`c` is the
+heat capacity, :math:`\kappa` is the thermal conductivity
+(heat conduction coefficient)
+in the soil, and :math:`\Gamma_0` is the surface boundary :math:`x_{0}=0`.
+
+We use a :math:`\theta`-scheme in time, i.e., the evolution equation
+:math:`\partial P/\partial t=Q(t)` is discretized as
+
+.. math::
+        
+        {P^k - P^{k-1}\over{{\Delta t}}} = \theta Q^k + (1-\theta )Q^{k-1},
+        
+
+where :math:`\theta\in[0,1]` is a weighting factor: :math:`\theta =1` corresponds
+to the backward difference scheme, :math:`\theta =1/2` to the Crank-Nicolson
+scheme, and :math:`\theta =0` to a forward difference scheme.
+The :math:`\theta`-scheme applied to our PDE results in
+
+.. math::
+        
+        \varrho c{T^k-T^{k-1}\over{{\Delta t}}} =
+        \theta \nabla\cdot\left( \kappa\nabla T^k\right)
+        + (1-\theta) \nabla\cdot\left( k\nabla T^{k-1}\right){\thinspace .}
+        
+
+Bringing this time-discrete PDE into weak form follows the technique shown
+many times earlier in this tutorial. In the standard notation
+:math:`a(T,v)=L(v)` the weak form has
+
+.. _Eq:_auto30:
+
+.. math::
+
+    \tag{82}
+    a(T,v) = \int_\Omega
+        \left( \varrho c Tv + \theta{{\Delta t}} \kappa\nabla T\cdot \nabla v\right) {\, \mathrm{d}x},
+        
+        
+
+.. _Eq:_auto31:
+
+.. math::
+
+    \tag{83}
+    L(v) = \int_\Omega \left( \varrho c T^{k-1}v - (1-\theta){{\Delta t}}
+        \kappa\nabla T^{k-1}\cdot \nabla v\right) {\, \mathrm{d}x}{\thinspace .}
+        
+        
+
+Observe that boundary integrals vanish because of the Neumann boundary
+conditions.
+
+.. index:: heterogeneous medium
+
+.. index:: multi-material domain
+
+The size of a 3D box is taken as :math:`W\times W\times D`, where :math:`D` is
+the depth and :math:`W=D/2` is the width.
+We give the degree of the basis functions at the command line, then :math:`D`,
+and then the divisions of the domain in the various directions.
+To make a box, rectangle, or interval of arbitrary (not unit) size,
+we have the classes ``BoxMesh``, ``RectangleMesh``, and
+``IntervalMesh`` at our disposal. The mesh and the function space
+can be created by the following code:
+
+.. code-block:: python
+
+        degree = int(sys.argv[1])
+        D = float(sys.argv[2])
+        W = D/2.0
+        divisions = [int(arg) for arg in sys.argv[3:]]
+        d = len(divisions)  # no of space dimensions
+        if d == 1:
+            mesh = IntervalMesh(divisions[0], -D, 0)
+        elif d == 2:
+            mesh = RectangleMesh(-W/2, -D, W/2, 0, divisions[0], divisions[1])
+        elif d == 3:
+            mesh = BoxMesh(-W/2, -W/2, -D, W/2, W/2, 0,
+                       divisions[0], divisions[1], divisions[2])
+        V = FunctionSpace(mesh, 'P', degree)
+
+The ``RectangleMesh`` and ``BoxMesh`` objects are defined by the coordinates
+of the "minimum" and "maximum" corners.
+
+Setting Dirichlet conditions at the upper boundary can be done by
+
+.. code-block:: python
+
+        T_R = 0; T_A = 1.0; omega = 2*pi
+        
+        T_0 = Expression('T_R + T_A*sin(omega*t)',
+                         T_R=T_R, T_A=T_A, omega=omega, t=0.0)
+        
+        def surface(x, on_boundary):
+            return on_boundary and abs(x[d-1]) < 1E-14
+        
+        bc = DirichletBC(V, T_0, surface)
+
+The :math:`\kappa` function can be defined as a constant :math:`\kappa_1` inside
+the particular rectangular area with a special soil composition, as
+indicated in Figure :ref:`tut:timedep:diffusion2:sin:fig1`. Outside
+this area :math:`\kappa` is a constant :math:`\kappa_0`.
+The domain of the rectangular area is taken as
+
+.. math::
+        
+        [-W/4, W/4]\times [-W/4, W/4]\times [-D/2, -D/2 + D/4]
+        
+
+in 3D, with :math:`[-W/4, W/4]\times [-D/2, -D/2 + D/4]` in 2D and
+:math:`[-D/2, -D/2 + D/4]` in 1D.
+Since we need some testing in the definition of the :math:`\kappa(\boldsymbol{x})`
+function, the most straightforward approach is to define a subclass
+of ``Expression``, where we can use a full Python method instead of
+just a C++ string formula for specifying a function.
+The method that defines the function is called ``eval``:
+
+.. code-block:: python
+
+        class Kappa(Expression):
+            def eval(self, value, x):
+                """x: spatial point, value[0]: function value."""
+                d = len(x)  # no of space dimensions
+                material = 0  # 0: outside, 1: inside
+                if d == 1:
+                    if -D/2. < x[d-1] < -D/2. + D/4.:
+                        material = 1
+                elif d == 2:
+                    if -D/2. < x[d-1] < -D/2. + D/4. and \ 
+                       -W/4. < x[0] < W/4.:
+                        material = 1
+                elif d == 3:
+                    if -D/2. < x[d-1] < -D/2. + D/4. and \ 
+                       -W/4. < x[0] < W/4. and -W/4. < x[1] < W/4.:
+                        material = 1
+                value[0] = kappa_0 if material == 0 else kappa_1
+
+The ``eval`` method gives great flexibility in defining functions,
+but a downside is that C++ calls up ``eval`` in Python for
+each point ``x``, which is a slow process, and the number of calls
+is proportional to the number of numerical
+integration points in the mesh (about
+the number of degrees of freedom).
+Function expressions in terms of strings are compiled to efficient
+C++ functions, being called from C++, so we should try to express functions
+as string expressions if possible. (The ``eval`` method can also be
+defined through C++ code, but this is much
+more complicated and not covered here.)
+Using inline if-tests in C++, we can make string expressions for
+:math:`\kappa`, here stored in a Python dictionary so that ``kappa_str[d-1]``
+is the proper test in a :math:`d` dimensional problem:
+
+.. code-block:: python
+
+        kappa_str = {}
+        kappa_str[1] = 'x[0] > -D/2 && x[0] < -D/2 + D/4 ? kappa_1 : kappa_0'
+        kappa_str[2] = 'x[0] > -W/4 && x[0] < W/4 '\ 
+                       '&& x[1] > -D/2 && x[1] < -D/2 + D/4 ? '\ 
+                       'kappa_1 : kappa_0'
+        kappa_str[3] = 'x[0] > -W/4 && x[0] < W/4 '\ 
+                       'x[1] > -W/4 && x[1] < W/4 '\ 
+                       '&& x[2] > -D/2 && x[2] < -D/2 + D/4 ?'\ 
+                       'kappa_1 : kappa_0'
+        
+        kappa = Expression(kappa_str[d],
+                           D=D, W=W, kappa_0=kappa_0, kappa_1=kappa_1)
+
+Let ``T`` denote the unknown spatial temperature function at the
+current time level, and let ``T_1`` be the corresponding function
+at one earlier time level.
+We are now ready to define the initial condition and the
+``a`` and ``L`` forms of our problem:
+
+.. code-block:: python
+
+        T_prev = interpolate(Constant(T_R), V)
+        
+        rho = 1
+        c = 1
+        period = 2*pi/omega
+        t_stop = 5*period
+        dt = period/20  # 20 time steps per period
+        theta = 1
+        
+        T = TrialFunction(V)
+        v = TestFunction(V)
+        f = Constant(0)
+        a = rho*c*T*v*dx + theta*dt*kappa*\ 
+            dot(grad(T), grad(v))*dx
+        L = (rho*c*T_prev*v + dt*f*v -
+             (1-theta)*dt*kappa*dot(grad(T_1), grad(v)))*dx
+        
+        A = assemble(a)
+        b = None  # variable used for memory savings in assemble calls
+        T = Function(V)   # unknown at the current time level
+
+We could, alternatively, break ``a`` and ``L`` up in subexpressions
+and assemble a mass matrix and stiffness matrix, as exemplified in
+the section :ref:`tut:timedep:diffusion1:noassemble`, to avoid
+assembly of ``b`` at every time level. This modification is
+straightforward and left as an exercise. The speed-up can be significant
+in 3D problems.
+
+The time loop is very similar to what we have displayed in
+the section :ref:`tut:timedep:diffusion1:impl`:
+
+.. code-block:: python
+
+        T = Function(V)   # unknown at the current time level
+        t = dt
+        while t <= t_stop:
+            b = assemble(L, tensor=b)
+            T_0.t = t
+            bc.apply(A, b)
+            solve(A, T.vector(), b)
+            # visualization statements
+            t += dt
+            T_prev.assign(T)
+
+The complete code in ``ft11_sin_daD.py`` contains several
+statements related to visualization and animation of the solution, both as a
+finite element field (``plot`` calls) and as a curve in the
+vertical direction. The code also plots the exact analytical solution,
+
+.. math::
+        
+        T(x,t) = T_R + T_Ae^{ax}\sin (\omega t + ax),\quad a =\sqrt{\omega\varrho c\over 2\kappa},
+        
+
+which is valid when :math:`\kappa = \kappa_0=\kappa_1`.
+
+Implementing this analytical solution as a Python function
+taking scalars and numpy arrays as arguments requires a word of caution.
+A straightforward function like
+
+.. code-block:: python
+
+        def T_exact(x):
+            a = sqrt(omega*rho*c/(2*kappa_0))
+            return T_R + T_A*exp(a*x)*sin(omega*t + a*x)
+
+will not work and result in an error message from UFL. The reason is that
+the names ``exp`` and ``sin`` are those imported
+by the ``from fenics import *`` statement, and these names
+come from UFL and are aimed at being used in variational forms.
+In the ``T_exact`` function where ``x`` may be a scalar or a
+``numpy`` array, we therefore need to explicitly specify
+``np.exp`` and ``np.sin`` (if ``numpy`` is imported under the common name ``np``):
+
+.. code-block:: python
+
+        def T_exact(x):
+            a = sqrt(omega*rho*c/(2*kappa_0))
+            return T_R + T_A*np.exp(a*x)*np.sin(omega*t + a*x)
+
+The complete code is found in the file The reader is encouraged to
+play around with the code and test out various parameter sets:
+
+ 1. :math:`T_R=0`, :math:`T_A=1`, :math:`\kappa_0 = \kappa_1=0.2`, :math:`\varrho = c = 1`, :math:`\omega = 2\pi`
+
+ 2. :math:`T_R=0`, :math:`T_A=1`, :math:`\kappa_0=0.2`, :math:`\kappa_1=0.01`, :math:`\varrho = c = 1`, :math:`\omega = 2\pi`
+
+ 3. :math:`T_R=0`, :math:`T_A=1`, :math:`\kappa_0=0.2`, :math:`\kappa_1=0.001`, :math:`\varrho = c = 1`, :math:`\omega = 2\pi`
+
+ 4. :math:`T_R=10` C, :math:`T_A=10` C, :math:`\kappa_0= 2.3 \hbox{ K}^{-1}\hbox{Ns}^{-1}`,
+    :math:`\kappa_1= 100 \hbox{ K}^{-1}\hbox{Ns}^{-1}`,
+    :math:`\varrho = 1500\hbox{ kg/m}^3`,
+    :math:`c = 1480\hbox{ Nm}\cdot\hbox{kg}^{-1}\hbox{K}^{-1}`,
+    :math:`\omega = 2\pi/24` 1/h  :math:`= 7.27\cdot 10^{-5}` 1/s, :math:`D=1.5` m
+
+ 5. As above, but :math:`\kappa_0= 12.3 \hbox{ K}^{-1}\hbox{Ns}^{-1}` and
+    :math:`\kappa_1= 10^4 \hbox{ K}^{-1}\hbox{Ns}^{-1}`
+
+Data set number 4 is relevant for real temperature variations in
+the ground (not necessarily the large value of :math:`\kappa_1`),
+while data set number 5
+exaggerates the effect of a large heat conduction contrast so that
+it becomes clearly visible in an animation.
+
+.. kappa_1 = 1.1, varrho_1 = 1200, c_1 = 1000 => 9.17E-7
+
+.. kappa_0 = 2.3, varrho_0 = 1800, c_0 = 1500 => 8.52E-7
+

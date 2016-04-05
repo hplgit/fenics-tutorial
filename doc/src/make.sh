@@ -75,4 +75,4 @@ dest=../pub
 rm -rf $dest/sphinx
 cp -r fenics-tutorial-4print.pdf sphinx-rootdir/_build/html $dest
 mv -f $dest/html $dest/sphinx
-cp -r $name.html ._*.html fig $dest
+cp -r $name.html ._*.html fig mov $dest
