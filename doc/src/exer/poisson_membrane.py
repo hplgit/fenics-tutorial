@@ -79,7 +79,7 @@ def application(beta, R0, num_elements_radial_dir):
     plot(p, title='Scaled ' + p.label())
 
     # Dump p and w to file in VTK format
-    vtkfile1 = File('membrane_displacement.pvd')
+    vtkfile1 = File('membrane_deflection.pvd')
     vtkfile1 << w
     vtkfile2 = File('membrane_load.pvd')
     vtkfile2 << p
@@ -89,25 +89,30 @@ def test_membrane():
     p = Constant(4)
     # Generate mesh over the unit circle
     domain = Circle(Point(0.0, 0.0), 1.0)
-    n = 10
-    for i in range(4):
-        n *= (i+1)
-        mesh = generate_mesh(domain, n)
-        w = solver(p, Constant(0), mesh, degree=1,
-                   linear_solver='direct')
-        print('max w: %g, w(0,0)=%g, h=%.3E, num_cells=%d' %
-              (w.vector().array().max(), w((0,0)),
-              1/np.sqrt(mesh.num_vertices()), mesh.num_cells()))
+    for degree in 2, 3:
+        print('********* P%d elements:' % degree)
+        n = 5
+        for i in range(4):  # Run some resolutions
+            n *= (i+1)
+            mesh = generate_mesh(domain, n)
+            #info(mesh)
+            w = solver(p, Constant(0), mesh, degree=degree,
+                       linear_solver='direct')
+            print('max w: %g, w(0,0)=%g, h=%.3E, dofs=%d' %
+                  (w.vector().array().max(), w((0,0)),
+                   1/np.sqrt(mesh.num_vertices()),
+                   w.function_space().dim()))
 
-        w_exact = Expression('1 - x[0]*x[0] - x[1]*x[1]')
-        w_e = interpolate(w_exact, w.function_space())
-        diff_array = np.abs(
-            w_e.vector().array() - w.vector().array())
-        print('Max error: %.16E' % diff_array.max())
-        assert diff_array.max() < 9.61E-03
+            w_exact = Expression('1 - x[0]*x[0] - x[1]*x[1]')
+            w_e = interpolate(w_exact, w.function_space())
+            error = np.abs(w_e.vector().array() -
+                           w.vector().array()).max()
+            print('error: %.3E' % error)
+            assert error < 9.61E-03
 
 def application2(
     beta, R0, num_elements_radial_dir):
+    """Explore more built-in visulization features."""
     # Scaled pressure function
     p = Expression(
         '4*exp(-pow(beta,2)*(pow(x[0], 2) + pow(x[1]-R0, 2)))',
@@ -144,7 +149,7 @@ def application2(
     viz_p.write_pdf('pressure')
 
     # Dump w and p to file in VTK format
-    vtkfile1 = File('membrane_displacement.pvd')
+    vtkfile1 = File('membrane_deflection.pvd')
     vtkfile1 << w
     vtkfile2 = File('membrane_load.pvd')
     vtkfile2 << p

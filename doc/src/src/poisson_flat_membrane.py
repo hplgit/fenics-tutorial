@@ -42,9 +42,10 @@ plot(w, title='Deflection')
 plot(p, title='Load')
 
 # Dump p and w to file in VTK format
-vtkfile = File('membrane.pvd')
-vtkfile << w
-vtkfile << p
+vtkfile1 = File('membrane_deflection.pvd')
+vtkfile1 << w
+vtkfile2 = File('membrane_load.pvd')
+vtkfile2 << p
 
 # Should be at the end
 interactive()
