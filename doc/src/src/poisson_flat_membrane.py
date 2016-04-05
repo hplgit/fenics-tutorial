@@ -47,5 +47,19 @@ vtkfile1 << w
 vtkfile2 = File('membrane_load.pvd')
 vtkfile2 << p
 
+# Curve plot along x=0 comparing p and w
+import numpy as np
+import matplotlib.pyplot as plt
+tol = 1E-8  # Avoid hitting points outside domain
+y = np.linspace(-1+tol, 1-tol, 101)
+points = [(0, y_) for y_ in y]  # 2D points
+w_line = np.array([w(point) for point in points])
+p_line = np.array([p(point) for point in points])
+plt.plot(y, 100*w_line, 'r-', y, p_line, 'b--') # magnify w
+plt.legend(['100 x deflection', 'load'], loc='upper left')
+plt.xlabel('y');  plt.ylabel('$p$ and $100u$')
+plt.savefig('tmp1.pdf');  plt.savefig('tmp1.png')
+
 # Should be at the end
 interactive()
+plt.show()

@@ -1102,7 +1102,7 @@ a suitable filename.
 .. _ftut:poisson:membrane:
 
 Deflection of a membrane
-------------------------
+========================
 
 The previous problem and code targeted a simple test problem where we
 can easily verify the implementation. Now we turn the attention to
@@ -1145,7 +1145,7 @@ The parameter :math:`A` is the amplitude of the pressure,
 and :math:`\sigma` the "width" of :math:`p`.
 
 Scaling
-~~~~~~~
+-------
 
 The localization of the pressure, :math:`(x_0,y_0)`, is for simplicity
 set to :math:`(0, R_0)`.
@@ -1204,7 +1204,7 @@ Just a few modifications are necessary in our previous program to solve
 this new problem.
 
 Defining the mesh
-~~~~~~~~~~~~~~~~~
+-----------------
 
 A mesh over the unit circle can be created by the ``mshr`` tool in
 FEniCS:
@@ -1213,14 +1213,16 @@ FEniCS:
 
         from mshr import *
         domain = Circle(Point(0.0, 0.0), 1.0)
+        n = 20
         mesh = generate_mesh(domain, n)
+        plot(mesh, interactive=True)
 
 The ``Circle`` shape from ``mshr`` takes the center and radius of the circle
 as the two first arguments, while ``n`` is the resolution, here the
 suggested number of cells per radius.
 
 Defining the load
-~~~~~~~~~~~~~~~~~
+-----------------
 
 .. index:: Expresion
 
@@ -1234,6 +1236,8 @@ by keyword arguments:
 
 .. code-block:: python
 
+        beta = 8
+        R0 = 0.6
         p = Expression(
             '4*exp(-pow(beta,2)*(pow(x[0], 2) + pow(x[1]-R0, 2)))',
             beta=beta, R0=R0)
@@ -1247,13 +1251,13 @@ values modified. For example, we may set
 
 .. code-block:: python
 
-        f.beta = 12
-        f.R0 = 0.3
+        p.beta = 12
+        p.R0 = 0.3
 
 .. index:: interpolation
 
 Variational form
-~~~~~~~~~~~~~~~~
+----------------
 
 We may introduce ``w`` instead of ``u`` as primary unknown and ``p`` instead
 of ``f`` as right-hand side function:
@@ -1269,7 +1273,7 @@ of ``f`` as right-hand side function:
         solve(a == L, w, bc)
 
 Visualization
-~~~~~~~~~~~~~
+-------------
 
 It would be of interest to visualize :math:`p` along with :math:`w` so that we can
 examine the pressure force and the membrane's response.  We must then
@@ -1282,10 +1286,10 @@ element function whose degrees of freedom are calculated from
 
         p = interpolate(p, V)
 
-Note that the assignment
-to ``p`` destroys the previous ``Expression`` object ``p``, so if
-it is of interest to still have access to this object, another name must be used
-for the ``Function`` object returned by ``interpolate``.
+Note that the assignment to ``p`` destroys the previous ``Expression``
+object ``p``, so if it is of interest to still have access to this
+object, another name must be used for the ``Function`` object returned
+by ``interpolate``.
 
 We can now plot ``w`` and ``p`` on the screen
 as well as dump the fields to file in VTK format:
@@ -1300,10 +1304,45 @@ as well as dump the fields to file in VTK format:
         vtkfile2 = File('membrane_load.pvd')
         vtkfile2 << p
 
-Figure :ref:`ftut:poisson:membrane:fig` shows the result of the ``plot``
-commands.
+Figure :ref:`ftut:poisson:membrane:fig` shows the result of the ``plot`` commands.
 
 .. _ftut:poisson:membrane:fig:
+
+.. figure:: membrane_fenics_viz.png
+   :width: 800
+
+   *Load (left) and resulting deflection (right) of a circular membrane*
+
+.. Nice with some matplotlib plots in notebooks...and very useful for
+
+.. scientific investigations.
+
+To better compare the load and the deflection, we can make a curve plot
+along the line :math:`y=0`. This is just a matter of defining a set of points
+along the line and evaluating the finite element functions ``w`` and ``p``
+at these points:
+
+.. code-block:: python
+
+        # Curve plot along x=0 comparing p and w
+        import numpy as np
+        import matplotlib.pyplot as plt
+        tol = 1E-8  # Avoid hitting points outside domain
+        y = np.linspace(-1+tol, 1-tol, 101)
+        points = [(0, y_) for y_ in y]  # 2D points
+        w_line = np.array([w(point) for point in points])
+        p_line = np.array([p(point) for point in points])
+        plt.plot(y, 100*w_line, 'r-', y, p_line, 'b--') # magnify w
+        plt.legend(['100 x deflection', 'load'], loc='upper left')
+        plt.xlabel('y');  plt.ylabel('$p$ and $100u$')
+        plt.savefig('tmp1.pdf');  plt.savefig('tmp1.png')
+
+(Remember a ``plt.show()`` at the end to show the plot on the screen.)
+The resulting curve plot appears in Figure :ref:`ftut:poisson:membrane:fig2`.
+It is seen how the localized input (:math:`p`) is heavily damped and smoothened in
+the output (:math:`w`). This reflects a typical property of the Poisson equation.
+
+.. _ftut:poisson:membrane:fig2:
 
 .. figure:: membrane_fenics_viz.png
    :width: 800
@@ -1313,7 +1352,7 @@ commands.
 .. _ftut:paraview:
 
 Running ParaView
-~~~~~~~~~~~~~~~~
+----------------
 
 `ParaView <http://www.paraview.org>`__ is a very strong and well-developed
 tool for visualizing scalar and vector fields, including those
@@ -1321,9 +1360,8 @@ computed by FEniCS.
 
 Our program file writes :math:`w` and :math:`p` to file as finite element
 functions.  The default filenames are ``membrane_deflection.pvd`` for
-:math:`w` and ``membrane_load.vtu`` for :math:`p`.
-These files are in VTK format and their data can be visualized in
-ParaView.
+:math:`w` and ``membrane_load.vtu`` for :math:`p`.  These files are in VTK format
+and their data can be visualized in ParaView.
 
 1. Start the ParaView application.
 
@@ -1410,7 +1448,7 @@ For more information, we refer to The ParaView Guide [Ref22]_
 .. _ftut:quickviz:
 
 Using the built-in visualization tool
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+-------------------------------------
 
 .. index:: visualization
 
