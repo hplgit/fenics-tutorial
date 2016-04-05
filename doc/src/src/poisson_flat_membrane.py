@@ -50,7 +50,7 @@ vtkfile2 << p
 # Curve plot along x=0 comparing p and w
 import numpy as np
 import matplotlib.pyplot as plt
-tol = 1E-8  # Avoid hitting points outside domain
+tol = 1E-8  # Avoid hitting points outside the domain
 y = np.linspace(-1+tol, 1-tol, 101)
 points = [(0, y_) for y_ in y]  # 2D points
 w_line = np.array([w(point) for point in points])
