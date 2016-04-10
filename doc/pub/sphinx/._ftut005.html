@@ -333,7 +333,7 @@ program <code class="docutils literal"><span class="pre">ft09_diffusion_flat2.py
 as explained in the section <a class="reference internal" href="._ftut004.html#ftut-poisson1-impl2"><span class="std std-ref">Refactored implementation</span></a> rather than a
 flat program.</p>
 <div class="highlight-python"><div class="highlight"><pre><span class="k">def</span> <span class="nf">solver_minimize_assembly</span><span class="p">(</span>
-    <span class="n">f</span><span class="p">,</span> <span class="n">u0</span><span class="p">,</span> <span class="n">I</span><span class="p">,</span> <span class="n">dt</span><span class="p">,</span> <span class="n">T</span><span class="p">,</span> <span class="n">Nx</span><span class="p">,</span> <span class="n">Ny</span><span class="p">,</span> <span class="n">degree</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+    <span class="n">alpha</span><span class="p">,</span> <span class="n">f</span><span class="p">,</span> <span class="n">u0</span><span class="p">,</span> <span class="n">I</span><span class="p">,</span> <span class="n">dt</span><span class="p">,</span> <span class="n">T</span><span class="p">,</span> <span class="n">Nx</span><span class="p">,</span> <span class="n">Ny</span><span class="p">,</span> <span class="n">degree</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
     <span class="n">user_action</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">I_project</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
     <span class="c"># Create mesh and define function space</span>
     <span class="n">mesh</span> <span class="o">=</span> <span class="n">UnitSquareMesh</span><span class="p">(</span><span class="n">Nx</span><span class="p">,</span> <span class="n">Ny</span><span class="p">)</span>
@@ -348,34 +348,43 @@ flat program.</p>
 
     <span class="c"># Initial condition</span>
     <span class="n">u_1</span> <span class="o">=</span> <span class="n">project</span><span class="p">(</span><span class="n">I</span><span class="p">,</span> <span class="n">V</span><span class="p">)</span> <span class="k">if</span> <span class="n">I_project</span> <span class="k">else</span> <span class="n">interpolate</span><span class="p">(</span><span class="n">I</span><span class="p">,</span> <span class="n">V</span><span class="p">)</span>
-    <span class="n">user_action</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">u_1</span><span class="p">,</span> <span class="n">V</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">user_action</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+        <span class="n">user_action</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">u_1</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
 
     <span class="c"># Define variational problem</span>
     <span class="n">u</span> <span class="o">=</span> <span class="n">TrialFunction</span><span class="p">(</span><span class="n">V</span><span class="p">)</span>
     <span class="n">v</span> <span class="o">=</span> <span class="n">TestFunction</span><span class="p">(</span><span class="n">V</span><span class="p">)</span>
     <span class="n">a_M</span> <span class="o">=</span> <span class="n">u</span><span class="o">*</span><span class="n">v</span><span class="o">*</span><span class="n">dx</span>
-    <span class="n">a_K</span> <span class="o">=</span> <span class="n">dot</span><span class="p">(</span><span class="n">grad</span><span class="p">(</span><span class="n">u</span><span class="p">),</span> <span class="n">grad</span><span class="p">(</span><span class="n">v</span><span class="p">))</span><span class="o">*</span><span class="n">dx</span>
+    <span class="n">a_K</span> <span class="o">=</span> <span class="n">alpha</span><span class="o">*</span><span class="n">dot</span><span class="p">(</span><span class="n">grad</span><span class="p">(</span><span class="n">u</span><span class="p">),</span> <span class="n">grad</span><span class="p">(</span><span class="n">v</span><span class="p">))</span><span class="o">*</span><span class="n">dx</span>
 
     <span class="n">M</span> <span class="o">=</span> <span class="n">assemble</span><span class="p">(</span><span class="n">a_M</span><span class="p">)</span>
     <span class="n">K</span> <span class="o">=</span> <span class="n">assemble</span><span class="p">(</span><span class="n">a_K</span><span class="p">)</span>
     <span class="n">A</span> <span class="o">=</span> <span class="n">M</span> <span class="o">+</span> <span class="n">dt</span><span class="o">*</span><span class="n">K</span>
     <span class="c"># Compute solution</span>
     <span class="n">u</span> <span class="o">=</span> <span class="n">Function</span><span class="p">(</span><span class="n">V</span><span class="p">)</span>   <span class="c"># the unknown at a new time level</span>
+    <span class="n">b_assemble</span> <span class="o">=</span> <span class="mi">0</span>  <span class="c"># CPU time for assembling all the b vectors</span>
+    <span class="n">timestep</span> <span class="o">=</span> <span class="mi">1</span>
     <span class="n">t</span> <span class="o">=</span> <span class="n">dt</span>
     <span class="k">while</span> <span class="n">t</span> <span class="o">&lt;=</span> <span class="n">T</span><span class="p">:</span>
+        <span class="n">t0</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">clock</span><span class="p">()</span>
         <span class="n">f_k</span> <span class="o">=</span> <span class="n">interpolate</span><span class="p">(</span><span class="n">f</span><span class="p">,</span> <span class="n">V</span><span class="p">)</span>
         <span class="n">F_k</span> <span class="o">=</span> <span class="n">f_k</span><span class="o">.</span><span class="n">vector</span><span class="p">()</span>
         <span class="n">b</span> <span class="o">=</span> <span class="n">M</span><span class="o">*</span><span class="n">u_1</span><span class="o">.</span><span class="n">vector</span><span class="p">()</span> <span class="o">+</span> <span class="n">dt</span><span class="o">*</span><span class="n">M</span><span class="o">*</span><span class="n">F_k</span>
+        <span class="n">b_assemble</span> <span class="o">+=</span> <span class="n">time</span><span class="o">.</span><span class="n">clock</span><span class="p">()</span> <span class="o">-</span> <span class="n">t0</span>
         <span class="k">try</span><span class="p">:</span>
             <span class="n">u0</span><span class="o">.</span><span class="n">t</span> <span class="o">=</span> <span class="n">t</span>
+            <span class="n">f</span><span class="o">.</span><span class="n">t</span> <span class="o">=</span> <span class="n">t</span>
         <span class="k">except</span> <span class="ne">AttributeError</span><span class="p">:</span>
             <span class="k">pass</span>  <span class="c"># ok if no t attribute in u0</span>
         <span class="n">bc</span><span class="o">.</span><span class="n">apply</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="n">b</span><span class="p">)</span>
         <span class="n">solve</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="n">u</span><span class="o">.</span><span class="n">vector</span><span class="p">(),</span> <span class="n">b</span><span class="p">)</span>
 
-        <span class="n">user_action</span><span class="p">(</span><span class="n">t</span><span class="p">,</span> <span class="n">u</span><span class="p">,</span> <span class="n">V</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">user_action</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">user_action</span><span class="p">(</span><span class="n">t</span><span class="p">,</span> <span class="n">u</span><span class="p">,</span> <span class="n">timestep</span><span class="p">)</span>
         <span class="n">t</span> <span class="o">+=</span> <span class="n">dt</span>
+        <span class="n">timestep</span> <span class="o">+=</span> <span class="mi">1</span>
         <span class="n">u_1</span><span class="o">.</span><span class="n">assign</span><span class="p">(</span><span class="n">u</span><span class="p">)</span>
+    <span class="n">info</span><span class="p">(</span><span class="s">&#39;total time for assembly of right-hand side: </span><span class="si">%.2f</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">b_assemble</span><span class="p">)</span>
 </pre></div>
 </div>
 <p>A special feature in this program is the <code class="docutils literal"><span class="pre">user_action</span></code> callback function:
@@ -393,30 +402,369 @@ numerical approximation errors, we can write a call to the solver function,</p>
     <span class="n">u0</span><span class="o">.</span><span class="n">t</span> <span class="o">=</span> <span class="mi">0</span>
     <span class="n">solver_minimize_assembly</span><span class="p">(</span>
         <span class="n">f</span><span class="p">,</span> <span class="n">u0</span><span class="p">,</span> <span class="n">u0</span><span class="p">,</span> <span class="n">dt</span><span class="p">,</span> <span class="n">T</span><span class="p">,</span> <span class="n">Nx</span><span class="p">,</span> <span class="n">Ny</span><span class="p">,</span> <span class="n">degree</span><span class="p">,</span>
-        <span class="n">user_action</span><span class="o">=</span><span class="n">assert_max_error</span><span class="p">,</span> <span class="n">I_project</span><span class="o">=</span><span class="bp">False</span><span class="p">)</span>
+        <span class="n">user_action</span><span class="o">=</span><span class="n">assert_error</span><span class="p">,</span> <span class="n">I_project</span><span class="o">=</span><span class="bp">False</span><span class="p">)</span>
 </pre></div>
 </div>
-<p>The <code class="docutils literal"><span class="pre">user_action</span></code> function asserts equality of the
+<p>The <code class="docutils literal"><span class="pre">user_action</span></code> function <code class="docutils literal"><span class="pre">assert_error</span></code> asserts equality of the
 exact and numerical solution at every time level:</p>
-<div class="highlight-python"><div class="highlight"><pre><span class="k">def</span> <span class="nf">assert_max_error</span><span class="p">(</span><span class="n">t</span><span class="p">,</span> <span class="n">u</span><span class="p">,</span> <span class="n">V</span><span class="p">):</span>
-    <span class="n">u_e</span> <span class="o">=</span> <span class="n">interpolate</span><span class="p">(</span><span class="n">u0</span><span class="p">,</span> <span class="n">V</span><span class="p">)</span>
-    <span class="n">max_error</span><span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">u_e</span><span class="o">.</span><span class="n">vector</span><span class="p">()</span><span class="o">.</span><span class="n">array</span><span class="p">()</span> <span class="o">-</span>
-                      <span class="n">u</span><span class="o">.</span><span class="n">vector</span><span class="p">()</span><span class="o">.</span><span class="n">array</span><span class="p">())</span><span class="o">.</span><span class="n">max</span><span class="p">()</span>
+<div class="highlight-python"><div class="highlight"><pre><span class="k">def</span> <span class="nf">assert_error</span><span class="p">(</span><span class="n">t</span><span class="p">,</span> <span class="n">u</span><span class="p">,</span> <span class="n">timestep</span><span class="p">):</span>
+    <span class="n">u_e</span> <span class="o">=</span> <span class="n">interpolate</span><span class="p">(</span><span class="n">u0</span><span class="p">,</span> <span class="n">u</span><span class="o">.</span><span class="n">function_space</span><span class="p">())</span>
+    <span class="n">error</span><span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">u_e</span><span class="o">.</span><span class="n">vector</span><span class="p">()</span><span class="o">.</span><span class="n">array</span><span class="p">()</span> <span class="o">-</span>
+                  <span class="n">u</span><span class="o">.</span><span class="n">vector</span><span class="p">()</span><span class="o">.</span><span class="n">array</span><span class="p">())</span><span class="o">.</span><span class="n">max</span><span class="p">()</span>
     <span class="n">tol</span> <span class="o">=</span> <span class="mf">2E-12</span>
-    <span class="k">assert</span> <span class="n">max_error</span> <span class="o">&lt;</span> <span class="n">tol</span><span class="p">,</span> <span class="s">&#39;max_error: </span><span class="si">%g</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">max_error</span>
+    <span class="k">assert</span> <span class="n">error</span> <span class="o">&lt;</span> <span class="n">tol</span><span class="p">,</span> <span class="s">&#39;error: </span><span class="si">%g</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">error</span>
 </pre></div>
 </div>
+<p>One can also use the user action callback function to visualize
+the solution:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="k">def</span> <span class="nf">assert_error</span><span class="p">(</span><span class="n">t</span><span class="p">,</span> <span class="n">u</span><span class="p">,</span> <span class="n">timestep</span><span class="p">):</span>
+    <span class="k">global</span> <span class="n">p</span>
+    <span class="k">if</span> <span class="n">t</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="n">p</span> <span class="o">=</span> <span class="n">plot</span><span class="p">(</span><span class="n">u</span><span class="p">,</span> <span class="n">title</span><span class="o">=</span><span class="s">&#39;u&#39;</span><span class="p">,</span>
+                 <span class="c"># Fix the color scale</span>
+                 <span class="n">range_min</span><span class="o">=</span><span class="nb">float</span><span class="p">(</span><span class="n">u_range</span><span class="p">[</span><span class="mi">0</span><span class="p">]),</span>  <span class="c"># must be float</span>
+                 <span class="n">range_max</span><span class="o">=</span><span class="nb">float</span><span class="p">(</span><span class="n">u_range</span><span class="p">[</span><span class="mi">1</span><span class="p">]))</span>  <span class="c"># must be float</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">p</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">u</span><span class="p">)</span>
+    <span class="k">print</span><span class="p">(</span><span class="s">&#39;t=</span><span class="si">%g</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">t</span><span class="p">)</span>
+    <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mf">0.5</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>It is key to fix the color scale to get a meaningful animation.</p>
+<p>Note that <code class="docutils literal"><span class="pre">p</span></code> above must be declared as a global parameter. This
+is necessary when the user action function is a <em>closure</em> as here.
+Some programmers find it more convenient to let the user action
+be class, where <code class="docutils literal"><span class="pre">p</span></code> can be an attribute. Later examples employ
+classes for user action functions.</p>
+<p>[<strong>hpl 20</strong>: The function <code class="docutils literal"><span class="pre">solver_vs_solver_minimize_assembly</span></code> measures the impact of this optimization. It is not big: a factor of 1-2 for P1 elements but hardly anything for P2 elements. Tested up to <span class="math">\(10^5\)</span> unknowns. However, the technique is important and it gave a significant speed-up when used in the Oasis CFD code by Mikael and co-workers (that code is on par wit OpenFOAM).]</p>
 </div>
 </div>
 </div>
 <div class="section" id="refactored-implementation-2">
 <h2>Refactored implementation<a class="headerlink" href="#refactored-implementation-2" title="Permalink to this headline">¶</a></h2>
+<div class="section" id="post-processing-data-and-saving-to-file">
+<h3>Post processing data and saving to file<a class="headerlink" href="#post-processing-data-and-saving-to-file" title="Permalink to this headline">¶</a></h3>
+<p>The focus so far in this tutorial has been on producing the solution
+of PDE problems. For scientific investigations, the primary work is
+often with post processing results: computing quantities derived from
+the solution and inspecting these with visualization or data analysis tools.
+To ease this process, we shall make use of a convenient tool, <code class="docutils literal"><span class="pre">cbcpost</span></code>,
+for post processing, saving data to file(s), and animating solutions.
+We recommend to use
+<code class="docutils literal"><span class="pre">cbcpost</span></code> in all time-dependent FEniCS solvers, but it also has a lot
+to offer in stationary problems too.</p>
+<div class="section" id="installation">
+<h4>Installation<a class="headerlink" href="#installation" title="Permalink to this headline">¶</a></h4>
+<p>The simplest installation method is to use <code class="docutils literal"><span class="pre">pip</span></code>. We recommend to
+install a companion package <code class="docutils literal"><span class="pre">fenicstools</span></code> as well. Just run</p>
+<div class="highlight-text"><div class="highlight"><pre>sudo pip install git+https://bitbucket.org/simula_cbc/cbcpost.git
+sudo pip install git+https://github.com/mikaem/fenicstools.git
+</pre></div>
+</div>
+<p>in a terminal window (skip <code class="docutils literal"><span class="pre">sudo</span></code> on Windows machines).
+Alternatively, you can grab the source code and run <code class="docutils literal"><span class="pre">setup.py</span></code> the usual
+way Python packages are installed from source:</p>
+<div class="highlight-text"><div class="highlight"><pre>Terminal&gt; git clone https://bitbucket.org/simula_cbc/cbcpost.git
+Terminal&gt; cd cbcpost
+Terminal&gt; python setup.py install
+Terminal&gt; cd ..
+Terminal&gt; git clone https://github.com/mikaem/fenicstools.git
+Terminal&gt; cd fenicstools
+Terminal&gt; python setup.py install
+</pre></div>
+</div>
+</div>
+<div class="section" id="basic-commands">
+<h4>Basic commands<a class="headerlink" href="#basic-commands" title="Permalink to this headline">¶</a></h4>
+<p>We must create a <em>post processor</em> and then specify what kind of
+results we want to be stored on file and (optionally) get visualized.
+Suppose we have a field with logical name <code class="docutils literal"><span class="pre">Temperature</span></code> that we want
+to save in XDMF/HDF5 format in files in a fresh subdirectory <code class="docutils literal"><span class="pre">Results</span></code>:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="kn">import</span> <span class="nn">cbcpost</span> <span class="kn">as</span> <span class="nn">post</span>
+<span class="c"># Create post processor</span>
+<span class="n">pp</span> <span class="o">=</span> <span class="n">post</span><span class="o">.</span><span class="n">PostProcessor</span><span class="p">(</span><span class="nb">dict</span><span class="p">(</span><span class="n">casedir</span><span class="o">=</span><span class="s">&#39;Results&#39;</span><span class="p">,</span> <span class="n">clean_casedir</span><span class="o">=</span><span class="bp">True</span><span class="p">))</span>
+<span class="c"># Specify storage of a &quot;Temperature&quot; field</span>
+<span class="n">pp</span><span class="o">.</span><span class="n">add_field</span><span class="p">(</span><span class="n">post</span><span class="o">.</span><span class="n">SolutionField</span><span class="p">(</span>
+    <span class="s">&#39;Temperature&#39;</span><span class="p">,</span>
+    <span class="nb">dict</span><span class="p">(</span><span class="n">save</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span>
+         <span class="n">save_as</span><span class="o">=</span><span class="p">[</span><span class="s">&#39;hdf5&#39;</span><span class="p">,</span> <span class="s">&#39;xdmf&#39;</span><span class="p">],</span>
+         <span class="n">plot</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span>
+         <span class="n">plot_args</span><span class="o">=</span><span class="nb">dict</span><span class="p">(</span><span class="n">range_min</span><span class="o">=</span><span class="mf">0.0</span><span class="p">,</span> <span class="n">range_max</span><span class="o">=</span><span class="mf">1.2</span><span class="p">))))</span>
+</pre></div>
+</div>
+<p>The <code class="docutils literal"><span class="pre">plot=True</span></code> automatically launches <code class="docutils literal"><span class="pre">fenics.plot</span></code> commands of
+this scalar field during the simulation. The ranges of the color
+scale must be given (as <code class="docutils literal"><span class="pre">float</span></code> variables) so that the color scale
+stays fixed during the animation on the screen.</p>
+<p>Inside the time loop, we have to feed a new solution to the post processor
+to get it saved:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">pp</span><span class="o">.</span><span class="n">update_all</span><span class="p">({</span><span class="s">&#39;Temperature&#39;</span><span class="p">:</span> <span class="k">lambda</span><span class="p">:</span> <span class="n">T</span><span class="p">},</span> <span class="n">t</span><span class="p">,</span> <span class="n">timestep</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Here, <code class="docutils literal"><span class="pre">T</span></code> is the <code class="docutils literal"><span class="pre">Function</span></code> object that we have solved for, <code class="docutils literal"><span class="pre">t</span></code> is
+current time, and <code class="docutils literal"><span class="pre">timestep</span></code> is the corresponding time step number.</p>
+<p>One can specify many fields to be saved (and plotted), but even more
+important: <code class="docutils literal"><span class="pre">cbcpost</span></code> can calculate a lot of derived quantities from
+the solution, such as</p>
+<blockquote>
+<div><ul class="simple">
+<li>time derivatives and integrals of vector/scalar fields</li>
+<li>extraction of fields over subdomains</li>
+<li>slicing of fields in 3D geometries</li>
+<li>averaging of fields in space or time</li>
+<li>norms and point values of fields as function of time</li>
+<li>user-defined post processing of fields</li>
+</ul>
+</div></blockquote>
+<div class="admonition-tip-use-cbcpost-to-visualize-time-dependent-data admonition">
+<p class="first admonition-title">Tip: Use <code class="docutils literal"><span class="pre">cbcpost</span></code> to visualize time-dependent data</p>
+<p class="last">Instead of issuing your own <code class="docutils literal"><span class="pre">plot</span></code> commands in time-dependent
+problems, it is safer and more convenient to specify <code class="docutils literal"><span class="pre">plot=True</span></code>
+and fix the range of the color scale, when you add fields
+to the post processor. Multiple fields will be synchronized during
+the animation.</p>
+</div>
+</div>
+</div>
+<div class="section" id="heat-transfer-due-to-a-moving-welding-source">
+<h3>Heat transfer due to a moving welding source<a class="headerlink" href="#heat-transfer-due-to-a-moving-welding-source" title="Permalink to this headline">¶</a></h3>
+<p>Let us solve a real diffusion problem taken from welding.
+A moving welding equipment acts as a moving heat source.
+The question is how the heat from the equipment spreads out
+in the material that is being welded. We use the standard
+heat equation and do not take phase transitions into account.
+The governing PDE is then</p>
+<div class="math">
+\[\varrho c \frac{\partial u}{\partial t} = k\nabla^2 u + f,\]</div>
+<p>where <span class="math">\(u\)</span> is temperature, <span class="math">\(\varrho\)</span> is the density of the material,
+<span class="math">\(c\)</span> is the heat capacity at constant volume, <span class="math">\(k\)</span> is the heat
+conduction coefficient, and <span class="math">\(f\)</span> models the heat source from the
+welding equipment. The domain is <span class="math">\(\Omega = [0,L]\times [0,L]\)</span>.</p>
+<p>A welding source rotating with angular velocity <span class="math">\(\omega\)</span> about a
+point <span class="math">\((x_0,y_0)\)</span> can be modelled as a Gaussian function with
+&#8220;standard deviation&#8221; <span class="math">\(\sigma\)</span>:</p>
+<div class="math">
+\[f(x,y,t) = A\exp{\left(-\frac{1}{2}
+\left(\frac{x-(x_0 + R\cos\omega t)}{\sigma}\right)^2 -\frac{1}{2}
+\left(\frac{y-(y_0 + R\sin\omega t)}{\sigma}\right)^2\right)}{\thinspace .}\]</div>
+<p>The parameter <span class="math">\(A\)</span> is the strength of the heat source.</p>
+<p>The initial condition is that the material has constant room temperature.</p>
+</div>
+<div class="section" id="scaling-of-the-welding-problem">
+<h3>Scaling of the welding problem<a class="headerlink" href="#scaling-of-the-welding-problem" title="Permalink to this headline">¶</a></h3>
+<p>There are 10 physical parameters in the problem:
+<span class="math">\(L\)</span>, <span class="math">\(\varrho\)</span>, <span class="math">\(c\)</span>, <span class="math">\(k\)</span>, <span class="math">\(A\)</span>, <span class="math">\(x_0\)</span>, <span class="math">\(y_0\)</span>, <span class="math">\(R\)</span>, <span class="math">\(\omega\)</span>, <span class="math">\(\sigma\)</span>.
+Scaling can dramatically reduce the number of parameters and also
+introduce new parameters that are much easier to assign numerical
+values. We therefore scale the problem. As length scale, we choose
+<span class="math">\(L\)</span> so the scaled domain becomes the unit square. As time scale
+and characteristic size of <span class="math">\(u\)</span>, we just introduce <span class="math">\(t_c\)</span> ad <span class="math">\(u_c\)</span>.
+This means that we introduce scaled variables</p>
+<div class="math">
+\[\bar x = \frac{x}{L},\ \bar y = \frac{y}{L},\ \bar t =\frac{t}{t_c},
+\ \bar u = \frac{u-U_s}{u_c}{\thinspace .}\]</div>
+<p>The parameter <span class="math">\(U_s\)</span> is the temperature of the surroundings (the initial
+conditions) such that we can have <span class="math">\(u=0\)</span> at <span class="math">\(t=0\)</span>.</p>
+<p>The scaled form of <span class="math">\(f\)</span> is naturally <span class="math">\(\bar f = f/A\)</span>, since this makes
+<span class="math">\(\bar f\in (0,1]\)</span>. The arguments in the exponential function in <span class="math">\(f\)</span> can
+also be scaled:</p>
+<div class="math">
+\[\begin{split}\bar f &amp;= \exp{\left(-\frac{1}{2}
+\left(\frac{\bar xL -(L \bar x_0 + L\bar R\cos\omega t_c t)}{\sigma}\right)^2 -\frac{1}{2}
+\left(\frac{L \bar y-(L\bar y0 + L\bar R\sin\omega t_c t)}{\sigma}\right)^2\right)}\\
+&amp;= \exp{\left(-\frac{1}{2}\frac{L^2}{\sigma^2}
+\left(x -(\bar x_0 + \bar R\cos\omega t_c \bar t)\right)^2 -\frac{1}{2}
+\left(\bar y-(\bar y0 + \bar R\sin\omega t_c \bar t)\right)^2\right)}\\
+&amp;= \exp{\left(-\frac{1}{2}\beta
+\left(x -(\frac{1}{2} + \bar R\cos\bar t)\right)^2 -\frac{1}{2}
+\left(\bar y-(\frac{1}{2} + \bar R\sin\bar t)\right)^2\right)},\end{split}\]</div>
+<p>where <span class="math">\(\beta\)</span> is a dimensionless parameter,</p>
+<div class="math">
+\[\beta = \frac{L}{\sigma},\]</div>
+<p>reflecting the ratio of the domain size and the width of the heat source.
+Moreover, we have restricted the rotation point to be the center point
+of the domain:</p>
+<div class="math">
+\[(\bar x_0,\bar y_0) = (\frac{1}{2},\frac{1}{2}){\thinspace .}\]</div>
+<p>The time scale
+in diffusion problems is usually related to the &#8220;speed of the
+diffusion&#8221;, but in this problem it is more natural to base the time
+scale on the movement of the heat source, which suggests setting
+<span class="math">\(t_c = 1/\omega\)</span>.</p>
+<p>Inserting the new scaled variables in the PDE leads to</p>
+<div class="math">
+\[\frac{\partial \bar u}{\partial\bar t} =
+\frac{k}{\omega\varrho c L^2}\bar\nabla^2\bar u +
+\frac{A}{\omega u_c\varrho c}\bar f(\bar x,\bar y,\bar t){\thinspace .}\]</div>
+<p>The first coefficient is a dimensionless number,</p>
+<div class="math">
+\[\gamma = \frac{k}{\omega\varrho c L^2},\]</div>
+<p>while the second coefficient can be used to determine <span class="math">\(u_c\)</span> by demanding
+the source term to balance the time derivative term,</p>
+<div class="math">
+\[u_c = \frac{A}{\omega\varrho c}{\thinspace .}\]</div>
+<p>Our aim is to have <span class="math">\(\bar u \in [0,1]\)</span>, but this <span class="math">\(u_c\)</span> do not capture
+the precise magnitude of <span class="math">\(u\)</span>. However, we believe that the characteristic
+size of <span class="math">\(u\)</span> is</p>
+<div class="math">
+\[u_c = \delta^{-1}\frac{A}{\omega\varrho c},\]</div>
+<p>for a scaling factor <span class="math">\(\delta\)</span>. Using this <span class="math">\(u_c\)</span> gives the PDE</p>
+<div class="math">
+\[\frac{\partial \bar u}{\partial\bar t} =
+\gamma\bar\nabla^2\bar u +
+\delta\bar f(\bar x,\bar y,\bar t),\]</div>
+<p>with two dimensionless variables, but <span class="math">\(\delta\)</span> is tuned from experiments
+to give <span class="math">\(\bar u\)</span> a typically size of unity.</p>
+<p>Looking at <span class="math">\(\gamma\)</span>, we see that it can be written</p>
+<div class="math">
+\[\gamma = \frac{1/\omega}{\varrho c L^2/k},\]</div>
+<p>which is the ratio of the time scale for the heat source and the
+time scale for diffusion.</p>
+<p>To summarize, the physics of our problem depends now on
+<span class="math">\(\beta\)</span>, <span class="math">\(\bar R\)</span>, and <span class="math">\(\gamma\)</span>, just three parameters.
+Of these, <span class="math">\(\bar R = 0.2\)</span> is an appropriate choice. For a quite
+localized heat source in space, <span class="math">\(\beta=10\)</span> is a suitable parameter.
+Then we are actually left with only one parameter to adjust: <span class="math">\(\gamma\)</span>.
+It is much easier to assign this parameter a value than to set
+<span class="math">\(\varrho\)</span>, <span class="math">\(c\)</span>, and <span class="math">\(k\)</span> for some chosen material, and then
+determine <span class="math">\(A\)</span>, <span class="math">\(L\)</span>, etc.</p>
+</div>
+<div class="section" id="a-function-based-solver">
+<h3>A function-based solver<a class="headerlink" href="#a-function-based-solver" title="Permalink to this headline">¶</a></h3>
+<p>We can use the <code class="docutils literal"><span class="pre">solver_minimize_assembly</span></code> function to solve the
+welding problem. The application code just declares the problem-dependent
+parameters and calls the solver function. From a trial run we find
+that <span class="math">\(\delta = 700\)</span> gives <span class="math">\(\bar u\)</span> of unit size for moderate <span class="math">\(\gamma\)</span>
+values.</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="k">def</span> <span class="nf">application_welding</span><span class="p">(</span><span class="n">gamma</span><span class="o">=</span><span class="mi">1</span><span class="p">):</span>
+    <span class="kn">from</span> <span class="nn">math</span> <span class="kn">import</span> <span class="n">pi</span><span class="p">,</span> <span class="n">sin</span><span class="p">,</span> <span class="n">cos</span>
+    <span class="n">u0</span> <span class="o">=</span> <span class="n">Constant</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+    <span class="n">I</span> <span class="o">=</span> <span class="n">Constant</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+    <span class="n">beta</span> <span class="o">=</span> <span class="mi">10</span>
+    <span class="n">R</span> <span class="o">=</span> <span class="mf">0.2</span>
+    <span class="n">delta</span> <span class="o">=</span> <span class="mi">700</span>
+    <span class="n">f</span> <span class="o">=</span> <span class="n">Expression</span><span class="p">(</span>
+        <span class="s">&#39;delta*exp(-0.5*pow(beta,2)*(pow(x[0]-(0.5+R*cos(t)),2) + &#39;</span>
+                                    <span class="s">&#39;pow(x[1]-(0.5+R*sin(t)),2)))&#39;</span><span class="p">,</span>
+        <span class="n">delta</span><span class="o">=</span><span class="n">delta</span><span class="p">,</span> <span class="n">beta</span><span class="o">=</span><span class="n">beta</span><span class="p">,</span> <span class="n">R</span><span class="o">=</span><span class="n">R</span><span class="p">,</span> <span class="n">t</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+    <span class="c"># Simulate to rotations with the equipment</span>
+    <span class="n">omega</span> <span class="o">=</span> <span class="mf">1.0</span>      <span class="c"># Scaled angular velocity</span>
+    <span class="n">P</span> <span class="o">=</span> <span class="mi">2</span><span class="o">*</span><span class="n">pi</span><span class="o">/</span><span class="n">omega</span>   <span class="c"># One period of rotation</span>
+    <span class="n">T</span> <span class="o">=</span> <span class="mi">2</span><span class="o">*</span><span class="n">P</span>          <span class="c"># Total simulation time</span>
+    <span class="n">dt</span> <span class="o">=</span> <span class="n">P</span><span class="o">/</span><span class="mi">40</span>        <span class="c"># 40 steps per rotation</span>
+    <span class="n">Nx</span> <span class="o">=</span> <span class="n">Ny</span> <span class="o">=</span> <span class="mi">60</span>
+    <span class="n">solver_minimize_assembly</span><span class="p">(</span>
+        <span class="n">gamma</span><span class="p">,</span> <span class="n">f</span><span class="p">,</span> <span class="n">u0</span><span class="p">,</span> <span class="n">I</span><span class="p">,</span> <span class="n">dt</span><span class="p">,</span> <span class="n">T</span><span class="p">,</span> <span class="n">Nx</span><span class="p">,</span> <span class="n">Ny</span><span class="p">,</span> <span class="n">degree</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+        <span class="n">user_action</span><span class="o">=</span><span class="n">ProcessResults</span><span class="p">(),</span> <span class="n">I_project</span><span class="o">=</span><span class="bp">False</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>The remaining task is to write the user action callback function
+and make use of <code class="docutils literal"><span class="pre">cbcpost</span></code> to store and visualize the solution <em>and</em>
+the heat source.</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="kn">import</span> <span class="nn">cbcpost</span> <span class="kn">as</span> <span class="nn">post</span>
+<span class="k">class</span> <span class="nc">ProcessResults</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">pp</span> <span class="o">=</span> <span class="n">post</span><span class="o">.</span><span class="n">PostProcessor</span><span class="p">(</span>
+            <span class="nb">dict</span><span class="p">(</span><span class="n">casedir</span><span class="o">=</span><span class="s">&#39;Results&#39;</span><span class="p">,</span> <span class="n">clean_casedir</span><span class="o">=</span><span class="bp">True</span><span class="p">))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">pp</span><span class="o">.</span><span class="n">add_field</span><span class="p">(</span>
+            <span class="n">post</span><span class="o">.</span><span class="n">SolutionField</span><span class="p">(</span>
+                <span class="s">&#39;Temperature&#39;</span><span class="p">,</span>
+                <span class="nb">dict</span><span class="p">(</span><span class="n">save</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span>
+                     <span class="n">save_as</span><span class="o">=</span><span class="p">[</span><span class="s">&#39;hdf5&#39;</span><span class="p">,</span> <span class="s">&#39;xdmf&#39;</span><span class="p">],</span>  <span class="c"># format</span>
+                     <span class="n">plot</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span>
+                     <span class="n">plot_args</span><span class="o">=</span>
+                     <span class="nb">dict</span><span class="p">(</span><span class="n">range_min</span><span class="o">=</span><span class="mf">0.0</span><span class="p">,</span> <span class="n">range_max</span><span class="o">=</span><span class="mf">2.0</span><span class="p">)</span>
+                     <span class="p">)))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">pp</span><span class="o">.</span><span class="n">add_field</span><span class="p">(</span>
+            <span class="n">post</span><span class="o">.</span><span class="n">SolutionField</span><span class="p">(</span>
+                <span class="s">&quot;Heat_source&quot;</span><span class="p">,</span>
+                <span class="nb">dict</span><span class="p">(</span><span class="n">save</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span>
+                     <span class="n">save_as</span><span class="o">=</span><span class="p">[</span><span class="s">&quot;hdf5&quot;</span><span class="p">,</span> <span class="s">&quot;xdmf&quot;</span><span class="p">],</span>  <span class="c"># format</span>
+                     <span class="n">plot</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span>
+                     <span class="p">)))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">vtkfile_T</span> <span class="o">=</span> <span class="n">File</span><span class="p">(</span><span class="s">&#39;temperature.pvd&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">vtkfile_f</span> <span class="o">=</span> <span class="n">File</span><span class="p">(</span><span class="s">&#39;source.pvd&#39;</span><span class="p">)</span>
+    <span class="k">def</span> <span class="nf">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">t</span><span class="p">,</span> <span class="n">T</span><span class="p">,</span> <span class="n">timestep</span><span class="p">):</span>
+        <span class="c"># Store temperature and heat source to cbcpost file</span>
+        <span class="c"># and to VTK file</span>
+        <span class="n">T</span><span class="o">.</span><span class="n">rename</span><span class="p">(</span><span class="s">&#39;T&#39;</span><span class="p">,</span> <span class="s">&#39;solution&#39;</span><span class="p">)</span>
+        <span class="n">f_Function</span> <span class="o">=</span> <span class="n">interpolate</span><span class="p">(</span><span class="n">f</span><span class="p">,</span> <span class="n">T</span><span class="o">.</span><span class="n">function_space</span><span class="p">())</span>
+        <span class="n">f_Function</span><span class="o">.</span><span class="n">rename</span><span class="p">(</span><span class="s">&#39;f&#39;</span><span class="p">,</span> <span class="s">&#39;welding equipment&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">pp</span><span class="o">.</span><span class="n">update_all</span><span class="p">(</span>
+            <span class="p">{</span><span class="s">&#39;Temperature&#39;</span><span class="p">:</span> <span class="k">lambda</span><span class="p">:</span> <span class="n">T</span><span class="p">,</span>
+             <span class="s">&#39;Heat_source&#39;</span><span class="p">:</span> <span class="k">lambda</span><span class="p">:</span> <span class="n">f_Function</span><span class="p">},</span>
+            <span class="n">t</span><span class="p">,</span> <span class="n">timestep</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">vtkfile_T</span> <span class="o">&lt;&lt;</span> <span class="p">(</span><span class="n">T</span><span class="p">,</span> <span class="nb">float</span><span class="p">(</span><span class="n">t</span><span class="p">))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">vtkfile_f</span> <span class="o">&lt;&lt;</span> <span class="p">(</span><span class="n">f_Function</span><span class="p">,</span> <span class="nb">float</span><span class="p">(</span><span class="n">t</span><span class="p">))</span>
+        <span class="n">info</span><span class="p">(</span><span class="s">&#39;saving results at time </span><span class="si">%g</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">t</span><span class="p">)</span>
+        <span class="c"># Leave plotting to cbcpost</span>
+    <span class="c"># Paraview: load temperature.pvd (sometimes: must load one</span>
+    <span class="c"># of the temperature*.vtu files), animate temperature, split</span>
+    <span class="c"># layout into two, load weld.pvd, move both layouts back to</span>
+    <span class="c"># time 0, start animation - they are synchronized.</span>
+<span class="n">Nx</span> <span class="o">=</span> <span class="n">Ny</span> <span class="o">=</span> <span class="mi">40</span>
+<span class="n">solver_minimize_assembly</span><span class="p">(</span>
+    <span class="n">gamma</span><span class="p">,</span> <span class="n">f</span><span class="p">,</span> <span class="n">u0</span><span class="p">,</span> <span class="n">I</span><span class="p">,</span> <span class="n">dt</span><span class="p">,</span> <span class="n">T</span><span class="p">,</span> <span class="n">Nx</span><span class="p">,</span> <span class="n">Ny</span><span class="p">,</span> <span class="n">degree</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+    <span class="n">user_action</span><span class="o">=</span><span class="n">ProcessResults</span><span class="p">(),</span> <span class="n">I_project</span><span class="o">=</span><span class="bp">False</span><span class="p">)</span>
+<span class="n">solver_vs_solver_minimize_assembly</span><span class="p">():</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">Compute the relative efficiency of a standard assembly of b</span>
+<span class="sd">and the technique in solver_minimize_assembly.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">Not a dramatic speed-up:</span>
+<span class="sd">l time for assembly of right-hand side: 0.04</span>
+<span class="sd">l time for assembly of right-hand side: 0.02</span>
+<span class="sd">, 1681 unknowns, std solver: 0.26 opt solver: 0.23 speed-up: 1.1</span>
+<span class="sd">l time for assembly of right-hand side: 0.13</span>
+<span class="sd">l time for assembly of right-hand side: 0.07</span>
+<span class="sd">, 6561 unknowns, std solver: 4.00 opt solver: 2.32 speed-up: 1.7</span>
+<span class="sd">l time for assembly of right-hand side: 0.45</span>
+<span class="sd">l time for assembly of right-hand side: 0.25</span>
+<span class="sd">0, 25921 unknowns, std solver: 13.78 opt solver: 5.05 speed-up: 2.7</span>
+<span class="sd">l time for assembly of right-hand side: 1.82</span>
+<span class="sd">l time for assembly of right-hand side: 1.05</span>
+<span class="sd">0, 103041 unknowns, std solver: 41.42 opt solver: 27.96 speed-up: 1.5</span>
+<span class="sd">P2 elements there is hardly any speed-up.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="kn">import</span> <span class="nn">time</span>
+<span class="n">alpha</span> <span class="o">=</span> <span class="mi">3</span><span class="p">;</span> <span class="n">beta</span> <span class="o">=</span> <span class="mf">1.2</span>
+<span class="n">u0</span> <span class="o">=</span> <span class="n">Expression</span><span class="p">(</span><span class="s">&#39;1 + x[0]*x[0] + alpha*x[1]*x[1] + beta*t&#39;</span><span class="p">,</span>
+                <span class="n">alpha</span><span class="o">=</span><span class="n">alpha</span><span class="p">,</span> <span class="n">beta</span><span class="o">=</span><span class="n">beta</span><span class="p">,</span> <span class="n">t</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+<span class="n">f</span> <span class="o">=</span> <span class="n">Constant</span><span class="p">(</span><span class="n">beta</span> <span class="o">-</span> <span class="mi">2</span> <span class="o">-</span> <span class="mi">2</span><span class="o">*</span><span class="n">alpha</span><span class="p">)</span>
+<span class="n">dt</span> <span class="o">=</span> <span class="mf">0.3</span><span class="p">;</span> <span class="n">T</span> <span class="o">=</span> <span class="mi">40</span><span class="o">*</span><span class="n">dt</span>
+<span class="n">degree</span> <span class="o">=</span> <span class="mi">2</span>
+<span class="n">N</span> <span class="o">=</span> <span class="mi">40</span>
+<span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">4</span><span class="p">):</span>
+    <span class="n">t0</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">clock</span><span class="p">()</span>
+    <span class="n">u0</span><span class="o">.</span><span class="n">t</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="n">solver</span><span class="p">(</span>
+        <span class="n">f</span><span class="p">,</span> <span class="n">u0</span><span class="p">,</span> <span class="n">u0</span><span class="p">,</span> <span class="n">dt</span><span class="p">,</span> <span class="n">T</span><span class="p">,</span> <span class="n">N</span><span class="p">,</span> <span class="n">N</span><span class="p">,</span> <span class="n">degree</span><span class="p">,</span>
+        <span class="n">user_action</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">I_project</span><span class="o">=</span><span class="bp">False</span><span class="p">)</span>
+    <span class="n">t1</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">clock</span><span class="p">()</span>
+    <span class="n">u0</span><span class="o">.</span><span class="n">t</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="n">solver_minimize_assembly</span><span class="p">(</span>
+        <span class="n">f</span><span class="p">,</span> <span class="n">u0</span><span class="p">,</span> <span class="n">u0</span><span class="p">,</span> <span class="n">dt</span><span class="p">,</span> <span class="n">T</span><span class="p">,</span> <span class="n">N</span><span class="p">,</span> <span class="n">N</span><span class="p">,</span> <span class="n">degree</span><span class="p">,</span>
+        <span class="n">user_action</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">I_project</span><span class="o">=</span><span class="bp">False</span><span class="p">)</span>
+    <span class="n">t2</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">clock</span><span class="p">()</span>
+    <span class="n">info</span><span class="p">(</span><span class="s">&#39;N=</span><span class="si">%d</span><span class="s">, </span><span class="si">%d</span><span class="s"> unknowns, std solver: </span><span class="si">%.2f</span><span class="s"> opt solver: </span><span class="si">%.2f</span><span class="s"> speed-up: </span><span class="si">%.1f</span><span class="s">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">N</span><span class="p">,</span> <span class="p">(</span><span class="n">N</span><span class="o">+</span><span class="mi">1</span><span class="p">)</span><span class="o">*</span><span class="p">(</span><span class="n">N</span><span class="o">+</span><span class="mi">1</span><span class="p">),</span> <span class="n">t1</span><span class="o">-</span><span class="n">t0</span><span class="p">,</span> <span class="n">t2</span><span class="o">-</span><span class="n">t1</span><span class="p">,</span> <span class="p">(</span><span class="n">t1</span><span class="o">-</span><span class="n">t0</span><span class="p">)</span><span class="o">/</span><span class="nb">float</span><span class="p">(</span><span class="n">t2</span><span class="o">-</span><span class="n">t1</span><span class="p">)))</span>
+    <span class="n">N</span> <span class="o">*=</span> <span class="mi">2</span>
+<span class="n">_name__</span> <span class="o">==</span> <span class="s">&#39;__main__&#39;</span><span class="p">:</span>
+<span class="c">#application()</span>
+<span class="c">#test_solvers()</span>
+<span class="n">application_animate</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span>
+<span class="c">#solver_vs_solver_minimize_assembly()</span>
+<span class="c">#application_welding(gamma=10)</span>
+<span class="n">interactive</span><span class="p">()</span>
+</pre></div>
+</div>
+</div>
 <div class="section" id="a-class-based-solver-for-a-general-diffusion-problem">
 <h3>A class-based solver for a general diffusion problem<a class="headerlink" href="#a-class-based-solver-for-a-general-diffusion-problem" title="Permalink to this headline">¶</a></h3>
 <p>When you want to apply some software tool for solving a PDE problem,
 you usually want to explore a family of related problems. To this end,
 you need to formulate some general form of the PDE problem and then</p>
-<p>[<strong>hpl 20</strong>: I AM HERE!]</p>
+<p>[<strong>hpl 21</strong>: I AM HERE!]</p>
 </div>
 <div class="section" id="exercise-5-implement-second-order-schemes-in-time">
 <h3>Exercise 5: Implement second-order schemes in time<a class="headerlink" href="#exercise-5-implement-second-order-schemes-in-time" title="Permalink to this headline">¶</a></h3>
@@ -435,7 +783,7 @@ method. In addition, implement the Crank-Nicolson method where you solve</p>
 <div class="math">
 \[\frac{u^{n+1}-u^n}{\Delta t} = \frac{1}{2}(G(u^{n+1}) + G(u^n)){\thinspace .}\]</div>
 <p>This method also has a truncation error of order <span class="math">\(\Delta t^2\)</span>.
-[<strong>hpl 21</strong>: Find some good test problems for comparing the performance of the schemes.]</p>
+[<strong>hpl 22</strong>: Find some good test problems for comparing the performance of the schemes.]</p>
 </div>
 <div class="section" id="a-physical-example">
 <span id="ftut-timedep-diffusion2-sin"></span><h3>A physical example<a class="headerlink" href="#a-physical-example" title="Permalink to this headline">¶</a></h3>
@@ -461,7 +809,7 @@ conductivity properties of the soil in the ground may vary with space
 so we introduce a variable coefficient <span class="math">\(\kappa\)</span> reflecting this
 property.  Figure <a class="reference internal" href="#ftut-timedep-diffusion2-sin-fig1"><span class="std std-ref">Sketch of a (2D) problem involving heating and cooling of the ground due to an oscillating surface temperature</span></a> shows a sketch
 of the problem, with a small region where the heat conductivity is
-much lower.  [<strong>hpl 22</strong>: All parameters <span class="math">\(\varrho\)</span>, <span class="math">\(c\)</span>, and <span class="math">\(\kappa\)</span> are different!]</p>
+much lower.  [<strong>hpl 23</strong>: All parameters <span class="math">\(\varrho\)</span>, <span class="math">\(c\)</span>, and <span class="math">\(\kappa\)</span> are different!]</p>
 <div class="figure" id="id1">
 <span id="ftut-timedep-diffusion2-sin-fig1"></span><a class="reference internal image-reference" href="_images/daynight.png"><img alt="_images/daynight.png" src="_images/daynight.png" style="width: 480px;" /></a>
 <p class="caption"><span class="caption-text"><em>Sketch of a (2D) problem involving heating and cooling of the ground due to an oscillating surface temperature</em></span></p>

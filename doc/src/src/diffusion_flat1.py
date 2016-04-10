@@ -1,6 +1,7 @@
 """
 FEniCS tutorial demo program: Diffusion equation with Dirichlet
-conditions and a solution that will be exact at all nodes.
+conditions and a solution that will be exact at all nodes on
+a uniform mesh.
 """
 
 from __future__ import print_function
@@ -49,7 +50,7 @@ while t <= T:
     u_e = interpolate(u0, V)
     error = np.abs(u_e.vector().array() -
                    u.vector().array()).max()
-    print('error, t=%.2f: %-10.3g' % (t, max_error))
+    print('error, t=%.2f: %-10.3g' % (t, error))
 
     t += dt
     u_1.assign(u)

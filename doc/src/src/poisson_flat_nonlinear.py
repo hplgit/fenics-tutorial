@@ -8,7 +8,7 @@ u = u0 on the boundary.
 from __future__ import print_function
 
 # Warning: from fenics import * imports f, q, and sym
-# (which overwrites the f and q (function) objects
+# (which overwrites our own f and q (function) objects
 # and also sym if we do import sympy as sym).
 # Therefore, do fenics import first and then overwrite
 from fenics import *

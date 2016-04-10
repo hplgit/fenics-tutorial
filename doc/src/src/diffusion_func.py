@@ -1,8 +1,9 @@
 """Refactored version of d2D_plain.py with functions."""
 from __future__ import print_function
 from fenics import *
+import time
 
-def solver(f, u0, I, dt, T, Nx, Ny, degree=1,
+def solver(alpha, f, u0, I, dt, T, Nx, Ny, degree=1,
            user_action=None, I_project=False):
     # Create mesh and define function space
     mesh = UnitSquareMesh(Nx, Ny)
@@ -18,12 +19,13 @@ def solver(f, u0, I, dt, T, Nx, Ny, degree=1,
     # Initial condition
     u_1 = project(I, V) if I_project else interpolate(I, V)
     u_1.rename('u', 'initial condition')
-    user_action(0, u_1, V)
+    if user_action is not None:
+        user_action(0, u_1, 0)
 
     # Define variational problem
     u = TrialFunction(V)
     v = TestFunction(V)
-    a = u*v*dx + dt*dot(grad(u), grad(v))*dx
+    a = u*v*dx + dt*alpha*dot(grad(u), grad(v))*dx
     L = (u_1 + dt*f)*v*dx
 
     A = assemble(a)   # assemble only once, before the time stepping
@@ -32,19 +34,27 @@ def solver(f, u0, I, dt, T, Nx, Ny, degree=1,
     # Compute solution
     u = Function(V)   # the unknown at a new time level
     u.rename('u', 'solution')
+    b_assemble = 0  # CPU time for assembling all the b vectors
+    timestep = 1
     t = dt
     while t <= T:
+        t0 = time.clock()
         b = assemble(L, tensor=b)
+        b_assemble += time.clock() - t0
         try:
             u0.t = t
+            f.t = t
         except AttributeError:
             pass  # ok if no t attribute in u0
         bc.apply(A, b)
         solve(A, u.vector(), b)
 
-        user_action(t, u, V)
+        if user_action is not None:
+            user_action(t, u, timestep)
         t += dt
+        timestep += 1
         u_1.assign(u)
+    info('total time for assembly of right-hand side: %.2f' % b_assemble)
 
 def application():
     import numpy as np
@@ -53,53 +63,20 @@ def application():
                     alpha=alpha, beta=beta, t=0)
     f = Constant(beta - 2 - 2*alpha)
 
-    def print_max_error(t, u, V):
-        u_e = interpolate(u0, V)
-        max_error = np.abs(u_e.vector().array() -
-                           u.vector().array()).max()
-        print('t=%.2f, max error: %-10.3f max u: %-10.3f' %
-              (t, max_error, u.vector().array().max()))
+    def print_error(t, u, timestep):
+        u_e = interpolate(u0, u.function_space())
+        error = np.abs(u_e.vector().array() -
+                       u.vector().array()).max()
+        print('t=%.2f, error: %-10.3f max u: %-10.3f' %
+              (t, error, u.vector().array().max()))
 
     dt = 0.3; T = 1.9
     Nx = Ny = 20
-    solver(f, u0, u0, dt, T, Nx, Ny, degree=2,
-           user_action=print_max_error, I_project=False)
-
-def application_animate(model_problem):
-    # Fundamental problem: How to fix the color bar and the z axis?
-    # Now the axis is adjusted, so animations are not possible.
-    import numpy as np, time
-
-    if model_problem == 1:
-        alpha = 3; beta = 1.2
-        u0 = Expression('1 + x[0]*x[0] + alpha*x[1]*x[1] + beta*t',
-                        alpha=alpha, beta=beta, t=0)
-        f = Constant(beta - 2 - 2*alpha)
-        I = u0
-        dt = 0.05; T = 2
-    elif model_problem == 2:
-        I = Expression('pow(sin(pi*x[0])*sin(pi*x[1]), 16)')
-        f = Constant(0)
-        u0 = Constant(0)
-        dt = 0.05; T = 2
-
-    vtkfile = File('diffusion.pvd')
-
-    def animate(t, u, V):
-        global p
-        if t == 0:
-            p = plot(u, title='u')
-        else:
-            p.plot(u)
-        time.sleep(0.1)
-        vtkfile << (u, float(t))  # store time-dep Function
-
-    Nx = Ny = 20
-    solver(f, u0, I, dt, T, Nx, Ny, degree=2,
-           user_action=animate, I_project=False)
+    solver(1.0, f, u0, u0, dt, T, Nx, Ny, degree=2,
+           user_action=print_error, I_project=False)
 
 def solver_minimize_assembly(
-    f, u0, I, dt, T, Nx, Ny, degree=1,
+    alpha, f, u0, I, dt, T, Nx, Ny, degree=1,
     user_action=None, I_project=False):
     # Create mesh and define function space
     mesh = UnitSquareMesh(Nx, Ny)
@@ -114,34 +91,84 @@ def solver_minimize_assembly(
 
     # Initial condition
     u_1 = project(I, V) if I_project else interpolate(I, V)
-    user_action(0, u_1, V)
+    if user_action is not None:
+        user_action(0, u_1, 0)
 
     # Define variational problem
     u = TrialFunction(V)
     v = TestFunction(V)
     a_M = u*v*dx
-    a_K = dot(grad(u), grad(v))*dx
+    a_K = alpha*dot(grad(u), grad(v))*dx
 
     M = assemble(a_M)
     K = assemble(a_K)
     A = M + dt*K
     # Compute solution
     u = Function(V)   # the unknown at a new time level
+    b_assemble = 0  # CPU time for assembling all the b vectors
+    timestep = 1
     t = dt
     while t <= T:
+        t0 = time.clock()
         f_k = interpolate(f, V)
         F_k = f_k.vector()
         b = M*u_1.vector() + dt*M*F_k
+        b_assemble += time.clock() - t0
         try:
             u0.t = t
+            f.t = t
         except AttributeError:
             pass  # ok if no t attribute in u0
         bc.apply(A, b)
         solve(A, u.vector(), b)
 
-        user_action(t, u, V)
+        if user_action is not None:
+            user_action(t, u, timestep)
         t += dt
+        timestep += 1
         u_1.assign(u)
+    info('total time for assembly of right-hand side: %.2f' % b_assemble)
+
+def application_animate(model_problem):
+    import numpy as np, time
+
+    if model_problem == 1:
+        # Test problem with exact solution at the nodes also for P1 elements
+        alpha = 3; beta = 1.2
+        u0 = Expression('1 + x[0]*x[0] + alpha*x[1]*x[1] + beta*t',
+                        alpha=alpha, beta=beta, t=0)
+        f = Constant(beta - 2 - 2*alpha)
+        I = u0
+        dt = 0.05; T = 2
+        Nx = Ny = 20
+        u_range = [1, 1+1+alpha*1+beta*T]
+    elif model_problem == 2:
+        # Diffusion of a sin^8 spike
+        I = Expression('pow(sin(pi*x[0])*sin(pi*x[1]), 8)')
+        f = Constant(0)
+        u0 = Constant(0)
+        dt = 0.0005; T = 20*dt
+        Nx = Ny = 60
+        u_range = [0, 1]
+
+    vtkfile = File('diffusion.pvd')
+
+    def animate(t, u, timestep):
+        global p
+        if t == 0:
+            p = plot(u, title='u',
+                     range_min=float(u_range[0]),  # must be float
+                     range_max=float(u_range[1]))  # must be float
+        else:
+            p.plot(u)
+        print('t=%g' % t)
+        time.sleep(0.5)
+        vtkfile << (u, float(t))  # store time-dep Function
+
+    solver_minimize_assembly(
+        1.0, f, u0, I, dt, T, Nx, Ny, degree=2,
+        user_action=animate, I_project=False)
+
 
 def solver_bc(
     p, f,                   # Coefficients in the PDE
@@ -163,7 +190,7 @@ def solver_bc(
     debug=False,
     ):
     """
-    Solve du/dt = -div(p*grad(u)) + f on the unit square.
+    Solve du/dt = -alpha*div(p*grad(u)) + f on the unit square.
     """
     # Create mesh and define function space
     mesh = UnitSquareMesh(Nx, Ny)
@@ -292,7 +319,8 @@ def solver_bc(
 
     # Initial condition
     u_1 = project(I, V) if I_project else interpolate(I, V)
-    user_action(0, u_1, V)
+    if user_action is not None:
+        user_action(0, u_1, 0)
 
     # Define variational problem
     a_M = u*v*dx
@@ -326,6 +354,7 @@ def solver_bc(
 
     # Compute solution
     u = Function(V)   # the unknown at a new time level
+    timestep = 1
     t = dt
     while t <= T:
         f_k = interpolate(f, V)
@@ -345,8 +374,10 @@ def solver_bc(
             prm['nonzero_initial_guess'] = True  # Use u (last sol.)
             solver.solve(A, u.vector(), b)
 
-        user_action(t, u, V)
+        if user_action is not None:
+            user_action(t, u, timestep)
         t += dt
+        timestep += 1
         u_1.assign(u)
 
 def test_solvers():
@@ -360,12 +391,11 @@ def test_solvers():
                     alpha=alpha, beta=beta, t=0)
     f = Constant(beta - 2 - 2*alpha)
 
-    def assert_max_error(t, u, V):
-        u_e = interpolate(u0, V)
-        max_error = np.abs(u_e.vector().array() -
-                           u.vector().array()).max()
-        #print('assert t=%g, maxdiff: %g < %g' % (t, maxdiff, tol))
-        assert max_error < tol, 'max error: %g' % max_error
+    def assert_error(t, u, timestep):
+        u_e = interpolate(u0, u.function_space())
+        error = np.abs(u_e.vector().array() -
+                       u.vector().array()).max()
+        assert error < tol, 'error: %g' % error
 
     for Nx, Ny in [(2,2), (3,5), (5,3), (20,20)]:
         for degree in 1, 2, 3:
@@ -374,26 +404,144 @@ def test_solvers():
             dt = 0.3; T = 1.2
             u0.t = 0 # Important, otherwise I is wrong
             solver(
-                f, u0, u0, dt, T, Nx, Ny, degree,
-                user_action=assert_max_error, I_project=False)
+                1.0, f, u0, u0, dt, T, Nx, Ny, degree,
+                user_action=assert_error, I_project=False)
             u0.t = 0 # Important, otherwise I is wrong
             solver_minimize_assembly(
-                f, u0, u0, dt, T, Nx, Ny, degree,
-                user_action=assert_max_error, I_project=False)
+                1.0, f, u0, u0, dt, T, Nx, Ny, degree,
+                user_action=assert_error, I_project=False)
             u0.t = 0 # Important, otherwise I is wrong
             solver_bc(
                 Constant(1), f, u0, dt, T,
                 {0: {'Dirichlet': u0}, 1: {'Dirichlet': u0},
                  2: {'Dirichlet': u0}, 3: {'Dirichlet': u0}},
                 Nx, Ny, degree, subdomains=[],
-                user_action=assert_max_error, I_project=False,
+                user_action=assert_error, I_project=False,
                 linear_solver='direct')
 
-def test_solver_vs_solver_minimize_assembly():
-    pass
+def application_welding(gamma=1, delta=1, beta=10, num_rotations=2):
+    from math import pi, sin, cos
+    u0 = Constant(0)
+    I  = Constant(0)
+    R = 0.2
+    f = Expression(
+        'delta*exp(-0.5*pow(beta,2)*(pow(x[0]-(0.5+R*cos(t)),2) + '
+                                    'pow(x[1]-(0.5+R*sin(t)),2)))',
+        delta=delta, beta=beta, R=R, t=0)
+    omega = 1.0      # Scaled angular velocity
+    P = 2*pi/omega   # One period of rotation
+    T = num_rotations*P
+    dt = P/40        # 40 steps per rotation
+
+    import cbcpost as post
+    class ProcessResults(object):
+        def __init__(self):
+            self.pp = post.PostProcessor(
+                dict(casedir='Results', clean_casedir=True))
+
+            self.pp.add_field(
+                post.SolutionField(
+                    'Temperature',
+                    dict(save=True,
+                         save_as=['hdf5', 'xdmf'],  # format
+                         plot=True,
+                         plot_args=
+                         dict(range_min=0.0, range_max=1.1)
+                         )))
+
+            self.pp.add_field(
+                post.SolutionField(
+                    "Heat_source",
+                    dict(save=True,
+                         save_as=["hdf5", "xdmf"],  # format
+                         plot=True,
+                         plot_args=
+                         dict(range_min=0.0, range_max=float(delta))
+                         )))
+            # Save separately to VTK files as well
+            self.vtkfile_T = File('temperature.pvd')
+            self.vtkfile_f = File('source.pvd')
+
+        def __call__(self, t, T, timestep):
+            # Store temperature and heat source to cbcpost file
+            # and to VTK file
+            T.rename('T', 'solution')
+            f_Function = interpolate(f, T.function_space())
+            f_Function.rename('f', 'welding equipment')
+            self.pp.update_all(
+                {'Temperature': lambda: T,
+                 'Heat_source': lambda: f_Function},
+                t, timestep)
+            self.vtkfile_T << (T, float(t))
+            self.vtkfile_f << (f_Function, float(t))
+            info('saving results at time %g, max T: %g' %
+                 (t, T.vector().array().max()))
+            # Leave plotting to cbcpost
+
+        # Paraview: load temperature.pvd (sometimes: must load one
+        # of the temperature*.vtu files), animate temperature, split
+        # layout into two, load weld.pvd, move both layouts back to
+        # time 0, start animation - they are synchronized.
+
+    # 10: 1.1 700
+    # 40 0.26 700
+    # 1  10   700
+    # delta = gamma*66.7
+
+    Nx = Ny = 40
+    solver_minimize_assembly(
+        gamma, f, u0, I, dt, T, Nx, Ny, degree=1,
+        user_action=ProcessResults(), I_project=False)
+
+def solver_vs_solver_minimize_assembly():
+    """
+    Compute the relative efficiency of a standard assembly of b
+    and the technique in solver_minimize_assembly.
+    """
+    """
+    Not a dramatic speed-up:
+total time for assembly of right-hand side: 0.04
+total time for assembly of right-hand side: 0.02
+N=40, 1681 unknowns, std solver: 0.26 opt solver: 0.23 speed-up: 1.1
+total time for assembly of right-hand side: 0.13
+total time for assembly of right-hand side: 0.07
+N=80, 6561 unknowns, std solver: 4.00 opt solver: 2.32 speed-up: 1.7
+total time for assembly of right-hand side: 0.45
+total time for assembly of right-hand side: 0.25
+N=160, 25921 unknowns, std solver: 13.78 opt solver: 5.05 speed-up: 2.7
+total time for assembly of right-hand side: 1.82
+total time for assembly of right-hand side: 1.05
+N=320, 103041 unknowns, std solver: 41.42 opt solver: 27.96 speed-up: 1.5
+
+For P2 elements there is hardly any speed-up.
+    """
+    import time
+    alpha = 3; beta = 1.2
+    u0 = Expression('1 + x[0]*x[0] + alpha*x[1]*x[1] + beta*t',
+                    alpha=alpha, beta=beta, t=0)
+    f = Constant(beta - 2 - 2*alpha)
+    dt = 0.3; T = 40*dt
+    degree = 2
+    N = 40
+    for i in range(4):
+        t0 = time.clock()
+        u0.t = 0
+        solver(
+            f, u0, u0, dt, T, N, N, degree,
+            user_action=None, I_project=False)
+        t1 = time.clock()
+        u0.t = 0
+        solver_minimize_assembly(
+            f, u0, u0, dt, T, N, N, degree,
+            user_action=None, I_project=False)
+        t2 = time.clock()
+        info('N=%d, %d unknowns, std solver: %.2f opt solver: %.2f speed-up: %.1f' % (N, (N+1)*(N+1), t1-t0, t2-t1, (t1-t0)/float(t2-t1)))
+        N *= 2
 
 if __name__ == '__main__':
     #application()
     #test_solvers()
     application_animate(2)
+    #solver_vs_solver_minimize_assembly()
+    #application_welding(gamma=10)
     interactive()

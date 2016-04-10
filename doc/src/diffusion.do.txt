@@ -75,7 +75,7 @@ look up the `u0` object to find the proper values in the Dirichlet condition,
 and these change with time in our test problem!
 
 The complete program is found in the file
-`${prog["diffusion_flat2"]}.py`.
+"`${prog['diffusion_flat2']}.py`": "${src_url}/${prog['diffusion_flat2']}.py".
 
 
 ===== Avoiding all assembly =====
@@ -152,12 +152,11 @@ F^k=(F^{k}_1,\ldots,F^{k}_N)^T\tp
 \end{equation*}
 !et
 
-We have immediate access to $U^{k-1}$
-in the program since that is the vector
-in the `u_1` function. The $F^k$ vector can easily be
-computed by interpolating the prescribed $f$ function (at each time level if
-$f$ varies with time). Given $M$, $U^{k-1}$, and $F^k$, the right-hand side
-$b$ can be calculated as
+We have immediate access to $U^{k-1}$ in the program since that is the
+vector in the `u_1` function. The $F^k$ vector can easily be computed
+by interpolating the prescribed $f$ function (at each time level if
+$f$ varies with time). Given $M$, $U^{k-1}$, and $F^k$, the right-hand
+side $b$ can be calculated as
 
 !bt
 \begin{equation*}
@@ -166,9 +165,9 @@ b = MU^{k-1} + {\dt} MF^k \tp
 !et
 That is, no assembly is necessary to compute $b$.
 
-The coefficient matrix $A$ can also be split into two terms.
-We insert $v=\hat\phi_i$ and $u^k = \sum_{j=1}^N U^k_j\phi_j$ in
-the expression (ref{ftut:diffusion:pde1:a}) to get
+The coefficient matrix $A$ can also be split into two terms.  We
+insert $v=\hat\phi_i$ and $u^k = \sum_{j=1}^N U^k_j\phi_j$ in the
+expression (ref{ftut:diffusion:pde1:a}) to get
 
 !bt
 \begin{equation*}
@@ -190,10 +189,10 @@ the matrix $K$ with entries
 \begin{equation} K_{ij} = \int_\Omega \nabla\hat\phi_i\cdot\nabla\phi_j \dx\tp
 \end{equation}
 !et
-The matrix $M$ is often called the ``mass matrix'' while ``stiffness matrix''
-is a common nickname for $K$. The associated bilinear forms for these
-matrices, as we need them for the assembly process in a FEniCS
-program, become
+The matrix $M$ is often called the ``mass matrix'' while ``stiffness
+matrix'' is a common nickname for $K$. The associated bilinear forms
+for these matrices, as we need them for the assembly process in a
+FEniCS program, become
 
 !bt
 \begin{align}
@@ -251,9 +250,11 @@ classes as the packaging of FEniCS programs.]
 We implement these modification in a refactored version of the
 program `${prog["diffusion_flat2"]}.py`, where the solver is a function
 as explained in Section ref{ftut:poisson1:impl2} rather than a
-flat program.
+flat program. The new `solver_minimize_assembly` function resides in
+"`${prog['diffusion_func']}.py`": "${prog['diffusion_func']}.py".
 
 @@@CODE src/diffusion_func.py fromto: def solver_minimize_assembly@def solver_bc
+
 A special feature in this program is the `user_action` callback function:
 at every time level, the solution is sent to `user_action`, which is
 some function provided by the user where the solution can be processed, e.g.,
@@ -269,31 +270,419 @@ def test_solver():
     f = Constant(beta - 2 - 2*alpha)
     dt = 0.3; T = 1.9
     u0.t = 0
+
+    # Define assert_error callback function
+    ...
+
     solver_minimize_assembly(
         f, u0, u0, dt, T, Nx, Ny, degree,
-        user_action=assert_max_error, I_project=False)
+        user_action=assert_error, I_project=False)
 !ec
-The `user_action` function asserts equality of the
+The `user_action` function `assert_error` asserts equality of the
 exact and numerical solution at every time level:
 
 !bc pycod
-def assert_max_error(t, u, V):
-    u_e = interpolate(u0, V)
-    max_error= np.abs(u_e.vector().array() -
-                      u.vector().array()).max()
+def assert_error(t, u, timestep):
+    u_e = interpolate(u0, u.function_space())
+    error= np.abs(u_e.vector().array() -
+    	          u.vector().array()).max()
     tol = 2E-12
-    assert max_error < tol, 'max_error: %g' % max_error
+    assert error < tol, 'error: %g' % error
 !ec
 
+One can also use the user action callback function to visualize
+the solution:
+
+!bc pycod
+def assert_error(t, u, timestep):
+    global p
+    if t == 0:
+        p = plot(u, title='u',
+	         # Fix the color scale
+                 range_min=float(u_range[0]),  # must be float
+                 range_max=float(u_range[1]))  # must be float
+    else:
+        p.plot(u)
+    print('t=%g' % t)
+    time.sleep(0.5)
+!ec
+It is key to fix the color scale to get a meaningful animation.
+
+A complete function calling up `solver_minimize_assembly` for
+animating the solution in two test problems is found in the
+function `application_animate` in
+"`${prog['diffusion_func']}.py`": "${prog['diffusion_func']}.py".
+
+Note that `p`, which must survive between subsequent calls to the
+callback function, has to be declared as a global variable. This is
+necessary when the user action function is a *closure* (function
+inside function, ``remembering'' variables in the parent function) and
+`p` is changed inside the closure.  Some programmers find it more
+convenient to let the user action be class instead, where `p` can be
+an attribute. Later examples employ the class design.
+
+[hpl: The function `solver_vs_solver_minimize_assembly` measures the
+impact of this optimization. It is not big: a factor of 1-2 for
+P1 elements but hardly anything for P2 elements. Tested up to
+$10^5$ unknowns. However, the technique is important and it gave
+a significant speed-up when used in the Oasis CFD code by Mikael and
+co-workers (that code is on par wit OpenFOAM).]
+
+[hpl: I AM HERE!]
+
+======= A welding example with post processing and animation =======
+label{ch:diffusion:welding}
+
+The focus so far in this tutorial has been on producing the solution
+of PDE problems. For scientific investigations, the primary work is
+often with post processing results: computing quantities derived from
+the solution and inspecting these with visualization or data analysis tools.
+To ease this process, we shall make use of a convenient tool, `cbcpost`,
+for post processing, saving data to file(s), and animating solutions.
+We recommend to use
+`cbcpost` in all time-dependent FEniCS solvers, but it also has a lot
+to offer in stationary problems too.
+
+To explain the usage of `cbcpost` for storage and plotting,
+we address a real physical application:
+welding of a plate, where a moving heat source gives rise to a moving
+temperature field.
+
+===== Post processing data and saving to file =====
+label{ch:diffusion:welding:cbcpost}
+
+=== Installation ===
+
+The `cbcpost` package is not a part of the `fenics` package so you
+will need to install it.
+The simplest installation method is to use `pip`. We recommend to
+install a companion package `fenicstools` as well. Just run
+
+!bc
+sudo pip install git+https://bitbucket.org/simula_cbc/cbcpost.git
+sudo pip install git+https://github.com/mikaem/fenicstools.git
+!ec
+in a terminal window (skip `sudo` on Windows machines).
+Alternatively, you can grab the source code and run `setup.py` the usual
+way Python packages are installed from source:
+
+!bc sys
+Terminal> git clone https://bitbucket.org/simula_cbc/cbcpost.git
+Terminal> cd cbcpost
+Terminal> python setup.py install
+Terminal> cd ..
+Terminal> git clone https://github.com/mikaem/fenicstools.git
+Terminal> cd fenicstools
+Terminal> python setup.py install
+!ec
+
+=== Basic commands ===
+
+We must create a *post processor* and then specify what kind of
+results we want to be stored on file and (optionally) get visualized.
+Suppose we have a field with logical name `Temperature` that we want
+to save in XDMF/HDF5 format in files in a fresh subdirectory `Results`:
+
+!bc pycod
+import cbcpost as post
+# Create post processor
+pp = post.PostProcessor(dict(casedir='Results', clean_casedir=True))
+# Specify storage of a "Temperature" field
+pp.add_field(post.SolutionField(
+    'Temperature',
+    dict(save=True,
+         save_as=['hdf5', 'xdmf'],
+         plot=True,
+	 plot_args=dict(range_min=0.0, range_max=1.2))))
+!ec
+The `plot=True` automatically launches `fenics.plot` commands of
+this scalar field during the simulation. The ranges of the color
+scale must be given (as `float` variables) so that the color scale
+stays fixed during the animation on the screen.
+
+Inside the time loop, we have to feed a new solution to the post processor
+to get it saved:
+
+!bc pycod
+pp.update_all({'Temperature': lambda: T}, t, timestep)
+!ec
+Here, `T` is the `Function` object that we have solved for, `t` is
+current time, and `timestep` is the corresponding time step number.
+
+One can specify many fields to be saved (and plotted), but even more
+important: `cbcpost` can calculate a lot of derived quantities from
+the solution, such as
+
+ * time derivatives and integrals of vector/scalar fields
+ * extraction of fields over subdomains
+ * slicing of fields in 3D geometries
+ * averaging of fields in space or time
+ * norms and point values of fields as function of time
+ * user-defined post processing of fields
+
+!bnotice Tip: Use `cbcpost` to visualize time-dependent data
+Instead of issuing your own `plot` commands in time-dependent
+problems, it is safer and more convenient to specify `plot=True`
+and fix the range of the color scale, when you add fields
+to the post processor. Multiple fields will be synchronized during
+the animation.
+!enotice
+
+===== Heat transfer due to a moving welding source =====
+label{ch:diffusion:welding:problem}
+
+Let us solve a real diffusion problem taken from welding.
+A moving welding equipment acts as a moving heat source.
+The question is how the heat from the equipment spreads out
+in the material that is being welded. We use the standard
+heat equation and do not take phase transitions into account.
+The governing PDE is then
+
+!bt
+\[ \varrho c \frac{\partial u}{\partial t} = k\nabla^2 u + f,\]
+!et
+where $u$ is temperature, $\varrho$ is the density of the material,
+$c$ is the heat capacity at constant volume, $k$ is the heat
+conduction coefficient, and $f$ models the heat source from the
+welding equipment. The domain is $\Omega = [0,L]\times [0,L]$.
+
+A welding source rotating with angular velocity $\omega$ about a
+point $(x_0,y_0)$ can be modelled as a Gaussian function with
+``standard deviation'' $\sigma$:
+
+!bt
+\[ f(x,y,t) = A\exp{\left(-\frac{1}{2}
+\left(\frac{x-(x_0 + R\cos\omega t)}{\sigma}\right)^2 -\frac{1}{2}
+\left(\frac{y-(y_0 + R\sin\omega t)}{\sigma}\right)^2\right)}\tp\]
+!et
+The parameter $A$ is the strength of the heat source.
+
+The initial condition is that the material has constant room temperature.
+
+===== Scaling of the welding problem =====
+label{ch:diffusion:welding:scaling}
+
+There are 10 physical parameters in the problem:
+$L$, $\varrho$, $c$, $k$, $A$, $x_0$, $y_0$, $R$, $\omega$, $\sigma$.
+Scaling can dramatically reduce the number of parameters and also
+introduce new parameters that are much easier to assign numerical
+values. We therefore scale the problem. As length scale, we choose
+$L$ so the scaled domain becomes the unit square. As time scale
+and characteristic size of $u$, we just introduce $t_c$ ad $u_c$.
+This means that we introduce scaled variables
+
+!bt
+\[
+\bar x = \frac{x}{L},\ \bar y = \frac{y}{L},\ \bar t =\frac{t}{t_c},
+\ \bar u = \frac{u-U_s}{u_c}\tp
+\]
+!et
+The parameter $U_s$ is the temperature of the surroundings (the initial
+conditions) such that we can have $u=0$ at $t=0$.
+
+The scaled form of $f$ is naturally $\bar f = f/A$, since this makes
+$\bar f\in (0,1]$. The arguments in the exponential function in $f$ can
+also be scaled:
+
+!bt
+\begin{align*}
+\bar f &= \exp{\left(-\frac{1}{2}
+\left(\frac{\bar xL -(L \bar x_0 + L\bar R\cos\omega t_c t)}{\sigma}\right)^2 -\frac{1}{2}
+\left(\frac{L \bar y-(L\bar y0 + L\bar R\sin\omega t_c t)}{\sigma}\right)^2\right)}\\
+&= \exp{\left(-\frac{1}{2}\frac{L^2}{\sigma^2}
+\left(x -(\bar x_0 + \bar R\cos\omega t_c \bar t)\right)^2 -\frac{1}{2}
+\left(\bar y-(\bar y0 + \bar R\sin\omega t_c \bar t)\right)^2\right)}\\
+&= \exp{\left(-\frac{1}{2}\beta
+\left(x -(\frac{1}{2} + \bar R\cos\bar t)\right)^2 -\frac{1}{2}
+\left(\bar y-(\frac{1}{2} + \bar R\sin\bar t)\right)^2\right)},
+\end{align*}
+!et
+where $\beta$ is a dimensionless parameter,
+
+!bt
+\[ \beta = \frac{L}{\sigma},\]
+!et
+reflecting the ratio of the domain size and the width of the heat source.
+Moreover, we have restricted the rotation point to be the center point
+of the domain:
+
+!bt
+\[ (\bar x_0,\bar y_0) = (\frac{1}{2},\frac{1}{2})\tp\]
+!et
+The time scale
+in diffusion problems is usually related to the ``speed of the
+diffusion'', but in this problem it is more natural to base the time
+scale on the movement of the heat source, which suggests setting
+$t_c = 1/\omega$.
+
+Inserting the new scaled variables in the PDE leads to
+
+!bt
+\[ \frac{\partial \bar u}{\partial\bar t} =
+\frac{k}{\omega\varrho c L^2}\bar\nabla^2\bar u +
+\frac{A}{\omega u_c\varrho c}\bar f(\bar x,\bar y,\bar t)\tp\]
+!et
+The first coefficient is a dimensionless number,
+
+!bt
+\[ \gamma = \frac{k}{\omega\varrho c L^2},\]
+!et
+while the second coefficient can be used to determine $u_c$ by demanding
+the source term to balance the time derivative term,
+
+!bt
+\[ u_c = \frac{A}{\omega\varrho c}\tp\]
+!et
+Our aim is to have $\bar u \in [0,1]$, but this $u_c$ do not capture
+the precise magnitude of $u$. However, we believe that the characteristic
+size of $u$ is
+
+!bt
+\[ u_c = \delta^{-1}\frac{A}{\omega\varrho c},\]
+!et
+for a scaling factor $\delta$. Using this $u_c$ gives the PDE
+
+!bt
+\[ \frac{\partial \bar u}{\partial\bar t} =
+\gamma\bar\nabla^2\bar u +
+\delta\bar f(\bar x,\bar y,\bar t),\]
+!et
+with two dimensionless variables, but $\delta$ is tuned from experiments
+to give $\bar u$ a typically size of unity.
+
+Looking at $\gamma$, we see that it can be written
+
+!bt
+\[ \gamma = \frac{1/\omega}{\varrho c L^2/k},\]
+!et
+which is the ratio of the time scale for the heat source and the
+time scale for diffusion.
+
+To summarize, the physics of our problem depends now on
+$\beta$, $\bar R$, and $\gamma$, just three parameters.
+Of these, $\bar R = 0.2$ is an appropriate choice. For a quite
+localized heat source in space, $\beta=10$ is a suitable parameter.
+Then we are actually left with only one parameter to adjust: $\gamma$.
+It is much easier to assign this parameter a value than to set
+$\varrho$, $c$, and $k$ for some chosen material, and then
+determine $A$, $L$, etc.
+
+===== A function-based solver =====
+label{ch:diffusion:welding:funcsolver}
+
+We can use the `solver_minimize_assembly` function to solve the
+welding problem. The application code just declares the problem-dependent
+parameters and calls the solver function. From a trial run we find
+that $\delta = 700$ gives $\bar u$ of unit size for moderate $\gamma$
+values.
+
+!bc pycod
+def application_welding(gamma=1, delta=1):
+    from math import pi, sin, cos
+    u0 = Constant(0)
+    I = Constant(0)
+    beta = 10
+    R = 0.2
+    f = Expression(
+        'delta*exp(-0.5*pow(beta,2)*(pow(x[0]-(0.5+R*cos(t)),2) + '
+                                    'pow(x[1]-(0.5+R*sin(t)),2)))',
+        delta=delta, beta=beta, R=R, t=0)
+    # Simulate to rotations with the equipment
+    omega = 1.0      # Scaled angular velocity
+    P = 2*pi/omega   # One period of rotation
+    T = 2*P          # Total simulation time
+    dt = P/40        # 40 steps per rotation
+    Nx = Ny = 60
+    solver_minimize_assembly(
+        gamma, f, u0, I, dt, T, Nx, Ny, degree=1,
+        user_action=ProcessResults(), I_project=False)
+!ec
+
+The remaining task is to write the user action callback function to
+process the solution at teach time step. We want to make use of
+`cbcpost` for storage and plotting.  Since we need the post processor
+variable, called `pp` in Section ref{ch:diffusion:welding:cbcpost},
+needs to survive between calls to the user action function, we find it
+most convenient to implement this function in terms of a class with
+`pp` as attribute and `__call__` as the user action function.  We want
+to make comparisons between the heat source and the temperature
+response, so we register both fields for storage and plotting:
+
+@@@CODE-4 src/diffusion_func.py fromto: import cbcpost as post@# Leave plotting to cbcpost
+We took the opportunity in the callback function (`__call__`) to also
+store the `u` and `f` functions to VTK files, although this is really
+not necessary since ParaView or VisIt can read XDMF files.
+
+Note that the use of `cbcpost` is usually very dependent on the
+problem at hand, so it does not make sense to include `cbcpost` code
+in a general PDE solver, only in problem-specific code such as the
+user action function.
+
+Getting an animation on the screen with the built-in plotting tool is
+a matter of running the welding example:
+
+!bc pyshell
+>>> from diffusion_func import application_welding as a
+>>> a(gamma=10, delta=700)
+!ec
+(We introduced the synonym `a` to save some typing.)
+Or you can run this as a command in the terminal:
+
+!bc sys
+Terminal> python -c '\
+from diffusion_func import application_welding as a;
+a(gamma=10, delta=700)'
+!ec
+
+Since we have fixed the color scale of the temperature to have values
+in $[0,1.1]$, we must adjust $\delta$ appropriately to $\gamma$.  For
+example, running $\gamma=40$ reveals, from the output in the terminal,
+that the maximum temperature is about 0.25, and consequently we do not
+see much. For any given $\gamma$, run the problem with $\delta=1$ (and
+say `num_rotations=0.2` to make a quick simulation), and rerun with
+$\delta$ as one over the maximum temperature.  Here we get an
+approximate $\delta = 66.7\gamma$ for $\gamma \leq 0.1$. Try running
+$\gamma=0.01$ and $\delta=1$ to observe some more significant heat
+transfer away from the welding equipment. With $\gamma =0.001$ there
+is significant heat build-up, but for so small $\gamma$ we should
+re-scale the problem and use the diffusion time scale as time scale.
+
+In ParaView, load `Results/Temperature/Temperature.xdmf` as file,
+click _Apply_, then the play button for animation. If the animation is
+not correct, repeat the procedure. Thereafter, split the layout in
+two, choose _3D View_, load `Results/Heat source/Heat_source.xmdf`,
+click _Apply_, and run the animation. The two plots are synchronized.
+
+# This is only in brief now in development
+#MOVIE: [https://github.com/hplgit/fenics-tutorial/tree/master/doc/pub/mov/welding_gamma1.ogg] Welding example with $\gamma=1$.
+#MOVIE: [https://github.com/hplgit/fenics-tutorial/tree/brief/doc/pub/mov/welding_gamma1.ogg] Welding example with $\gamma=1$.
+
+
 ======= Refactored implementation =======
+label{ch:diffusion:refactor}
+
+The flat program for the diffusion solver in
+`${prog["diffusion_flat1"]}.py` and `${prog["diffusion_flat2"]}.py`
+was refactored in `${prog["diffusion_func"]}.py` in
+terms of a `solver` function with the general code
+for solving the PDE problem, a callback function for processing
+the solution at each time step, and an application function using
+the solver and defining the callback function to solve a specific
+problem. However, for time-dependent problems a solver function that
+gets all its input through a set of arguments is less flexible
+than a solver *class*, which can demand its input both through
+arguments and through functions (in subclasses) provided by the user.
+
+
+
 
 ===== A class-based solver for a general diffusion problem =====
+label{ch:diffusion:refactor:class_solver}
 
 When you want to apply some software tool for solving a PDE problem,
 you usually want to explore a family of related problems. To this end,
 you need to formulate some general form of the PDE problem and then
 
-[hpl: I AM HERE!]
 
 % if EXV:
 ===== Exercise: Implement second-order schemes in time =====
