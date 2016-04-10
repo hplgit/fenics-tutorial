@@ -922,13 +922,13 @@ natural to use the same variable name for both objects.
 Examining the values of the solution
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-The present test problem should produce a numerical solution that
-equals the exact solution to machine precision. That is, there are
-no approximation errors in our test problem. We can use this property
-to "prove" that our implementation is correct, a necessary first step
-before we try to apply our code to more complicated problems.
-For such verification, we need
-to compare the computed ``u`` function to ``u0``.
+Since we have a test problem where the numerical solution is without
+approximation errors at the degrees of freedom for P1 elements on a
+uniform mesh, we can use this property to "prove" that our
+implementation is correct. This is a necessary first step before we
+try to apply our code to more complicated problems.  For such
+verification, we need to compare the computed ``u`` function to the
+given ``u0``.
 
 A finite element function like :math:`u` is expressed as a linear combination
 of basis functions :math:`\phi_j`, spanning the space :math:`V`:
@@ -941,20 +941,19 @@ of basis functions :math:`\phi_j`, spanning the space :math:`V`:
     u = \sum_{j=1}^N U_j \phi_j {\thinspace .}
         
 
-By writing ``solve(a == L, u, bc)`` in the program, a linear system
-will be formed from :math:`a` and :math:`L`, and this system is solved for the
-:math:`U_1,\ldots,U_N` values. The :math:`U_1,\ldots,U_N` values are known
-as *degrees of freedom* of :math:`u`. For Lagrange elements (and many other
-element types) :math:`U_k` is simply the value of :math:`u` at the node
-with global number :math:`k`.
-The nodes and cell vertices coincide for linear Lagrange elements, while
-for higher-order elements there are additional nodes at
-the facets and maybe also in the interior of cells.
+By writing ``solve(a == L, u, bc)`` in the program, a linear system will
+be formed from :math:`a` and :math:`L`, and this system is solved for the
+:math:`U_1,\ldots,U_N` values. The :math:`U_1,\ldots,U_N` values are known as
+*degrees of freedom* of :math:`u`. For Lagrange elements (and many other
+element types) :math:`U_k` is simply the value of :math:`u` at the node with
+global number :math:`k`.  The location of the nodes and cell vertices
+coincide for linear Lagrange elements, while for higher-order elements
+there are additional nodes at the facets and sometimes also in the
+interior of cells.
 
 Having ``u`` represented as a ``Function`` object, we can either evaluate
-``u(x)`` at any point ``x`` in the mesh (expensive operation!),
-or we can grab all the degrees of
-freedom values :math:`U_j` directly by
+``u(x)`` at any point ``x`` in the mesh (expensive operation!), or we can
+grab all the degrees of freedom values :math:`U_j` directly by
 
 .. code-block:: python
 
@@ -1009,8 +1008,8 @@ are equal. One safe of doing this is to compute the maximum error,
 .. code-block:: python
 
         u0_array = u0_Function.vector().array()  # dof values
-        max_error = (u0_array - u.vector().array()).max()
-        print('max error:', max_error)
+        error = (u0_array - u.vector().array()).max()
+        print('error:', error)
 
 
 .. admonition:: How to check that the error vanishes
@@ -1019,11 +1018,11 @@ are equal. One safe of doing this is to compute the maximum error,
    this maximum error is not zero, but should be a small number.
    The machine precision is about :math:`10^{-16}`, but in finite element
    calculations, rounding errors of this size may accumulate, so
-   the expected accuracy of ``max_error`` smaller. Experiments show
+   the expected accuracy of ``error`` smaller. Experiments show
    that increasing the number of elements and increasing the degree
-   of the finite element polynomials increase ``max_error``.
+   of the finite element polynomials increase ``error``.
    For a mesh with :math:`2(20\times 20)` cubic Lagrange elements (degree 3)
-   ``max_error`` is about :math:`2\cdot 10^{-12}`, while for 18 linear elements
+   ``error`` is about :math:`2\cdot 10^{-12}`, while for 18 linear elements
    the maximum error is about :math:`2\cdot 10^{-15}`.
 
 
@@ -1070,7 +1069,7 @@ VTK format:
         vtkfile << u
 
 The ``poisson.pvd`` file can now be loaded into any front-end to VTK,
-say ParaView or VisIt. The ``plot`` function is intended for quick
+in particular ParaView or VisIt. The ``plot`` function is intended for quick
 examination of the solution during program development.  More in-depth
 visual investigations of finite element solutions will normally
 benefit from using highly professional tools such as ParaView and
@@ -1746,8 +1745,8 @@ computations at the previous time level):
 
 Given :math:`I`, we can solve for :math:`u^0`, :math:`u^1`, :math:`u^2`, and so on.
 
-As an alternative to :ref:`(24) <Eq:ftut:diffusion:pde1:uk>`, which can be
-convenient in implementations, we may collect
+An alternative to :ref:`(24) <Eq:ftut:diffusion:pde1:uk>`, which can be
+convenient in implementations, is to collect
 all terms on one side of the equality sign:
 
 .. _Eq:ftut:diffusion:pde1:uk2:
@@ -1755,7 +1754,7 @@ all terms on one side of the equality sign:
 .. math::
 
     \tag{25}
-    u^k - {{\Delta t}}\nabla^2 u^k -  u^{k-1} - {{\Delta t}} f^k = ,\quad k=1,2,\ldots
+    F(u;v) = u^k - {{\Delta t}}\nabla^2 u^k -  u^{k-1} - {{\Delta t}} f^k = 0,\quad k=1,2,\ldots
         
         
 
@@ -1765,42 +1764,21 @@ We use a finite element method to solve
 requires turning the equations into weak forms.  As usual, we multiply
 by a test function :math:`v\in \hat V` and integrate second-derivatives by
 parts. Introducing the symbol :math:`u` for :math:`u^k` (which is natural in the
-program), the resulting weak form can be conveniently written in
+program), the resulting weak form arising from
+formulation :ref:`(24) <Eq:ftut:diffusion:pde1:uk>`
+can be conveniently written in
 the standard notation:
-
-.. math::
-         a_0(u,v)=L_0(v),
-
-for
-:ref:`(23) <Eq:ftut:diffusion:pde1:u0>`. The formulation :ref:`(24) <Eq:ftut:diffusion:pde1:uk>`
-gives rise to
 
 .. math::
          a(u,v)=L(v),
 
 where
 
-.. _Eq:ftut:diffusion:pde1:a0:
-
-.. math::
-
-    \tag{26}
-    a_0(u,v) = \int_\Omega uv {\, \mathrm{d}x}, 
-        
-
-.. _Eq:ftut:diffusion:pde1:L0:
-
-.. math::
-
-    \tag{27}
-    L_0(v) = \int_\Omega Iv {\, \mathrm{d}x}, 
-        
-
 .. _Eq:ftut:diffusion:pde1:a:
 
 .. math::
 
-    \tag{28}
+    \tag{26}
     a(u,v) = \int_\Omega\left( uv + {{\Delta t}}
         \nabla u\cdot \nabla v\right) {\, \mathrm{d}x}, 
         
@@ -1809,15 +1787,16 @@ where
 
 .. math::
 
-    \tag{29}
+    \tag{27}
     L(v) = \int_\Omega \left(u^{k-1} + {{\Delta t}}  f^k\right)v {\, \mathrm{d}x}{\thinspace .}
         
         
 
-The alternative form :ref:`(25) <Eq:ftut:diffusion:pde1:uk2>` has a formulation
+The alternative form :ref:`(25) <Eq:ftut:diffusion:pde1:uk2>` has an
+abstract formulation
 
 .. math::
-         F(u,v) = 0,
+         F(u;v) = 0,
 
 where
 
@@ -1825,12 +1804,40 @@ where
 
 .. math::
 
-    \tag{30}
+    \tag{28}
     F = \int_\Omega\left( uv + {{\Delta t}}
         \nabla u\cdot \nabla v -
         \left(u^{k-1} - {{\Delta t}}  f^k\right)v\right) {\, \mathrm{d}x}{\thinspace .}
         
         
+
+The initial condition :ref:`(23) <Eq:ftut:diffusion:pde1:u0>`
+can also be turned into a weak form,
+
+.. math::
+         a_0(u,v)=L_0(v),
+
+with
+
+.. _Eq:ftut:diffusion:pde1:a0:
+
+.. math::
+
+    \tag{29}
+    a_0(u,v) = \int_\Omega uv {\, \mathrm{d}x}, 
+        
+
+.. _Eq:ftut:diffusion:pde1:L0:
+
+.. math::
+
+    \tag{30}
+    L_0(v) = \int_\Omega Iv {\, \mathrm{d}x}{\thinspace .} 
+        
+
+The alternative is to construct :math:`u_0` by just interpolating :math:`I`
+(which is also a much cheaper operation since no linear system is
+involved).
 
 The continuous variational problem is to find
 :math:`u^0\in V` such that :math:`a_0(u^0,v)=L_0(v)` holds for all :math:`v\in\hat V`,
@@ -1902,8 +1909,7 @@ A new programming issue is how to deal with functions that vary in
 space *and time*, such as the boundary condition :math:`u_0` given by
 :ref:`(31) <Eq:ftut:diffusion:pde1:u0test>`.  A natural solution is to apply an
 ``Expression`` object with time :math:`t` as a parameter, in addition to the
-parameters :math:`\alpha` and :math:`\beta`
-for ``Expression`` objects with parameters:
+parameters :math:`\alpha` and :math:`\beta`:
 
 .. code-block:: python
 
@@ -1919,7 +1925,7 @@ parameters can later be updated as in
 
         u0.t = t
 
-The essential boundary conditions, along the whole boundary in this case,
+The essential boundary conditions, along the entire boundary in this case,
 are set in the usual way,
 
 .. code-block:: python
@@ -1948,8 +1954,8 @@ do
    To actually recover the
    exact solution :ref:`(31) <Eq:ftut:diffusion:pde1:u0test>` to machine precision,
    it is important not to compute the discrete initial condition by
-   projecting :math:`I`, but by interpolating :math:`I` so that the nodal values are
-   exact at :math:`t=0` (projection results in approximative values at the
+   projecting :math:`I`, but by interpolating :math:`I` so that the degrees of freedom have
+   exact values at :math:`t=0` (projection results in approximative values at the
    nodes).
 
 
@@ -2001,7 +2007,8 @@ Finally, we perform the time stepping in a loop:
 
 The time loop above does not contain any comparison of the numerical
 and the exact solution, which we must include in order to verify the
-implementation.  As in many previous examples, we compute the
+implementation.  As in the Poisson equation example in
+the section :ref:`ftut:poisson1:impl:dissect`, we compute the
 difference between the array of nodal values of ``u`` and the array of
 the interpolated exact solution.  The following code is to be included
 inside the loop, after ``u`` is found:
@@ -2258,23 +2265,22 @@ where
 .. math::
 
     \tag{34}
-    F(u; v) = \int_\Omega q(u)\nabla u\cdot \nabla v {\, \mathrm{d}x},
+    F(u; v) = \int_\Omega (q(u)\nabla u\cdot \nabla v + fv){\, \mathrm{d}x},
         
 
 and
 
 .. math::
         
-            \hat{V} &= \{v \in H^1(\Omega) : v = 0 \mbox{ on } x_0=0\mbox{ and }x_0=1\}, \\ 
-             V      &= \{v \in H^1(\Omega) : v = 0 \mbox{ on } x_0=0\mbox{ and } v = 1\mbox{ on }x_0=1\}{\thinspace .}
+            \hat{V} &= \{v \in H^1(\Omega) : v = 0 \mbox{ on } \partial Omega\}, \\ 
+             V      &= \{v \in H^1(\Omega) : v = u_0 \mbox{ on } \partial\Omega\}{\thinspace .}
         
 
 The discrete problem arises as usual by restricting :math:`V` and :math:`\hat V` to a
 pair of discrete spaces. As usual, we omit any subscript on discrete
 spaces and simply say :math:`V` and :math:`\hat V` are chosen finite dimensional
 according to some mesh with some element type.
-Similarly, we let :math:`u` be the discrete solution and use :math:`{u_{\small\mbox{e}}}` for
-the exact solution if it becomes necessary to distinguish between the two.
+Similarly, we let :math:`u` from now on be the discrete solution.
 
 The discrete nonlinear problem is then written as: find :math:`u\in V` such that
 
@@ -2351,12 +2357,13 @@ manufactured solutions. The forthcoming code with SymPy requires some
 basic familiarity with this package (here, defining symbols, ``diff`` for
 differentiation, ``ccode`` for C/C++ code generation).
 
-We try out a two-dimensional solution that is linear in the unknowns:
+We try out a two-dimensional manufactured
+solution that is linear in the unknowns:
 
 .. code-block:: python
 
         # Warning: from fenics import * imports f, q, and sym
-        # (which overwrites the f and q (function) objects
+        # (which overwrites our own f and q (function) objects
         # and also sym if we do import sympy as sym).
         # Therefore, do fenics import first and then overwrite
         from fenics import *
@@ -2463,7 +2470,11 @@ nonlinear problems in FEniCS.
 The equations of linear elasticity
 ==================================
 
-[**hpl 8**: This is *very* preliminary text! Anders, don't do much before I have taken a round and removed this comment. Ideas are of course welcome!]
+Analysis of structures is one of the major activities in modern
+engineering, thus making the PDEs for deformation of elastic bodies
+most likely the most popular PDE model in the world.
+It just takes a page of code to solve the equations of 2D or 3D
+elasticity in FEniCS, and the details follows below.
 
 .. _ftut:elast:varform:
 
@@ -2471,7 +2482,7 @@ Variational formulation          (3)
 ------------------------------------
 
 The equations governing small elastic deformations of a body :math:`\Omega`
-are
+can be written as
 
 .. _Eq:ftut:elast:varform:equilibrium:
 
@@ -2631,7 +2642,7 @@ acceleration of gravity. The beam is box-shaped with length :math:`L` and
 square cross section of width :math:`W`. We set :math:`u=(0,0,0)` at the clamped
 end, :math:`x=0`. The rest of the boundaries is traction free.
 
-Let us scale the problem. [**hpl 9**: This was meant to simplify the problem so we don't need values for :math:`\lambda`, :math:`\mu`, :math:`\varrho`, etc for a specific material, but the scaling requires some care.]
+Let us scale the problem. [**hpl 8**: This was meant to simplify the problem so we don't need values for :math:`\lambda`, :math:`\mu`, :math:`\varrho`, etc for a specific material, but the scaling requires some care.]
 In the equation for :math:`u`, arising from inserting
 :ref:`(37) <Eq:ftut:elast:varform:stresstrain>` and
 :ref:`(38) <Eq:ftut:elast:varform:strainu>` in
@@ -2674,7 +2685,7 @@ with physical parameters, :math:`\lambda`, :math:`\mu`, :math:`\varrho`, :math:`
 Code
 ~~~~
 
-[**hpl 10**: Must explain the code. New concepts here, though not many.]
+[**hpl 9**: Must explain the code. New concepts here, though not many.]
 
 .. code-block:: python
 

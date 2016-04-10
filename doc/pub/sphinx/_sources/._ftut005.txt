@@ -95,7 +95,7 @@ look up the ``u0`` object to find the proper values in the Dirichlet condition,
 and these change with time in our test problem!
 
 The complete program is found in the file
-``ft09_diffusion_flat2.py``.
+`ft09_diffusion_flat2.py <https://github.com/hplgit/fenics-tutorial/blob/master/src/ft09_diffusion_flat2.py>`__.
 
 .. _ftut:timedep:diffusion1:noassemble:
 
@@ -124,7 +124,7 @@ Deriving recursive linear systems
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 To see how repeated assembly can be avoided, we look at the :math:`L(v)`
-form in  :ref:`(29) <Eq:ftut:diffusion:pde1:L>`,
+form in  :ref:`(27) <Eq:ftut:diffusion:pde1:L>`,
 which in general varies with
 time through :math:`u^{k-1}`, :math:`f^k`, and possibly also with :math:`{\Delta t}`
 if the time step is adjusted during the simulation.
@@ -175,12 +175,11 @@ and
         F^k=(F^{k}_1,\ldots,F^{k}_N)^T{\thinspace .}
         
 
-We have immediate access to :math:`U^{k-1}`
-in the program since that is the vector
-in the ``u_1`` function. The :math:`F^k` vector can easily be
-computed by interpolating the prescribed :math:`f` function (at each time level if
-:math:`f` varies with time). Given :math:`M`, :math:`U^{k-1}`, and :math:`F^k`, the right-hand side
-:math:`b` can be calculated as
+We have immediate access to :math:`U^{k-1}` in the program since that is the
+vector in the ``u_1`` function. The :math:`F^k` vector can easily be computed
+by interpolating the prescribed :math:`f` function (at each time level if
+:math:`f` varies with time). Given :math:`M`, :math:`U^{k-1}`, and :math:`F^k`, the right-hand
+side :math:`b` can be calculated as
 
 .. math::
         
@@ -189,9 +188,9 @@ computed by interpolating the prescribed :math:`f` function (at each time level 
 
 That is, no assembly is necessary to compute :math:`b`.
 
-The coefficient matrix :math:`A` can also be split into two terms.
-We insert :math:`v=\hat\phi_i` and :math:`u^k = \sum_{j=1}^N U^k_j\phi_j` in
-the expression :ref:`(28) <Eq:ftut:diffusion:pde1:a>` to get
+The coefficient matrix :math:`A` can also be split into two terms.  We
+insert :math:`v=\hat\phi_i` and :math:`u^k = \sum_{j=1}^N U^k_j\phi_j` in the
+expression :ref:`(26) <Eq:ftut:diffusion:pde1:a>` to get
 
 .. math::
         
@@ -218,10 +217,10 @@ the matrix :math:`K` with entries
         
         
 
-The matrix :math:`M` is often called the "mass matrix" while "stiffness matrix"
-is a common nickname for :math:`K`. The associated bilinear forms for these
-matrices, as we need them for the assembly process in a FEniCS
-program, become
+The matrix :math:`M` is often called the "mass matrix" while "stiffness
+matrix" is a common nickname for :math:`K`. The associated bilinear forms
+for these matrices, as we need them for the assembly process in a
+FEniCS program, become
 
 .. _Eq:ftut:diffusion:pde1:aK:
 
@@ -287,12 +286,13 @@ The relevant code segments become
             F_k = f_k.vector()
             b = M*u_1.vector() + dt*M*F_k
 
-[**hpl 19**: I wonder if the refactoring should have a function first and then a class or if we jump right to the class. From now on we could use classes as the packaging of FEniCS programs.]
+[**hpl 18**: I wonder if the refactoring should have a function first and then a class or if we jump right to the class. From now on we could use classes as the packaging of FEniCS programs.]
 
 We implement these modification in a refactored version of the
 program ``ft09_diffusion_flat2.py``, where the solver is a function
 as explained in the section :ref:`ftut:poisson1:impl2` rather than a
-flat program.
+flat program. The new ``solver_minimize_assembly`` function resides in
+`ft10_diffusion_func.py <ft10_diffusion_func.py>`__.
 
 .. code-block:: python
 
@@ -349,6 +349,46 @@ flat program.
                 timestep += 1
                 u_1.assign(u)
             info('total time for assembly of right-hand side: %.2f' % b_assemble)
+        
+        def application_animate(model_problem):
+            import numpy as np, time
+        
+            if model_problem == 1:
+                # Test problem with exact solution at the nodes also for P1 elements
+                alpha = 3; beta = 1.2
+                u0 = Expression('1 + x[0]*x[0] + alpha*x[1]*x[1] + beta*t',
+                                alpha=alpha, beta=beta, t=0)
+                f = Constant(beta - 2 - 2*alpha)
+                I = u0
+                dt = 0.05; T = 2
+                Nx = Ny = 20
+                u_range = [1, 1+1+alpha*1+beta*T]
+            elif model_problem == 2:
+                # Diffusion of a sin^8 spike
+                I = Expression('pow(sin(pi*x[0])*sin(pi*x[1]), 8)')
+                f = Constant(0)
+                u0 = Constant(0)
+                dt = 0.0005; T = 20*dt
+                Nx = Ny = 60
+                u_range = [0, 1]
+        
+            vtkfile = File('diffusion.pvd')
+        
+            def animate(t, u, timestep):
+                global p
+                if t == 0:
+                    p = plot(u, title='u',
+                             range_min=float(u_range[0]),  # must be float
+                             range_max=float(u_range[1]))  # must be float
+                else:
+                    p.plot(u)
+                print('t=%g' % t)
+                time.sleep(0.5)
+                vtkfile << (u, float(t))  # store time-dep Function
+        
+            solver_minimize_assembly(
+                1.0, f, u0, I, dt, T, Nx, Ny, degree=2,
+                user_action=animate, I_project=False)
 
 A special feature in this program is the ``user_action`` callback function:
 at every time level, the solution is sent to ``user_action``, which is
@@ -366,6 +406,10 @@ numerical approximation errors, we can write a call to the solver function,
             f = Constant(beta - 2 - 2*alpha)
             dt = 0.3; T = 1.9
             u0.t = 0
+        
+            # Define assert_error callback function
+            ...
+        
             solver_minimize_assembly(
                 f, u0, u0, dt, T, Nx, Ny, degree,
                 user_action=assert_error, I_project=False)
@@ -401,19 +445,27 @@ the solution:
 
 It is key to fix the color scale to get a meaningful animation.
 
-Note that ``p`` above must be declared as a global parameter. This
-is necessary when the user action function is a *closure* as here.
-Some programmers find it more convenient to let the user action
-be class, where ``p`` can be an attribute. Later examples employ
-classes for user action functions.
+A complete function calling up ``solver_minimize_assembly`` for
+animating the solution in two test problems is found in the
+function ``application_animate`` in
+`ft10_diffusion_func.py <ft10_diffusion_func.py>`__.
 
-[**hpl 20**: The function ``solver_vs_solver_minimize_assembly`` measures the impact of this optimization. It is not big: a factor of 1-2 for P1 elements but hardly anything for P2 elements. Tested up to :math:`10^5` unknowns. However, the technique is important and it gave a significant speed-up when used in the Oasis CFD code by Mikael and co-workers (that code is on par wit OpenFOAM).]
+Note that ``p``, which must survive between subsequent calls to the
+callback function, has to be declared as a global variable. This is
+necessary when the user action function is a *closure* (function
+inside function, "remembering" variables in the parent function) and
+``p`` is changed inside the closure.  Some programmers find it more
+convenient to let the user action be class instead, where ``p`` can be
+an attribute. Later examples employ the class design.
 
-Refactored implementation          (2)
-======================================
+[**hpl 19**: The function ``solver_vs_solver_minimize_assembly`` measures the impact of this optimization. It is not big: a factor of 1-2 for P1 elements but hardly anything for P2 elements. Tested up to :math:`10^5` unknowns. However, the technique is important and it gave a significant speed-up when used in the Oasis CFD code by Mikael and co-workers (that code is on par wit OpenFOAM).]
 
-Post processing data and saving to file
----------------------------------------
+[**hpl 20**: I AM HERE!]
+
+.. _ch:diffusion:welding:
+
+A welding example with post processing and animation
+====================================================
 
 The focus so far in this tutorial has been on producing the solution
 of PDE problems. For scientific investigations, the primary work is
@@ -425,9 +477,21 @@ We recommend to use
 ``cbcpost`` in all time-dependent FEniCS solvers, but it also has a lot
 to offer in stationary problems too.
 
+To explain the usage of ``cbcpost`` for storage and plotting,
+we address a real physical application:
+welding of a plate, where a moving heat source gives rise to a moving
+temperature field.
+
+.. _ch:diffusion:welding:cbcpost:
+
+Post processing data and saving to file
+---------------------------------------
+
 Installation
 ~~~~~~~~~~~~
 
+The ``cbcpost`` package is not a part of the ``fenics`` package so you
+will need to install it.
 The simplest installation method is to use ``pip``. We recommend to
 install a companion package ``fenicstools`` as well. Just run
 
@@ -514,6 +578,8 @@ the solution, such as
 
 
 
+.. _ch:diffusion:welding:problem:
+
 Heat transfer due to a moving welding source
 --------------------------------------------
 
@@ -544,6 +610,8 @@ point :math:`(x_0,y_0)` can be modelled as a Gaussian function with
 The parameter :math:`A` is the strength of the heat source.
 
 The initial condition is that the material has constant room temperature.
+
+.. _ch:diffusion:welding:scaling:
 
 Scaling of the welding problem
 ------------------------------
@@ -653,6 +721,8 @@ It is much easier to assign this parameter a value than to set
 :math:`\varrho`, :math:`c`, and :math:`k` for some chosen material, and then
 determine :math:`A`, :math:`L`, etc.
 
+.. _ch:diffusion:welding:funcsolver:
+
 A function-based solver
 -----------------------
 
@@ -664,13 +734,12 @@ values.
 
 .. code-block:: python
 
-        def application_welding(gamma=1):
+        def application_welding(gamma=1, delta=1):
             from math import pi, sin, cos
             u0 = Constant(0)
             I = Constant(0)
             beta = 10
             R = 0.2
-            delta = 700
             f = Expression(
                 'delta*exp(-0.5*pow(beta,2)*(pow(x[0]-(0.5+R*cos(t)),2) + '
                                             'pow(x[1]-(0.5+R*sin(t)),2)))',
@@ -685,9 +754,15 @@ values.
                 gamma, f, u0, I, dt, T, Nx, Ny, degree=1,
                 user_action=ProcessResults(), I_project=False)
 
-The remaining task is to write the user action callback function
-and make use of ``cbcpost`` to store and visualize the solution *and*
-the heat source.
+The remaining task is to write the user action callback function to
+process the solution at teach time step. We want to make use of
+``cbcpost`` for storage and plotting.  Since we need the post processor
+variable, called ``pp`` in the section :ref:`ch:diffusion:welding:cbcpost`,
+needs to survive between calls to the user action function, we find it
+most convenient to implement this function in terms of a class with
+``pp`` as attribute and ``__call__`` as the user action function.  We want
+to make comparisons between the heat source and the temperature
+response, so we register both fields for storage and plotting:
 
 .. code-block:: python
 
@@ -703,7 +778,7 @@ the heat source.
                              save_as=['hdf5', 'xdmf'],  # format
                              plot=True,
                              plot_args=
-                             dict(range_min=0.0, range_max=2.0)
+                             dict(range_min=0.0, range_max=1.1)
                              )))
                 self.pp.add_field(
                     post.SolutionField(
@@ -711,7 +786,10 @@ the heat source.
                         dict(save=True,
                              save_as=["hdf5", "xdmf"],  # format
                              plot=True,
+                             plot_args=
+                             dict(range_min=0.0, range_max=float(delta))
                              )))
+                # Save separately to VTK files as well
                 self.vtkfile_T = File('temperature.pvd')
                 self.vtkfile_f = File('source.pvd')
             def __call__(self, t, T, timestep):
@@ -726,66 +804,78 @@ the heat source.
                     t, timestep)
                 self.vtkfile_T << (T, float(t))
                 self.vtkfile_f << (f_Function, float(t))
-                info('saving results at time %g' % t)
-                # Leave plotting to cbcpost
-            # Paraview: load temperature.pvd (sometimes: must load one
-            # of the temperature*.vtu files), animate temperature, split
-            # layout into two, load weld.pvd, move both layouts back to
-            # time 0, start animation - they are synchronized.
-        Nx = Ny = 40
-        solver_minimize_assembly(
-            gamma, f, u0, I, dt, T, Nx, Ny, degree=1,
-            user_action=ProcessResults(), I_project=False)
-        solver_vs_solver_minimize_assembly():
-        """
-        Compute the relative efficiency of a standard assembly of b
-        and the technique in solver_minimize_assembly.
-        """
-        """
-        Not a dramatic speed-up:
-        l time for assembly of right-hand side: 0.04
-        l time for assembly of right-hand side: 0.02
-        , 1681 unknowns, std solver: 0.26 opt solver: 0.23 speed-up: 1.1
-        l time for assembly of right-hand side: 0.13
-        l time for assembly of right-hand side: 0.07
-        , 6561 unknowns, std solver: 4.00 opt solver: 2.32 speed-up: 1.7
-        l time for assembly of right-hand side: 0.45
-        l time for assembly of right-hand side: 0.25
-        0, 25921 unknowns, std solver: 13.78 opt solver: 5.05 speed-up: 2.7
-        l time for assembly of right-hand side: 1.82
-        l time for assembly of right-hand side: 1.05
-        0, 103041 unknowns, std solver: 41.42 opt solver: 27.96 speed-up: 1.5
-        P2 elements there is hardly any speed-up.
-        """
-        import time
-        alpha = 3; beta = 1.2
-        u0 = Expression('1 + x[0]*x[0] + alpha*x[1]*x[1] + beta*t',
-                        alpha=alpha, beta=beta, t=0)
-        f = Constant(beta - 2 - 2*alpha)
-        dt = 0.3; T = 40*dt
-        degree = 2
-        N = 40
-        for i in range(4):
-            t0 = time.clock()
-            u0.t = 0
-            solver(
-                f, u0, u0, dt, T, N, N, degree,
-                user_action=None, I_project=False)
-            t1 = time.clock()
-            u0.t = 0
-            solver_minimize_assembly(
-                f, u0, u0, dt, T, N, N, degree,
-                user_action=None, I_project=False)
-            t2 = time.clock()
-            info('N=%d, %d unknowns, std solver: %.2f opt solver: %.2f speed-up: %.1f' % (N, (N+1)*(N+1), t1-t0, t2-t1, (t1-t0)/float(t2-t1)))
-            N *= 2
-        _name__ == '__main__':
-        #application()
-        #test_solvers()
-        application_animate(2)
-        #solver_vs_solver_minimize_assembly()
-        #application_welding(gamma=10)
-        interactive()
+                info('saving results at time %g, max T: %g' %
+                     (t, T.vector().array().max()))
+
+We took the opportunity in the callback function (``__call__``) to also
+store the ``u`` and ``f`` functions to VTK files, although this is really
+not necessary since ParaView or VisIt can read XDMF files.
+
+Note that the use of ``cbcpost`` is usually very dependent on the
+problem at hand, so it does not make sense to include ``cbcpost`` code
+in a general PDE solver, only in problem-specific code such as the
+user action function.
+
+Getting an animation on the screen with the built-in plotting tool is
+a matter of running the welding example:
+
+.. code-block:: python
+
+        >>> from diffusion_func import application_welding as a
+        >>> a(gamma=10, delta=700)
+
+(We introduced the synonym ``a`` to save some typing.)
+Or you can run this as a command in the terminal:
+
+.. code-block:: text
+
+        Terminal> python -c '\ 
+        from diffusion_func import application_welding as a;
+        a(gamma=10, delta=700)'
+
+Since we have fixed the color scale of the temperature to have values
+in :math:`[0,1.1]`, we must adjust :math:`\delta` appropriately to :math:`\gamma`.  For
+example, running :math:`\gamma=40` reveals, from the output in the terminal,
+that the maximum temperature is about 0.25, and consequently we do not
+see much. For any given :math:`\gamma`, run the problem with :math:`\delta=1` (and
+say ``num_rotations=0.2`` to make a quick simulation), and rerun with
+:math:`\delta` as one over the maximum temperature.  Here we get an
+approximate :math:`\delta = 66.7\gamma` for :math:`\gamma \leq 0.1`. Try running
+:math:`\gamma=0.01` and :math:`\delta=1` to observe some more significant heat
+transfer away from the welding equipment. With :math:`\gamma =0.001` there
+is significant heat build-up, but for so small :math:`\gamma` we should
+re-scale the problem and use the diffusion time scale as time scale.
+
+In ParaView, load ``Results/Temperature/Temperature.xdmf`` as file,
+click **Apply**, then the play button for animation. If the animation is
+not correct, repeat the procedure. Thereafter, split the layout in
+two, choose **3D View**, load ``Results/Heat source/Heat_source.xmdf``,
+click **Apply**, and run the animation. The two plots are synchronized.
+
+.. This is only in brief now in development
+
+.. MOVIE: [https://github.com/hplgit/fenics-tutorial/tree/master/doc/pub/mov/welding_gamma1.ogg] Welding example with :math:`\gamma=1`.
+
+.. MOVIE: [https://github.com/hplgit/fenics-tutorial/tree/brief/doc/pub/mov/welding_gamma1.ogg] Welding example with :math:`\gamma=1`.
+
+.. _ch:diffusion:refactor:
+
+Refactored implementation          (2)
+======================================
+
+The flat program for the diffusion solver in
+``ft02_diffusion_flat1.py`` and ``ft09_diffusion_flat2.py``
+was refactored in ``ft10_diffusion_func.py`` in
+terms of a ``solver`` function with the general code
+for solving the PDE problem, a callback function for processing
+the solution at each time step, and an application function using
+the solver and defining the callback function to solve a specific
+problem. However, for time-dependent problems a solver function that
+gets all its input through a set of arguments is less flexible
+than a solver *class*, which can demand its input both through
+arguments and through functions (in subclasses) provided by the user.
+
+.. _ch:diffusion:refactor:class_solver:
 
 A class-based solver for a general diffusion problem
 ----------------------------------------------------
@@ -793,8 +883,6 @@ A class-based solver for a general diffusion problem
 When you want to apply some software tool for solving a PDE problem,
 you usually want to explore a family of related problems. To this end,
 you need to formulate some general form of the PDE problem and then
-
-[**hpl 21**: I AM HERE!]
 
 .. --- begin exercise ---
 
@@ -822,7 +910,7 @@ by
          \frac{u^{n+1}-u^n}{\Delta t} = \frac{1}{2}(G(u^{n+1}) + G(u^n)){\thinspace .}
 
 This method also has a truncation error of order :math:`\Delta t^2`.
-[**hpl 22**: Find some good test problems for comparing the performance of the schemes.]
+[**hpl 21**: Find some good test problems for comparing the performance of the schemes.]
 
 .. --- end exercise ---
 
@@ -859,7 +947,7 @@ conductivity properties of the soil in the ground may vary with space
 so we introduce a variable coefficient :math:`\kappa` reflecting this
 property.  Figure :ref:`ftut:timedep:diffusion2:sin:fig1` shows a sketch
 of the problem, with a small region where the heat conductivity is
-much lower.  [**hpl 23**: All parameters :math:`\varrho`, :math:`c`, and :math:`\kappa` are different!]
+much lower.  [**hpl 22**: All parameters :math:`\varrho`, :math:`c`, and :math:`\kappa` are different!]
 
 .. _ftut:timedep:diffusion2:sin:fig1:
 
