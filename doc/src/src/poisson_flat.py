@@ -47,8 +47,6 @@ vtkfile << u
 # Compute and print error
 u_e = interpolate(u0, V)
 error = max(abs(u_e.vector().array() - u.vector().array()))
-import numpy as np
-error = np.abs(u_e.vector().array() - u.vector().array()).max()
 print('error =', error)
 
 # Hold plot
