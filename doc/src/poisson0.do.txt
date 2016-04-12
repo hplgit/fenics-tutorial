@@ -650,17 +650,22 @@ vertex_values_u  = u.compute_vertex_values(mesh)
 error_vertices = max(abs(vertex_values_u0 - vertex_values_u))
 !ec
 
+!bnotice How to check that the error vanishes?
+With inexact arithmetics, as we always have on a computer, the maximum
+error at the vertices is not zero, but should be a small number. The
+machine precision is about $10^{-16}$, but in finite element
+calculations, rounding errors of this size may accumulate, to produce
+an error larger than $10^{-16}$. Experiments show that increasing the
+number of elements and increasing the degree of the finite element
+polynomials increases the error. For a mesh with $2\times(20\times
+20)$ cubic Lagrange elements (degree 3) the error is about $2\cdot
+10^{-12}$, while for 81 linear elements the error is about $2\cdot
+10^{-15}$.
+!enotice
+
 ===== Examining the values of the solution =====
 
 [AL: I AM HERE]
-
-Since we have a test problem where the numerical solution is without
-approximation errors at the degrees of freedom for P1 elements on a
-uniform mesh, we can use this property to ``prove'' that our
-implementation is correct. This is a necessary first step before we
-try to apply our code to more complicated problems.  For such
-verification, we need to compare the computed `u` function to the
-given `u0`.
 
 A finite element function like $u$ is expressed as a linear combination
 of basis functions $\phi_j$, spanning the space $V$:
@@ -672,28 +677,26 @@ u = \sum_{j=1}^N U_j \phi_j label{ftut:poisson1:ufem}\tp
 !et
 By writing `solve(a == L, u, bc)` in the program, a linear system will
 be formed from $a$ and $L$, and this system is solved for the
-$U_1,\ldots,U_N$ values. The $U_1,\ldots,U_N$ values are known as
-*degrees of freedom* of $u$. For Lagrange elements (and many other
-element types) $U_k$ is simply the value of $u$ at the node with
-global number $k$.  The location of the nodes and cell vertices
-coincide for linear Lagrange elements, while for higher-order elements
-there are additional nodes at the facets and sometimes also in the
-interior of cells.
+$U_1,\ldots,U_N$ values. The $U_1,\ldots,U_N$ values are known as the
+*degrees of freedom* ("dofs") or *nodal values* of $u$. For Lagrange
+elements (and many other element types) $U_j$ is simply the value of
+$u$ at the node with global number $j$. The location of the nodes and
+cell vertices coincide for linear Lagrange elements, while for
+higher-order elements there are additional nodes associated with the
+facets, edges and sometimes also the interior of cells.
 
 Having `u` represented as a `Function` object, we can either evaluate
 `u(x)` at any point `x` in the mesh (expensive operation!), or we can
-grab all the degrees of freedom values $U_j$ directly by
+grab all the degrees of freedom values $U$ directly by
 
 !bc pycod-t
 u_nodal_values = u.vector()
 !ec
-The result is a `Vector` object, which is basically an
-encapsulation of the vector object used in the linear algebra package
-that is used to solve the linear system arising from the
-variational problem.
-Since we program in Python it is convenient to convert the
-`Vector` object to a standard `numpy` array for further
-processing:
+The result is a `Vector` object, which is basically an encapsulation
+of the vector object used in the linear algebra package that is used
+to solve the linear system arising from the variational problem.
+Since we program in Python it is convenient to convert the `Vector`
+object to a standard `numpy` array for further processing:
 
 idx{degrees of freedom array}
 idx{nodal values array}
@@ -703,51 +706,30 @@ idx{numbering!cell vertices}
 !bc pycod-t
 u_array = u_nodal_values.array()
 !ec
-With `numpy` arrays we can write MATLAB-like code to analyze
-the data. Indexing is done with square brackets: `u_array[i]`,
-where the index `i` always starts at `0`. However, `i` corresponds
-to $u$ at some point in the mesh and the correspondence requires
-knowledge of the numbering of degrees of freedom and the numbering of
-vertices in elements in the
+
+With `numpy` arrays we can write MATLAB-like code to analyze the
+data. Indexing is done with square brackets: `u_array[j]`, where the
+index `j` always starts at `0`. If the solution is computed with
+piecewise linear Lagrange elements ($\mathsf{P}_1$), then the size of
+the array `u_array` is equal to the number of vertices, and each
+`u[j]` is the value at some vertex in the mesh. However, the degrees
+of freedom are not necessarily numbered in the same way as the
+vertices of the
 % if FORMAT == 'ipynb':
 mesh.
 % else:
 mesh, see Section ref{ftut:poisson1:verify1} for details.
 % endif
-
-idx{`interpolate`}
-
-For now, we want to check that the values in `u_array` are correct:
-they should equal our `u0` function. The most natural approach is
-to interpolate our `u0` expression onto our space
-(i.e., the finite element mesh),
+If we therefore want to know the values at the vertices, we need to
+call the function `u.compute_vertex_values()`. This function returns
+the values at all the vertices of the mesh as a `numpy` with the same
+numbering as for the vertices of the mesh, for example:
 
 !bc pycod-t
-u0_Function = interpolate(u0, V)
+u_vertex_values = u.compute_vertex_values()
 !ec
-The `interpolate` function returns a `Function` object, whose degrees
-of freedom values can be obtained by `.vector().array()`.  Our goal is
-to show that the degrees of freedom arrays of `u` and `u0_Function`
-are equal. One safe of doing this is to compute the maximum error,
-
-!bc pycod-t
-u0_array = u0_Function.vector().array()  # dof values
-error = (u0_array - u.vector().array()).max()
-print('error:', error)
-!ec
-
-!bnotice How to check that the error vanishes?
-With inexact arithmetics, as we always have on a computer,
-this maximum error is not zero, but should be a small number.
-The machine precision is about $10^{-16}$, but in finite element
-calculations, rounding errors of this size may accumulate, so
-the expected accuracy of `error` smaller. Experiments show
-that increasing the number of elements and increasing the degree
-of the finite element polynomials increase `error`.
-For a mesh with $2(20\times 20)$ cubic Lagrange elements (degree 3)
-`error` is about $2\cdot 10^{-12}$, while for 18 linear elements
-the maximum error is about $2\cdot 10^{-15}$.
-!enotice
+Note that `u_array` and `u_vertex_values` are arrays of the same
+length and containing the same values, albeit in different order.
 
 ===== Plotting in ParaView =====
 
