@@ -17,7 +17,7 @@ mesh = UnitSquareMesh(8, 8)
 V = FunctionSpace(mesh, 'P', 1)
 
 # Define boundary conditions
-u0 = Expression('1 + x[0]*x[0] + 2*x[1]*x[1]', degree=1)
+u0 = Expression('1 + x[0]*x[0] + 2*x[1]*x[1]', degree=2)
 
 def u0_boundary(x, on_boundary):
     return on_boundary
@@ -44,10 +44,17 @@ plot(mesh)
 vtkfile = File('poisson.pvd')
 vtkfile << u
 
-# Compute and print error
-u_e = interpolate(u0, V)
-error = max(abs(u_e.vector().array() - u.vector().array()))
-print('error =', error)
+# Compute error in L2 norm
+error_L2norm = errornorm(u0, u, 'L2')
+
+# Compute maximum error at vertices
+vertex_values_u0 = u0.compute_vertex_values(mesh)
+vertex_values_u  = u.compute_vertex_values(mesh)
+error_vertices = max(abs(vertex_values_u0 - vertex_values_u))
+
+# Print errors
+print('error_L2norm   =', error_L2norm)
+print('error_vertices =', error_vertices)
 
 # Hold plot
 interactive()
