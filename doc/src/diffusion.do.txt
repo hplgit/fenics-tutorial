@@ -3,17 +3,35 @@ label{ch:diffusion}
 
 # Pointers backward...what is needed to be recaptured?
 
+This chapter is devoted to solving diffusion problems of the
+form
+
+!bt
+\[ -\nabla\cdot(p\nabla u) = f,\]
+!et
+with initial condition $u=I$ and various types of Dirichlet, Neumann,
+and Robin conditions.
+A very simple FEniCS program for a diffusion equation was introduced
+in Section ref{ch:fundamentals:diffusion}, but here we shall
+discuss important algorithmic optimization strategies, how to store
+and animate time-dependent data, and how to construct more advanced
+solvers in terms of classes.
+
 ======= Optimization of algorithms and implementations =======
+label{ch:diffusion:opt}
 
 ===== Avoiding some assembly =====
+label{ch:diffusion:opt:bassembly}
 
-We realize that $a$ does not depend on time, which means that its
-associated matrix also will be time independent. Therefore, it is wise
+The time-dependent diffusion equation gives rise to a linear system
+$AU=b$ at each time level, where the coefficient matrix $A$ is constant,
+but $b$ depends on $u$ at the previous time level. To increase the
+computational efficiency, we can therefore assemble $A$ once and
+for all before the time loop. To be able to do this, we need to
 to explicitly create matrices and vectors as demonstrated in Section
-ref{ftut:poisson1:linalg}.  The matrix $A$ arising from $a$ can be
-computed prior to the time stepping, so that we only need to compute
-the right-hand side $b$, corresponding to $L$, in each pass in the
-time loop. Let us express the solution procedure in algorithmic form,
+ref{ftut:poisson1:linalg}.
+
+Let us express the solution procedure in algorithmic form,
 writing $u$ for the unknown spatial function at the new time level
 ($u^k$) and $u_1$ for the spatial solution at one earlier time level
 ($u^{k-1}$):
@@ -79,7 +97,8 @@ The complete program is found in the file
 
 
 ===== Avoiding all assembly =====
-label{ftut:timedep:diffusion1:noassemble}
+label{ch:diffusion:opt:noassembly}
+
 idx{assembly, increasing efficiency}
 
 The purpose of this section is to present a technique for speeding up
@@ -337,16 +356,16 @@ The focus so far in this tutorial has been on producing the solution
 of PDE problems. For scientific investigations, the primary work is
 often with post processing results: computing quantities derived from
 the solution and inspecting these with visualization or data analysis tools.
-To ease this process, we shall make use of a convenient tool, `cbcpost`,
+This is the focus of the present section.
+To ease the programming, we shall make use of a convenient tool, `cbcpost`,
 for post processing, saving data to file(s), and animating solutions.
 We recommend to use
 `cbcpost` in all time-dependent FEniCS solvers, but it also has a lot
 to offer in stationary problems too.
 
-To explain the usage of `cbcpost` for storage and plotting,
-we address a real physical application:
-welding of a plate, where a moving heat source gives rise to a moving
-temperature field.
+To explain the usage of `cbcpost` for storage and plotting, we address
+a real physical application: welding of a plate, where a moving heat
+source gives rise to a moving temperature field.
 
 ===== Post processing data and saving to file =====
 label{ch:diffusion:welding:cbcpost}
@@ -354,9 +373,9 @@ label{ch:diffusion:welding:cbcpost}
 === Installation ===
 
 The `cbcpost` package is not a part of the `fenics` package so you
-will need to install it.
-The simplest installation method is to use `pip`. We recommend to
-install a companion package `fenicstools` as well. Just run
+will need to install it.  The simplest installation method is to use
+`pip`. We recommend to install a companion package `fenicstools` as
+well. Just run
 
 !bc
 sudo pip install git+https://bitbucket.org/simula_cbc/cbcpost.git
@@ -432,10 +451,12 @@ the animation.
 label{ch:diffusion:welding:problem}
 
 Let us solve a real diffusion problem taken from welding.
-A moving welding equipment acts as a moving heat source.
+A moving welding equipment acts as a moving heat source
+at the top of a thin metal plate.
 The question is how the heat from the equipment spreads out
 in the material that is being welded. We use the standard
-heat equation and do not take phase transitions into account.
+heat equation, treat the material as two dimensional,
+and do not take phase transitions into account.
 The governing PDE is then
 
 !bt
@@ -445,19 +466,25 @@ where $u$ is temperature, $\varrho$ is the density of the material,
 $c$ is the heat capacity at constant volume, $k$ is the heat
 conduction coefficient, and $f$ models the heat source from the
 welding equipment. The domain is $\Omega = [0,L]\times [0,L]$.
+An additional major simplification is that we set $u=U_s$ at the boundary,
+where $U_s$ is the temperature of the surroundings (a Robin condition,
+modeling cooling at the boundary would be more accurate, but then we should
+also consider cooling in the third dimension as well).
+The initial condition reads $u=U_s$.
 
-A welding source rotating with angular velocity $\omega$ about a
-point $(x_0,y_0)$ can be modelled as a Gaussian function with
-``standard deviation'' $\sigma$:
+A welding source is moving and very localized in space.
+The localization can be modeled by a peak-shaped Gaussian function.
+The movement is taken to be a circle with radius $R$ about a
+point $(x_0,y_0)$. An appropriate $f$ is
 
 !bt
-\[ f(x,y,t) = A\exp{\left(-\frac{1}{2}
-\left(\frac{x-(x_0 + R\cos\omega t)}{\sigma}\right)^2 -\frac{1}{2}
-\left(\frac{y-(y_0 + R\sin\omega t)}{\sigma}\right)^2\right)}\tp\]
+\[ f(x,y,t) = A\exp{\left(-\frac{1}{2\sigma^2}
+\left({x-(x_0 + R\cos\omega t)}\right)^2 -\frac{1}{2}
+\left({y-(y_0 + R\sin\omega t)}\right)^2\right)}\tp\]
 !et
-The parameter $A$ is the strength of the heat source.
-
-The initial condition is that the material has constant room temperature.
+The parameter $A$ is the strength of the heat source, and $\sigma$ is
+the ``standard deviation'' (i.e., a measure of the width) of the Gaussian
+function.
 
 ===== Scaling of the welding problem =====
 label{ch:diffusion:welding:scaling}
@@ -477,18 +504,15 @@ This means that we introduce scaled variables
 \ \bar u = \frac{u-U_s}{u_c}\tp
 \]
 !et
-The parameter $U_s$ is the temperature of the surroundings (the initial
-conditions) such that we can have $u=0$ at $t=0$.
-
 The scaled form of $f$ is naturally $\bar f = f/A$, since this makes
 $\bar f\in (0,1]$. The arguments in the exponential function in $f$ can
 also be scaled:
 
 !bt
 \begin{align*}
-\bar f &= \exp{\left(-\frac{1}{2}
-\left(\frac{\bar xL -(L \bar x_0 + L\bar R\cos\omega t_c t)}{\sigma}\right)^2 -\frac{1}{2}
-\left(\frac{L \bar y-(L\bar y0 + L\bar R\sin\omega t_c t)}{\sigma}\right)^2\right)}\\
+\bar f &= \exp{\left(-\frac{1}{2\sigma^2}
+\left({\bar xL -(L \bar x_0 + L\bar R\cos\omega t_c t)}\right)^2 -\frac{1}{2\sigma^2}
+\left({L \bar y-(L\bar y0 + L\bar R\sin\omega t_c t)}\right)^2\right)}\\
 &= \exp{\left(-\frac{1}{2}\frac{L^2}{\sigma^2}
 \left(x -(\bar x_0 + \bar R\cos\omega t_c \bar t)\right)^2 -\frac{1}{2}
 \left(\bar y-(\bar y0 + \bar R\sin\omega t_c \bar t)\right)^2\right)}\\
@@ -556,16 +580,25 @@ Looking at $\gamma$, we see that it can be written
 \[ \gamma = \frac{1/\omega}{\varrho c L^2/k},\]
 !et
 which is the ratio of the time scale for the heat source and the
-time scale for diffusion.
+time scale for diffusion. Multiplying by $R/R$ gives another
+interpretation: $\gamma$ is the ratio of the speed of diffusion and
+the speed of the heat source.
 
-To summarize, the physics of our problem depends now on
-$\beta$, $\bar R$, and $\gamma$, just three parameters.
-Of these, $\bar R = 0.2$ is an appropriate choice. For a quite
-localized heat source in space, $\beta=10$ is a suitable parameter.
-Then we are actually left with only one parameter to adjust: $\gamma$.
-It is much easier to assign this parameter a value than to set
-$\varrho$, $c$, and $k$ for some chosen material, and then
-determine $A$, $L$, etc.
+!bnotice The benfits of scaling
+The physics of our problem depends now on $\beta$, $\bar
+R$, and $\gamma$, just three ratios of physical effects insetad
+of 10 independent parameters.  Setting
+$\bar R = 0.2$ is an appropriate choice. For a quite localized heat
+source in space, $\beta=10$ is a suitable value.  Then we are
+actually left with only one interesting parameter to adjust: $\gamma$.
+It is so much easier to assign this parameter a value (speed of
+diffusion versus speed of heat source) than to set $\varrho$, $c$, and
+$k$ for some chosen material, and then determine relevant values for
+$A$, $L$, etc. There are no approximations in the scaling procedure;
+it just dramatically simplifies numerical simulations.
+The book cite{Langtangen_scaling} gives a comprehensive treatment
+of scaling.
+!enotice
 
 ===== A function-based solver =====
 label{ch:diffusion:welding:funcsolver}
@@ -577,11 +610,11 @@ that $\delta = 700$ gives $\bar u$ of unit size for moderate $\gamma$
 values.
 
 !bc pycod
-def application_welding(gamma=1, delta=1):
+def application_welding(gamma=1, delta=1, beta=10, num_rotations=2):
+    """Circular moving heat source for simulating welding."""
     from math import pi, sin, cos
     u0 = Constant(0)
     I = Constant(0)
-    beta = 10
     R = 0.2
     f = Expression(
         'delta*exp(-0.5*pow(beta,2)*(pow(x[0]-(0.5+R*cos(t)),2) + '
@@ -608,7 +641,7 @@ most convenient to implement this function in terms of a class with
 to make comparisons between the heat source and the temperature
 response, so we register both fields for storage and plotting:
 
-@@@CODE-4 src/diffusion_func.py fromto: import cbcpost as post@# Leave plotting to cbcpost
+@@@CODE-4 src/diffusion_func.py fromto: import cbcpost as post@info\('saving results
 We took the opportunity in the callback function (`__call__`) to also
 store the `u` and `f` functions to VTK files, although this is really
 not necessary since ParaView or VisIt can read XDMF files.
@@ -651,12 +684,13 @@ In ParaView, load `Results/Temperature/Temperature.xdmf` as file,
 click _Apply_, then the play button for animation. If the animation is
 not correct, repeat the procedure. Thereafter, split the layout in
 two, choose _3D View_, load `Results/Heat source/Heat_source.xmdf`,
-click _Apply_, and run the animation. The two plots are synchronized.
+click _Apply_, and run the animation. The two plots are synchronized
+in time.
 
 # This is only in brief now in development
 #MOVIE: [https://github.com/hplgit/fenics-tutorial/tree/master/doc/pub/mov/welding_gamma1.ogg] Welding example with $\gamma=1$.
 
-#MOVIE: [https://github.com/hplgit/fenics-tutorial/tree/brief/doc/pub/mov/welding_gamma1.ogg] Welding example with $\gamma=1$.
+MOVIE: [https://github.com/hplgit/fenics-tutorial/tree/brief/doc/pub/mov/welding_gamma1.ogg] Welding example with $\gamma=1$.
 
 
 ======= Refactored implementation =======
@@ -664,26 +698,88 @@ label{ch:diffusion:refactor}
 
 The flat program for the diffusion solver in
 `${prog["diffusion_flat1"]}.py` and `${prog["diffusion_flat2"]}.py`
-was refactored in `${prog["diffusion_func"]}.py` in
-terms of a `solver` function with the general code
-for solving the PDE problem, a callback function for processing
-the solution at each time step, and an application function using
-the solver and defining the callback function to solve a specific
-problem. However, for time-dependent problems a solver function that
-gets all its input through a set of arguments is less flexible
-than a solver *class*, which can demand its input both through
-arguments and through functions (in subclasses) provided by the user.
+was refactored in `${prog["diffusion_func"]}.py` in terms of a
+`solver` function with the general code for solving the PDE problem, a
+callback function for processing the solution at each time step, and
+an application function defining the callback function and calling the
+solver to solve a specific problem. However, for time-dependent
+problems a solver function that gets all its input through a set of
+arguments is less flexible than a solver *class*, which can demand its
+input both through arguments and through functions (in subclasses)
+provided by the user. The following text requires you to be familiar
+with class programming in Python (tailored learning material is
+Chapter 7, 9, and Appendix E in cite{Langtangen2009a}).
 
+When we work with a PDE project, we often want to explore a range or
+similar problems where the PDE model basically stays the same, but
+coefficents in the PDE, boundary and initial conditions, as well as
+domains change.  This means that some of our code related to solving
+the PDE is always the same, while some of our code is strongly
+dependent upon a particular application. To avoid copying code (which
+is considered evil in computer programming), we need to collect the
+common code for all problems of this type in one place and then create
+an API (application programming interface) to the code that will be
+different from application to application. To this end, we introduce a
+*solver class* that applies FEniCS to solve the PDE. It requires
+access to a *problem class* where all the application-specific details
+are defined. This problem class defines an API that the solver class
+applies for communication.
 
+The solver class will usually have only a constructor to set up data
+structures (typically the variational formulation), a `step` function
+to advance the solution one time step, and a `solve` function to run
+the time loop. Every time the solver class needs problem-specific
+information, it needs to get that from the problem class, either in
+terms of attributes (variables) in the class or in terms of method
+(function) calls. The forthcoming examples are tied to the diffusion
+equation, but should be sufficiently general to be reused for
+most time-dependent FEniCS applications.
 
 
 ===== A class-based solver for a general diffusion problem =====
 label{ch:diffusion:refactor:class_solver}
 
-When you want to apply some software tool for solving a PDE problem,
-you usually want to explore a family of related problems. To this end,
-you need to formulate some general form of the PDE problem and then
+The simplest part is the solver class. It contains the data structures
+and actions from previous programs, but needs to ask the problem class
+about the mesh, boundary conditions, the time step, and so forth. We
+therefore need to define the API of the problem class first so we know
+how the solver class can ask for the mesh, for instance.
 
+Here is an abstract problem class:
+
+@@@CODE src/diffusion_class.py fromto: class Problem\(@class Problem1
+The meaning of the different methods in this class will be evident as
+we present specific examples on implementations.
+
+The idea now is that different problems are implemented as different
+subclasses of `Problem`. The `solve` and `flux` methods are general
+and can be inherited, while the rest of the methods must be
+implemented in the subclass.
+
+As a simple example, consider the test problem where we have a
+manufactured solution $u=1+x^2 + \alpha y^2 + \beta t$ on
+a uniform mesh over the unit square and Dirichlet conditions
+on the entire boundary. Suppose we have $\Delta t=0.3$ and
+want to simulate for $t\in [0,0.9]$. A problem class is then
+
+@@@CODE-4 src/diffusion_class.py fromto: class TestProblemExact@problem = TestProblemExact
+
+The problem is now solved by
+
+@@@CODE-4 src/diffusion_class.py fromto: problem = TestProblemExact@if __name
+The solver class will call the `user_action` function at every time level,
+and this function will assert that we recover the solution to machine precision
+(note that if we change the degree of the elements, or increase the
+mesh size, we need a less restrict tolerance!).
+
+The solver class, here based on the algorithm in Section
+ref{ch:diffusion:opt:noassembly}, can be coded as follows:
+
+@@@CODE src/diffusion_class.py fromto: class Solver@class Problem
+
+ * Think about Crank-Nicolson as subclass!
+ * Some simple diffusion problems with varying $\Delta t$,
+   focus on a flux at a part of the boundary, etc. Can also be exercises.
 
 % if EXV:
 ===== Exercise: Implement second-order schemes in time =====
@@ -718,7 +814,7 @@ label{ftut:timedep:diffusion2:sin}
 idx{`${prog["sin_daD"]}.py`}
 
 With the basic programming techniques for time-dependent problems from
-Sections ref{ftut:timedep:diffusion1:noassemble} and
+Sections ref{ch:diffusion:opt:noassembly} and
 ref{ftut:timedep:diffusion1:impl} we are ready to attack more
 physically realistic examples.  The next example concerns the
 question: How is the temperature in the ground affected by day and
@@ -941,7 +1037,7 @@ T = Function(V)   # unknown at the current time level
 !ec
 We could, alternatively, break `a` and `L` up in subexpressions
 and assemble a mass matrix and stiffness matrix, as exemplified in
-Section ref{ftut:timedep:diffusion1:noassemble}, to avoid
+Section ref{ch:diffusion:opt:noassembly}, to avoid
 assembly of `b` at every time level. This modification is
 straightforward and left as an exercise. The speed-up can be significant
 in 3D problems.

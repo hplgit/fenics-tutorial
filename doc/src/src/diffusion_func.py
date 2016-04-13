@@ -1,10 +1,19 @@
-"""Refactored version of d2D_plain.py with functions."""
+"""Refactored version of diffusion_plain*.py with functions."""
 from __future__ import print_function
 from fenics import *
 import time
 
 def solver(alpha, f, u0, I, dt, T, Nx, Ny, degree=1,
            user_action=None, I_project=False):
+    """
+    Solve diffusion PDE in 2D: -div(alpha*grad(u))=f in the
+    unit square, with u=u0 on the boundary, with Nx x Ny partitioning
+    of elements of the specified degree.
+    user_action(t, u, timestep) is a callback function for
+    problem-dependent processing the solution at each time step.
+    If I_project is False, the initial condition I is interpolated
+    at t=0.
+    """
     # Create mesh and define function space
     mesh = UnitSquareMesh(Nx, Ny)
     V = FunctionSpace(mesh, 'P', degree)
@@ -420,6 +429,7 @@ def test_solvers():
                 linear_solver='direct')
 
 def application_welding(gamma=1, delta=1, beta=10, num_rotations=2):
+    """Circular moving heat source for simulating welding."""
     from math import pi, sin, cos
     u0 = Constant(0)
     I  = Constant(0)
@@ -477,16 +487,6 @@ def application_welding(gamma=1, delta=1, beta=10, num_rotations=2):
             info('saving results at time %g, max T: %g' %
                  (t, T.vector().array().max()))
             # Leave plotting to cbcpost
-
-        # Paraview: load temperature.pvd (sometimes: must load one
-        # of the temperature*.vtu files), animate temperature, split
-        # layout into two, load weld.pvd, move both layouts back to
-        # time 0, start animation - they are synchronized.
-
-    # 10: 1.1 700
-    # 40 0.26 700
-    # 1  10   700
-    # delta = gamma*66.7
 
     Nx = Ny = 40
     solver_minimize_assembly(

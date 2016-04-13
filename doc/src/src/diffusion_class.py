@@ -92,20 +92,13 @@ class Solver(object):
             t += self.dt
             self.u_1.assign(self.u)
 
-    def flux(self):
-        """Compute and return flux -p*grad(u)."""
-        mesh = self.u.function_space().mesh()
-        degree = self.u.ufl_element().degree()
-        V_g = VectorFunctionSpace(mesh, 'P', degree)
-        self.flux_u = project(-self.p*grad(self.u), V_g)
-        self.flux_u.rename('flux(u)', 'continuous flux field')
-        return self.flux_u
-
 class Problem(object):
-    """Abstract base class for problems."""
-    def solve(self, linear_solver='direct',
+    """Abstract base class for specific diffusion applications."""
+
+    def solve(self, solver_class=Solver, linear_solver='direct',
               abs_tol=1E-6, rel_tol=1E-5, max_iter=1000):
-        self.solver = Solver(self)
+        """Solve the PDE problem for the primary unknown."""
+        self.solver = solver_class(self)
         iterative_solver = KrylovSolver('gmres', 'ilu')
         prm = iterative_solver.parameters
         prm['absolute_tolerance'] = abs_tol
@@ -114,26 +107,18 @@ class Problem(object):
         prm['nonzero_initial_guess'] = True  # Use u (last sol.)
         return self.solver.solve()
 
-    def user_action(self, t, u):
-        """Post process solution u at time t."""
-        pass
-
-    def time_step(self, t):
-        raise NotImplentedError('Must implement time_step')
-
-    def end_step(self):
-        raise NotImplentedError('Must implement end_time')
-
-    def solution(self):
-        return self.solver.u
-
-    def update_boundary_conditions(self, t):
-        """Update t parameter in Expression objects in BCs."""
-        pass
+    def flux(self):
+        """Compute and return flux -p*grad(u)."""
+        mesh = self.mesh()
+        degree = self.solution().ufl_element().degree()
+        V_g = VectorFunctionSpace(mesh, 'P', degree)
+        self.flux_u = project(-self.p*grad(self.u), V_g)
+        self.flux_u.rename('flux(u)', 'continuous flux field')
+        return self.flux_u
 
     def mesh_degree(self):
         """Return mesh, degree."""
-        raise NotImplementedError('Must implement mesh!')
+        raise NotImplementedError('Must implement mesh')
 
     def I(self):
         """Return initial condition."""
@@ -145,8 +130,26 @@ class Problem(object):
     def f_rhs(self):
         return Constant(0.0)
 
+    def time_step(self, t):
+        raise NotImplentedError('Must implement time_step')
+
+    def end_step(self):
+        raise NotImplentedError('Must implement end_time')
+
+    def solution(self):
+        return self.solver.u
+
+    def user_action(self, t, u):
+        """Post process solution u at time t."""
+        pass
+
+    def update_boundary_conditions(self, t):
+        """Update t parameter in Expression objects in BCs."""
+        pass
+
     def Dirichlet_conditions(self):
-        """Return list of (value,boundary_parts,index) triplets."""
+        """Return either an Expression (for the entire boundary) or
+        a list of (value,boundary_parts,index) triplets."""
         return []
 
     def Neumann_conditions(self):
@@ -154,7 +157,7 @@ class Problem(object):
         return []
 
     def Robin_conditions(self):
-        """Return list of (r,u,ds(n)) triplets."""
+        """Return list of (r,s,ds(n)) triplets."""
         return []
 
 
@@ -326,16 +329,16 @@ def test_Solver():
         def user_action(self, t, u):
             """Post process solution u at time t."""
             u_e = interpolate(self.u0, u.function_space())
-            max_error = np.abs(u_e.vector().array() -
-                               u.vector().array()).max()
-            print('max_error at %g: %g' % (t, max_error))
-            assert max_error < 2E-15, 'max_error: %g' % max_error
+            error = np.abs(u_e.vector().array() -
+                           u.vector().array()).max()
+            print('error at %g: %g' % (t, error))
+            assert error < 2E-15, 'max_error: %g' % error
 
     problem = TestProblemExact(Nx=2, Ny=2)
     problem.solve(linear_solver='direct')
     u = problem.solution()
 
 if __name__ == '__main__':
-    demo()
-    #test_Solver()
+    #demo()
+    test_Solver()
     interactive()
