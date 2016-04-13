@@ -416,7 +416,7 @@ follows:</p>
 <span class="n">V</span> <span class="o">=</span> <span class="n">FunctionSpace</span><span class="p">(</span><span class="n">mesh</span><span class="p">,</span> <span class="s">&#39;P&#39;</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
 
 <span class="c"># Define boundary conditions</span>
-<span class="n">u0</span> <span class="o">=</span> <span class="n">Expression</span><span class="p">(</span><span class="s">&#39;1 + x[0]*x[0] + 2*x[1]*x[1]&#39;</span><span class="p">,</span> <span class="n">degree</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+<span class="n">u0</span> <span class="o">=</span> <span class="n">Expression</span><span class="p">(</span><span class="s">&#39;1 + x[0]*x[0] + 2*x[1]*x[1]&#39;</span><span class="p">,</span> <span class="n">degree</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
 
 <span class="k">def</span> <span class="nf">u0_boundary</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">on_boundary</span><span class="p">):</span>
     <span class="k">return</span> <span class="n">on_boundary</span>
@@ -443,12 +443,17 @@ follows:</p>
 <span class="n">vtkfile</span> <span class="o">=</span> <span class="n">File</span><span class="p">(</span><span class="s">&#39;poisson.pvd&#39;</span><span class="p">)</span>
 <span class="n">vtkfile</span> <span class="o">&lt;&lt;</span> <span class="n">u</span>
 
-<span class="c"># Compute and print error</span>
-<span class="n">u_e</span> <span class="o">=</span> <span class="n">interpolate</span><span class="p">(</span><span class="n">u0</span><span class="p">,</span> <span class="n">V</span><span class="p">)</span>
-<span class="n">error</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="nb">abs</span><span class="p">(</span><span class="n">u_e</span><span class="o">.</span><span class="n">vector</span><span class="p">()</span><span class="o">.</span><span class="n">array</span><span class="p">()</span> <span class="o">-</span> <span class="n">u</span><span class="o">.</span><span class="n">vector</span><span class="p">()</span><span class="o">.</span><span class="n">array</span><span class="p">()))</span>
-<span class="kn">import</span> <span class="nn">numpy</span> <span class="kn">as</span> <span class="nn">np</span>
-<span class="n">error</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">u_e</span><span class="o">.</span><span class="n">vector</span><span class="p">()</span><span class="o">.</span><span class="n">array</span><span class="p">()</span> <span class="o">-</span> <span class="n">u</span><span class="o">.</span><span class="n">vector</span><span class="p">()</span><span class="o">.</span><span class="n">array</span><span class="p">())</span><span class="o">.</span><span class="n">max</span><span class="p">()</span>
-<span class="k">print</span><span class="p">(</span><span class="s">&#39;error =&#39;</span><span class="p">,</span> <span class="n">error</span><span class="p">)</span>
+<span class="c"># Compute error in L2 norm</span>
+<span class="n">error_L2norm</span> <span class="o">=</span> <span class="n">errornorm</span><span class="p">(</span><span class="n">u0</span><span class="p">,</span> <span class="n">u</span><span class="p">,</span> <span class="s">&#39;L2&#39;</span><span class="p">)</span>
+
+<span class="c"># Compute maximum error at vertices</span>
+<span class="n">vertex_values_u0</span> <span class="o">=</span> <span class="n">u0</span><span class="o">.</span><span class="n">compute_vertex_values</span><span class="p">(</span><span class="n">mesh</span><span class="p">)</span>
+<span class="n">vertex_values_u</span>  <span class="o">=</span> <span class="n">u</span><span class="o">.</span><span class="n">compute_vertex_values</span><span class="p">(</span><span class="n">mesh</span><span class="p">)</span>
+<span class="n">error_vertices</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="nb">abs</span><span class="p">(</span><span class="n">vertex_values_u0</span> <span class="o">-</span> <span class="n">vertex_values_u</span><span class="p">))</span>
+
+<span class="c"># Print errors</span>
+<span class="k">print</span><span class="p">(</span><span class="s">&#39;error_L2norm   =&#39;</span><span class="p">,</span> <span class="n">error_L2norm</span><span class="p">)</span>
+<span class="k">print</span><span class="p">(</span><span class="s">&#39;error_vertices =&#39;</span><span class="p">,</span> <span class="n">error_vertices</span><span class="p">)</span>
 
 <span class="c"># Hold plot</span>
 <span class="n">interactive</span><span class="p">()</span>
@@ -460,7 +465,18 @@ follows:</p>
 <span id="ftut-poisson1-impl-run"></span><h3>Running the program<a class="headerlink" href="#running-the-program" title="Permalink to this headline">¶</a></h3>
 <p>The FEniCS program must be available in a plain text file, written with a
 text editor such as Atom, Sublime Text, Emacs, Vim, or similar.</p>
-<p>To run the program <code class="docutils literal"><span class="pre">ft01_poisson_flat.py</span></code>, open a terminal
+<p>There are several ways to run a Python program like
+<code class="docutils literal"><span class="pre">ft01_poisson_flat.py</span></code>:</p>
+<blockquote>
+<div><ul class="simple">
+<li>Use a terminal window</li>
+<li>Use an intergrated development environment (IDE), e.g., Spyder</li>
+<li>Use a Jupyter notebook</li>
+</ul>
+</div></blockquote>
+<div class="section" id="terminal-window">
+<h4>Terminal window<a class="headerlink" href="#terminal-window" title="Permalink to this headline">¶</a></h4>
+<p>Open a terminal
 window, move to the directory containing the program and type the
 following command:</p>
 <div class="highlight-text"><div class="highlight"><pre>Terminal&gt; python ft01_poisson_flat.py
@@ -480,6 +496,31 @@ error should be small, something on the order of <span class="math">\(10^{-15}\)
 <div class="figure" id="id5">
 <span id="ftut-poisson-2d-fig-ex1-u"></span><a class="reference internal image-reference" href="_images/ex1_u.png"><img alt="_images/ex1_u.png" src="_images/ex1_u.png" style="width: 600px;" /></a>
 <p class="caption"><span class="caption-text"><em>Plot of the solution in the first FEniCS example</em></span></p>
+</div>
+</div>
+<div class="section" id="spyder">
+<h4>Spyder<a class="headerlink" href="#spyder" title="Permalink to this headline">¶</a></h4>
+<p>Many prefer to work in an integrated development environment where there is
+an editor for programming, a window for executing code, a window for
+inspecting objects, etc. The Spyder tool comes with all major Python
+installations. Just open the file <code class="docutils literal"><span class="pre">ft01_poisson_flat.py</span></code> and press
+the play button to run it. We refer to the Spyder tutorial to learn more
+about working in the Spyder environment. Spyder is highly recommended
+if you are used to working in the <em>graphical</em> MATLAB environment.</p>
+</div>
+<div class="section" id="jupyter-notebooks">
+<h4>Jupyter notebooks<a class="headerlink" href="#jupyter-notebooks" title="Permalink to this headline">¶</a></h4>
+<p>Notebooks make it possible to mix text and executable code in the same
+document, but you can also just use it to run programs in a web browser.
+Start <code class="docutils literal"><span class="pre">jupyter</span> <span class="pre">notebook</span></code> from a terminal window, find the <strong>New</strong> pulldown
+menu in the upper right part of the GUI, choose a new notebook in
+Python 2 or 3, write <code class="docutils literal"><span class="pre">%load</span> <span class="pre">ft01_poisson_flat.py</span></code> in the blank
+cell of this notebook, then write Shift+Enter to execute the cell.
+The file <code class="docutils literal"><span class="pre">ft01_poisson_flat.py</span></code> will the be loaded into the notebook.
+Re-execute the cell (Shift+Enter) to run the program. You may divide the
+entire program into several cells to examine intermediate results: place
+the cursor where you want to split the cell and choose <strong>Edit - Split Cell</strong>.</p>
+<p>[<strong>hpl 4</strong>: Need to describe this with more care. The first program seems to have some problems with printing the error to the notebook unless we drop the plot commands. Anyway, there should be in-browser plot commands.]</p>
 </div>
 </div>
 <div class="section" id="dissection-of-the-program">
@@ -526,7 +567,7 @@ should be divided into <span class="math">\(8\times 8\)</span> rectangles, each 
 triangles. The total number of triangles (cells) thus becomes
 128. The total number of vertices in the mesh is <span class="math">\(9\cdot 9=81\)</span>.
 In later chapters, you will learn how to generate more complex meshes.</p>
-<p>[<strong>hpl 4</strong>: Note that plot was made by the old partitioning <span class="math">\(6\times 4\)</span>. Probably no issue.]</p>
+<p>[<strong>hpl 5</strong>: Note that plot was made by the old partitioning <span class="math">\(6\times 4\)</span>. Probably no issue.]</p>
 <span class="target" id="index-6"></span><span class="target" id="index-7"></span><span class="target" id="index-8"></span><span class="target" id="index-9"></span></div>
 <div class="section" id="defining-the-finite-element-function-space">
 <span id="index-10"></span><h4>Defining the finite element function space<a class="headerlink" href="#defining-the-finite-element-function-space" title="Permalink to this headline">¶</a></h4>
@@ -585,21 +626,27 @@ Naturally, the FEniCS class used to define Dirichlet boundary
 conditions is named <code class="docutils literal"><span class="pre">DirichletBC</span></code>.</p>
 <p id="index-17">The variable <code class="docutils literal"><span class="pre">u0</span></code> refers to an <code class="docutils literal"><span class="pre">Expression</span></code> object, which is used to
 represent a mathematical function. The typical construction is</p>
-<div class="highlight-python"><div class="highlight"><pre><span class="n">u0</span> <span class="o">=</span> <span class="n">Expression</span><span class="p">(</span><span class="n">formula</span><span class="p">)</span>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">u0</span> <span class="o">=</span> <span class="n">Expression</span><span class="p">(</span><span class="n">formula</span><span class="p">,</span> <span class="n">degree</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
 </pre></div>
 </div>
 <p>where <code class="docutils literal"><span class="pre">formula</span></code> is a string containing the mathematical expression.
 This formula is written with C++ syntax. The expression is
 automatically turned into an efficient, compiled C++ function.
-The expression may depend on the variables <code class="docutils literal"><span class="pre">x[0]</span></code> and <code class="docutils literal"><span class="pre">x[1]</span></code>
+The second argument <code class="docutils literal"><span class="pre">degree</span></code> is a parameter that specifies how
+the expression should be treated in computations. FEniCS will
+interpolate the expression into some finite element space. It is
+usually a good choice to interpolate expressions into the same
+space <span class="math">\(V\)</span> that is used for the trial and test functions,
+but in certain cases, one may want to use a more accurate (higher
+degree) representation of expressions.</p>
+<p>The expression may depend on the variables <code class="docutils literal"><span class="pre">x[0]</span></code> and <code class="docutils literal"><span class="pre">x[1]</span></code>
 corresponding to the <span class="math">\(x\)</span> and <span class="math">\(y\)</span> coordinates. In 3D, the expression
 may also depend on the variable <code class="docutils literal"><span class="pre">x[2]</span></code> corresponding to the <span class="math">\(z\)</span>
 coordinate. With our choice of <span class="math">\(u_0(x,y)=1 + x^2 + 2y^2\)</span>, the formula
 string can be written as <code class="docutils literal"><span class="pre">1</span> <span class="pre">+</span> <span class="pre">x[0]*x[0]</span> <span class="pre">+</span> <span class="pre">2*x[1]*x[1]</span></code>:</p>
-<div class="highlight-python"><div class="highlight"><pre><span class="n">u0</span> <span class="o">=</span> <span class="n">Expression</span><span class="p">(</span><span class="s">&#39;1 + x[0]*x[0] + 2*x[1]*x[1]&#39;</span><span class="p">)</span>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">u0</span> <span class="o">=</span> <span class="n">Expression</span><span class="p">(</span><span class="s">&#39;1 + x[0]*x[0] + 2*x[1]*x[1]&#39;</span><span class="p">,</span> <span class="n">degree</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
 </pre></div>
 </div>
-<p>[<strong>hpl 5</strong>: In the code there is a degree parameter that is not included above. Why?]</p>
 <span class="target" id="index-18"></span><div class="admonition-string-expressions-must-have-valid-c-syntax admonition" id="index-19">
 <p class="first admonition-title">String expressions must have valid C++ syntax</p>
 <p>The string argument to an <code class="docutils literal"><span class="pre">Expression</span></code> object must obey C++ syntax.
@@ -624,14 +671,14 @@ function</p>
 \[\begin{split}f(x,y) = \left\lbrace\begin{array}{ll} x^2, &amp; x, y\geq 0\\
 2, &amp; \hbox{otherwise}\end{array}\right.\end{split}\]</div>
 <p>is implemented as</p>
-<div class="highlight-python"><div class="highlight"><pre><span class="n">f</span> <span class="o">=</span> <span class="n">Expression</span><span class="p">(</span><span class="s">&#39;x[0] &gt;= 0 &amp;&amp; x[1] &gt;= 0? pow(x[0], 2) : 2&#39;</span><span class="p">)</span>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">f</span> <span class="o">=</span> <span class="n">Expression</span><span class="p">(</span><span class="s">&#39;x[0] &gt;= 0 &amp;&amp; x[1] &gt;= 0? pow(x[0], 2) : 2&#39;</span><span class="p">,</span> <span class="n">degree</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
 </pre></div>
 </div>
 <p>Parameters in expression strings are allowed, but
 must be initialized via keyword
 arguments when creating the <code class="docutils literal"><span class="pre">Expression</span></code> object. For example, the
 function <span class="math">\(f(x)=e^{-\kappa\pi^2t}\sin(\pi k x)\)</span> can be coded as</p>
-<div class="highlight-python"><div class="highlight"><pre><span class="n">f</span> <span class="o">=</span> <span class="n">Expression</span><span class="p">(</span><span class="s">&#39;exp(-kappa*pow(pi,2)*t)*sin(pi*k*x[0])&#39;</span><span class="p">,</span>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">f</span> <span class="o">=</span> <span class="n">Expression</span><span class="p">(</span><span class="s">&#39;exp(-kappa*pow(pi,2)*t)*sin(pi*k*x[0])&#39;</span><span class="p">,</span> <span class="n">degree</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
                <span class="n">kappa</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span> <span class="n">t</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">k</span><span class="o">=</span><span class="mi">4</span><span class="p">)</span>
 </pre></div>
 </div>
@@ -691,7 +738,7 @@ to check for equality with a tolerance, either explicitly</p>
 <span id="index-21"></span><h4>Defining the source term<a class="headerlink" href="#defining-the-source-term" title="Permalink to this headline">¶</a></h4>
 <p>Before defining the bilinear and linear forms <span class="math">\(a(u,v)\)</span> and <span class="math">\(L(v)\)</span> we
 have to specify the source term <span class="math">\(f\)</span>:</p>
-<div class="highlight-python"><div class="highlight"><pre><span class="n">f</span> <span class="o">=</span> <span class="n">Expression</span><span class="p">(</span><span class="s">&#39;-6&#39;</span><span class="p">)</span>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">f</span> <span class="o">=</span> <span class="n">Expression</span><span class="p">(</span><span class="s">&#39;-6&#39;</span><span class="p">,</span> <span class="n">degree</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
 </pre></div>
 </div>
 <p>When <span class="math">\(f\)</span> is constant over the domain, <code class="docutils literal"><span class="pre">f</span></code> can be
@@ -733,17 +780,102 @@ the variable <code class="docutils literal"><span class="pre">u</span></code> is
 applications for linear problems. The two types of objects that <code class="docutils literal"><span class="pre">u</span></code>
 refers to are equal from a mathematical point of view, and hence it is
 natural to use the same variable name for both objects.</p>
-<p id="index-22">[<strong>AL 6</strong>: I AM HERE]</p>
 </div>
-<div class="section" id="examining-the-values-of-the-solution">
-<h4>Examining the values of the solution<a class="headerlink" href="#examining-the-values-of-the-solution" title="Permalink to this headline">¶</a></h4>
-<p>Since we have a test problem where the numerical solution is without
-approximation errors at the degrees of freedom for P1 elements on a
-uniform mesh, we can use this property to &#8220;prove&#8221; that our
-implementation is correct. This is a necessary first step before we
-try to apply our code to more complicated problems.  For such
-verification, we need to compare the computed <code class="docutils literal"><span class="pre">u</span></code> function to the
-given <code class="docutils literal"><span class="pre">u0</span></code>.</p>
+<div class="section" id="plotting-the-solution">
+<span id="index-22"></span><h4>Plotting the solution<a class="headerlink" href="#plotting-the-solution" title="Permalink to this headline">¶</a></h4>
+<p>Once the solution has been computed, it can be visualized by
+the <code class="docutils literal"><span class="pre">plot()</span></code> command:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">plot</span><span class="p">(</span><span class="n">u</span><span class="p">)</span>
+<span class="n">plot</span><span class="p">(</span><span class="n">mesh</span><span class="p">)</span>
+<span class="n">interactive</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>Clicking on <code class="docutils literal"><span class="pre">Help</span></code> or typing <code class="docutils literal"><span class="pre">h</span></code> in the plot windows brings up a list
+of commands. For example, typing <code class="docutils literal"><span class="pre">m</span></code> brings up the mesh. With the
+left, middle, and right mouse buttons you can rotate, translate, and
+zoom (respectively) the plotted surface to better examine what the
+solution looks like. You must click <code class="docutils literal"><span class="pre">Ctrl+q</span></code> to kill the plot window
+and continue execution beyond the command interactive()`. In the
+example program, we have therefore placed the call to <code class="docutils literal"><span class="pre">interactive()</span></code>
+at the very end. Alternatively, one may use the command <code class="docutils literal"><span class="pre">plot(u,</span>
+<span class="pre">interactive=True)</span></code> which again means you can interact with the plot
+window and that execution will be halted until the plot window is
+closed.</p>
+<p>Figure <a class="reference internal" href="#ftut-poisson-2d-fig-ex1-u"><span class="std std-ref">Plot of the solution in the first FEniCS example</span></a> displays the resulting <span class="math">\(u\)</span> function.</p>
+</div>
+<div class="section" id="exporting-and-post-processing-the-solution">
+<h4>Exporting and post-processing the solution<a class="headerlink" href="#exporting-and-post-processing-the-solution" title="Permalink to this headline">¶</a></h4>
+<p>It is also possible to dump the computed solution to file for
+post-processing, e.g., in VTK format:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">vtkfile</span> <span class="o">=</span> <span class="n">File</span><span class="p">(</span><span class="s">&#39;poisson.pvd&#39;</span><span class="p">)</span>
+<span class="n">vtkfile</span> <span class="o">&lt;&lt;</span> <span class="n">u</span>
+</pre></div>
+</div>
+<p>The <code class="docutils literal"><span class="pre">poisson.pvd</span></code> file can now be loaded into any front-end to VTK, in
+particular ParaView or VisIt. The <code class="docutils literal"><span class="pre">plot()</span></code> function is intended for
+quick examination of the solution during program development. More
+in-depth visual investigations of finite element solutions will
+normally benefit from using highly professional tools such as ParaView
+and VisIt.</p>
+<p id="index-23">Prior to plotting and storing solutions to file it is wise to
+give <code class="docutils literal"><span class="pre">u</span></code> a proper name by <code class="docutils literal"><span class="pre">u.rename('u',</span> <span class="pre">'solution')</span></code>. Then
+<code class="docutils literal"><span class="pre">u</span></code> will be used as name in plots (rather than the more cryptic
+default names like <code class="docutils literal"><span class="pre">f_7</span></code>).</p>
+<p>Once the solution has been stored to file, it can be opened in
+Paraview by choosing <strong>File - Open</strong>. Find the file <code class="docutils literal"><span class="pre">poisson.pvd</span></code>, and
+click the green <strong>Apply</strong> button to the left in the GUI. A 2D color plot
+of <span class="math">\(u(x,y)\)</span> is then shown.  You can save the figure to file by <strong>File -
+Export Scene...</strong> and choosing a suitable filename. For more
+information about how to install and use Paraview, see the
+<code class="docutils literal"><span class="pre">http://www.paraview.org/</span></code>.</p>
+</div>
+<div class="section" id="computing-the-error">
+<h4>Computing the error<a class="headerlink" href="#computing-the-error" title="Permalink to this headline">¶</a></h4>
+<p>Finally, we compute the error to check the accuracy of the solution.
+We do this by comparing the finite element solution <code class="docutils literal"><span class="pre">u</span></code> with the exact
+solution <code class="docutils literal"><span class="pre">u0</span></code>, which in this example happens to be the same as the
+<code class="docutils literal"><span class="pre">Expression</span></code> used to set the boundary conditions. We compute the error
+in two different ways. First, we compute the <span class="math">\(L^2\)</span> norm of the error,
+defined by</p>
+<div class="math">
+\[E = \sqrt{\int_\Omega (u_0 - u)^2{\, \mathrm{d}x}}{\thinspace .}\]</div>
+<p>Since the exact solution is quadratic and the finite element solution
+is piecewise linear, this error will be nonzero. To compute this error
+in FEniCS, we simply write</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">error_L2norm</span> <span class="o">=</span> <span class="n">errornorm</span><span class="p">(</span><span class="n">u0</span><span class="p">,</span> <span class="n">u</span><span class="p">,</span> <span class="s">&#39;L2&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>The <code class="docutils literal"><span class="pre">errornorm()</span></code> function can also compute other error norms such
+as the <span class="math">\(H^1\)</span> norm. Type <code class="docutils literal"><span class="pre">pydoc</span> <span class="pre">fenics.errornorm</span></code> in a terminal window
+for details.</p>
+<p>We also compute the maximum value of the error at all the vertices of
+the finite element mesh. As mentioned above, we expect this error to
+be zero to within machine precision for this particular example. To
+compute the error at the vertices, we first ask FEniCS to compute the
+value of both <code class="docutils literal"><span class="pre">u0</span></code> and <code class="docutils literal"><span class="pre">u</span></code> at all vertices, and then subtract the
+results:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">vertex_values_u0</span> <span class="o">=</span> <span class="n">u0</span><span class="o">.</span><span class="n">compute_vertex_values</span><span class="p">(</span><span class="n">mesh</span><span class="p">)</span>
+<span class="n">vertex_values_u</span>  <span class="o">=</span> <span class="n">u</span><span class="o">.</span><span class="n">compute_vertex_values</span><span class="p">(</span><span class="n">mesh</span><span class="p">)</span>
+<span class="n">error_vertices</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="nb">abs</span><span class="p">(</span><span class="n">vertex_values_u0</span> <span class="o">-</span> <span class="n">vertex_values_u</span><span class="p">))</span>
+</pre></div>
+</div>
+<div class="admonition-how-to-check-that-the-error-vanishes admonition">
+<p class="first admonition-title">How to check that the error vanishes</p>
+<p class="last">With inexact arithmetics, as we always have on a computer, the maximum
+error at the vertices is not zero, but should be a small number. The
+machine precision is about <span class="math">\(10^{-16}\)</span>, but in finite element
+calculations, rounding errors of this size may accumulate, to produce
+an error larger than <span class="math">\(10^{-16}\)</span>. Experiments show that increasing the
+number of elements and increasing the degree of the finite element
+polynomials increases the error. For a mesh with <span class="math">\(2\times(20\times
+20)\)</span> cubic Lagrange elements (degree 3) the error is about <span class="math">\(2\cdot
+10^{-12}\)</span>, while for 81 linear elements the error is about <span class="math">\(2\cdot
+10^{-15}\)</span>.</p>
+</div>
+</div>
+</div>
+<div class="section" id="degrees-of-freedom-and-vertex-values">
+<h3>Degrees of freedom and vertex values<a class="headerlink" href="#degrees-of-freedom-and-vertex-values" title="Permalink to this headline">¶</a></h3>
 <p>A finite element function like <span class="math">\(u\)</span> is expressed as a linear combination
 of basis functions <span class="math">\(\phi_j\)</span>, spanning the space <span class="math">\(V\)</span>:</p>
 <div class="math" id="eq-ftut-poisson1-ufem">
@@ -751,120 +883,50 @@ of basis functions <span class="math">\(\phi_j\)</span>, spanning the space <spa
 u = \sum_{j=1}^N U_j \phi_j {\thinspace .}\]</div>
 <p>By writing <code class="docutils literal"><span class="pre">solve(a</span> <span class="pre">==</span> <span class="pre">L,</span> <span class="pre">u,</span> <span class="pre">bc)</span></code> in the program, a linear system will
 be formed from <span class="math">\(a\)</span> and <span class="math">\(L\)</span>, and this system is solved for the
-<span class="math">\(U_1,\ldots,U_N\)</span> values. The <span class="math">\(U_1,\ldots,U_N\)</span> values are known as
-<em>degrees of freedom</em> of <span class="math">\(u\)</span>. For Lagrange elements (and many other
-element types) <span class="math">\(U_k\)</span> is simply the value of <span class="math">\(u\)</span> at the node with
-global number <span class="math">\(k\)</span>.  The location of the nodes and cell vertices
-coincide for linear Lagrange elements, while for higher-order elements
-there are additional nodes at the facets and sometimes also in the
-interior of cells.</p>
+<span class="math">\(U_1,\ldots,U_N\)</span> values. The <span class="math">\(U_1,\ldots,U_N\)</span> values are known as the
+<em>degrees of freedom</em> (&#8220;dofs&#8221;) or <em>nodal values</em> of <span class="math">\(u\)</span>. For Lagrange
+elements (and many other element types) <span class="math">\(U_j\)</span> is simply the value of
+<span class="math">\(u\)</span> at the node with global number <span class="math">\(j\)</span>. The location of the nodes and
+cell vertices coincide for linear Lagrange elements, while for
+higher-order elements there are additional nodes associated with the
+facets, edges and sometimes also the interior of cells.</p>
 <p>Having <code class="docutils literal"><span class="pre">u</span></code> represented as a <code class="docutils literal"><span class="pre">Function</span></code> object, we can either evaluate
 <code class="docutils literal"><span class="pre">u(x)</span></code> at any point <code class="docutils literal"><span class="pre">x</span></code> in the mesh (expensive operation!), or we can
-grab all the degrees of freedom values <span class="math">\(U_j\)</span> directly by</p>
+grab all the degrees of freedom values <span class="math">\(U\)</span> directly by</p>
 <div class="highlight-python"><div class="highlight"><pre><span class="n">u_nodal_values</span> <span class="o">=</span> <span class="n">u</span><span class="o">.</span><span class="n">vector</span><span class="p">()</span>
 </pre></div>
 </div>
-<p>The result is a <code class="docutils literal"><span class="pre">Vector</span></code> object, which is basically an
-encapsulation of the vector object used in the linear algebra package
-that is used to solve the linear system arising from the
-variational problem.
-Since we program in Python it is convenient to convert the
-<code class="docutils literal"><span class="pre">Vector</span></code> object to a standard <code class="docutils literal"><span class="pre">numpy</span></code> array for further
-processing:</p>
-<span class="target" id="index-23"></span><span class="target" id="index-24"></span><span class="target" id="index-25"></span><div class="highlight-python" id="index-26"><div class="highlight"><pre><span class="n">u_array</span> <span class="o">=</span> <span class="n">u_nodal_values</span><span class="o">.</span><span class="n">array</span><span class="p">()</span>
+<p>The result is a <code class="docutils literal"><span class="pre">Vector</span></code> object, which is basically an encapsulation
+of the vector object used in the linear algebra package that is used
+to solve the linear system arising from the variational problem.
+Since we program in Python it is convenient to convert the <code class="docutils literal"><span class="pre">Vector</span></code>
+object to a standard <code class="docutils literal"><span class="pre">numpy</span></code> array for further processing:</p>
+<span class="target" id="index-24"></span><span class="target" id="index-25"></span><span class="target" id="index-26"></span><div class="highlight-python" id="index-27"><div class="highlight"><pre><span class="n">u_array</span> <span class="o">=</span> <span class="n">u_nodal_values</span><span class="o">.</span><span class="n">array</span><span class="p">()</span>
 </pre></div>
 </div>
-<p>With <code class="docutils literal"><span class="pre">numpy</span></code> arrays we can write MATLAB-like code to analyze
-the data. Indexing is done with square brackets: <code class="docutils literal"><span class="pre">u_array[i]</span></code>,
-where the index <code class="docutils literal"><span class="pre">i</span></code> always starts at <code class="docutils literal"><span class="pre">0</span></code>. However, <code class="docutils literal"><span class="pre">i</span></code> corresponds
-to <span class="math">\(u\)</span> at some point in the mesh and the correspondence requires
-knowledge of the numbering of degrees of freedom and the numbering of
-vertices in elements in the
-mesh, see the section <a class="reference internal" href="._ftut004.html#ftut-poisson1-verify1"><span class="std std-ref">Writing out the discrete solution</span></a> for details.</p>
-<p id="index-27">For now, we want to check that the values in <code class="docutils literal"><span class="pre">u_array</span></code> are correct:
-they should equal our <code class="docutils literal"><span class="pre">u0</span></code> function. The most natural approach is
-to interpolate our <code class="docutils literal"><span class="pre">u0</span></code> expression onto our space
-(i.e., the finite element mesh),</p>
-<div class="highlight-python"><div class="highlight"><pre><span class="n">u0_Function</span> <span class="o">=</span> <span class="n">interpolate</span><span class="p">(</span><span class="n">u0</span><span class="p">,</span> <span class="n">V</span><span class="p">)</span>
+<p>With <code class="docutils literal"><span class="pre">numpy</span></code> arrays we can write MATLAB-like code to analyze the
+data. Indexing is done with square brackets: <code class="docutils literal"><span class="pre">u_array[j]</span></code>, where the
+index <code class="docutils literal"><span class="pre">j</span></code> always starts at <code class="docutils literal"><span class="pre">0</span></code>. If the solution is computed with
+piecewise linear Lagrange elements (<span class="math">\(\mathsf{P}_1\)</span>), then the size of
+the array <code class="docutils literal"><span class="pre">u_array</span></code> is equal to the number of vertices, and each
+<code class="docutils literal"><span class="pre">u[j]</span></code> is the value at some vertex in the mesh. However, the degrees
+of freedom are not necessarily numbered in the same way as the
+vertices of the
+mesh, see the section <a class="reference internal" href="._ftut004.html#ftut-poisson1-verify1"><span class="std std-ref">Writing out the discrete solution</span></a> for details.
+If we therefore want to know the values at the vertices, we need to
+call the function <code class="docutils literal"><span class="pre">u.compute_vertex_values()</span></code>. This function returns
+the values at all the vertices of the mesh as a <code class="docutils literal"><span class="pre">numpy</span></code> with the same
+numbering as for the vertices of the mesh, for example:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">u_vertex_values</span> <span class="o">=</span> <span class="n">u</span><span class="o">.</span><span class="n">compute_vertex_values</span><span class="p">()</span>
 </pre></div>
 </div>
-<p>The <code class="docutils literal"><span class="pre">interpolate</span></code> function returns a <code class="docutils literal"><span class="pre">Function</span></code> object, whose degrees
-of freedom values can be obtained by <code class="docutils literal"><span class="pre">.vector().array()</span></code>.  Our goal is
-to show that the degrees of freedom arrays of <code class="docutils literal"><span class="pre">u</span></code> and <code class="docutils literal"><span class="pre">u0_Function</span></code>
-are equal. One safe of doing this is to compute the maximum error,</p>
-<div class="highlight-python"><div class="highlight"><pre><span class="n">u0_array</span> <span class="o">=</span> <span class="n">u0_Function</span><span class="o">.</span><span class="n">vector</span><span class="p">()</span><span class="o">.</span><span class="n">array</span><span class="p">()</span>  <span class="c"># dof values</span>
-<span class="n">error</span> <span class="o">=</span> <span class="p">(</span><span class="n">u0_array</span> <span class="o">-</span> <span class="n">u</span><span class="o">.</span><span class="n">vector</span><span class="p">()</span><span class="o">.</span><span class="n">array</span><span class="p">())</span><span class="o">.</span><span class="n">max</span><span class="p">()</span>
-<span class="k">print</span><span class="p">(</span><span class="s">&#39;error:&#39;</span><span class="p">,</span> <span class="n">error</span><span class="p">)</span>
-</pre></div>
-</div>
-<div class="admonition-how-to-check-that-the-error-vanishes admonition">
-<p class="first admonition-title">How to check that the error vanishes</p>
-<p class="last">With inexact arithmetics, as we always have on a computer,
-this maximum error is not zero, but should be a small number.
-The machine precision is about <span class="math">\(10^{-16}\)</span>, but in finite element
-calculations, rounding errors of this size may accumulate, so
-the expected accuracy of <code class="docutils literal"><span class="pre">error</span></code> smaller. Experiments show
-that increasing the number of elements and increasing the degree
-of the finite element polynomials increase <code class="docutils literal"><span class="pre">error</span></code>.
-For a mesh with <span class="math">\(2(20\times 20)\)</span> cubic Lagrange elements (degree 3)
-<code class="docutils literal"><span class="pre">error</span></code> is about <span class="math">\(2\cdot 10^{-12}\)</span>, while for 18 linear elements
-the maximum error is about <span class="math">\(2\cdot 10^{-15}\)</span>.</p>
-</div>
-</div>
-<div class="section" id="plotting-the-solution">
-<h4>Plotting the solution<a class="headerlink" href="#plotting-the-solution" title="Permalink to this headline">¶</a></h4>
-<p>The simplest way of quickly looking at <code class="docutils literal"><span class="pre">u</span></code> is to say</p>
-<div class="highlight-python"><div class="highlight"><pre><span class="n">plot</span><span class="p">(</span><span class="n">u</span><span class="p">,</span> <span class="n">interactive</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
-<span class="c"># or</span>
-<span class="n">plot</span><span class="p">(</span><span class="n">u</span><span class="p">)</span>
-<span class="n">interactive</span><span class="p">()</span>
-</pre></div>
-</div>
-<p>Clicking on <code class="docutils literal"><span class="pre">Help</span></code> in the plot windows brings up a list of commands.
-For example, typing <code class="docutils literal"><span class="pre">m</span></code> brings up the mesh.  With the left, middle,
-and right mouse buttons you can rotate, translate, and zoom
-(respectively) the plotted surface to better examine what the solution
-looks like. You must click <code class="docutils literal"><span class="pre">Ctrl+q</span></code> to kill the plot window and
-continue execution beyond the <code class="docutils literal"><span class="pre">plot(u,</span> <span class="pre">interactive=True)</span></code> command or
-<code class="docutils literal"><span class="pre">interactive()</span></code>.
-Figure <a class="reference internal" href="#ftut-poisson-2d-fig-ex1-u"><span class="std std-ref">Plot of the solution in the first FEniCS example</span></a> displays the resulting <span class="math">\(u\)</span> function.</p>
-<p>Plotting both the solution and the mesh is accomplished by</p>
-<div class="highlight-python"><div class="highlight"><pre><span class="n">plot</span><span class="p">(</span><span class="n">u</span><span class="p">)</span>
-<span class="n">plot</span><span class="p">(</span><span class="n">mesh</span><span class="p">)</span>
-<span class="c"># Hold plot</span>
-<span class="n">interactive</span><span class="p">()</span>
-</pre></div>
-</div>
-<p>Type <code class="docutils literal"><span class="pre">Ctrl+w</span></code> to kill all plot windows and continue execution.</p>
-<p>It is also possible to dump the computed solution to file, e.g., in the
-VTK format:</p>
-<div class="highlight-python"><div class="highlight"><pre><span class="n">vtkfile</span> <span class="o">=</span> <span class="n">File</span><span class="p">(</span><span class="s">&#39;poisson.pvd&#39;</span><span class="p">)</span>
-<span class="n">vtkfile</span> <span class="o">&lt;&lt;</span> <span class="n">u</span>
-</pre></div>
-</div>
-<p>The <code class="docutils literal"><span class="pre">poisson.pvd</span></code> file can now be loaded into any front-end to VTK,
-in particular ParaView or VisIt. The <code class="docutils literal"><span class="pre">plot</span></code> function is intended for quick
-examination of the solution during program development.  More in-depth
-visual investigations of finite element solutions will normally
-benefit from using highly professional tools such as ParaView and
-VisIt.</p>
-<p id="index-28">Prior to plotting and storing solutions to file it is wise to
-give <code class="docutils literal"><span class="pre">u</span></code> a proper name by <code class="docutils literal"><span class="pre">u.rename('u',</span> <span class="pre">'solution')</span></code>. Then
-<code class="docutils literal"><span class="pre">u</span></code> will be used as name in plots (rather than the more cryptic
-default names like <code class="docutils literal"><span class="pre">f_7</span></code>).</p>
-</div>
-</div>
-<div class="section" id="plotting-in-paraview">
-<h3>Plotting in ParaView<a class="headerlink" href="#plotting-in-paraview" title="Permalink to this headline">¶</a></h3>
-<p>Just to get you quickly started with ParaView, launch the application,
-choose <strong>File - Open</strong>, find the file <code class="docutils literal"><span class="pre">poisson.pvd</span></code>, and click the green <strong>Apply</strong>
-button to the left in the GUI. A 2D color plot of <span class="math">\(u(x,y)\)</span> is then shown.
-You can save the figure to file by <strong>File - Export Scene...</strong> and choosing
-a suitable filename.</p>
+<p>Note that <code class="docutils literal"><span class="pre">u_array</span></code> and <code class="docutils literal"><span class="pre">u_vertex_values</span></code> are arrays of the same
+length and containing the same values, albeit in different order.</p>
 </div>
 </div>
 <div class="section" id="deflection-of-a-membrane">
 <span id="ftut-poisson-membrane"></span><h2>Deflection of a membrane<a class="headerlink" href="#deflection-of-a-membrane" title="Permalink to this headline">¶</a></h2>
+<p>[<strong>AL 6</strong>: I AM HERE]</p>
 <p>The previous problem and code targeted a simple test problem where we
 can easily verify the implementation. Now we turn the attention to
 a more physically relevant problem, in a non-trivial geometry, and
@@ -874,7 +936,7 @@ circular membrane, subject to a load <span class="math">\(p\)</span> over the me
 appropriate PDE model is</p>
 <div class="math" id="eq-auto3">
 \[\tag{14}
--T\nabla^2 D = p(x,y)\quad\hbox{in }\Omega = \{ (x,y)\,|\, x^2+y^2\leq R\}{\thinspace .}\]</div>
+-T\nabla^2 D = p(x,y)\quad\hbox{in }\Omega = \{ (x,y)\,\vert\, x^2+y^2\leq R\}{\thinspace .}\]</div>
 <p>Here, <span class="math">\(T\)</span> is the tension in the membrane (constant), and <span class="math">\(p\)</span> is the external
 pressure load.
 The boundary of the membrane has no
@@ -950,7 +1012,7 @@ suggested number of cells per radius.</p>
 </div>
 <div class="section" id="defining-the-load">
 <h3>Defining the load<a class="headerlink" href="#defining-the-load" title="Permalink to this headline">¶</a></h3>
-<span class="target" id="index-29"></span><p id="index-30">The right-hand side pressure function
+<span class="target" id="index-28"></span><p id="index-29">The right-hand side pressure function
 is represented by an <code class="docutils literal"><span class="pre">Expression</span></code> object. There
 are two physical parameters in the formula for <span class="math">\(f\)</span> that enter the
 expression string and these parameters must have their values set
@@ -974,7 +1036,7 @@ values modified. For example, we may set</p>
 </div>
 </div>
 <div class="section" id="variational-form">
-<span id="index-31"></span><h3>Variational form<a class="headerlink" href="#variational-form" title="Permalink to this headline">¶</a></h3>
+<span id="index-30"></span><h3>Variational form<a class="headerlink" href="#variational-form" title="Permalink to this headline">¶</a></h3>
 <p>We may introduce <code class="docutils literal"><span class="pre">w</span></code> instead of <code class="docutils literal"><span class="pre">u</span></code> as primary unknown and <code class="docutils literal"><span class="pre">p</span></code> instead
 of <code class="docutils literal"><span class="pre">f</span></code> as right-hand side function:</p>
 <div class="highlight-python"><div class="highlight"><pre><span class="n">w</span> <span class="o">=</span> <span class="n">TrialFunction</span><span class="p">(</span><span class="n">V</span><span class="p">)</span>
@@ -1125,7 +1187,7 @@ an <a class="reference external" href="https://vimeo.com/34037236">instruction v
 </div>
 <div class="section" id="using-the-built-in-visualization-tool">
 <span id="ftut-quickviz"></span><h3>Using the built-in visualization tool<a class="headerlink" href="#using-the-built-in-visualization-tool" title="Permalink to this headline">¶</a></h3>
-<span class="target" id="index-32"></span><span class="target" id="index-33"></span><p id="index-34">This section explains some useful visualization features of the
+<span class="target" id="index-31"></span><span class="target" id="index-32"></span><p id="index-33">This section explains some useful visualization features of the
 built-in visualization tool in FEniCS.  The <code class="docutils literal"><span class="pre">plot</span></code> command applies the
 VTK package to visualize finite element functions in a very quick and
 simple way.  The command is ideal for debugging, teaching, and initial
@@ -1133,7 +1195,7 @@ scientific investigations.  The visualization can be interactive, or
 you can steer and automate it through program statements.  More
 advanced and professional visualizations are usually better created
 with advanced tools like Mayavi, ParaView, or VisIt.</p>
-<p id="index-35">The <code class="docutils literal"><span class="pre">plot</span></code> function can take additional arguments, such as
+<p id="index-34">The <code class="docutils literal"><span class="pre">plot</span></code> function can take additional arguments, such as
 a title of the plot, or a specification of a wireframe plot (elevated mesh)
 instead of a colored surface plot:</p>
 <div class="highlight-python"><div class="highlight"><pre><span class="n">plot</span><span class="p">(</span><span class="n">mesh</span><span class="p">,</span> <span class="n">title</span><span class="o">=</span><span class="s">&#39;Finite element mesh&#39;</span><span class="p">)</span>
@@ -1153,7 +1215,7 @@ is an integer that is increased by one from the last plot that was
 made. The file stem <code class="docutils literal"><span class="pre">dolfin_plot_</span></code> can be set to something more
 suitable through the <code class="docutils literal"><span class="pre">hardcopy_prefix</span></code> keyword argument to the <code class="docutils literal"><span class="pre">plot</span></code>
 function, for instance, <code class="docutils literal"><span class="pre">plot(f,</span> <span class="pre">hardcopy_prefix='pressure')</span></code>.</p>
-<span class="target" id="index-36"></span><p id="index-37">Plots stored in PDF format need to be rotated 90 degrees before
+<span class="target" id="index-35"></span><p id="index-36">Plots stored in PDF format need to be rotated 90 degrees before
 inclusion in documents. This can be done by the <code class="docutils literal"><span class="pre">convert</span> <span class="pre">-rotate</span> <span class="pre">90</span></code>
 command (from the ImageMagick utility), but the resulting file has
 then no more high-resolution PDF vector graphics. A better solution
@@ -1230,7 +1292,7 @@ use the mouse to rotate the 3D cube.</p>
 </div>
 </div>
 <div class="section" id="the-time-dependent-diffusion-equation">
-<span id="ftut-timedep"></span><h2>The time-dependent diffusion equation<a class="headerlink" href="#the-time-dependent-diffusion-equation" title="Permalink to this headline">¶</a></h2>
+<span id="ch-fundamentals-diffusion"></span><h2>The time-dependent diffusion equation<a class="headerlink" href="#the-time-dependent-diffusion-equation" title="Permalink to this headline">¶</a></h2>
 <p>The examples in the section <a class="reference internal" href="#ftut-poisson1-impl"><span class="std std-ref">FEniCS implementation</span></a>
 illustrate that solving linear, stationary PDE problems with the aid
 of FEniCS is easy and requires little programming.  FEniCS clearly
@@ -1242,7 +1304,7 @@ leave the time-stepping to an ODE solver.</p>
 <p>[<strong>hpl 7</strong>: Should exemplify all three approaches? With emphasis on simple finite differences?]</p>
 <div class="section" id="variational-formulation-1">
 <span id="ftut-timedep-diffusion1"></span><h3>Variational formulation<a class="headerlink" href="#variational-formulation-1" title="Permalink to this headline">¶</a></h3>
-<p id="index-38">Our model problem for time-dependent PDEs reads</p>
+<p id="index-37">Our model problem for time-dependent PDEs reads</p>
 <div class="math" id="eq-ftut-diffusion-pde1">
 \[\tag{17}
 {\partial u\over\partial t} = \nabla^2 u + f\hbox{ in }\Omega,\]</div>
@@ -1392,7 +1454,7 @@ is uniformly partitioned.  By inserting
 2\alpha\)</span> and <span class="math">\(I(x,y)=1+x^2+\alpha y^2\)</span>.</p>
 </div>
 <div class="section" id="the-code">
-<span id="index-39"></span><h4>The code<a class="headerlink" href="#the-code" title="Permalink to this headline">¶</a></h4>
+<span id="index-38"></span><h4>The code<a class="headerlink" href="#the-code" title="Permalink to this headline">¶</a></h4>
 <p>A new programming issue is how to deal with functions that vary in
 space <em>and time</em>, such as the boundary condition <span class="math">\(u_0\)</span> given by
 <a class="reference internal" href="#eq-ftut-diffusion-pde1-u0test"><span class="std std-ref">(31)</span></a>.  A natural solution is to apply an

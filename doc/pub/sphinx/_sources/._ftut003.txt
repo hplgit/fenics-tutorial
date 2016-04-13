@@ -450,7 +450,7 @@ follows:
         V = FunctionSpace(mesh, 'P', 1)
         
         # Define boundary conditions
-        u0 = Expression('1 + x[0]*x[0] + 2*x[1]*x[1]', degree=1)
+        u0 = Expression('1 + x[0]*x[0] + 2*x[1]*x[1]', degree=2)
         
         def u0_boundary(x, on_boundary):
             return on_boundary
@@ -477,12 +477,17 @@ follows:
         vtkfile = File('poisson.pvd')
         vtkfile << u
         
-        # Compute and print error
-        u_e = interpolate(u0, V)
-        error = max(abs(u_e.vector().array() - u.vector().array()))
-        import numpy as np
-        error = np.abs(u_e.vector().array() - u.vector().array()).max()
-        print('error =', error)
+        # Compute error in L2 norm
+        error_L2norm = errornorm(u0, u, 'L2')
+        
+        # Compute maximum error at vertices
+        vertex_values_u0 = u0.compute_vertex_values(mesh)
+        vertex_values_u  = u.compute_vertex_values(mesh)
+        error_vertices = max(abs(vertex_values_u0 - vertex_values_u))
+        
+        # Print errors
+        print('error_L2norm   =', error_L2norm)
+        print('error_vertices =', error_vertices)
         
         # Hold plot
         interactive()
@@ -497,7 +502,19 @@ Running the program
 The FEniCS program must be available in a plain text file, written with a
 text editor such as Atom, Sublime Text, Emacs, Vim, or similar.
 
-To run the program ``ft01_poisson_flat.py``, open a terminal
+There are several ways to run a Python program like
+``ft01_poisson_flat.py``:
+
+ * Use a terminal window
+
+ * Use an intergrated development environment (IDE), e.g., Spyder
+
+ * Use a Jupyter notebook
+
+Terminal window
+~~~~~~~~~~~~~~~
+
+Open a terminal
 window, move to the directory containing the program and type the
 following command:
 
@@ -543,6 +560,33 @@ error should be small, something on the order of :math:`10^{-15}`.
    :width: 600
 
    *Plot of the solution in the first FEniCS example*
+
+Spyder
+~~~~~~
+
+Many prefer to work in an integrated development environment where there is
+an editor for programming, a window for executing code, a window for
+inspecting objects, etc. The Spyder tool comes with all major Python
+installations. Just open the file ``ft01_poisson_flat.py`` and press
+the play button to run it. We refer to the Spyder tutorial to learn more
+about working in the Spyder environment. Spyder is highly recommended
+if you are used to working in the *graphical* MATLAB environment.
+
+Jupyter notebooks
+~~~~~~~~~~~~~~~~~
+
+Notebooks make it possible to mix text and executable code in the same
+document, but you can also just use it to run programs in a web browser.
+Start ``jupyter notebook`` from a terminal window, find the **New** pulldown
+menu in the upper right part of the GUI, choose a new notebook in
+Python 2 or 3, write ``%load ft01_poisson_flat.py`` in the blank
+cell of this notebook, then write Shift+Enter to execute the cell.
+The file ``ft01_poisson_flat.py`` will the be loaded into the notebook.
+Re-execute the cell (Shift+Enter) to run the program. You may divide the
+entire program into several cells to examine intermediate results: place
+the cursor where you want to split the cell and choose **Edit - Split Cell**.
+
+[**hpl 4**: Need to describe this with more care. The first program seems to have some problems with printing the error to the notebook unless we drop the plot commands. Anyway, there should be in-browser plot commands.]
 
 .. _ftut:poisson1:impl:dissect:
 
@@ -602,7 +646,7 @@ triangles. The total number of triangles (cells) thus becomes
 128. The total number of vertices in the mesh is :math:`9\cdot 9=81`.
 In later chapters, you will learn how to generate more complex meshes.
 
-[**hpl 4**: Note that plot was made by the old partitioning :math:`6\times 4`. Probably no issue.]
+[**hpl 5**: Note that plot was made by the old partitioning :math:`6\times 4`. Probably no issue.]
 
 .. index:: FunctionSpace
 
@@ -699,11 +743,19 @@ represent a mathematical function. The typical construction is
 
 .. code-block:: python
 
-        u0 = Expression(formula)
+        u0 = Expression(formula, degree=1)
 
 where ``formula`` is a string containing the mathematical expression.
 This formula is written with C++ syntax. The expression is
 automatically turned into an efficient, compiled C++ function.
+The second argument ``degree`` is a parameter that specifies how
+the expression should be treated in computations. FEniCS will
+interpolate the expression into some finite element space. It is
+usually a good choice to interpolate expressions into the same
+space :math:`V` that is used for the trial and test functions,
+but in certain cases, one may want to use a more accurate (higher
+degree) representation of expressions.
+
 The expression may depend on the variables ``x[0]`` and ``x[1]``
 corresponding to the :math:`x` and :math:`y` coordinates. In 3D, the expression
 may also depend on the variable ``x[2]`` corresponding to the :math:`z`
@@ -712,9 +764,7 @@ string can be written as ``1 + x[0]*x[0] + 2*x[1]*x[1]``:
 
 .. code-block:: python
 
-        u0 = Expression('1 + x[0]*x[0] + 2*x[1]*x[1]')
-
-[**hpl 5**: In the code there is a degree parameter that is not included above. Why?]
+        u0 = Expression('1 + x[0]*x[0] + 2*x[1]*x[1]', degree=1)
 
 .. index:: C++ expression syntax
 
@@ -751,7 +801,7 @@ string can be written as ``1 + x[0]*x[0] + 2*x[1]*x[1]``:
    
    .. code-block:: python
    
-           f = Expression('x[0] >= 0 && x[1] >= 0? pow(x[0], 2) : 2')
+           f = Expression('x[0] >= 0 && x[1] >= 0? pow(x[0], 2) : 2', degree=1)
    
    Parameters in expression strings are allowed, but
    must be initialized via keyword
@@ -760,7 +810,7 @@ string can be written as ``1 + x[0]*x[0] + 2*x[1]*x[1]``:
    
    .. code-block:: python
    
-           f = Expression('exp(-kappa*pow(pi,2)*t)*sin(pi*k*x[0])',
+           f = Expression('exp(-kappa*pow(pi,2)*t)*sin(pi*k*x[0])', degree=1,
                           kappa=1.0, t=0, k=4)
    
    At any time, parameters can be updated:
@@ -840,7 +890,7 @@ have to specify the source term :math:`f`:
 
 .. code-block:: python
 
-        f = Expression('-6')
+        f = Expression('-6', degree=1)
 
 When :math:`f` is constant over the domain, ``f`` can be
 more efficiently represented as a ``Constant``:
@@ -917,18 +967,135 @@ natural to use the same variable name for both objects.
 
 .. index:: degrees of freedom
 
-[**AL 6**: I AM HERE]
+Plotting the solution
+~~~~~~~~~~~~~~~~~~~~~
 
-Examining the values of the solution
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Once the solution has been computed, it can be visualized by
+the ``plot()`` command:
 
-Since we have a test problem where the numerical solution is without
-approximation errors at the degrees of freedom for P1 elements on a
-uniform mesh, we can use this property to "prove" that our
-implementation is correct. This is a necessary first step before we
-try to apply our code to more complicated problems.  For such
-verification, we need to compare the computed ``u`` function to the
-given ``u0``.
+.. code-block:: python
+
+        plot(u)
+        plot(mesh)
+        interactive()
+
+Clicking on ``Help`` or typing ``h`` in the plot windows brings up a list
+of commands. For example, typing ``m`` brings up the mesh. With the
+left, middle, and right mouse buttons you can rotate, translate, and
+zoom (respectively) the plotted surface to better examine what the
+solution looks like. You must click ``Ctrl+q`` to kill the plot window
+and continue execution beyond the command interactive()`. In the
+example program, we have therefore placed the call to ``interactive()``
+at the very end. Alternatively, one may use the command ``plot(u,
+interactive=True)`` which again means you can interact with the plot
+window and that execution will be halted until the plot window is
+closed.
+
+Figure :ref:`ftut:poisson:2D:fig:ex1:u` displays the resulting :math:`u` function.
+
+Exporting and post-processing the solution
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+It is also possible to dump the computed solution to file for
+post-processing, e.g., in VTK format:
+
+.. code-block:: python
+
+        vtkfile = File('poisson.pvd')
+        vtkfile << u
+
+The ``poisson.pvd`` file can now be loaded into any front-end to VTK, in
+particular ParaView or VisIt. The ``plot()`` function is intended for
+quick examination of the solution during program development. More
+in-depth visual investigations of finite element solutions will
+normally benefit from using highly professional tools such as ParaView
+and VisIt.
+
+.. index:: rename
+
+Prior to plotting and storing solutions to file it is wise to
+give ``u`` a proper name by ``u.rename('u', 'solution')``. Then
+``u`` will be used as name in plots (rather than the more cryptic
+default names like ``f_7``).
+
+Once the solution has been stored to file, it can be opened in
+Paraview by choosing **File - Open**. Find the file ``poisson.pvd``, and
+click the green **Apply** button to the left in the GUI. A 2D color plot
+of :math:`u(x,y)` is then shown.  You can save the figure to file by **File -
+Export Scene...** and choosing a suitable filename. For more
+information about how to install and use Paraview, see the
+``http://www.paraview.org/``.
+
+.. figure:: poisson0_paraview.png
+   :weight: 800
+
+   Visualization of test problem in ParaView, with contour lines added in the right plot
+
+Computing the error
+~~~~~~~~~~~~~~~~~~~
+
+Finally, we compute the error to check the accuracy of the solution.
+We do this by comparing the finite element solution ``u`` with the exact
+solution ``u0``, which in this example happens to be the same as the
+``Expression`` used to set the boundary conditions. We compute the error
+in two different ways. First, we compute the :math:`L^2` norm of the error,
+defined by
+
+.. Logg equation did not work with mako:
+
+.. \begin{equation}
+
+.. |e| = \sqrt{\int_\Omega (u_0-u)^2 {\, \mathrm{d}x}}{\thinspace .}
+
+.. \end{equation}
+
+.. math::
+         E = \sqrt{\int_\Omega (u_0 - u)^2{\, \mathrm{d}x}}{\thinspace .}
+
+Since the exact solution is quadratic and the finite element solution
+is piecewise linear, this error will be nonzero. To compute this error
+in FEniCS, we simply write
+
+.. code-block:: python
+
+        error_L2norm = errornorm(u0, u, 'L2')
+
+The ``errornorm()`` function can also compute other error norms such
+as the :math:`H^1` norm. Type ``pydoc fenics.errornorm`` in a terminal window
+for details.
+
+We also compute the maximum value of the error at all the vertices of
+the finite element mesh. As mentioned above, we expect this error to
+be zero to within machine precision for this particular example. To
+compute the error at the vertices, we first ask FEniCS to compute the
+value of both ``u0`` and ``u`` at all vertices, and then subtract the
+results:
+
+.. code-block:: python
+
+        vertex_values_u0 = u0.compute_vertex_values(mesh)
+        vertex_values_u  = u.compute_vertex_values(mesh)
+        error_vertices = max(abs(vertex_values_u0 - vertex_values_u))
+
+
+.. admonition:: How to check that the error vanishes
+
+   With inexact arithmetics, as we always have on a computer, the maximum
+   error at the vertices is not zero, but should be a small number. The
+   machine precision is about :math:`10^{-16}`, but in finite element
+   calculations, rounding errors of this size may accumulate, to produce
+   an error larger than :math:`10^{-16}`. Experiments show that increasing the
+   number of elements and increasing the degree of the finite element
+   polynomials increases the error. For a mesh with :math:`2\times(20\times
+   20)` cubic Lagrange elements (degree 3) the error is about :math:`2\cdot
+   10^{-12}`, while for 81 linear elements the error is about :math:`2\cdot
+   10^{-15}`.
+
+
+
+
+Degrees of freedom and vertex values
+------------------------------------
 
 A finite element function like :math:`u` is expressed as a linear combination
 of basis functions :math:`\phi_j`, spanning the space :math:`V`:
@@ -943,29 +1110,27 @@ of basis functions :math:`\phi_j`, spanning the space :math:`V`:
 
 By writing ``solve(a == L, u, bc)`` in the program, a linear system will
 be formed from :math:`a` and :math:`L`, and this system is solved for the
-:math:`U_1,\ldots,U_N` values. The :math:`U_1,\ldots,U_N` values are known as
-*degrees of freedom* of :math:`u`. For Lagrange elements (and many other
-element types) :math:`U_k` is simply the value of :math:`u` at the node with
-global number :math:`k`.  The location of the nodes and cell vertices
-coincide for linear Lagrange elements, while for higher-order elements
-there are additional nodes at the facets and sometimes also in the
-interior of cells.
+:math:`U_1,\ldots,U_N` values. The :math:`U_1,\ldots,U_N` values are known as the
+*degrees of freedom* ("dofs") or *nodal values* of :math:`u`. For Lagrange
+elements (and many other element types) :math:`U_j` is simply the value of
+:math:`u` at the node with global number :math:`j`. The location of the nodes and
+cell vertices coincide for linear Lagrange elements, while for
+higher-order elements there are additional nodes associated with the
+facets, edges and sometimes also the interior of cells.
 
 Having ``u`` represented as a ``Function`` object, we can either evaluate
 ``u(x)`` at any point ``x`` in the mesh (expensive operation!), or we can
-grab all the degrees of freedom values :math:`U_j` directly by
+grab all the degrees of freedom values :math:`U` directly by
 
 .. code-block:: python
 
         u_nodal_values = u.vector()
 
-The result is a ``Vector`` object, which is basically an
-encapsulation of the vector object used in the linear algebra package
-that is used to solve the linear system arising from the
-variational problem.
-Since we program in Python it is convenient to convert the
-``Vector`` object to a standard ``numpy`` array for further
-processing:
+The result is a ``Vector`` object, which is basically an encapsulation
+of the vector object used in the linear algebra package that is used
+to solve the linear system arising from the variational problem.
+Since we program in Python it is convenient to convert the ``Vector``
+object to a standard ``numpy`` array for further processing:
 
 .. index:: degrees of freedom array
 
@@ -981,120 +1146,26 @@ processing:
 
         u_array = u_nodal_values.array()
 
-With ``numpy`` arrays we can write MATLAB-like code to analyze
-the data. Indexing is done with square brackets: ``u_array[i]``,
-where the index ``i`` always starts at ``0``. However, ``i`` corresponds
-to :math:`u` at some point in the mesh and the correspondence requires
-knowledge of the numbering of degrees of freedom and the numbering of
-vertices in elements in the
+With ``numpy`` arrays we can write MATLAB-like code to analyze the
+data. Indexing is done with square brackets: ``u_array[j]``, where the
+index ``j`` always starts at ``0``. If the solution is computed with
+piecewise linear Lagrange elements (:math:`\mathsf{P}_1`), then the size of
+the array ``u_array`` is equal to the number of vertices, and each
+``u[j]`` is the value at some vertex in the mesh. However, the degrees
+of freedom are not necessarily numbered in the same way as the
+vertices of the
 mesh, see the section :ref:`ftut:poisson1:verify1` for details.
-
-.. index:: interpolate
-
-For now, we want to check that the values in ``u_array`` are correct:
-they should equal our ``u0`` function. The most natural approach is
-to interpolate our ``u0`` expression onto our space
-(i.e., the finite element mesh),
+If we therefore want to know the values at the vertices, we need to
+call the function ``u.compute_vertex_values()``. This function returns
+the values at all the vertices of the mesh as a ``numpy`` with the same
+numbering as for the vertices of the mesh, for example:
 
 .. code-block:: python
 
-        u0_Function = interpolate(u0, V)
+        u_vertex_values = u.compute_vertex_values()
 
-The ``interpolate`` function returns a ``Function`` object, whose degrees
-of freedom values can be obtained by ``.vector().array()``.  Our goal is
-to show that the degrees of freedom arrays of ``u`` and ``u0_Function``
-are equal. One safe of doing this is to compute the maximum error,
-
-.. code-block:: python
-
-        u0_array = u0_Function.vector().array()  # dof values
-        error = (u0_array - u.vector().array()).max()
-        print('error:', error)
-
-
-.. admonition:: How to check that the error vanishes
-
-   With inexact arithmetics, as we always have on a computer,
-   this maximum error is not zero, but should be a small number.
-   The machine precision is about :math:`10^{-16}`, but in finite element
-   calculations, rounding errors of this size may accumulate, so
-   the expected accuracy of ``error`` smaller. Experiments show
-   that increasing the number of elements and increasing the degree
-   of the finite element polynomials increase ``error``.
-   For a mesh with :math:`2(20\times 20)` cubic Lagrange elements (degree 3)
-   ``error`` is about :math:`2\cdot 10^{-12}`, while for 18 linear elements
-   the maximum error is about :math:`2\cdot 10^{-15}`.
-
-
-
-
-Plotting the solution
-~~~~~~~~~~~~~~~~~~~~~
-
-The simplest way of quickly looking at ``u`` is to say
-
-.. code-block:: python
-
-        plot(u, interactive=True)
-        # or
-        plot(u)
-        interactive()
-
-Clicking on ``Help`` in the plot windows brings up a list of commands.
-For example, typing ``m`` brings up the mesh.  With the left, middle,
-and right mouse buttons you can rotate, translate, and zoom
-(respectively) the plotted surface to better examine what the solution
-looks like. You must click ``Ctrl+q`` to kill the plot window and
-continue execution beyond the ``plot(u, interactive=True)`` command or
-``interactive()``.
-Figure :ref:`ftut:poisson:2D:fig:ex1:u` displays the resulting :math:`u` function.
-
-Plotting both the solution and the mesh is accomplished by
-
-.. code-block:: python
-
-        plot(u)
-        plot(mesh)
-        # Hold plot
-        interactive()
-
-Type ``Ctrl+w`` to kill all plot windows and continue execution.
-
-It is also possible to dump the computed solution to file, e.g., in the
-VTK format:
-
-.. code-block:: python
-
-        vtkfile = File('poisson.pvd')
-        vtkfile << u
-
-The ``poisson.pvd`` file can now be loaded into any front-end to VTK,
-in particular ParaView or VisIt. The ``plot`` function is intended for quick
-examination of the solution during program development.  More in-depth
-visual investigations of finite element solutions will normally
-benefit from using highly professional tools such as ParaView and
-VisIt.
-
-.. index:: rename
-
-Prior to plotting and storing solutions to file it is wise to
-give ``u`` a proper name by ``u.rename('u', 'solution')``. Then
-``u`` will be used as name in plots (rather than the more cryptic
-default names like ``f_7``).
-
-Plotting in ParaView
---------------------
-
-Just to get you quickly started with ParaView, launch the application,
-choose **File - Open**, find the file ``poisson.pvd``, and click the green **Apply**
-button to the left in the GUI. A 2D color plot of :math:`u(x,y)` is then shown.
-You can save the figure to file by **File - Export Scene...** and choosing
-a suitable filename.
-
-.. figure:: poisson0_paraview.png
-   :weight: 800
-
-   Visualization of test problem in ParaView, with contour lines added in the right plot
+Note that ``u_array`` and ``u_vertex_values`` are arrays of the same
+length and containing the same values, albeit in different order.
 
 .. Stand-alone notebook?
 
@@ -1102,6 +1173,8 @@ a suitable filename.
 
 Deflection of a membrane
 ========================
+
+[**AL 6**: I AM HERE]
 
 The previous problem and code targeted a simple test problem where we
 can easily verify the implementation. Now we turn the attention to
@@ -1117,7 +1190,7 @@ appropriate PDE model is
 .. math::
 
     \tag{14}
-    -T\nabla^2 D = p(x,y)\quad\hbox{in }\Omega = \{ (x,y)\,|\, x^2+y^2\leq R\}{\thinspace .}
+    -T\nabla^2 D = p(x,y)\quad\hbox{in }\Omega = \{ (x,y)\,\vert\, x^2+y^2\leq R\}{\thinspace .}
         
         
 
@@ -1590,7 +1663,7 @@ Filename: ``poissin_3d_func``.
 
 .. --- end exercise ---
 
-.. _ftut:timedep:
+.. _ch:fundamentals:diffusion:
 
 The time-dependent diffusion equation
 =====================================
