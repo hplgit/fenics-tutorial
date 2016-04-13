@@ -50,7 +50,8 @@ error_L2norm = errornorm(u0, u, 'L2')
 # Compute maximum error at vertices
 vertex_values_u0 = u0.compute_vertex_values(mesh)
 vertex_values_u  = u.compute_vertex_values(mesh)
-error_vertices = max(abs(vertex_values_u0 - vertex_values_u))
+import numpy as np
+error_vertices = np.max(np.abs(vertex_values_u0 - vertex_values_u))
 
 # Print errors
 print('error_L2norm   =', error_L2norm)
