@@ -2,7 +2,7 @@ from __future__ import print_function
 from fenics import *
 import numpy as np
 
-class Solver(object):
+class PoissonSolver(object):
     def __init__(self, problem, debug=False):
         self.mesh, degree = problem.mesh_degree()
         self.V = V = FunctionSpace(self.mesh, 'P', degree)
@@ -75,11 +75,11 @@ class Solver(object):
         self.flux_u.rename('flux(u)', 'continuous flux field')
         return self.flux_u
 
-class Problem(object):
+class PoissonProblem(object):
     """Abstract base class for problems."""
     def solve(self, linear_solver='direct',
               abs_tol=1E-6, rel_tol=1E-5, max_iter=1000):
-        self.solver = Solver(self)
+        self.solver = PoissonSolver(self)
         prm = parameters['krylov_solver'] # short form
         prm['absolute_tolerance'] = abs_tol
         prm['relative_tolerance'] = rel_tol
@@ -113,7 +113,7 @@ class Problem(object):
         return []
 
 
-class Problem1(Problem):
+class Problem1(PoissonProblem):
     """
     -div(p*grad(u)=f on the unit square.
     General Dirichlet, Neumann, or Robin condition along each
@@ -192,7 +192,7 @@ class Problem1(Problem):
         return [(0, self.ds(0)), (0, self.ds(1))]
 
 def demo():
-    problem = Problem1(Nx=20, Ny=20)
+    problem = PoissonProblem1(Nx=20, Ny=20)
     problem.solve(linear_solver='direct')
     u = problem.solution()
     u.rename('u', 'potential')  # name 'u' is used in plot
@@ -203,9 +203,9 @@ def demo():
     vtkfile << u
     interactive()
 
-def test_Solver():
+def test_PoissonSolver():
     """Recover numerial solution to "machine precision"."""
-    class TestProblemExact(Problem):
+    class TestProblemExact(PoissonProblem):
         def __init__(self, Nx, Ny):
             """Initialize mesh, boundary parts, and p."""
             self.mesh = UnitSquareMesh(Nx, Ny)
@@ -231,4 +231,4 @@ def test_Solver():
 
 if __name__ == '__main__':
     #demo()
-    test_Solver()
+    test_PoissonSolver()

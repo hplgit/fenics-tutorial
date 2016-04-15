@@ -3,19 +3,26 @@ from __future__ import print_function
 from fenics import *
 import time
 
-def solver(alpha, f, u0, I, dt, T, Nx, Ny, degree=1,
+def solver(alpha, f, u0, I, dt, T, divisions, L, degree=1,
            user_action=None, I_project=False):
     """
-    Solve diffusion PDE in 2D: -div(alpha*grad(u))=f in the
-    unit square, with u=u0 on the boundary, with Nx x Ny partitioning
-    of elements of the specified degree.
+    Solve diffusion PDE: -div(alpha*grad(u))=f in a box-shaped
+    domain [0,L[0]]x[0,L[1]]x[0,L[2]] with partitioning
+    given by divisions. u=u0 on the boundary.
     user_action(t, u, timestep) is a callback function for
     problem-dependent processing the solution at each time step.
     If I_project is False, the initial condition I is interpolated
     at t=0.
     """
     # Create mesh and define function space
-    mesh = UnitSquareMesh(Nx, Ny)
+    assert len(divisions) == len(L)
+    d = len(L)  # No of space dimensions
+    if d == 1:
+        mesh = IntervalMesh(divisions[0], 0, L[0])
+    elif d == 2:
+        mesh = RectangleMesh(Point(0,0), Point(*L), *divisions)
+    elif d == 3:
+        mesh = BoxMesh(Point(0,0), Point(*L), *divisions)
     V = FunctionSpace(mesh, 'P', degree)
 
     class Boundary(SubDomain):  # define the Dirichlet boundary
@@ -81,14 +88,29 @@ def application():
 
     dt = 0.3; T = 1.9
     Nx = Ny = 20
-    solver(1.0, f, u0, u0, dt, T, Nx, Ny, degree=2,
+    solver(1.0, f, u0, u0, dt, T, (Nx, Ny), (1, 1), degree=2,
            user_action=print_error, I_project=False)
 
 def solver_minimize_assembly(
-    alpha, f, u0, I, dt, T, Nx, Ny, degree=1,
+    alpha, f, u0, I, dt, T, divisions, L, degree=1,
     user_action=None, I_project=False):
+    """
+    Solve diffusion PDE u_t = div(alpha*grad(u)) + f on
+    an interval, rectangle, or box with side lengths in L.
+    divisions reflect cell partitioning, degree the element
+    degree. user_action(t, u, timetesp) is a callback function
+    where the calling code can process the solution.
+    If I_project is false, use interpolation for the initial
+    condition.
+    """
     # Create mesh and define function space
-    mesh = UnitSquareMesh(Nx, Ny)
+    d = len(L)  # No of space dimensions
+    if d == 1:
+        mesh = IntervalMesh(divisions[0], 0, L[0])
+    elif d == 2:
+        mesh = RectangleMesh(Point(0,0), Point(*L), *divisions)
+    elif d == 3:
+        mesh = BoxMesh(Point(0,0), Point(*L), *divisions)
     V = FunctionSpace(mesh, 'P', degree)
 
     class Boundary(SubDomain):  # define the Dirichlet boundary
@@ -175,7 +197,7 @@ def application_animate(model_problem):
         vtkfile << (u, float(t))  # store time-dep Function
 
     solver_minimize_assembly(
-        1.0, f, u0, I, dt, T, Nx, Ny, degree=2,
+        1.0, f, u0, I, dt, T, (Nx, Ny), (1, 1), degree=2,
         user_action=animate, I_project=False)
 
 
@@ -345,6 +367,7 @@ def solver_bc(
 
     def update_boundary_conditions(boundary_conditions, t):
         """Update t parameter in Expression objects in BCs."""
+        # This is more flexible and elegant in the class version
         for n in boundary_conditions:
             bc = boundary_conditions[n]
             if 'Robin' in bc:
@@ -413,11 +436,11 @@ def test_solvers():
             dt = 0.3; T = 1.2
             u0.t = 0 # Important, otherwise I is wrong
             solver(
-                1.0, f, u0, u0, dt, T, Nx, Ny, degree,
+                1.0, f, u0, u0, dt, T, (Nx, Ny), (1, 1), degree,
                 user_action=assert_error, I_project=False)
             u0.t = 0 # Important, otherwise I is wrong
             solver_minimize_assembly(
-                1.0, f, u0, u0, dt, T, Nx, Ny, degree,
+                1.0, f, u0, u0, dt, T, (Nx, Ny), (1, 1), degree,
                 user_action=assert_error, I_project=False)
             u0.t = 0 # Important, otherwise I is wrong
             solver_bc(
@@ -446,6 +469,7 @@ def application_welding(gamma=1, delta=1, beta=10, num_rotations=2):
     import cbcpost as post
     class ProcessResults(object):
         def __init__(self):
+            """Define fields to be stored/plotted."""
             self.pp = post.PostProcessor(
                 dict(casedir='Results', clean_casedir=True))
 
@@ -473,15 +497,16 @@ def application_welding(gamma=1, delta=1, beta=10, num_rotations=2):
             self.vtkfile_f = File('source.pvd')
 
         def __call__(self, t, T, timestep):
-            # Store temperature and heat source to cbcpost file
-            # and to VTK file
+            """Store T and f to file (cbcpost and VTK)."""
             T.rename('T', 'solution')
             f_Function = interpolate(f, T.function_space())
             f_Function.rename('f', 'welding equipment')
+
             self.pp.update_all(
                 {'Temperature': lambda: T,
                  'Heat_source': lambda: f_Function},
                 t, timestep)
+
             self.vtkfile_T << (T, float(t))
             self.vtkfile_f << (f_Function, float(t))
             info('saving results at time %g, max T: %g' %
@@ -490,7 +515,7 @@ def application_welding(gamma=1, delta=1, beta=10, num_rotations=2):
 
     Nx = Ny = 40
     solver_minimize_assembly(
-        gamma, f, u0, I, dt, T, Nx, Ny, degree=1,
+        gamma, f, u0, I, dt, T, (Nx, Ny), (1, 1), degree=1,
         user_action=ProcessResults(), I_project=False)
 
 def solver_vs_solver_minimize_assembly():
@@ -522,26 +547,47 @@ For P2 elements there is hardly any speed-up.
     f = Constant(beta - 2 - 2*alpha)
     dt = 0.3; T = 40*dt
     degree = 2
+
+    # 2D tests
     N = 40
     for i in range(4):
         t0 = time.clock()
         u0.t = 0
         solver(
-            f, u0, u0, dt, T, N, N, degree,
+            1.0, f, u0, u0, dt, T, (N, N), (1, 1), degree,
             user_action=None, I_project=False)
         t1 = time.clock()
         u0.t = 0
         solver_minimize_assembly(
-            f, u0, u0, dt, T, N, N, degree,
+            1.0, f, u0, u0, dt, T, (N, N), (1, 1), degree,
             user_action=None, I_project=False)
         t2 = time.clock()
-        info('N=%d, %d unknowns, std solver: %.2f opt solver: %.2f speed-up: %.1f' % (N, (N+1)*(N+1), t1-t0, t2-t1, (t1-t0)/float(t2-t1)))
+        info('N=%d, std solver: %.2f opt solver: %.2f speed-up: %.1f' %
+             (N, t1-t0, t2-t1, (t1-t0)/float(t2-t1)))
+        N *= 2
+
+    # 3D tests
+    N = 10
+    for i in range(3):
+        t0 = time.clock()
+        u0.t = 0
+        solver(
+            1.0, f, u0, u0, dt, T, (N, N, N), (1, 1, 1), degree,
+            user_action=None, I_project=False)
+        t1 = time.clock()
+        u0.t = 0
+        solver_minimize_assembly(
+            1.0, f, u0, u0, dt, T, (N, N, N), (1, 1, 1), degree,
+            user_action=None, I_project=False)
+        t2 = time.clock()
+        info('N=%d, std solver: %.2f opt solver: %.2f speed-up: %.1f' %
+             (N, t1-t0, t2-t1, (t1-t0)/float(t2-t1)))
         N *= 2
 
 if __name__ == '__main__':
     #application()
     #test_solvers()
-    application_animate(2)
-    #solver_vs_solver_minimize_assembly()
+    #application_animate(2)
+    solver_vs_solver_minimize_assembly()
     #application_welding(gamma=10)
     interactive()
