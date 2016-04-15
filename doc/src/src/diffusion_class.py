@@ -3,8 +3,12 @@ from fenics import *
 import numpy as np
 import matplotlib.pyplot as plt
 
-class Solver(object):
+class DiffusionSolver(object):
     def __init__(self, problem):
+        """
+        Compute mesh and set up time-independent part of
+        the variational formulation.
+        """
         self.problem = problem
         self.mesh, degree = problem.mesh_degree()
         self.V = V = FunctionSpace(self.mesh, 'P', degree)
@@ -19,11 +23,14 @@ class Solver(object):
         self.u_1.rename('u', 'initial condition')
         problem.user_action(0, self.u_1)
 
-        # Define variational problem
+        # Define variational problem (except for the f term)
         u = TrialFunction(V)
         v = TestFunction(V)
         p = problem.p_coeff()
         self.p = p  # store for flux computations
+        self.f = problem.f_rhs()  # used in step()
+        # f is handled in the time loop by interpolation and M matrix
+
         a_M = u*v*dx
         a_K = dot(p*grad(u), grad(v))*dx
         a_K += sum([r*u*v*ds_
@@ -31,16 +38,16 @@ class Solver(object):
         self.M = assemble(a_M)
         self.K = assemble(a_K)
 
-        self.f = problem.f_rhs()  # used in step()
-        L = Constant(0)*v*dx # Must initialize L if next line has empty lists
-        # f is handled in the time loop by interpolation and M matrix
+        # Must initialize L if boundary conditions have empty lists
+        L = Constant(0)*v*dx
         L -= sum([g*v*ds_
                   for g, ds_ in problem.Neumann_conditions()])
         L -= sum([r*s*v*ds_
                   for r, s, ds_ in problem.Robin_conditions()])
-        # Note: updating of Expression objects (t attribute)
-        # does not change these a_* and L expressions.
+        # If Robin or Neumann conditions depend on time, they have to
+        # be assembled in the time loop!
         self.b_surface_int = assemble(L)
+
         self.u = Function(V)   # the unknown at a new time level
         self.u.rename('u', 'solution')
         self.T = problem.end_time()
@@ -49,7 +56,7 @@ class Solver(object):
              abs_tol=1E-6, rel_tol=1E-5, max_iter=1000):
         """Advance solution one time step."""
         # Find new Dirichlet conditions at this time step
-        Dirichlet_cond = self.problem.Dirichlet_conditions()
+        Dirichlet_cond = self.problem.Dirichlet_conditions(t)
         if isinstance(Dirichlet_cond, Expression):
             # Just one Expression for Dirichlet conditions on
             # the entire boundary
@@ -72,7 +79,6 @@ class Solver(object):
         F_k = f_k.vector()
         b = self.M*self.u_1.vector() + self.dt*self.M*F_k + \
             self.dt*self.b_surface_int
-        self.problem.update_boundary_conditions(t)
 
         # Solve linear system
         [bc.apply(A, b) for bc in self.bcs]
@@ -92,10 +98,11 @@ class Solver(object):
             t += self.dt
             self.u_1.assign(self.u)
 
-class Problem(object):
+class DiffusionProblem(object):
     """Abstract base class for specific diffusion applications."""
 
-    def solve(self, solver_class=Solver, linear_solver='direct',
+    def solve(self, solver_class=DiffusionSolver,
+              linear_solver='direct',
               abs_tol=1E-6, rel_tol=1E-5, max_iter=1000):
         """Solve the PDE problem for the primary unknown."""
         self.solver = solver_class(self)
@@ -143,11 +150,7 @@ class Problem(object):
         """Post process solution u at time t."""
         pass
 
-    def update_boundary_conditions(self, t):
-        """Update t parameter in Expression objects in BCs."""
-        pass
-
-    def Dirichlet_conditions(self):
+    def Dirichlet_conditions(self, t):
         """Return either an Expression (for the entire boundary) or
         a list of (value,boundary_parts,index) triplets."""
         return []
@@ -160,13 +163,15 @@ class Problem(object):
         """Return list of (r,s,ds(n)) triplets."""
         return []
 
+    def update_expressions(self, t):
+        """Update all expressions to current time t."""
 
-class Problem1(Problem):
+
+class Problem1(DiffusionProblem):
     """Evolving boundary layer, I=0, but u=1 at x=0."""
     def __init__(self, Nx, Ny, p_values):
-        Problem.__init__(self)
+        DiffusionProblem.__init__(self)
         self.init_mesh(Nx, Ny, p_values)
-        self.Dirichlet_bc = Expression('sin(t)', t=0)
         self.file = File('temp.pvd')
 
     def init_mesh(self, Nx, Ny, p_values=[1, 0.1]):
@@ -262,15 +267,15 @@ class Problem1(Problem):
     def f_rhs(self):
         return Constant(0)
 
-    def Dirichlet_conditions(self):
+    def Dirichlet_conditions(self, t):
         """Return list of (value,boundary) pairs."""
         # return [(DirichletBC, self.boundary_parts, 2),
         return [(1.0, self.boundary_parts, 0),
                 (0.0, self.boundary_parts, 1)]
 
-    def Neumann_conditions(self, t):
+    def Neumann_conditions(self):
         """Return list of g*ds(n) values."""
-        return [(0, self.ds(0)), (0, self.ds(1))]
+        return [(0, self.ds(2)), (0, self.ds(3))]
 
 class Problem2(Problem1):
     """Oscillating surface temperature."""
@@ -278,23 +283,24 @@ class Problem2(Problem1):
         Problem1.__init__(self, Nx, Ny, p_values)
         self.surface_temp = lambda t: T_A*sin(w*t)
 
-    def Dirichlet_conditions(self):
+    def Dirichlet_conditions(self, t):
         """Return list of (value,boundary) pairs."""
         # return [(DirichletBC, self.boundary_parts, 2),
         # t: self.solver.t
-        return [(self.surface_temp(self.solver.t),
+        return [(self.surface_temp(t),
                  self.boundary_parts, 0),
                 (0.0, self.boundary_parts, 1)]
 
 def demo():
-    problem = Problem1(Nx=20, Ny=5, p_values=[1,1])
+    problem = DiffusionProblem1(Nx=20, Ny=5, p_values=[1,1])
     problem.solve(linear_solver='direct')
     u = problem.solution()
     plt.savefig('tmp1.png')
     plt.show()
 
-def test_Solver():
-    class TestProblemExact(Problem):
+# 2DO: test alle funksjoner her igjen etter at vi la inn t i BC funcs[[[
+def test_DiffusionSolver():
+    class TestProblemExact(DiffusionProblem):
         def __init__(self, Nx, Ny):
             self.mesh = UnitSquareMesh(Nx, Ny)
             alpha = 3; beta = 1.2
@@ -319,12 +325,9 @@ def test_Solver():
         def f_rhs(self):
             return self.f
 
-        def Dirichlet_conditions(self):
-            return self.u0
-
-        def update_boundary_conditions(self, t):
-            """Update t parameter in Expression objects in BCs."""
+        def Dirichlet_conditions(self, t):
             self.u0.t = t
+            return self.u0
 
         def user_action(self, t, u):
             """Post process solution u at time t."""
@@ -340,5 +343,5 @@ def test_Solver():
 
 if __name__ == '__main__':
     #demo()
-    test_Solver()
+    test_DiffusionSolver()
     interactive()

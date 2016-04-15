@@ -29,7 +29,7 @@ but $b$ depends on $u$ at the previous time level. To increase the
 computational efficiency, we can therefore assemble $A$ once and
 for all before the time loop. To be able to do this, we need to
 explicitly create matrices and vectors as demonstrated in Section
-ref{ftut:poisson1:linalg}.
+ref{ch:poisson0:linalg}.
 
 Let us express the solution procedure in algorithmic form,
 writing $u$ for the unknown spatial function at the new time level
@@ -119,14 +119,14 @@ of a finite element code in time-dependent problems.
 === Deriving recursive linear systems ===
 
 To see how repeated assembly can be avoided, we look at the $L(v)$
-form in  (ref{ftut:diffusion:pde1:L}),
+form in  (ref{ch:diffusion0:pde1:L}),
 which in general varies with
 time through $u^{k-1}$, $f^k$, and possibly also with $\dt$
 if the time step is adjusted during the simulation.
 The technique for avoiding repeated assembly consists in
 expanding the finite element functions in sums over the basis functions
 $\phi_i$, as explained
-in Section ref{ftut:poisson1:linalg}, to identify matrix-vector
+in Section ref{ch:poisson0:linalg}, to identify matrix-vector
 products that build up the complete system. We have
 $u^{k-1}=\sum_{j=1}^NU^{k-1}_j\phi_j$, and we can expand $f^k$ as
 $f^{k}=\sum_{j=1}^NF^{k}_j\phi_j$. Inserting these expressions in $L(v)$
@@ -186,7 +186,7 @@ That is, no assembly is necessary to compute $b$.
 
 The coefficient matrix $A$ can also be split into two terms.  We
 insert $v=\hat\phi_i$ and $u^k = \sum_{j=1}^N U^k_j\phi_j$ in the
-expression (ref{ftut:diffusion:pde1:a}) to get
+expression (ref{ch:diffusion0:pde1:a}) to get
 
 !bt
 \begin{equation*}
@@ -216,8 +216,8 @@ FEniCS program, become
 !bt
 \begin{align}
 a_K(u,v) &= \int_\Omega\nabla u\cdot\nabla v \dx,
-label{ftut:diffusion:pde1:aK}\\
-a_M(u,v) &= \int_\Omega uv \dx label{ftut:diffusion:pde1:aM}\tp
+label{ch:diffusion0:pde1:aK}\\
+a_M(u,v) &= \int_\Omega uv \dx label{ch:diffusion0:pde1:aM}\tp
 \end{align}
 !et
 
@@ -234,7 +234,7 @@ strategy of avoiding assembly at each time level:
 
   o Define separate forms $a_M$ and $a_K$
   o Assemble $a_M$ to $M$ and $a_K$ to $K$
-  o Compute $A=M+{\dt}$, $K$
+  o Compute $A=M+{\dt}K$
   o Define $f$ as an `Expression`
   o Interpolate the formula for $f$ to a finite element function $F^k$
   o Compute $b=MU^{k-1} + {\dt}MF^k$
@@ -262,14 +262,12 @@ while t <= T:
     b = M*u_1.vector() + dt*M*F_k
 !ec
 
-[hpl: I wonder if the refactoring should have a function first and then
-a class or if we jump right to the class. From now on we could use
-classes as the packaging of FEniCS programs.]
-
-We implement these modification in a refactored version of the
+We implement these modifications in a refactored version of the
 program `${prog["diffusion_flat2"]}.py`, where the solver is a function
-as explained in Section ref{ftut:poisson1:impl2} rather than a
-flat program. The new `solver_minimize_assembly` function resides in
+as explained in Section ref{ch:poisson0:impl2} rather than a
+flat program. The domain can also more flexibly be a 1D, 2D, or 3D
+interval, rectangle, or box.
+The new `solver_minimize_assembly` function resides in
 "`${prog['diffusion_func']}.py`": "${prog['diffusion_func']}.py".
 
 @@@CODE src/diffusion_func.py fromto: def solver_minimize_assembly@def solver_bc
@@ -395,6 +393,7 @@ Terminal> cd fenicstools
 Terminal> python setup.py install
 !ec
 
+
 === Basic commands ===
 
 We must create a *post processor* and then specify what kind of
@@ -412,7 +411,7 @@ pp.add_field(post.SolutionField(
     dict(save=True,
          save_as=['hdf5', 'xdmf'],
          plot=True,
-	 plot_args=dict(range_min=0.0, range_max=1.2))))
+         plot_args=dict(range_min=0.0, range_max=1.2))))
 !ec
 The `plot=True` automatically launches `fenics.plot` commands of
 this scalar field during the simulation. The ranges of the color
@@ -439,6 +438,9 @@ the solution, such as
  * norms and point values of fields as function of time
  * user-defined post processing of fields
 
+We refer to the online "cbcpost documentation": "http://cbcpost.readthedocs.org/en/latest/index.html" for further information on all the capabilities of this
+package.
+
 !bnotice Tip: Use `cbcpost` to visualize time-dependent data
 Instead of issuing your own `plot` commands in time-dependent
 problems, it is safer and more convenient to specify `plot=True`
@@ -450,36 +452,34 @@ the animation.
 ===== Heat transfer due to a moving welding source =====
 label{ch:diffusion:welding:problem}
 
-Let us solve a real diffusion problem taken from welding.
-A moving welding equipment acts as a moving heat source
-at the top of a thin metal plate.
-The question is how the heat from the equipment spreads out
-in the material that is being welded. We use the standard
-heat equation, treat the material as two dimensional,
-and do not take phase transitions into account.
-The governing PDE is then
+Let us solve a diffusion problem taken from welding.  A moving
+welding equipment acts as a moving heat source at the top of a thin
+metal plate.  The question is how the heat from the equipment spreads
+out in the material that is being welded. We use the standard heat
+equation, treat the material as two dimensional, and do not take phase
+transitions into account.  The governing PDE is then
 
 !bt
-\[ \varrho c \frac{\partial u}{\partial t} = k\nabla^2 u + f,\]
+\[ \varrho c \frac{\partial u}{\partial t} = \kappa\nabla^2 u + f,\]
 !et
 where $u$ is temperature, $\varrho$ is the density of the material,
-$c$ is the heat capacity at constant volume, $k$ is the heat
+$c$ is the heat capacity at constant volume, $\kappa$ is the heat
 conduction coefficient, and $f$ models the heat source from the
-welding equipment. The domain is $\Omega = [0,L]\times [0,L]$.
-An additional major simplification is that we set $u=U_s$ at the boundary,
-where $U_s$ is the temperature of the surroundings (a Robin condition,
-modeling cooling at the boundary would be more accurate, but then we should
-also consider cooling in the third dimension as well).
-The initial condition reads $u=U_s$.
+welding equipment. The domain is $\Omega = [0,L]\times [0,L]$.  An
+additional major simplification is that we set $u=U_s$ at the
+boundary, where $U_s$ is the temperature of the surroundings (a Robin
+condition, modeling cooling at the boundary would be more accurate,
+but then we should also consider cooling in the third dimension as
+well).  The initial condition reads $u=U_s$.
 
-A welding source is moving and very localized in space.
-The localization can be modeled by a peak-shaped Gaussian function.
-The movement is taken to be a circle with radius $R$ about a
-point $(x_0,y_0)$. An appropriate $f$ is
+A welding source is moving and very localized in space.  The
+localization can be modeled by a peak-shaped Gaussian function.  The
+movement is taken to be a circle with radius $R$ about a point
+$(x_0,y_0)$. An appropriate $f$ is
 
 !bt
 \[ f(x,y,t) = A\exp{\left(-\frac{1}{2\sigma^2}
-\left({x-(x_0 + R\cos\omega t)}\right)^2 -\frac{1}{2}
+\left({x-(x_0 + R\cos\omega t)}\right)^2 -\frac{1}{2\sigma^2}
 \left({y-(y_0 + R\sin\omega t)}\right)^2\right)}\tp\]
 !et
 The parameter $A$ is the strength of the heat source, and $\sigma$ is
@@ -489,19 +489,19 @@ function.
 ===== Scaling of the welding problem =====
 label{ch:diffusion:welding:scaling}
 
-There are 10 physical parameters in the problem:
-$L$, $\varrho$, $c$, $k$, $A$, $x_0$, $y_0$, $R$, $\omega$, $\sigma$.
-Scaling can dramatically reduce the number of parameters and also
-introduce new parameters that are much easier to assign numerical
-values. We therefore scale the problem. As length scale, we choose
-$L$ so the scaled domain becomes the unit square. As time scale
-and characteristic size of $u$, we just introduce $t_c$ ad $u_c$.
-This means that we introduce scaled variables
+There are 10 physical parameters in the problem: $L$, $\varrho$, $c$,
+$\kappa$, $A$, $x_0$, $y_0$, $R$, $\omega$, $\sigma$.  Scaling can
+dramatically reduce the number of parameters and also introduce new
+parameters that are much easier to assign numerical values. We
+therefore scale the problem. As length scale, we choose $L$ so the
+scaled domain becomes the unit square. As time scale and
+characteristic size of $u$, we just introduce $t_c$ ad $u_c$.  This
+means that we introduce scaled variables
 
 !bt
 \[
-\bar x = \frac{x}{L},\ \bar y = \frac{y}{L},\ \bar t =\frac{t}{t_c},
-\ \bar u = \frac{u-U_s}{u_c}\tp
+\bar x = \frac{x}{L},\quad \bar y = \frac{y}{L},\quad \bar t =\frac{t}{t_c},
+\quad\bar u = \frac{u-U_s}{u_c}\tp
 \]
 !et
 The scaled form of $f$ is naturally $\bar f = f/A$, since this makes
@@ -514,11 +514,12 @@ also be scaled:
 \left({\bar xL -(L \bar x_0 + L\bar R\cos\omega t_c t)}\right)^2 -\frac{1}{2\sigma^2}
 \left({L \bar y-(L\bar y0 + L\bar R\sin\omega t_c t)}\right)^2\right)}\\
 &= \exp{\left(-\frac{1}{2}\frac{L^2}{\sigma^2}
-\left(x -(\bar x_0 + \bar R\cos\omega t_c \bar t)\right)^2 -\frac{1}{2}
+\left(x -(\bar x_0 + \bar R\cos\omega t_c \bar t)\right)^2 -
+\frac{1}{2}\frac{L^2}{\sigma^2}
 \left(\bar y-(\bar y0 + \bar R\sin\omega t_c \bar t)\right)^2\right)}\\
-&= \exp{\left(-\frac{1}{2}\beta
-\left(x -(\frac{1}{2} + \bar R\cos\bar t)\right)^2 -\frac{1}{2}
-\left(\bar y-(\frac{1}{2} + \bar R\sin\bar t)\right)^2\right)},
+&= \exp{\left(-\frac{1}{2}\beta^2
+\left((x -(\frac{1}{2} + \bar R\cos\bar t)\right)^2 -
+\left(\bar y-(\frac{1}{2} + \bar R\sin\bar t))^2\right)\right)},
 \end{align*}
 !et
 where $\beta$ is a dimensionless parameter,
@@ -543,13 +544,13 @@ Inserting the new scaled variables in the PDE leads to
 
 !bt
 \[ \frac{\partial \bar u}{\partial\bar t} =
-\frac{k}{\omega\varrho c L^2}\bar\nabla^2\bar u +
+\frac{\kappa}{\omega\varrho c L^2}\bar\nabla^2\bar u +
 \frac{A}{\omega u_c\varrho c}\bar f(\bar x,\bar y,\bar t)\tp\]
 !et
 The first coefficient is a dimensionless number,
 
 !bt
-\[ \gamma = \frac{k}{\omega\varrho c L^2},\]
+\[ \gamma = \frac{\kappa}{\omega\varrho c L^2},\]
 !et
 while the second coefficient can be used to determine $u_c$ by demanding
 the source term to balance the time derivative term,
@@ -571,13 +572,13 @@ for a scaling factor $\delta$. Using this $u_c$ gives the PDE
 \gamma\bar\nabla^2\bar u +
 \delta\bar f(\bar x,\bar y,\bar t),\]
 !et
-with two dimensionless variables, but $\delta$ is tuned from experiments
-to give $\bar u$ a typically size of unity.
+with two dimensionless variables, but $\delta$ is quite easily
+tuned from experiments to give $\bar u$ a typically size of unity.
 
 Looking at $\gamma$, we see that it can be written
 
 !bt
-\[ \gamma = \frac{1/\omega}{\varrho c L^2/k},\]
+\[ \gamma = \frac{1/\omega}{\varrho c L^2/\kappa},\]
 !et
 which is the ratio of the time scale for the heat source and the
 time scale for diffusion. Multiplying by $R/R$ gives another
@@ -593,7 +594,7 @@ source in space, $\beta=10$ is a suitable value.  Then we are
 actually left with only one interesting parameter to adjust: $\gamma$.
 It is so much easier to assign this parameter a value (speed of
 diffusion versus speed of heat source) than to set $\varrho$, $c$, and
-$k$ for some chosen material, and then determine relevant values for
+$\kappa$ for some chosen material, and then determine relevant values for
 $A$, $L$, etc. There are no approximations in the scaling procedure;
 it just dramatically simplifies numerical simulations.
 The book cite{Langtangen_scaling} gives a comprehensive treatment
@@ -605,9 +606,7 @@ label{ch:diffusion:welding:funcsolver}
 
 We can use the `solver_minimize_assembly` function to solve the
 welding problem. The application code just declares the problem-dependent
-parameters and calls the solver function. From a trial run we find
-that $\delta = 700$ gives $\bar u$ of unit size for moderate $\gamma$
-values.
+parameters and calls the solver function:
 
 !bc pycod
 def application_welding(gamma=1, delta=1, beta=10, num_rotations=2):
@@ -627,7 +626,7 @@ def application_welding(gamma=1, delta=1, beta=10, num_rotations=2):
     dt = P/40        # 40 steps per rotation
     Nx = Ny = 60
     solver_minimize_assembly(
-        gamma, f, u0, I, dt, T, Nx, Ny, degree=1,
+        gamma, f, u0, I, dt, T, (Nx, Ny), (1, 1), degree=1,
         user_action=ProcessResults(), I_project=False)
 !ec
 
@@ -635,14 +634,14 @@ The remaining task is to write the user action callback function to
 process the solution at teach time step. We want to make use of
 `cbcpost` for storage and plotting.  Since we need the post processor
 variable, called `pp` in Section ref{ch:diffusion:welding:cbcpost},
-needs to survive between calls to the user action function, we find it
+to survive between calls to the user action function, we find it
 most convenient to implement this function in terms of a class with
 `pp` as attribute and `__call__` as the user action function.  We want
 to make comparisons between the heat source and the temperature
 response, so we register both fields for storage and plotting:
 
 @@@CODE-4 src/diffusion_func.py fromto: import cbcpost as post@info\('saving results
-We took the opportunity in the callback function (`__call__`) to also
+We took the opportunity to also
 store the `u` and `f` functions to VTK files, although this is really
 not necessary since ParaView or VisIt can read XDMF files.
 
@@ -735,6 +734,69 @@ terms of attributes (variables) in the class or in terms of method
 equation, but should be sufficiently general to be reused for
 most time-dependent FEniCS applications.
 
+===== Mathematical problem =====
+label{ch:diffusion:refactor:math}
+
+We address a variable-coefficient diffusion equation with Dirichlet,
+Neumann, and Robin conditions:
+
+!bt
+\begin{align}
+\varrho c{\partial u\over\partial t} &= \nabla\cdot\left( \kappa\nabla u\right)
++ f(\x,t)\hbox{ in }\Omega\times (0,T],\\
+u(\x,0) &= I\hbox{ on }\Omega,\\
+u &= u_0(t)\hbox{ on }\Gamma_D,\\
+-\kappa{\partial u\over\partial n} &= g\hbox{ on }\Gamma_N,\\
+-\kappa{\partial u\over\partial n} &= h_T(u-U_s)\hbox{ on }\Gamma_R\tp
+\end{align}
+!et
+The spatial domain $\Omega$ has boundary $\partial\Omega = \Gamma_D\cup
+\Gamma_N\cup\Gamma_R$. We shall assume that all coefficients $\varrho$,
+$c$, and $\kappa$ may vary in space, and $f$ may vary in time too.
+
+We discretize in time by the general $\theta$-rule.
+For an evolution equation
+$\partial P/\partial t=Q(t)$, this rule reads
+
+!bt
+\begin{equation*}
+{P^{n+1} - P^{n}\over{\dt}} = \theta Q^{n+1} + (1-\theta )Q^{n},
+\end{equation*}
+!et
+where $\theta\in[0,1]$ is a weighting factor. The attractive property
+of this scheme is that $\theta =1$ corresponds
+to the Backward Euler scheme, $\theta =1/2$ to the Crank-Nicolson
+scheme, and $\theta =0$ to the Forward Euler scheme.
+
+Introducing the $\theta$-rule in our PDE results in
+
+!bt
+\begin{equation}
+\varrho c\frac{u^{n+1}-u^n}{\Delta t}
+= \theta(\nabla\cdot\left( \kappa\nabla u^{n+1}\right) + f(\x,t_{n+1})) +
+(1-\theta)(\nabla\cdot\left( \kappa\nabla u^{n}\right) + f(\x,t_{n}))\tp
+label{ch:diffusion:refactor:math:problem}
+\end{equation}
+!et
+
+A Galerkin method for this initial-boundary value problem consists
+of multiplying (ref{ch:diffusion:refactor:math:problem}) by
+a test function $v\in\hat V$, integrate over $\Omega$, and
+perform integration by parts on second-order derivative terms
+(here the term $\nabla\cdot\left( \kappa\nabla u\right)$):
+
+!bt
+\begin{align*}
+\int\limits_\Omega \biggl(
+v\varrho c\frac{u^{n+1}-u^n}{\Delta t}\dx
+& + \theta \kappa\nabla u^{n+1}\cdot\nabla v + vf(\x,t_{n+1} \\
+& + (1-\theta) \kappa\nabla u^{n}\cdot\nabla v + vf(\x,t_{n}\biggr)\\
+& - \int\limits_{\Gamma_N\cup\Gamma_R}
+\biggl(\theta \kappa\frac{\partial u^{n+1}}{\partial n}v
++ (1-\theta) \kappa\frac{\partial u^{n}}{\partial n}v\biggr)\ds
+\tp
+\end{align*}
+!et
 
 ===== A class-based solver for a general diffusion problem =====
 label{ch:diffusion:refactor:class_solver}
@@ -747,12 +809,12 @@ how the solver class can ask for the mesh, for instance.
 
 Here is an abstract problem class:
 
-@@@CODE src/diffusion_class.py fromto: class Problem\(@class Problem1
+@@@CODE src/diffusion_class.py fromto: class DiffusionProblem\(@class Problem1
 The meaning of the different methods in this class will be evident as
 we present specific examples on implementations.
 
 The idea now is that different problems are implemented as different
-subclasses of `Problem`. The `solve` and `flux` methods are general
+subclasses of `DiffusionProblem`. The `solve` and `flux` methods are general
 and can be inherited, while the rest of the methods must be
 implemented in the subclass.
 
@@ -775,7 +837,7 @@ mesh size, we need a less restrict tolerance!).
 The solver class, here based on the algorithm in Section
 ref{ch:diffusion:opt:noassembly}, can be coded as follows:
 
-@@@CODE src/diffusion_class.py fromto: class Solver@class Problem
+@@@CODE src/diffusion_class.py fromto: class DiffusionSolver@class DiffusionProblem
 
  * Think about Crank-Nicolson as subclass!
  * Some simple diffusion problems with varying $\Delta t$,
