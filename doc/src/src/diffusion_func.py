@@ -70,7 +70,7 @@ def solver(alpha, f, u0, I, dt, T, divisions, L, degree=1,
         t += dt
         timestep += 1
         u_1.assign(u)
-    info('total time for assembly of right-hand side: %.2f' % b_assemble)
+    #info('total time for assembly of right-hand side: %.2f' % b_assemble)
 
 def application():
     import numpy as np
@@ -136,6 +136,7 @@ def solver_minimize_assembly(
     A = M + dt*K
     # Compute solution
     u = Function(V)   # the unknown at a new time level
+
     b_assemble = 0  # CPU time for assembling all the b vectors
     timestep = 1
     t = dt
@@ -158,7 +159,7 @@ def solver_minimize_assembly(
         t += dt
         timestep += 1
         u_1.assign(u)
-    info('total time for assembly of right-hand side: %.2f' % b_assemble)
+    #info('total time for assembly of right-hand side: %.2f' % b_assemble)
 
 def application_animate(model_problem):
     import numpy as np, time
@@ -523,30 +524,20 @@ def solver_vs_solver_minimize_assembly():
     Compute the relative efficiency of a standard assembly of b
     and the technique in solver_minimize_assembly.
     """
-    """
-    Not a dramatic speed-up:
-total time for assembly of right-hand side: 0.04
-total time for assembly of right-hand side: 0.02
-N=40, 1681 unknowns, std solver: 0.26 opt solver: 0.23 speed-up: 1.1
-total time for assembly of right-hand side: 0.13
-total time for assembly of right-hand side: 0.07
-N=80, 6561 unknowns, std solver: 4.00 opt solver: 2.32 speed-up: 1.7
-total time for assembly of right-hand side: 0.45
-total time for assembly of right-hand side: 0.25
-N=160, 25921 unknowns, std solver: 13.78 opt solver: 5.05 speed-up: 2.7
-total time for assembly of right-hand side: 1.82
-total time for assembly of right-hand side: 1.05
-N=320, 103041 unknowns, std solver: 41.42 opt solver: 27.96 speed-up: 1.5
-
-For P2 elements there is hardly any speed-up.
-    """
     import time
     alpha = 3; beta = 1.2
     u0 = Expression('1 + x[0]*x[0] + alpha*x[1]*x[1] + beta*t',
                     alpha=alpha, beta=beta, t=0)
     f = Constant(beta - 2 - 2*alpha)
-    dt = 0.3; T = 40*dt
+    dt = 0.3
+    Nt = 10
+    T = Nt*dt
     degree = 2
+
+    from diffusion_class import TestProblemExact
+    class ClassVersion(TestProblemExact):
+        def user_action(self, t, u, timestep):
+            return
 
     # 2D tests
     N = 40
@@ -562,8 +553,12 @@ For P2 elements there is hardly any speed-up.
             1.0, f, u0, u0, dt, T, (N, N), (1, 1), degree,
             user_action=None, I_project=False)
         t2 = time.clock()
-        info('N=%d, std solver: %.2f opt solver: %.2f speed-up: %.1f' %
-             (N, t1-t0, t2-t1, (t1-t0)/float(t2-t1)))
+
+        problem = ClassVersion(N, N, degree=degree, num_time_steps=Nt)
+        problem.solve(theta=1, linear_solver='direct')
+        t3 = time.clock()
+        info('N=%3d, std solver: %.2f opt solver: %.2f class solver: %.2f speed-up: %.1f' %
+             (N, t1-t0, t2-t1, t3-t2, (t1-t0)/float(t2-t1)))
         N *= 2
 
     # 3D tests
@@ -580,10 +575,23 @@ For P2 elements there is hardly any speed-up.
             1.0, f, u0, u0, dt, T, (N, N, N), (1, 1, 1), degree,
             user_action=None, I_project=False)
         t2 = time.clock()
-        info('N=%d, std solver: %.2f opt solver: %.2f speed-up: %.1f' %
-             (N, t1-t0, t2-t1, (t1-t0)/float(t2-t1)))
-        N *= 2
 
+        problem = ClassVersion(N, N, N, degree=degree, num_time_steps=Nt)
+        problem.solve(theta=1, linear_solver='direct')
+        t3 = time.clock()
+        info('N=%3d, std solver: %.2f opt solver: %.2f class solver: %.2f speed-up: %.1f' %
+             (N, t1-t0, t2-t1, t3-t2, (t1-t0)/float(t2-t1)))
+        N *= 1.5
+        N = int(round(N))
+"""
+N= 40, std solver: 0.08 opt solver: 0.07 class solver: 0.27 speed-up: 1.2
+N= 80, std solver: 0.31 opt solver: 0.29 class solver: 0.54 speed-up: 1.1
+N=160, std solver: 1.45 opt solver: 1.44 class solver: 2.07 speed-up: 1.0
+N=320, std solver: 7.42 opt solver: 8.27 class solver: 9.65 speed-up: 0.9
+N= 10, std solver: 0.19 opt solver: 0.11 class solver: 0.38 speed-up: 1.7
+N= 15, std solver: 0.98 opt solver: 0.54 class solver: 1.48 speed-up: 1.8
+N= 23, std solver: 14.14 opt solver: 6.32 class solver: 14.38 speed-up: 2.2
+"""
 if __name__ == '__main__':
     #application()
     #test_solvers()
