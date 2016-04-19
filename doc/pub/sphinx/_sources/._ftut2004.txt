@@ -1,0 +1,965 @@
+.. !split
+
+More old stuff
+%%%%%%%%%%%%%%
+
+.. _ftut:prepro:
+
+Creating more complex domains
+=============================
+
+Up to now we have been very fond of the unit square as domain,
+which is an appropriate choice for initial versions of a
+PDE solver. The strength of the finite element method, however, is its
+ease of handling domains with complex shapes. This section
+shows some methods that can be used to create different types of
+domains and meshes.
+
+Domains of complex shape must normally be constructed in separate
+preprocessor programs. Two relevant preprocessors are Triangle for
+2D domains and NETGEN for 3D domains.
+
+.. _ftut:prepro:builtin:
+
+Built-in mesh generation tools
+------------------------------
+
+.. index:: UnitIntervalMesh
+
+.. index:: UnitSquareMesh
+
+.. index:: IntervalMesh
+
+.. index:: RectangleMesh
+
+.. index:: BoxMesh
+
+.. index:: UnitCubeMesh
+
+DOLFIN has a few tools for creating various types of meshes over
+domains with simple
+shape:
+``UnitIntervalMesh``,
+``UnitSquareMesh``,
+``UnitCubeMesh``,
+``IntervalMesh``,
+``RectangleMesh``, and
+``BoxMesh``.
+Some of these names have been briefly met in previous sections.
+The hopefully self-explanatory code snippet below summarizes
+typical constructions of meshes with the aid of these tools:
+
+.. code-block:: python
+
+        # 1D domains
+        mesh = UnitIntervalMesh(20)     # 20 cells, 21 vertices
+        mesh = IntervalMesh(20, -1, 1)  # domain [-1,1]
+        
+        # 2D domains (6x10 divisions, 120 cells, 77 vertices)
+        mesh = UnitSquareMesh(6, 10)  # 'right' diagonal is default
+        # The diagonals can be right, left or crossed
+        mesh = UnitSquareMesh(6, 10, 'left')
+        mesh = UnitSquareMesh(6, 10, 'crossed')
+        
+        # Domain [0,3]x[0,2] with 6x10 divisions and left diagonals
+        mesh = RectangleMesh(0, 0, 3, 2, 6, 10, 'left')
+        
+        # 6x10x5 boxes in the unit cube, each box gets 6 tetrahedra:
+        mesh = UnitCubeMesh(6, 10, 5)
+        
+        # Domain [-1,1]x[-1,0]x[-1,2] with 6x10x5 divisions
+        mesh = BoxMesh(-1, -1, -1, 1, 0, 2, 6, 10, 5)
+
+.. _ftut:mesh:transform:cyl:
+
+Transforming mesh coordinates
+-----------------------------
+
+.. index:: mesh transformations
+
+.. index:: coordinate stretching
+
+.. index:: coordinate transformations
+
+Coordinate stretching
+~~~~~~~~~~~~~~~~~~~~~
+
+A mesh that is denser toward a boundary is often desired to increase
+accuracy in that region. Given a mesh with uniformly spaced
+coordinates :math:`x_0,\ldots,x_{M-1}` in :math:`[a,b]`, the coordinate transformation
+:math:`\xi = (x-a)/(b-a)` maps :math:`x` onto :math:`\xi\in [0,1]`. A new mapping
+:math:`\eta = \xi^s`, for some :math:`s>1`, stretches the mesh toward :math:`\xi=0` (:math:`x=a`),
+while :math:`\eta = \xi^{1/s}` makes a stretching toward :math:`\xi=1` (:math:`x=b`).
+Mapping the :math:`\eta\in[0,1]` coordinates back to :math:`[a,b]` gives new,
+stretched :math:`x` coordinates,
+
+.. _Eq:_auto39:
+
+.. math::
+
+    \tag{69}
+    \bar x = a + (b-a)\left({x-a\over b-a}\right)^s
+        
+        
+
+toward :math:`x=a`, or
+
+.. _Eq:_auto40:
+
+.. math::
+
+    \tag{70}
+    \bar x = a + (b-a)\left({x-a\over b-a}\right)^{1/s}
+        
+        
+
+toward :math:`x=b`. Figure :ref:`ftut:mesh:transform:cyl:fig1` shows the
+effect of making a rectangular mesh denser toward :math:`x=0` (prior to
+the coordinate transformation below).
+
+Rectangle to hollow circle mapping
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+One way of creating more complex geometries is to transform the
+vertex coordinates in a rectangular mesh according to some formula.
+Say we want to create a part of a hollow cylinder of :math:`\Theta` degrees,
+with inner radius :math:`a` and outer radius :math:`b`. A standard mapping from polar
+coordinates to Cartesian coordinates can be used to generate the
+hollow cylinder. Given a rectangle in :math:`(\bar x, \bar y)` space such that
+:math:`a\leq \bar x\leq b` and :math:`0\leq \bar y\leq 1`, the mapping
+
+.. math::
+        
+        \hat x = \bar x\cos (\Theta \bar y),\quad \hat y = \bar x\sin (\Theta \bar y),
+        
+
+takes a point in the rectangular :math:`(\bar x,\bar y)`
+geometry and maps it to a point
+:math:`(\hat x, \hat y)` in a hollow cylinder.
+
+The corresponding Python code for first stretching the mesh and
+then mapping it onto a hollow cylinder looks as follows:
+
+.. code-block:: python
+
+        Theta = pi/2
+        a, b = 1, 5.0
+        nr = 10  # divisions in r direction
+        nt = 20  # divisions in theta direction
+        mesh = RectangleMesh(a, 0, b, 1, nr, nt, 'crossed')
+        
+        # First make a denser mesh towards r=a
+        x = mesh.coordinates()[:,0]
+        y = mesh.coordinates()[:,1]
+        s = 1.3
+        
+        def denser(x, y):
+            return [a + (b-a)*((x-a)/(b-a))**s, y]
+        
+        x_bar, y_bar = denser(x, y)
+        xy_bar_coor = numpy.array([x_bar, y_bar]).transpose()
+        mesh.coordinates()[:] = xy_bar_coor
+        plot(mesh, title='stretched mesh')
+        
+        def cylinder(r, s):
+            return [r*numpy.cos(Theta*s), r*numpy.sin(Theta*s)]
+        
+        x_hat, y_hat = cylinder(x_bar, y_bar)
+        xy_hat_coor = numpy.array([x_hat, y_hat]).transpose()
+        mesh.coordinates()[:] = xy_hat_coor
+        plot(mesh, title='hollow cylinder')
+        interactive()
+
+The result of calling ``denser`` and ``cylinder`` above is a list of two
+vectors, with the :math:`x` and :math:`y` coordinates, respectively.
+Turning this list into a ``numpy`` array object results in a :math:`2\times M`
+array, :math:`M` being the number of vertices in the mesh. However,
+``mesh.coordinates()`` is by a convention an :math:`M\times 2` array so we
+need to take the transpose. The resulting mesh is displayed
+in Figure :ref:`ftut:mesh:transform:cyl:fig1`.
+
+.. _ftut:mesh:transform:cyl:fig1:
+
+.. figure:: hollow_cylinder.png
+   :width: 480
+
+   *Hollow cylinder generated by mapping a rectangular mesh, stretched toward the left side*
+
+Setting boundary conditions in meshes created from mappings like the one
+illustrated above is most conveniently done by using a mesh function
+to mark parts of the boundary. The marking is easiest to perform
+before the mesh is mapped since one can then conceptually work with
+the sides in a pure rectangle.
+
+.. Stretch coordinates according to Mikael.
+
+.. Use refine uniformly and adaptively (adaptive poisson demo, use just
+
+.. grad u for example)
+
+.. Check ../../dielectric/python/demo.py og MeshEditor!
+
+.. Use refine og move.
+
+.. CHeck Netgen examples in the source, 2D.
+
+.. Transfinite mappings? Laplace?
+
+.. ===== Separate Preprocessor Applications =====
+
+.. _ftut:possion:nD:nmat:
+
+A General :math:`d`-Dimensional multi-material test problem
+===========================================================
+
+**This section is in a preliminary state!**
+
+The purpose of the present section is to generalize the basic
+ideas from the previous section to a problem involving
+an arbitrary number of materials in 1D, 2D, or 3D domains.
+The example also highlights how to build more general and flexible
+FEniCS applications.
+
+More to be done:
+
+  * Batch compilation of subdomains, see mailinglist.txt, lots of
+    useful stuff in Hake's example with "pointwise", see what the
+    bcs are etc.
+
+  * Use of ``near`` or similar function (better: user-adjusted tolerance)
+
+.. _ftut:possion:nD:nmat:PDE:
+
+The PDE problem
+---------------
+
+We generalize the problem in the section :ref:`ftut:possion:2D:2mat:impl`
+to the case where there are :math:`s` materials :math:`\Omega_0,\ldots,\Omega_{s-1}`,
+with associated constant :math:`k` values :math:`k_0,k_1,\ldots,k_{s-1}`,
+as illustrated in Figure :ref:`ftut:possion:nD:nmat:fig1`.
+
+.. _ftut:possion:nD:nmat:fig1:
+
+.. figure:: layers.sh
+   :width: 480
+
+   *Sketch of a multi-material problem*
+
+Although the sketch of the domain is in two dimensions, we can easily
+define this problem in any number of dimensions, using
+the ideas of the section :ref:`ch:poisson0:nD`, but the layer
+boundaries are planes :math:`x_0=\hbox{const}` and :math:`u` varies with
+:math:`x_0` only.
+
+The PDE reads
+
+.. _Eq:ch:poisson0:2D:varcoeff2:
+
+.. math::
+
+    \tag{71}
+    \nabla\cdot (k\nabla u) =0 {\thinspace .}
+        
+
+To construct a problem where we can find an analytical solution that can
+be computed to machine precision regardless of the element size,
+we choose :math:`\Omega` as a hypercube :math:`[0,1]^d`, and the materials as
+layers in the :math:`x_0` direction, as depicted in
+Figure :ref:`ftut:possion:nD:nmat:fig1` for a 2D case with four materials.
+The boundaries :math:`x_0=0` and :math:`x_0=1` have Dirichlet conditions
+:math:`u=0` and :math:`u=1`, respectively, while Neumann conditions
+:math:`\partial u/\partial n=0` are set on the remaining boundaries.
+The complete boundary-value problem is then
+
+.. _Eq:ch:poisson0:2D:varcoeff3:
+
+.. math::
+
+    \tag{72}
+    \begin{array}{rcll}
+            \nabla\cdot \left(k(x_0)\nabla u(x_0,\ldots,x_{d-1})\right)
+              &= 0 &\mbox{in } \Omega, \\ 
+            u &= 0 &\mbox{on } \Gamma_0,\\ 
+            u &= 1 &\mbox{on } \Gamma_1,\\ 
+            {\partial u\over\partial n} &= 0 &\mbox{on } \Gamma_N{\thinspace .}
+          \end{array}
+        
+
+The domain :math:`\Omega` is divided into :math:`s` materials :math:`\Omega_i`, :math:`i=0,\ldots,s-1`,
+where
+
+.. math::
+        
+        \Omega_i = \{ (x_0,\ldots,x_{d-1})\, |\, L_i \leq x_0 < L_{i+1}\}
+        
+
+for given :math:`x_0` values :math:`0=L_0 < L_1 < \cdots < L_s=1`
+of the material (subdomain) boundaries.
+The :math:`k(x_0)` function takes on the value :math:`k_i` in :math:`\Omega_i`.
+
+The exact solution of the basic PDE
+in :ref:`(72) <Eq:ch:poisson0:2D:varcoeff3>`
+
+.. math::
+        
+        u(x_0,\ldots,x_{d-1}) =
+        {\int_0^{x_0} (k(\tau ))^{-1}d\tau\over
+        \int_0^1 (k(\tau ))^{-1}d\tau}{\thinspace .}
+        
+
+For a piecewise constant :math:`k(x_0)` as explained, we get
+
+.. _Eq:ch:poisson0:2D:varcoeff2:exact:
+
+.. math::
+
+    \tag{73}
+    u(x_0,\ldots,x_{d-1}) =
+        {(x_0-L_i)k_i^{-1} + \sum_{j=0}^{i-1} (L_{j+1}-L_j)k_j^{-1}\over
+        \sum_{j=0}^{s-1} (L_{j+1}-L_j)k_j^{-1}},\quad L_i\leq x_0 \leq L_{i+1}{\thinspace .}
+        
+        
+
+That is, :math:`u(x_0,\ldots,x_{d-1})` is piecewise linear in :math:`x_0` and
+constant in all other directions.
+If :math:`L_i`
+coincides with the element boundaries, Lagrange elements will
+reproduce this exact solution to machine precision, which is ideal
+for a test case.
+
+.. SHOULD WE HAVE A CLASS INSTEAD? Or functions? No, class, and a module
+
+.. where both the preprocess step and the solve step and special BCs
+
+.. are handled. Separate general and special pieces of the problem and
+
+.. the implementation such that the code can easily be resued
+
+.. in a different problem (different PDE, different BCs, different domain).
+
+.. class BC with essential and natural conditions, class Domain
+
+.. (:math:`k` sits in domain - or in PDE or in Problem?),
+
+.. class PDE, and class Problem that has all of them.
+
+.. But illustrate this first for a simpler problem!
+
+.. _ftut:possion:nD:nmat:prepro:
+
+Preparing a mesh with subdomains
+--------------------------------
+
+Our first task is to generate a mesh for :math:`\Omega = [0,1]^d` and divide
+it into subdomains
+
+.. math::
+        
+        \Omega_i = \{ (x_0,\ldots,x_{d-1})\, |\, L_i < x_0 < L_{i+1}\}
+        
+
+for given subdomain boundaries :math:`x_0=L_i`, :math:`i=0,\ldots,s`, :math:`L_0=0`, :math:`L_s=1`.
+Note that the boundaries :math:`x_0=L_i` are points in 1D, lines in 2D, and
+planes in 3D.
+
+Let us, on the command line, specify the polynomial degree of Lagrange
+elements and the number of element divisions in the various space
+directions, as explained in detail in
+the section :ref:`ch:poisson0:nD`. This results in an object ``mesh``
+representing the interval :math:`[0,1]` in 1D, the unit square in 2D, or the
+unit cube in 3D.
+
+Specification of subdomains (and boundary parts, if desired) is
+done using a user-defined subclass of ``SubDomain``, as
+explained in the section :ref:`ftut:possion:2D:2mat:impl`.
+We could, in principle,
+introduce one subclass of ``SubDomain`` for each subdomain, and
+this would be feasible if one has a small and fixed number of
+subdomains as in the example in the section :ref:`ftut:possion:2D:2mat:impl` with
+two subdomains. Our present case is more general as we
+have :math:`s` subdomains. It then makes sense to create one
+subclass ``Material`` of ``SubDomain`` and have an attribute
+to reflect the subdomain (material) number. We use this number
+in the test whether a spatial point ``x`` is inside a subdomain or not:
+
+.. code-block:: python
+
+        class Material(SubDomain):
+            """Define material (subdomain) no. i."""
+            def __init__(self, subdomain_number, subdomain_boundaries):
+                self.number = subdomain_number
+                self.boundaries = subdomain_boundaries
+                SubDomain.__init__(self)
+        
+            def inside(self, x, on_boundary):
+                i = self.number
+                L = self.boundaries         # short form (cf. the math)
+                if L[i] <= x[0] <= L[i+1]:
+                    return True
+                else:
+                    return False
+
+The ``<=`` in the test if a point is inside a subdomain is important as
+``x`` will equal vertex coordinates in the cells, and all vertices
+of a cell must lead to a ``True`` return value from the ``inside``
+method
+for the cell to be a part of the actual subdomain. That is, the
+more mathematically natural test ``L[i] <= x[0] < L[i+1]`` fails to
+include elements with :math:`x=L_{i+1}` as boundary in subdomain :math:`\Omega_i`.
+
+The marking and numbering of all subdomains
+goes as follows:
+
+.. code-block:: python
+
+        cell_entity_dim = mesh.topology().dim()  # = d
+        subdomains = MeshFunction('uint', mesh, cell_entity_dim)
+        # Mark subdomains with numbers i=0,1,\ldots,s (=len(L)-1)
+        for i in range(s):
+            material_i = Material(i, L)
+            material_i.mark(subdomains, i)
+
+.. Note that the subdomain numbers must :math:`0,1,2,\ldots`.
+
+We have now all the geometric information about subdomains in
+a ``MeshFunction`` object ``subdomains``. The subdomain number
+of mesh entity number ``e``, here cell ``e``, is given
+by ``subdomains.array()[e]``.
+
+.. index:: ft16_define_layers.py
+
+The code presented so far had the purpose of preparing a mesh and
+a mesh function defining the subdomain. It is smart to put this code
+in a separate file, say ``ft16_define_layers.py``,
+and view the code as a preprocessing step.
+We must then store the computed mesh and mesh function in files.
+Another program may load the files and perform the actually
+solve the boundary-value problem.
+
+Storing the mesh itself and the mesh function in XML format is done by
+
+.. code-block:: python
+
+        file = File('hypercube_mesh.xml.gz')
+        file << mesh
+        file = File('layers.xml.gz')
+        file << subdomains
+
+This preprocessing code knows about the layer geometries and
+the corresponding :math:`k`, which
+must be propagated to the solver code. One idea is to let the
+preprocessing code write a Python module containing
+the ``L`` and ``k`` lists as well as an implementation of a
+function that evaluates the exact solution.
+The solver code can import this module to get access to ``L``,
+``k``, and the exact solution (for comparison).
+The relevant Python code for generating a Python module may take
+the form
+
+.. code-block:: python
+
+        f = open('u_layered.py', 'w')
+        f.write("""
+        import numpy
+        L = numpy.array(
+        #s, float)
+        k = numpy.array(
+        #s, float)
+        s = len(L)-1
+        
+        def u_e(x):
+            # First find which subdomain x0 is located in
+            for i in range(len(L)-1):
+                if L[i] <= x <= L[i+1]:
+                    break
+        
+            # Vectorized implementation of summation:
+            s2 = sum((L[1:s+1] - L[0:s])*(1.0/k[:]))
+            if i == 0:
+                u = (x - L[i])*(1.0/k[0])/s2
+            else:
+                s1 = sum((L[1:i+1] - L[0:i])*(1.0/k[0:i]))
+                u = ((x - L[i])*(1.0/k[i]) + s1)/s2
+            return u
+        
+        if __name__ == '__main__':
+            # Plot the exact solution
+            from scitools.std import linspace, plot, array
+            x = linspace(0, 1, 101)
+            u = array([u_e(xi) for xi in x])
+            print(u)
+            plot(x, u)
+        """
+        # (L, k))
+        f.close()
+
+.. _ftut:possion:nD:nmat:solve:
+
+Solving the PDE problem
+-----------------------
+
+The solver program starts with loading a prepared mesh with a mesh
+function representing the subdomains:
+
+.. code-block:: python
+
+        mesh = Mesh('hypercube_mesh.xml.gz')
+        subdomains = MeshFunction('uint', mesh, 'layers.xml.gz')
+
+The next task is to define the :math:`k` function as a finite element function.
+As we recall from the section :ref:`ftut:possion:2D:2mat:impl`, a :math:`k` that
+is constant in each element is suitable.
+We then follow the recipe from the section :ref:`ftut:possion:2D:2mat:impl`
+to compute :math:`k`:
+
+.. code-block:: python
+
+        V0 = FunctionSpace(mesh, 'DG', 0)
+        k = Function(V0)
+        
+        # Vectorized calculation
+        help = numpy.asarray(subdomains.array(), dtype=numpy.int32)
+        k.vector()[:] = numpy.choose(help, k_values)
+
+The essential boundary conditions are defined in the same way is
+in ``dn2_p2D.py`` from the section :ref:`ch:poisson0:multiple:Dirichlet`
+and therefore not repeated here.
+The variational problem is defined and solved in a standard manner,
+
+.. code-block:: python
+
+        u = TrialFunction(V)
+        v = TestFunction(V)
+        f = Constant(0)
+        a = k*dot(grad(u), grad(v))*dx
+        L = f*v*dx
+        
+        problem = VariationalProblem(a, L, bc)
+        u = problem.solve()
+
+Plotting the discontinuous ``k`` is often desired. Just a ``plot(k)``
+makes a continuous function out of ``k``, which is not what we want.
+Making a ``MeshFunction`` over cells and filling in the right :math:`k`
+values results in an object that can be displayed as a discontinuous field.
+A relevant code is
+
+.. code-block:: python
+
+        k_meshfunc = MeshFunction('double', mesh, mesh.topology().dim())
+        
+        # Scalar version
+        for i in range(len(subdomains.array())):
+            k_meshfunc.array()[i] = k_values[subdomains.array()[i]]
+        
+        # Vectorized version
+        help = numpy.asarray(subdomains.array(), dtype=numpy.int32)
+        k_meshfunc.array()[:] = numpy.choose(help, k_values)
+        
+        plot(k_meshfunc, title='k as mesh function')
+
+The file ``ft17_Poisson_layers.py`` contains the complete code.
+
+More Examples
+=============
+
+Many more topics could be treated in a FEniCS tutorial, e.g., how
+to solve systems of PDEs, how to work with mixed finite element
+methods, how to create more complicated meshes and mark boundaries,
+and how to create more advanced visualizations.  However, to limit the
+size of this tutorial, the examples end here.
+There are, fortunately, a rich set of FEniCS demos.
+The FEniCS documentation explains a collection of PDE solvers in detail:
+the Poisson equation, the mixed formulation for the Poission equation,
+the Biharmonic equation, the equations of hyperelasticity, the
+Cahn-Hilliard equation, and the incompressible Navier-Stokes equations.
+Both Python and C++ versions of these solvers are explained.
+An eigenvalue solver is also documented.
+In the ``fenics/demo`` directory of the DOLFIN source code tree you can
+find programs for these and many other examples, including
+the advection-diffusion equation,
+the equations of elastodynamics,
+a reaction-diffusion equation,
+various finite element methods for the Stokes problem,
+discontinuous Galerkin methods for
+the Poisson and advection-diffusion equations,
+and an eigenvalue problem arising from electromagnetic waveguide
+problem with Nedelec elements.
+There are also numerous demos on how to apply various functionality in
+FEniCS, e.g., mesh refinement and error control,
+moving meshes (for ALE methods),
+computing functionals over subsets of the mesh (such as
+lift and drag on bodies in flow), and
+creating separate subdomain meshes from a parent mesh.
+
+The project cbc.solve (`<https://launchpad.net/cbc.solve>`_) offers
+more complete PDE solvers for the Navier-Stokes equations, the
+equations of hyperelasticity, fluid-structure interaction, viscous
+mantle flow, and the bidomain model of electrophysiology.  Most of
+these solvers are described in the "FEniCS book" [Ref3]_
+(`<https://launchpad.net/fenics-book>`_).  Another project, cbc.rans
+(`<https://launchpad.net/cbc.rans>`_), offers an environment for very
+flexible and easy implementation of Navier-Stokes solvers and
+turbulence [Ref4]_ [Ref5]_. For example, cbc.rans
+contains an elliptic relaxation model for turbulent flow involving 18
+nonlinear PDEs.  FEniCS proved to be an ideal environment for
+implementing such complicated PDE models.  The easy construction of
+systems of nonlinear PDEs in cbc.rans has been further generalized to
+simplify the implementation of large systems of nonlinear PDEs in
+general.  The functionality is found in the cbc.pdesys package
+(`<https://launchpad.net/cbcpdesys>`_).
+
+Miscellaneous topics
+====================
+
+[**hpl 15**: Needs to be cleaned up.]
+
+Glossary
+--------
+
+.. index:: self
+
+.. index:: FEniCS
+
+.. index:: DOLFIN
+
+.. index:: Viper
+
+.. index:: UFL
+
+.. index:: class
+
+.. index:: instance
+
+.. index:: method (class)
+
+.. index:: attribute (class)
+
+Below we explain some key terms used in this tutorial.
+
+  FEniCS: name of a software suite composed of many individual software
+          components (see ``fenicsproject.org``). Some components are DOLFIN and
+	  Viper, explicitly referred to in this tutorial. Others are
+          FFC and FIAT, heavily used by the programs appearing in this tutorial,
+          but never explicitly used from the programs.
+
+  DOLFIN: a FEniCS component, more precisely a C++ library, with
+          a Python interface, for performing important actions in finite element
+          programs. DOLFIN makes use of many other FEniCS components and
+          many external software packages.
+
+  Viper:  a FEniCS component for quick visualization of finite element
+          meshes and solutions.
+
+  UFL:    a FEniCS component implementing the *unified form language*
+          for specifying finite element forms in FEniCS programs.
+          The definition of the forms, typically called ``a`` and ``L`` in
+          this tutorial, must have legal UFL syntax. The same applies to
+          the definition of functionals (see the section :ref:`ch:poisson0:functionals`).
+
+  Class (Python): a programming construction for creating objects
+          containing a set of variables and functions. Most
+          types of FEniCS objects are defined through the class concept.
+
+  Instance (Python): an object of a particular type, where the type is
+          implemented as a class. For instance,
+          ``mesh = UnitIntervalMesh(10)`` creates
+          an instance of class ``UnitIntervalMesh``, which is reached by the
+          name ``mesh``. (Class ``UnitIntervalMesh`` is actually just
+          an interface to a corresponding C++ class in the DOLFIN C++ library.)
+
+  Class method (Python): a function in a class, reached by dot
+          notation: ``instance_name.method_name``
+
+  argument ``self`` (Python): required first parameter in class methods,
+         representing a particular object of the class.
+         Used in method definitions, but never in calls to a method.
+         For example, if ``method(self, x)`` is the definition of
+         ``method`` in a class ``Y``, ``method`` is called as
+         ``y.method(x)``, where ``y`` is an instance of class ``Y``.
+         In a call like ``y.method(x)``, ``method`` is invoked with
+         ``self=y``.
+
+  Class attribute (Python): a variable in a class, reached by
+         dot notation: ``instance_name.attribute_name``
+
+Overview of objects and functions
+---------------------------------
+
+Most classes in FEniCS have an explanation of the purpose and usage
+that can be seen by using the general documentation command
+``pydoc`` for Python objects. You can type
+
+.. index:: pydoc
+
+.. code-block:: text
+
+        pydoc fenics.X
+
+to look up documentation of a Python class ``X`` from the DOLFIN
+library (``X`` can be ``UnitSquareMesh``, ``Function``,
+``Viper``, etc.). Below is an overview of the most important classes
+and functions
+in FEniCS programs, in the order they typically appear within programs.
+
+``UnitSquareMesh(nx, ny)``: generate mesh over the unit square
+:math:`[0,1]\times [0,1]` using ``nx`` divisions in :math:`x` direction and
+``ny`` divisions in :math:`y` direction. Each of the ``nx*ny`` squares
+are divided into two cells of triangular shape.
+
+``UnitIntervalMesh``, ``UnitCubeMesh``, ``UnitCircleMesh``, ``UnitSphere``,
+``IntervalMesh``, ``RectangleMesh``, and ``BoxMesh``: generate mesh over
+domains of simple geometric shape, see the section :ref:`ftut:prepro`.
+
+``FunctionSpace(mesh, element_type, degree)``:
+a function space defined over a mesh, with a given element type
+(e.g., ``'Lagrange'`` or ``'DG'``), with basis functions as polynomials of
+a specified degree.
+
+``Expression(formula, p1=v1, p2=v2, ...)``:
+a scalar- or vector-valued function, given as a
+mathematical expression ``formula`` (string) written in C++ syntax.
+The spatial coordinates in the expression are named
+``x[0]``, ``x[1]``, and ``x[2]``, while time and other
+physical parameters can be represented as symbols ``p1``, ``p2``,
+etc., with corresponding values ``v1``, ``v2``, etc., initialized
+through keyword arguments. These parameters become attributes,
+whose values can be modified when desired.
+
+``Function(V)``: a scalar- or vector-valued finite element field in
+the function space ``V``. If ``V`` is a ``FunctionSpace`` object,
+``Function(V)`` becomes a scalar field, and with ``V`` as a
+``VectorFunctionSpace`` object, ``Function(V)`` becomes a
+vector field.
+
+``SubDomain``: class for defining a subdomain, either a part of the
+boundary, an internal boundary, or a part of the domain.
+The programmer must subclass ``SubDomain`` and implement the
+``inside(self, x, on_boundary)`` function
+(see the section :ref:`ch:poisson0:impl`) for telling whether a
+point ``x`` is inside the subdomain or not.
+
+``Mesh``: class for representing a finite element mesh, consisting of
+cells, vertices, and optionally faces, edges, and facets.
+
+``MeshFunction``: tool for marking parts of the domain or the boundary.
+Used for variable coefficients ("material properties", see
+the section :ref:`ftut:possion:2D:2mat:impl`) or for
+boundary conditions (see the section :ref:`ch:poisson0:multi:bc`).
+
+``DirichletBC(V, value, where)``: specification of Dirichlet (essential)
+boundary conditions via a function space ``V``, a function
+``value(x)`` for computing the value of the condition at a point ``x``,
+and a specification ``where`` of the boundary, either as a
+``SubDomain`` subclass instance, a plain function, or as a
+``MeshFunction`` instance.
+In the latter case, a 4th argument is provided to describe which subdomain
+number that describes the relevant boundary.
+
+``TestFunction(V)``: define a test function on a space ``V`` to be used
+in a variational form.
+
+``TrialFunction(V)``: define a trial function on a space ``V`` to be used
+in a variational form to represent the unknown in a finite element problem.
+
+``assemble(X)``: assemble a matrix, a right-hand side, or a functional,
+given a from ``X`` written with UFL syntax.
+
+``assemble_system(a, L, bcs)``: assemble the matrix and the right-hand
+side from a bilinear (``a``) and linear (``L``) form written with UFL
+syntax. The ``bcs`` parameter holds one or more ``DirichletBC`` objects.
+
+``LinearVariationalProblem(a, L, u, bcs)``: define a variational problem,
+given a bilinear (``a``) and linear (``L``) form, written with UFL
+syntax, and one or more ``DirichletBC`` objects stored in ``bcs``.
+
+``LinearVariationalSolver(problem)``: create solver object for a linear
+variational problem object (``problem``).
+
+``solve(A, U, b)``: solve a linear system with ``A`` as coefficient
+matrix (``Matrix`` object), ``U`` as unknown (``Vector`` object),
+and ``b`` as right-hand side (``Vector`` object).
+Usually, ``U = u.vector()``, where
+``u`` is a ``Function`` object representing the unknown finite
+element function of the problem, while
+``A`` and ``b`` are computed by calls to ``assemble``
+or ``assemble_system``.
+
+``plot(q)``: quick visualization of a mesh, function, or mesh function
+``q``, using a built-in, VTK-based component in FEniCS.
+
+``interpolate(func, V)``: interpolate a formula or finite
+element function ``func`` onto the function space ``V``.
+
+``project(func, V)``: project a formula or finite element function ``func``
+onto the function space ``V``.
+
+Handy methods in key FEniCS objects
+-----------------------------------
+
+.. index:: pydoc
+
+In general,
+``pydoc fenics.X`` shows the documentation of any name ``X``
+and lists all the methods (i.e.g, functions in the class) that
+can be called. Below, we list just a few, but very useful, methods
+in the most central FEniCS classes.
+
+Mesh
+~~~~
+
+Let ``mesh`` be a ``Mesh`` object.
+
+  * ``mesh.coordinates()`` returns an array of the coordinates of
+     the vertices in the mesh.
+
+  * ``mesh.num_cells()`` returns the number of cells (triangles)
+    in the mesh,
+
+  * ``mesh.num_vertices()`` returns the number of vertices in
+    the mesh (with our choice of linear Lagrange elements this equals the
+    number of nodes, ``len(u_array)``, or dimension of the space ``V.dim()``),
+
+  * ``mesh.cells()`` returns the vertex numbers of the vertices in
+    each cell as a ``numpy`` array with shape
+    (*number of cells*, *number of vertices in a cell*),
+
+  * ``mesh.hmin()`` returns the minimum cell diameter ("smallest cell"),
+
+  * ``mesh.hmax()`` returns the maximum cell diameter ("largest cell").
+
+  * ``mesh.topology().dim()`` returns the number of physical dimensions of
+    the mesh.
+
+Writing ``print(mesh)`` dumps a short, pretty-print description
+of the mesh (``print(mesh)`` actually displays the result of ``str(mesh)``,
+which defines the pretty print):
+
+.. code-block:: text
+
+        <Mesh of topological dimension 2 (triangles) with
+        16 vertices and 18 cells, ordered>
+
+Function space
+~~~~~~~~~~~~~~
+
+Let ``V`` be a ``FunctionSpace`` object.
+
+ * ``V.mesh()`` returns the associated mesh.
+
+ * ``V.dim()`` returns the dimension (number of degrees of freedom).
+
+ * ``V.ufl_element()`` returns the associated finite element.
+
+Function
+~~~~~~~~
+
+Let ``u`` be a ``Function`` object.
+
+ * ``u.function_space()`` returns the associated function space.
+
+ * ``u.vector()`` returns the vector object of degrees of freedom.
+
+ * ``u.vector().array()`` returns a copy of the degrees of freedom
+   in a ``numpy`` array.
+
+.. _ftut:Epetra:
+
+Using a backend-specific solver
+-------------------------------
+
+
+.. warning::
+    The linear algebra backends in FEniCS have recently changed. This
+    section is not yet up-to-date.
+
+
+
+
+.. index:: down-casting matrices and vectors
+
+.. index:: PETSc
+
+The linear algebra backend determines the specific data structures
+that are used in the ``Matrix`` and ``Vector`` classes. For example, with
+the PETSc backend, ``Matrix`` encapsulates a PETSc matrix storage
+structure, and ``Vector`` encapsulates a PETSc vector storage structure.
+Sometimes one wants to perform operations directly on (say) the
+underlying PETSc objects. These can be fetched by
+
+.. code-block:: python
+
+        A_PETSc =
+        down_cast(A).mat() b_PETSc = down_cast(b).vec() U_PETSc =
+        down_cast(u.vector()).vec()
+
+Here, ``u`` is a ``Function``, ``A`` is a
+``Matrix``, and ``b`` is a ``Vector``.  The same syntax applies if we want
+to fetch the underlying Epetra, uBLAS, or MTL4 matrices and vectors.
+
+.. ../../../la/trilinos/python/demo.py
+
+.. index:: Trilinos
+
+.. index:: Epetra
+
+Sometimes one wants to implement tailored solution algorithms, using
+special features of the underlying numerical packages.  Here is an
+example where we create an ML preconditioned Conjugate Gradient solver
+by programming with Trilinos-specific objects directly.  Given a
+linear system :math:`AU=b`, represented by a ``Matrix`` object ``A``, and two
+``Vector`` objects ``U`` and ``b`` in a Python program, the purpose is to
+set up a solver using the Aztec Conjugate Gradient method from
+Trilinos' Aztec library and combine that solver with the algebraic
+multigrid preconditioner ML from the ML library in Trilinos. Since the
+various parts of Trilinos are mirrored in Python through the
+PyTrilinos package, we can operate directly on Trilinos-specific
+objects.
+
+.. code-block:: python
+
+        try:
+            from PyTrilinos import Epetra, AztecOO, TriUtils, ML
+        except:
+            print('''You Need to have PyTrilinos with
+        Epetra, AztecOO, TriUtils and ML installed
+        for this demo to run''')
+            exit()
+        
+        from fenics import *
+        
+        if not has_la_backend('Epetra'):
+            print('Warning: Dolfin is not compiled with Trilinos')
+            exit()
+        
+        parameters['linear_algebra_backend'] = 'Epetra'
+        
+        # create matrix A and vector b in the usual way
+        # u is a Function
+        
+        # Fetch underlying Epetra objects
+        A_epetra = down_cast(A).mat()
+        b_epetra = down_cast(b).vec()
+        U_epetra = down_cast(u.vector()).vec()
+        
+        # Sets up the parameters for ML using a python dictionary
+        ML_param = {"max levels"        : 3,
+                    "output"            : 10,
+                    "smoother: type"    : "ML symmetric Gauss-Seidel",
+                    "aggregation: type" : "Uncoupled",
+                    "ML validate parameter list" : False
+        }
+        
+        # Create the preconditioner
+        prec = ML.MultiLevelPreconditioner(A_epetra, False)
+        prec.SetParameterList(ML_param)
+        prec.ComputePreconditioner()
+        
+        # Create solver and solve system
+        solver = AztecOO.AztecOO(A_epetra, U_epetra, b_epetra)
+        solver.SetPrecOperator(prec)
+        solver.SetAztecOption(AztecOO.AZ_solver, AztecOO.AZ_cg)
+        solver.SetAztecOption(AztecOO.AZ_output, 16)
+        solver.Iterate(MaxIters=1550, Tolerance=1e-5)
+        
+        plot(u)
+
