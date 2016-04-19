@@ -3,22 +3,19 @@
 # #include "mako_code.txt"
 # #endif
 
-
-======= The time-dependent diffusion equation =======
+======= The heat equation =======
 label{ch:fundamentals:diffusion}
 
-% if FORMAT == 'ipynb':
-Previous examples on using FEniCS to solve the Poisson equation
-% else:
-The examples in Section ref{ch:poisson0:impl}
-% endif
-illustrate that solving linear, stationary PDE problems with the aid
-of FEniCS is easy and requires little programming.  FEniCS clearly
-automates the spatial discretization by the finite element method. One
-can use a separate, one-dimensional finite element method in the
-domain as well, but very often, it is easier to just use a finite
-difference method, or to formulate the problem as an ODE system and
-leave the time-stepping to an ODE solver.
+As a first extension of the Problem from the previous chapter, we
+consider the time-dependent heat equation, or time-dependent diffusion
+equation. This is the natural extension of the Poisson equation
+describing the stationary distribution of heat in a body to a
+time-dependent problem.
+
+We will see that by discretizing time into small time intervals and
+applying standard time-stepping methods, we can solve the heat
+equation by solving a sequence of variational problems, much like the
+one we encountered for the Poisson equation.
 
 #The solution of
 #nonlinear problems, as we showed in Section
@@ -33,9 +30,6 @@ leave the time-stepping to an ODE solver.
 #We shall explain how
 #easily this is accomplished through examples.
 
-[hpl: Should exemplify all three approaches? With emphasis on
-simple finite differences?]
-
 ===== Variational formulation =====
 label{ftut:timedep:diffusion1}
 idx{time-dependent PDEs}
@@ -46,16 +40,16 @@ Our model problem for time-dependent PDEs reads
 \begin{align}
 {\partial u\over\partial t} &= \nabla^2 u + f\hbox{ in }\Omega,
 label{ch:diffusion0:pde1}\\
-u &= u_0\hbox{ on } \partial \Omega,
+u &= u_{\mathrm{b}}\hbox{ on } \partial \Omega,
 label{ch:diffusion0:pde1:bc}\\
-u &= I \mbox{ at } t=0\tp
+u &= u_0 \mbox{ at } t=0\tp
 label{ch:diffusion0:pde1:ic}
 \end{align}
 !et
 Here, $u$ varies with space and time, e.g., $u=u(x,y,t)$ if the spatial
 domain $\Omega$ is two-dimensional. The source function $f$ and the
-boundary values $u_0$ may also vary with space and time.
-The initial condition $I$ is a function of space only.
+boundary values $u_{\mathrm{b}}$ may also vary with space and time.
+The initial condition $u_0$ is a function of space only.
 
 A straightforward approach to solving time-dependent PDEs by the
 finite element method is to first discretize the time derivative by a
@@ -63,10 +57,10 @@ finite difference approximation, which yields a recursive set of
 stationary problems, and then turn each stationary problem into a
 variational formulation.
 
-Let superscript $k$ denote a quantity at time $t_k$, where $k$ is an
-integer counting time levels. For example, $u^k$ means $u$ at time
-level $k$.  A finite difference discretization in time first consists
-in sampling the PDE at some time level, say $k$:
+Let superscript $n$ denote a quantity at time $t_n$, where $n$ is an
+integer counting time levels. For example, $u^n$ means $u$ at time
+level $n$. A finite difference discretization in time first consists
+in sampling the PDE at some time level, say $n$:
 
 !bt
 \begin{equation} {\partial \over\partial t}u^k = \nabla^2 u^k + f^k\tp
@@ -74,11 +68,11 @@ label{ch:diffusion0:pde1:tk}
 \end{equation}
 !et
 The time-derivative can be approximated by a finite difference.
-For simplicity and stability reasons we choose a
+For simplicity and stability reasons, we choose a
 simple backward difference:
 
 !bt
-\begin{equation} {\partial \over\partial t}u^k\approx {u^k - u^{k-1}\over{\dt}},
+\begin{equation} {\partial \over\partial t}u^k\approx {u^n - u^{n-1}\over{\dt}},
 label{ch:diffusion0:BE}
 \end{equation}
 !et
@@ -87,28 +81,32 @@ Inserting (ref{ch:diffusion0:BE}) in (ref{ch:diffusion0:pde1:tk}) yields
 
 !bt
 \begin{equation}
-{u^k - u^{k-1}\over{\dt}} = \nabla^2 u^k + f^k\tp
+{u^n - u^{n-1}\over{\dt}} = \nabla^2 u^n + f^n\tp
 label{ch:diffusion0:pde1:BE}
 \end{equation}
 !et
 This is our time-discrete version of the diffusion PDE
-(ref{ch:diffusion0:pde1}).
+(ref{ch:diffusion0:pde1}). This is a so-called *backward Euler* or
+*implicit Euler* discretization. Alternatively, we may also view this
+as a finite element discretization in time in the form of the first order
+$\mathrm{dG}(0)$ method, which here is identical to the backward Euler
+method.
 
 We may reorder (ref{ch:diffusion0:pde1:BE}) so
-that the left-hand side contains the terms with the unknown $u^k$ and
+that the left-hand side contains the terms with the unknown $u^n$ and
 the right-hand side contains computed terms only. The result
 is a recursive set of spatial
-(stationary) problems for $u^k$ (assuming $u^{k-1}$ is known from
+(stationary) problems for $u^n$ (assuming $u^{n-1}$ is known from
 computations at the previous time level):
 
 !bt
 \begin{align}
-u^0 &= I, label{ch:diffusion0:pde1:u0}\\
-u^k - {\dt}\nabla^2 u^k &=  u^{k-1} + {\dt} f^k,\quad k=1,2,\ldots
+u^0 &= u_0, label{ch:diffusion0:pde1:u0}\\
+u^n - {\dt}\nabla^2 u^n &=  u^{n-1} + {\dt} f^n,\quad n=1,2,\ldots
 label{ch:diffusion0:pde1:uk}
 \end{align}
 !et
-Given $I$, we can solve for $u^0$, $u^1$, $u^2$, and so on.
+Given $u_0$, we can solve for $u^0$, $u^1$, $u^2$, and so on.
 
 An alternative to (ref{ch:diffusion0:pde1:uk}), which can be
 convenient in implementations, is to collect
@@ -116,7 +114,7 @@ all terms on one side of the equality sign:
 
 !bt
 \begin{equation}
-F(u;v) = u^k - {\dt}\nabla^2 u^k -  u^{k-1} - {\dt} f^k = 0,\quad k=1,2,\ldots
+u^n - {\dt}\nabla^2 u^n -  u^{n-1} - {\dt} f^n = 0,\quad n=1,2,\ldots
 label{ch:diffusion0:pde1:uk2}
 \end{equation}
 !et
@@ -126,7 +124,7 @@ We use a finite element method to solve
 (ref{ch:diffusion0:pde1:uk}) or (ref{ch:diffusion0:pde1:uk2}).  This
 requires turning the equations into weak forms.  As usual, we multiply
 by a test function $v\in \hat V$ and integrate second-derivatives by
-parts. Introducing the symbol $u$ for $u^k$ (which is natural in the
+parts. Introducing the symbol $u$ for $u^n$ (which is natural in the
 program), the resulting weak form arising from
 formulation (ref{ch:diffusion0:pde1:uk})
 can be conveniently written in
@@ -141,11 +139,10 @@ where
 \begin{align}
 a(u,v) &= \int_\Omega\left( uv + {\dt}
 \nabla u\cdot \nabla v\right) \dx, label{ch:diffusion0:pde1:a}\\
-L(v) &= \int_\Omega \left(u^{k-1} + {\dt}  f^k\right)v \dx\tp
+L(v) &= \int_\Omega \left(u^{n-1} + {\dt}  f^n\right)v \dx\tp
 label{ch:diffusion0:pde1:L}
 \end{align}
 !et
-
 The alternative form (ref{ch:diffusion0:pde1:uk2}) has an
 abstract formulation
 
@@ -156,15 +153,17 @@ where
 
 !bt
 \begin{equation}
-F = \int_\Omega\left( uv + {\dt}
+F(u; v) = \int_\Omega\left( uv + {\dt}
 \nabla u\cdot \nabla v -
-\left(u^{k-1} - {\dt}  f^k\right)v\right) \dx\tp
+u^{n-1} - {\dt}  f^n\right)v \dx\tp
 label{ch:diffusion0:pde1:F}
 \end{equation}
 !et
 
-The initial condition (ref{ch:diffusion0:pde1:u0})
-can also be turned into a weak form,
+In addition to the variational problem to be solve in each time step,
+we also need to approximate the initial condition
+(ref{ch:diffusion0:pde1:u0}). This equation can also be turned into a
+variational problem:
 
 !bt
 \[ a_0(u,v)=L_0(v),\]
@@ -174,43 +173,34 @@ with
 !bt
 \begin{align}
 a_0(u,v) &= \int_\Omega uv \dx, label{ch:diffusion0:pde1:a0}\\
-L_0(v) &= \int_\Omega Iv \dx\tp label{ch:diffusion0:pde1:L0}
+L_0(v) &= \int_\Omega u_0 v \dx\tp label{ch:diffusion0:pde1:L0}
 \end{align}
 !et
-The alternative is to construct $u_0$ by just interpolating $I$
-(which is also a much cheaper operation since no linear system is
-involved).
-
-The continuous variational problem is to find
-$u^0\in V$ such that $a_0(u^0,v)=L_0(v)$ holds for all $v\in\hat V$,
-and then find $u^k\in V$
-such that $a(u^k,v)=L(v)$ for all $v\in\hat V$,
-or alternatively, $F(u^k,v)=0$ for all $v\in\hat V$,
-$k=1,2,\ldots$.
-
-Approximate solutions in space are found by restricting the functional
-spaces $V$ and $\hat V$ to finite-dimensional spaces, exactly as we
-have done in the Poisson problems.  We shall use the symbol $u$ for
-the finite element approximation at time $t_k$. In case we need to
-distinguish this space-time discrete approximation from the exact
-solution of the continuous diffusion problem, we use $\uex$ for the
-latter.  By $u^{k-1}$ we mean the finite element approximation of the
-solution at time $t_{k-1}$.
-
-Instead of solving (ref{ch:diffusion0:pde1:u0}) by a finite element
-method, i.e., projecting $I$ onto $V$ via the problem
-$a_0(u,v)=L_0(v)$, we could simply interpolate $u^0$ from $I$. That
-is, if $u^0=\sum_{j=1}^N U^0_j\phi_j$, we simply set $U_j=I(x_j,y_j)$,
+When solving this variational problem for $u^0$, $u^0$ becomes the
+$L^2$ projection of the given initial value $u_0$ into the finite
+element space. The alternative is to construct $u^0$ by just
+interpolating the initial value $u_0$; that is,
+if $u^0=\sum_{j=1}^N U^0_j\phi_j$, we simply set $U_j=u_0(x_j,y_j)$,
 where $(x_j,y_j)$ are the coordinates of node number $j$. We refer to
 these two strategies as computing the initial condition by either
-projecting $I$ or interpolating $I$.  Both operations are easy to
-compute through one statement, using either the `project` or
+projection or interpolation. Both operations are easy to
+compute in FEniCS through one statement, using either the `project` or
 `interpolate` function.
+
+In summary, we thus need to solve the follow sequence of variational
+problems to compute the finite element solution to the heat equation:
+find $u^0\in V$ such that $a_0(u^0,v)=L_0(v)$ holds for all $v\in\hat V$,
+and then find $u^n\in V$
+such that $a(u^n,v)=L(v)$ for all $v\in\hat V$,
+or alternatively, $F(u^n,v)=0$ for all $v\in\hat V$,
+for $n=1,2,\ldots$.
+
+[AL: I AM HERE]
 
 ===== A simple implementation =====
 label{ftut:timedep:diffusion1:impl}
 
-Our program needs to implement the time stepping explicitly, but can
+Our program needs to implement the time-stepping explicitly, but can
 rely on FEniCS to easily compute $a_0$, $L_0$, $F$, $a$, and $L$, and solve
 the linear systems for the unknowns.
 
@@ -329,7 +319,7 @@ F = u*v*dx + dt*dot(grad(u), grad(v))*dx - (u_1 + dt*f)*v*dx
 a, L = lhs(F), rhs(F)
 !ec
 
-Finally, we perform the time stepping in a loop:
+Finally, we perform the time-stepping in a loop:
 
 !bc pycod
 u = Function(V)   # the unknown at a new time level
