@@ -1,9 +1,9 @@
 """
 FEniCS tutorial demo program: Poisson equation with Dirichlet conditions.
-Simplest example of computation and visualization with FEniCS.
+Test problem is chosen to give an exact solution at all nodes of the mesh.
 
-  -Laplace(u) = f  on the unit square
-            u = u0 on the boundary
+  -Laplace(u) = f   in the unit square
+            u = u0  on the boundary
 
   u = 1 + x^2 + 2y^2 = u0
   f = -6
@@ -31,7 +31,7 @@ f = Constant(-6.0)
 a = dot(grad(u), grad(v))*dx
 L = f*v*dx
 
-# Compute solution
+# Solve variational problem
 u = Function(V)
 solve(a == L, u, bc)
 

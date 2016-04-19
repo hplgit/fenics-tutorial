@@ -155,7 +155,7 @@ where
 \begin{equation}
 F(u; v) = \int_\Omega\left( uv + {\dt}
 \nabla u\cdot \nabla v -
-u^{n-1} - {\dt}  f^n\right)v \dx\tp
+(u^{n-1} + {\dt} f^n\right)v \dx\tp
 label{ch:diffusion0:pde1:F}
 \end{equation}
 !et
@@ -195,8 +195,6 @@ such that $a(u^n,v)=L(v)$ for all $v\in\hat V$,
 or alternatively, $F(u^n,v)=0$ for all $v\in\hat V$,
 for $n=1,2,\ldots$.
 
-[AL: I AM HERE]
-
 ===== A simple implementation =====
 label{ftut:timedep:diffusion1:impl}
 
@@ -206,28 +204,30 @@ the linear systems for the unknowns.
 
 === Test problem ===
 
-Before starting the coding, we shall construct a problem where it is
-easy to determine if the calculations are correct. The simple backward
-time difference is exact for linear functions, so we decide to have
-a linear variation in time. Combining a second-degree polynomial in space
-with a linear term in time,
+Just as for the Poisson problem from the previous chapter, we
+construct a test problem that makes it easy to determine if the
+calculations are correct. Since we know that our first-order
+time-stepping scheme is exact for linear functions, we create a test
+problem which has a linear variation in time. We combine this with a
+quadratic variation in space. We thus take
 
 !bt
 \begin{equation} u = 1 + x^2 + \alpha y^2 + \beta t,
 label{ch:diffusion0:pde1:u0test}
 \end{equation}
 !et
-yields a function whose computed values at the nodes will be exact,
-regardless of the size of the elements and $\dt$, as long as the mesh
-is uniformly partitioned.  By inserting
-(ref{ch:diffusion0:pde1:u0test}) in the PDE problem
-(ref{ch:diffusion0:pde1}), it follows that $u_0$ must be given as
-(ref{ch:diffusion0:pde1:u0test}) and that $f(x,y,t)=\beta - 2 -
-2\alpha$ and $I(x,y)=1+x^2+\alpha y^2$.
+which yields a function whose computed values at the nodes will be
+exact, regardless of the size of the elements and $\dt$, as long as
+the mesh is uniformly partitioned. By inserting
+(ref{ch:diffusion0:pde1:u0test}) into the heat equation
+(ref{ch:diffusion0:pde1}), we find that the right-hand side $f$ must
+be given by $f(x,y,t)=\beta - 2 - 2\alpha$. The boundary value
+$u_{\mathrm{b}}$ is $1 + x^2 + \alpha y^2 + \beta t$ and the initial
+value $u_0$ is $1 + x^2 + \alpha y^2$.
 
 idx{`${prog["diffusion_flat1"]}.py`}
 
-=== The code ===
+=== FEniCS implementation ===
 
 % if FORMAT == 'ipynb':
 We first create a mesh:
@@ -238,16 +238,16 @@ from fenics import *
 import numpy as np
 
 # Create mesh and define function space
-nx = ny = 4
+nx = ny = 8
 mesh = UnitSquareMesh(nx, ny)
 V = FunctionSpace(mesh, 'P', 1)
 !ec
 % endif
 
 A new programming issue is how to deal with functions that vary in
-space *and time*, such as the boundary condition $u_0$ given by
-(ref{ch:diffusion0:pde1:u0test}).  A natural solution is to apply an
-`Expression` object with time $t$ as a parameter, in addition to the
+space *and time*, such as the boundary condition $u_{\mathrm{b}}(x, y,
+t) = 1 + x^2 + \alpha y^2 + \beta t$. A natural solution is to use a
+FEniCS `Expression` with time $t$ as a parameter, in addition to the
 parameters $\alpha$ and $\beta$:
 
 !bc pycod
@@ -255,49 +255,48 @@ parameters $\alpha$ and $\beta$:
 # Create mesh and define function space
 % endif
 alpha = 3; beta = 1.2
-u0 = Expression('1 + x[0]*x[0] + alpha*x[1]*x[1] + beta*t',
-                alpha=alpha, beta=beta, t=0)
+u_b = Expression('1 + x[0]*x[0] + alpha*x[1]*x[1] + beta*t',
+                 degree=2, alpha=alpha, beta=beta, t=0)
 !ec
 This function expression has the components of `x` as independent
 variables, while `alpha`, `beta`, and `t` are parameters.  The
 parameters can later be updated as in
 
 !bc pycod-t
-u0.t = t
+u_b.t = t
 !ec
 
 The essential boundary conditions, along the entire boundary in this case,
-are set in the usual way,
+are set in the usual way:
 
 !bc pycod
-def boundary(x, on_boundary):  # define the Dirichlet boundary
+def boundary(x, on_boundary):
     return on_boundary
 
 bc = DirichletBC(V, u0, boundary)
 !ec
 
-We shall use `u` for the unknown $u$ at the new time level and `u_1`
-for $u$ at the previous time level.  The initial value of `u_1`,
-implied by the initial condition on $u$, can be computed by either
-projecting or interpolating $I$.  The $I(x,y)$ function is available
-in the program through `u0`, as long as `u0.t` is zero.  We can then
-do
+We shall use `u` for the unknown $u$ at the new time level and `u_p`
+for $u$ at the previous time level. The initial value of `u_p` can be
+computed by either projection or interpolation of $u_0$. Since we set
+`t = 0` for the boundary value `u_b`, we can use this also to specify
+the initial condition. We can then do
 
 !bc pycod-t
-u_1 = interpolate(u0, V)
+u_p = project(u_b, V)
 # or
-u_1 = project(u0, V)
+u_p = interpolate(u_b, V)
 !ec
 
 !bc pyhid
-u_1 = interpolate(u0, V)
+u_p = interpolate(u_b, V)
 !ec
 
 !bwarning Projecting versus interpolating the initial condition
 To actually recover the
 exact solution (ref{ch:diffusion0:pde1:u0test}) to machine precision,
 it is important not to compute the discrete initial condition by
-projecting $I$, but by interpolating $I$ so that the degrees of freedom have
+projecting $u_0$, but by interpolating $u_0$ so that the degrees of freedom have
 exact values at $t=0$ (projection results in approximative values at the
 nodes).
 !ewarning
@@ -309,36 +308,39 @@ $L$. The latter is convenient, especially in more complicated problems,
 so we illustrate that construction:
 
 !bc pycod
-dt = 0.3      # time step
-
 u = TrialFunction(V)
 v = TestFunction(V)
 f = Constant(beta - 2 - 2*alpha)
 
-F = u*v*dx + dt*dot(grad(u), grad(v))*dx - (u_1 + dt*f)*v*dx
+F = u*v*dx + dt*dot(grad(u), grad(v))*dx - (u_p + dt*f)*v*dx
 a, L = lhs(F), rhs(F)
 !ec
 
 Finally, we perform the time-stepping in a loop:
 
 !bc pycod
-u = Function(V)   # the unknown at a new time level
-T = 2             # total simulation time
-t = dt
-
+u = Function(V)
+t = 0
+for n in xrange(num_steps):
 while t <= T:
-    u0.t = t
+
+    # Update current time
+    t += dt
+    u_b.t = t
+
+    # Solve variational problem
     solve(a == L, u, bc)
 
 % if FORMAT == 'ipynb':
-    # Verify
-    u_e = interpolate(u0, V)
+    # Compute error
+    u_e = interpolate(u_b, V)
     error = np.abs(u_e.vector().array() -
                    u.vector().array()).max()
-    print('error, t=%.2f: %-10.3g' % (t, max_error))
+    print('t = %.2f: error = %.3g' % (t, error))
 % endif
-    t += dt
-    u_1.assign(u)
+
+    # Update previous solution
+    u_p.assign(u)
 !ec
 
 !bwarning Remember to update expression objects with the current time!
@@ -355,53 +357,60 @@ and the exact solution, which we must include in order to verify the
 implementation.  As in the Poisson equation example in
 Section ref{ch:poisson0:impl:dissect}, we compute the
 difference between the array of nodal values of `u` and the array of
-the interpolated exact solution.  The following code is to be included
-inside the loop, after `u` is found:
+the interpolated exact solution. This may be done as follows:
 
 !bc pycod
-u_e = interpolate(u0, V)
-error = np.abs(u_e.vector().array() -
-               u.vector().array()).max()
-print('error, t=%.2f: %-10.3g' % (t, max_error))
+u_e = interpolate(u_b, V)
+error = np.abs(u_e.vector().array() - u.vector().array()).max()
+print('error, t=%.2f: %-10.3g' % (t, error))
 !ec
 
 The complete program code for this time-dependent case goes as follows:
+
+[AL: Rename program to `heat_equation.py` or just `heat.py`.]
 
 @@@CODE src/diffusion_flat1.py fromto: from fenics import@
 The code is available in the
 file "`${prog['diffusion_flat1']}.py`": "${src_url}/diffusion_flat1.py".
 % endif
 
-
 ===== Diffusion of a Gaussian function =====
 
 === The mathematical problem ===
 
-Now we want to solve a more physical problem, namely the diffusion of
-a Gaussian hill. It means that the initial condition is given by
+Now we want to solve a more relevant test problem, namely the diffusion of
+a Gaussian hill. It means that the initial value is given by
 
 !bt
-\[ I(x,y)= e^{-ax^2 - ay^2}\]
+\[ u_0(x,y)= e^{-ax^2 - ay^2}\]
 !et
-on a domain $[-2,2]\times [2,2]$. A possible value of $a$ is 5.
+on a domain $[-2,2]\times [2,2]$. We will take $a = 5$. For this
+problem we will use homogeneous Dirichlet boundary conditions ($u = 0$).
 
-=== Implementation ===
+=== FEniCS implementation ===
 
-What are the necessary changes to the previous program?
+Which are the required changes to our previous program? One major
+change is that domain is not a unit square anymore. We also want to
+use much higher resolution. The new domain can
+be created easily in FEniCS using `RectangleMesh`:
 
- o The domain is not the unit square and it needs much higher resolution: `mesh = RectangleMesh(Point(-2,-2), Point(2,2), 30, 30)`.
- o The boundary condition is zero everywhere: `DirichletBC(V, Constant(0), boundary)`.
- o The initial condition is different: `I = Expression('exp(...)')`.
- o The time step should be sufficiently small: `dt = 0.01` or `dt = 0.05`.
- o The right-hand side function `f` is zero: `f = Constant(0)` (just `0`
-   will given an error as functions in FEniCS must be `Expression`, `Function`
-   (over a mesh) or `Constant`).
- o The end time for the simulation must be longer: `T = 0.8`.
- o The initial condition and the solution inside the time loop should be
-   stored to file in VTK format for visualization: `vtkfile << (u, t)`.
- o We can add a `plot(u)` command inside the time loop as well.
+!bc pycod
+nx = ny = 30
+mesh = RectangleMesh(Point(-2,-2), Point(2,2), nx, ny)
+!ec
+
+We also need to redefine the initial condition and boundary condition.
+Both are easily changed by defining a new `Expression` and by setting
+$u = 0$ on the boundary. We will also save the solution to file in VTK
+format in each time step:
+
+!bc pycod
+vtkfile << (u, t)
+!ec
 
 The complete program appears below.
+
+[AL: Rename program to `gaussian_diffusion.py`.]
 
 @@@CODE src/diffusion_flat1_gaussian.py fromto: from fenics import@
 
@@ -412,11 +421,13 @@ PLEASE have in-browser visualization!
 % if FORMAT != 'ipynb':
 === Visualization in ParaView ===
 
-Start ParaView, choose _File - Open_, open the file `diffusion.pvd`,
-click the green _Apply_ button on the left to see the initial condition
-being plotting. Choose _View - Animation View_. Click on the play button
-or (better) the next frame button in the row of buttons at the top of the GUI
-to see the evolution of the scalar field you just have computed:
+To visualize the diffusion of the Gaussian hill, start ParaView,
+choose _File - Open_, open the file `gaussian_diffusion.pvd`, click
+the green _Apply_ button on the left to see the initial condition
+being plotting. Choose _View - Animation View_. Click on the play
+button or (better) the next frame button in the row of buttons at the
+top of the GUI to see the evolution of the scalar field you have just
+computed:
 
 <linebreak>
 <linebreak>
@@ -442,6 +453,9 @@ Choose _File - Save Animation..._ to save the animation to the OGG video format.
 
 MOVIE: [mov/diffusion0.ogg]
 % endif
+Once the animation has been saved to file, you can play the animation
+offline using a player such as mplayer or VLC. Below is a sequence of
+snapshots of the solution.
 
 FIGURE: [fig/diffusion0_paraview_animation, width=600 frac=0.8]
 

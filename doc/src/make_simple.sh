@@ -49,17 +49,12 @@ doconce subst 'frametitlebackgroundcolor=.*?,' 'frametitlebackgroundcolor=gray!5
 
 # Compile latex
 system pdflatex $name
-system bibtex $name
-system makeindex $name
-pdflatex $name
-pdflatex $name
+#system bibtex $name
+#system makeindex $name
+#pdflatex $name
+#pdflatex $name
 }
 
 # Printed book
 compile --device=paper EXV=False
 cp $name.pdf fenics-tutorial${bookno}-4print.pdf
-cp $name.log fenics-tutorial${bookno}-4print.log  # save to track the no of pages!
-
-# PDF online ebook (exetended version with exercises etc.)
-compile --device=screen EXV=True
-cp $name.pdf fenics-tutorial${bookno}-4screen.pdf
