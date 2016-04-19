@@ -16,7 +16,7 @@ from fenics import *
 mesh = UnitSquareMesh(8, 8)
 V = FunctionSpace(mesh, 'P', 1)
 
-# Define boundary conditions
+# Define boundary condition
 u0 = Expression('1 + x[0]*x[0] + 2*x[1]*x[1]', degree=2)
 
 def u0_boundary(x, on_boundary):
@@ -35,7 +35,7 @@ L = f*v*dx
 u = Function(V)
 solve(a == L, u, bc)
 
-# Plot solution on the screen
+# Plot solution
 u.rename('u', 'solution')
 plot(u)
 plot(mesh)

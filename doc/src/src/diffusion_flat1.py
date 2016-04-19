@@ -25,7 +25,7 @@ nx = ny = 8
 mesh = UnitSquareMesh(nx, ny)
 V = FunctionSpace(mesh, 'P', 1)
 
-# Define boundary conditions
+# Define boundary condition
 u_b = Expression('1 + x[0]*x[0] + alpha*x[1]*x[1] + beta*t',
                  degree=2, alpha=alpha, beta=beta, t=0)
 
@@ -58,7 +58,7 @@ for n in xrange(num_steps):
     # Solve variational problem
     solve(a == L, u, bc)
 
-    # Compute error
+    # Compute error at vertices
     u_e = interpolate(u_b, V)
     error = np.abs(u_e.vector().array() - u.vector().array()).max()
     print('t = %.2f: error = %.3g' % (t, error))

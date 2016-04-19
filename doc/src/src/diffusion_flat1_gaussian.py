@@ -15,7 +15,7 @@ nx = ny = 30
 mesh = RectangleMesh(Point(-2,-2), Point(2,2), nx, ny)
 V = FunctionSpace(mesh, 'P', 1)
 
-# Define boundary conditions
+# Define boundary condition
 def boundary(x, on_boundary):
     return on_boundary
 
