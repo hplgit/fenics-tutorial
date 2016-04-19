@@ -338,14 +338,14 @@ inside function, ``remembering'' variables in the parent function) and
 convenient to let the user action be class instead, where `p` can be
 an attribute. Later examples employ the class design.
 
-[hpl: The function `solver_vs_solver_minimize_assembly` measures the
-impact of this optimization. It is not big: a factor of 1-2 for
-P1 elements but hardly anything for P2 elements. Tested up to
-$10^5$ unknowns. However, the technique is important and it gave
-a significant speed-up when used in the Oasis CFD code by Mikael and
-co-workers (that code is on par wit OpenFOAM).]
+The function `solver_vs_solver_minimize_assembly` measures the
+impact of the optimization technique in this section compared to
+the simpler technique from the previous section where we need
+to assemble the right-hand side of the linear system at every time
+level. The impact is not huge, just a speed-up factor of 1-2 for 2D problems
+and around 2 for 3D problems. Still, this may be a value factor when
+you run a code a lot.
 
-[hpl: I AM HERE!]
 
 ======= A welding example with post processing and animation =======
 label{ch:diffusion:welding}
@@ -691,6 +691,7 @@ in time.
 
 MOVIE: [https://github.com/hplgit/fenics-tutorial/tree/brief/doc/pub/mov/welding_gamma1.ogg] Welding example with $\gamma=1$.
 
+[hpl: I AM HERE!]
 
 ======= Refactored implementation =======
 label{ch:diffusion:refactor}
@@ -734,6 +735,168 @@ terms of attributes (variables) in the class or in terms of method
 equation, but should be sufficiently general to be reused for
 most time-dependent FEniCS applications.
 
+
+% if EXV:
+
+===== Exercise: Find error in implementation =====
+
+For those who are familiar with object-oriented programming, this is
+seemingly a very simple exercise, but it makes sure you understand
+class hierarchies and the associated program flow, which is of
+fundamental importance when you implement FEniCS solvers and problems
+as classes.  The exercise also points out a very common bug in that
+context. If you have problems with this exercise, we advise you to
+read more about classes in Python (e.g., Chapter 7 and 9 in
+cite{Langtangen2009a}), before you continue reading this tutorial.
+
+Somebody has made a class `Line` for straight lines $y=ax+b$
+where $a$ and $b$ are meant to be defined in subclasses by the
+methods `constant` and `steepness_factor`, respectively.
+
+!bc pypro
+class Line(object):
+    def __call__(self, x):
+        return self.constant() + self.steepness_factor()*x
+
+    def constant(self):
+        return 1.0
+
+    def steepness_factor(self):
+        return 1.0
+
+class MyLine(Line):
+    def steepness_factor(self):
+        return -0.2
+
+line = MyLine()
+x = 2
+print('x=%g, y=%g' % (x, line(x)))
+!ec
+
+!bsubex
+Simulate the program above by hand. Make sure you understand the program
+flow.
+
+!bsol
+idx{Online Python Tutor}
+
+% if FORMAT in ('html', 'sphinx'):
+A nice tool to follow the program flow in simple programs is the
+"Online Python Tutor": "http://pythontutor.com/visualize.html#mode=edit".
+
+!bc pyoptpro
+from __future__ import print_function
+
+class Line(object):
+    def __call__(self, x):
+        return self.constant() + self.steepness_factor()*x
+
+    def constant(self):
+        return 1.0
+
+    def steepness_factor(self):
+        return 1.0
+
+class MyLine(Line):
+    def steepness_factor(self):
+        return -0.2
+
+line = MyLine()
+x = 2
+print('x=%g, y=%g' % (x, line(x)))
+!ec
+
+The Online Python Tutor is fine for simple test programs, but one cannot
+use third-party Python modules. If that is required,
+a debugger must be used. It is
+visually less pleasant for following program flow, but will always
+be applicable.
+% endif
+
+The program flow begins at the top of the file and goes down line by
+line. First is the definition of the two classes. Then we have the
+first line in the main program: `line = MyLine()`.  There is no
+constructor in class `MyLine`, but it could be inherited from the
+parent class `Line`. However, there is neither any constructor in
+`Line`.  In such cases, Python equips the `Line` class with an empty
+constructor as we had made an `__init__(self)` method with just `pass`
+as body. This constructor is called by `MyLine()`.  It makes `line`
+refer to an instance of class `MyLine`.
+
+In the print statement, one needs to fill the string with
+numbers, and after `x` is inserted, the call `line(x)` is performed.
+Since `line` is an object of type `MyLine`, a function call
+like `line(x)` is legal if the class has a special method
+`__call__`. This is the case, since class `MyLine` inherits
+`__call__` from the parent class `Line`.
+The program flow moves to `Line.__call__` where we first call
+`self.constant()`. Since the `self` object is of type `MyLine`,
+this means we call `MyLine.constant`, but there is no `constant`
+method in `MyLine`, meaning that it just inherits the `constant`
+method from `Line`. Consequently, `Line.constant` is called and
+returns 1.0. The next call is to `MyLine.steepness_factor`, and
+this method is implemented in class `MyLine` and returns -0.2.
+In `Line.__call__` we then evaluate `1.0 + (-0.2)*x`, which
+results in 0.4 when `x` is 2.
+!esol
+!esubex
+
+!bsubex
+Somebody makes another subclass:
+
+!bc pycod
+class YourLine(MyLine):
+    def steepnes_factor(self):
+        return 2
+
+line = YourLine()
+x = 2
+print('x=%g, y=%g' % (x, line(x)))
+!ec
+However, this time the printout is `x=2, y=0.4`, while it should be
+`x=2, y=5`. Where is the error?
+
+!bsol
+% if FORMAT in ('html', 'sphinx'):
+Doing this by hand might not be successful due to the nature of the error.
+It is probably better to use the Online Python Tutor or a debugger.
+
+!bc pyoptpro
+from __future__ import print_function
+
+class Line(object):
+    def __call__(self, x):
+        return self.constant() + self.steepness_factor()*x
+
+    def constant(self):
+        return 1.0
+
+    def steepness_factor(self):
+        return 1.0
+
+class MyLine(Line):
+    def steepness_factor(self):
+        return -0.2
+
+class YourLine(MyLine):
+    def steepnes_factor(self):
+        return 2
+
+line = YourLine()
+x = 2
+print('x=%g, y=%g' % (x, line(x)))
+!ec
+% endif
+The problem is that when `Line.__call__` tries to call
+`YourLine.steepness_factor`, it cannot find such a method in
+`YourLine`, and instead if uses the inherited method `Line.steepness_factor`,
+which returns -0.2. The problem is that there is a misspelling: a
+missing s in class `YourLine`. This is a very common error that can be
+hard to track down.
+!esol
+!esubex
+% endif
+
 ===== Mathematical problem =====
 label{ch:diffusion:refactor:math}
 
@@ -747,16 +910,16 @@ Neumann, and Robin conditions:
 u(\x,0) &= I\hbox{ on }\Omega,\\
 u &= u_0(t)\hbox{ on }\Gamma_D,\\
 -\kappa{\partial u\over\partial n} &= g\hbox{ on }\Gamma_N,\\
--\kappa{\partial u\over\partial n} &= h_T(u-U_s)\hbox{ on }\Gamma_R\tp
+-\kappa{\partial u\over\partial n} &= r(u-U_s)\hbox{ on }\Gamma_R\tp
 \end{align}
 !et
 The spatial domain $\Omega$ has boundary $\partial\Omega = \Gamma_D\cup
 \Gamma_N\cup\Gamma_R$. We shall assume that all coefficients $\varrho$,
-$c$, and $\kappa$ may vary in space, and $f$ may vary in time too.
+$c$, $\kappa$ may vary in space, while $f$ and $g$ may vary in time too.
+The coefficients $r$ and $U_s$ are assumed to depend on time only.
 
-We discretize in time by the general $\theta$-rule.
-For an evolution equation
-$\partial P/\partial t=Q(t)$, this rule reads
+We discretize in time by the general $\theta$-rule.  For an evolution
+equation $\partial P/\partial t=Q(t)$, this rule reads
 
 !bt
 \begin{equation*}
@@ -787,21 +950,67 @@ perform integration by parts on second-order derivative terms
 
 !bt
 \begin{align*}
-\int\limits_\Omega \biggl(
+\int\limits_\Omega \bigl(
 v\varrho c\frac{u^{n+1}-u^n}{\Delta t}\dx
 & + \theta \kappa\nabla u^{n+1}\cdot\nabla v + vf(\x,t_{n+1} \\
-& + (1-\theta) \kappa\nabla u^{n}\cdot\nabla v + vf(\x,t_{n}\biggr)\\
+& + (1-\theta) \kappa\nabla u^{n}\cdot\nabla v + vf(\x,t_{n}\bigr)\dx\\
 & - \int\limits_{\Gamma_N\cup\Gamma_R}
-\biggl(\theta \kappa\frac{\partial u^{n+1}}{\partial n}v
-+ (1-\theta) \kappa\frac{\partial u^{n}}{\partial n}v\biggr)\ds
+\bigl(\theta \kappa\frac{\partial u^{n+1}}{\partial n}v
++ (1-\theta) \kappa\frac{\partial u^{n}}{\partial n}v\bigr)\ds = 0
 \tp
 \end{align*}
 !et
+Inserting the boundary conditions at $\Gamma_N$ and $\Gamma_R$  gives
+us
 
-===== A class-based solver for a general diffusion problem =====
+!bt
+\begin{align}
+F(u;v) &= \int\limits_\Omega \bigl(
+v\varrho c\frac{u^{n+1}-u^n}{\Delta t}\dx
++ \theta \kappa\nabla u^{n+1}\cdot\nabla v + vf(\x,t_{n+1} \nonumber\\
+&\quad + (1-\theta) \kappa\nabla u^{n}\cdot\nabla v + vf(\x,t_{n}\bigr)\dx\nonumber\\
+&\quad + \int\limits_{\Gamma_N}
+\bigl(\theta g(\x,t_{n+1})v
++ (1-\theta) g(\x,t_n)v\bigr)\ds\nonumber\\
+&\quad + \int\limits_{\Gamma_R}
+\bigl(\theta r(u^{n+1} - U_s(t_{n+1}))v
++ (1-\theta) r(u^{n} - U_s(t_{n}))v\bigr)\ds
+= 0\tp
+label{ch:diffusion:refactor:math:varform0}
+\end{align}
+!et
+Since we use `u` for the unknown $u^{n+1}$ in the code, and `u_1`
+for $u^n$, we introduce the same notation in the mathematics too:
+$u$ for $u^{n+1}$ and $u_1$ for $u^n$,
+
+!bt
+\begin{align}
+F(u;v) &= \int\limits_\Omega \bigl(
+v\varrho c\frac{u-u_1}{\Delta t}\dx
++ \theta \kappa\nabla u\cdot\nabla v + vf(\x,t_{n+1} \nonumber\\
+&\quad + (1-\theta) \kappa\nabla u_1\cdot\nabla v + vf(\x,t_{n}\bigr)\dx\nonumber\\
+&\quad + \int\limits_{\Gamma_N}
+\bigl(\theta g(\x,t_{n+1})v
++ (1-\theta) g(\x,t_n)v\bigr)\ds\nonumber\\
+&\quad + \int\limits_{\Gamma_R}
+\bigl(\theta r(u - U_s(t_{n+1}))v
++ (1-\theta) r(u_1 - U_s(t_{n}))v\bigr)\ds
+= 0\tp
+label{ch:diffusion:refactor:math:varform}
+\end{align}
+!et
+
+The variational formulation is then: at each time level, find $u\in V$
+such that $F(u;v)=0\ \forall v\in\hat V$.  We do not need to identify
+the bilinear and linear terms in the expression $F$ since we can use
+the `lhs` and `rhs` functions for this purpose in the code.  However,
+we should be very convinced that we have a *linear* variational
+problem at hand and not a nonlinear one.
+
+===== A class-based solver =====
 label{ch:diffusion:refactor:class_solver}
 
-The simplest part is the solver class. It contains the data structures
+The solver class contains the data structures
 and actions from previous programs, but needs to ask the problem class
 about the mesh, boundary conditions, the time step, and so forth. We
 therefore need to define the API of the problem class first so we know
@@ -809,41 +1018,145 @@ how the solver class can ask for the mesh, for instance.
 
 Here is an abstract problem class:
 
-@@@CODE src/diffusion_class.py fromto: class DiffusionProblem\(@class Problem1
+@@@CODE src/diffusion_class.py fromto: class DiffusionProblem\(@import cbcpost
 The meaning of the different methods in this class will be evident as
 we present specific examples on implementations.
 
 The idea now is that different problems are implemented as different
-subclasses of `DiffusionProblem`. The `solve` and `flux` methods are general
-and can be inherited, while the rest of the methods must be
-implemented in the subclass.
+subclasses of `DiffusionProblem`. The `solve` and `flux` methods are
+general and can be inherited, while the rest of the methods must be
+implemented in the subclass for the particular problem at hand.
 
 As a simple example, consider the test problem where we have a
 manufactured solution $u=1+x^2 + \alpha y^2 + \beta t$ on
-a uniform mesh over the unit square and Dirichlet conditions
+a uniform mesh over the unit square or cube, with Dirichlet conditions
 on the entire boundary. Suppose we have $\Delta t=0.3$ and
 want to simulate for $t\in [0,0.9]$. A problem class is then
 
-@@@CODE-4 src/diffusion_class.py fromto: class TestProblemExact@problem = TestProblemExact
+@@@CODE src/diffusion_class.py fromto: class TestProblemExact@def test_
+Remember that we can inherit all methods from the parent class that are
+appropriate for the problem at hand.
 
-The problem is now solved by
+Our test problem can now be solved in (e.g.) a unit test like
 
-@@@CODE-4 src/diffusion_class.py fromto: problem = TestProblemExact@if __name
+@@@CODE src/diffusion_class.py fromto: test_DiffusionSolver@if __name
 The solver class will call the `user_action` function at every time level,
-and this function will assert that we recover the solution to machine precision
-(note that if we change the degree of the elements, or increase the
-mesh size, we need a less restrict tolerance!).
+and this function will assert that we recover the solution to machine precision.
 
-The solver class, here based on the algorithm in Section
-ref{ch:diffusion:opt:noassembly}, can be coded as follows:
+The solver class, here based on the $\theta$-rule and the
+variational formulation from the previous section, can be coded as
+follows:
 
-@@@CODE src/diffusion_class.py fromto: class DiffusionSolver@class DiffusionProblem
+@@@CODE src/diffusion_class.py fromto: class DiffusionSolver@def debug_Dirichlet
 
- * Think about Crank-Nicolson as subclass!
- * Some simple diffusion problems with varying $\Delta t$,
-   focus on a flux at a part of the boundary, etc. Can also be exercises.
+===== Example: Thermal boundary layer =====
+
+Assume we have some medium at temperature $U_s$ and then we suddenly
+heat one end so the temperature here stays constant at $U_1$. At the
+other end we have some equipment to keep the temperature constant at
+$U_s$. The other boundaries are insulated so heat cannot escape.
+There are no heat sources.  How is the temperature development
+in the material due to such sudden heating of one end?
+
+=== Mathematics ===
+
+The problem is mathematically one-dimensional, so it means that if we
+create a 2D or 3D domain, the boundaries in $y$ and $z$ directions are
+insulated ($\partial u/\partial n=0$). The heating is applied to $x=0$
+and $x=L$.
+
+It is natural to scale the problem by introducing dimensionless
+independent and dependent variables:
+
+!bt
+\[ \bar x = \frac{x}{L},\quad \bar y = \frac{y}{L},\quad
+\bar u = \frac{u-U_s}{U_1-U_s},\quad \bar t = \frac{t}{t_c}\tp\]
+!et
+The suggested scaling for $u$ makes a simple boundary condition at $x=0$:
+$\bar u = 1$. This scaling also results in $\bar u \in [0,1]$ as is
+always desired.
+
+After inserting the dimensionless variables in the PDE, we demand the
+time-derivative term and the heat conduction term to balance, and
+find $t_c$ from that condition: $t_c = \varrho c L^2/\kappa$.
+
+The spatial domain is the unit square. We introduce the boundaries
+$\Gamma_{D_1}$ as the side $x=0$, $\Gamma_{D_2}$ as the side $x=1$,
+and $\Gamma_N$ as the rest of the boundary.
+The scaled initial-boundary problem can be written as
+
+!bt
+\begin{align}
+\frac{\partial\bar u}{\partial\bar t} &= \bar\nabla^2\bar u\hbox{ in }
+\Omega = (0,1)\times (0,1)\times (0,T],\\
+\bar u(\x, 0) &= 0\hbox{ in }\Omega,\\
+\bar u &= 1\hbox{ at } \Gamma_{D_1},\\
+\bar u &= 0\hbox{ at } \Gamma_{D_2},\\
+\frac{\partial\bar u}{\partial\bar n} &= 0\hbox{ at }\Gamma_N\tp
+\end{align}
+!et
+
+=== Implementation ===
+
+We can solve our problem with the general problem and solver
+classes by noticing that we set $\varrho = c= \kappa = 1$,
+and $I=0$. The most labor-intensive part of the problem class is
+the visualization. We can create a helper class, `ProcessSolution`,
+which applies `cbcpost` to store the solution:
+
+@@@CODE src/diffusion_class.py fromto: import cbcpost@def mark_
+In the `user_action`
+method, we use this tool to store the solution, but we also add
+statements for plotting $u$ along a line from $x=0$ to $x=1$
+through the medium ($y=0.5$). This will gives an animation of
+the temperature profile, but results in somewhat lengthy code
+(we actually use SciTools to cut down the length compared to animation
+code in Matplotlib).
+
+To mark the boundaries, we make a general
+`mark_boundary_in_rectangle` function:
+
+@@@CODE src/diffusion_class.py fromto: def mark_boundar@class Problem1
+
+Now we are in a position to show our problem class:
+
+@@@CODE src/diffusion_class.py fromto: class Problem1@# Classical matplotlib
+
+The problem is solved by
+
+@@@CODE src/diffusion_class.py fromto: def demo1@def demo2
+
+=== Results ===
+
+Figure ref{ch:diffusion:refactor:class_solver:fig1} shows accumulated
+curves (the figure `self.plt.figure(2)` in the code). The problem is a
+primary example on a *thermal boundary layer*: the sudden rise in
+temperature at $x=0$ at $t=0$ gives rise to a very steep function, and
+a thin boundary layer that grows with time as heat is transported from
+the boundary into the domain. The jump in the temperature profile at
+$x=0$ makes demands to the numerical methods. Quite typically, a
+Crank-Nicolson scheme may show oscillations (as we can see in the
+first curve) because of inaccurate treatment of the shortest spatial
+waves in the Fourier representation of the discrete solution.  The
+oscillations are removed by doubling the spatial resolution from 20 to
+40 elements in the $x$ direction.  With $\theta=0$, we never
+experience any oscillations, but the boundary layer gets thicker and
+less accurate (smaller $\Delta t$ is needed to compensate).
+
+FIGURE: [fig/thermal_layer1, width=800 frac=1] Development of thermal boundary layer: Crank-Nicolson (left) and Backward Euler (right) schemes. label{ch:diffusion:refactor:class_solver:fig1}
+
+From all the plot frames with filenames `tmp_%04d.png` we may create
+video files by
+
+!bc sys
+Terminal> ffmpeg -i tmp_%04d.png -r 25 -vcodec libx264   movie.mp4
+Terminal> ffmpeg -i tmp_%04d.png -r 25 -vcodec libtheora movie.ogg
+!ec
+
+MOVIE: [https://github.com/hplgit/fenics-tutorial/tree/brief/doc/pub/mov/thermal_layer1/movie.ogg] Developing thermal boundary layer.
 
 % if EXV:
+
 ===== Exercise: Implement second-order schemes in time =====
 
 A backward difference of accuracy $\mathcal{O}(\Delta t^2)$ involves
@@ -868,8 +1181,8 @@ by
 !et
 This method also has a truncation error of order $\Delta t^2$.
 [hpl: Find some good test problems for comparing the performance of the schemes.]
-% endif
 
+% endif
 ===== A physical example =====
 label{ftut:timedep:diffusion2:sin}
 
