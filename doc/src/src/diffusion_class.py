@@ -70,8 +70,7 @@ class DiffusionSolver(object):
         # Solve linear system
         [bc.apply(A, b) for bc in self.bcs]
         if self.V.dim() < 50:
-            print('A:\n', A.array())
-            print('b:\n', b.array())
+            print('A:\n', A.array(), '\nb:\n', b.array())
 
         if linear_solver == 'direct':
             solve(A, self.u.vector(), b)
@@ -277,6 +276,28 @@ def mark_boundaries_in_rectangle(mesh, x0=0, x1=1, y0=0, y1=1):
     by1.mark(boundary_parts, 3)
     return boundary_parts
 
+def mark_boundaries_in_hypercube(
+    mesh, d=2, x0=0, x1=1, y0=0, y1=1, z0=0, z1=1):
+    """
+    Return mesh function FacetFunction with each side in a hypercube
+    in d dimensions. Sides are marked by indicators 0, 1, 2, ..., 6.
+    Side 0 is x=x0, 1 is x=x1, 2 is y=y0, 3 is y=y1, and so on.
+    """
+    side_definitions = [
+        'near(x[0], %(x0)s, tol)', 'near(x[0], %(x1)s, tol)',
+        'near(x[1], %(y0)s, tol)', 'near(x[1], %(y1)s, tol)',
+        'near(x[2], %(z0)s, tol)', 'near(x[2], %(z1)s, tol)']
+    boundaries = [CompiledSubDomain(
+        ('on_boundary && ' + side_definition) % vars(), tol=1E-14)
+                  for side_definition in side_definitions[:2*d]]
+    # Mark boundaries
+    boundary_parts = FacetFunction('uint', mesh)
+    boundary_parts.set_all(9999)
+    for i in range(len(boundaries)):
+        boundaries[i].mark(boundary_parts, i)
+    return boundary_parts
+
+
 class Problem1(DiffusionProblem):
     """Evolving boundary layer, I=0, but u=1 at x=0."""
     def __init__(self, Nx, Ny):
@@ -286,16 +307,12 @@ class Problem1(DiffusionProblem):
         self.user_action_object = \
                    ProcessSolution(self, u_min=0, u_max=1)
         # Compare u(x,t) as curve plots for the following times
-        self.times4curveplots = [self.time_step(0),
-                                 4*self.time_step(0),
-                                 8*self.time_step(0),
-                                 12*self.time_step(0),
-                                 16*self.time_step(0),
-                                 0.02,
-                                 0.1,
-                                 0.2,
-                                 0.3]
-        # Smoother matplotlib plot by scitools plot command
+        self.times4curveplots = [
+            self.time_step(0), 4*self.time_step(0),
+            8*self.time_step(0), 12*self.time_step(0),
+            16*self.time_step(0), 0.02, 0.1, 0.2, 0.3]
+        # scitools animation is simpler than FuncAnimation
+        # in matplotlib for the user_action callback function
         import scitools.std as plt
         self.plt = plt
 
@@ -304,7 +321,8 @@ class Problem1(DiffusionProblem):
         self.mesh = UnitSquareMesh(Nx, Ny)
         self.divisions = (Nx, Ny)
 
-        self.boundary_parts = mark_boundaries_in_rectangle(self.mesh)
+        self.boundary_parts = \
+             mark_boundaries_in_hypercube(self.mesh, d=2)
         self.ds =  Measure(
             'ds', domain=self.mesh,
             subdomain_data=self.boundary_parts)
@@ -368,21 +386,25 @@ class Problem1(DiffusionProblem):
                 plt.axis([0, 1, 0, 1])
         """
 
-
 class Problem2(Problem1):
     """As Problem 1, but du/dn at x=1 and varying kappa."""
     def __init__(self, Nx, Ny, kappa_values):
-        DiffusionProblem.__init__(self)
+        Problem1.__init__(self, Nx, Ny)
         self.init_mesh(Nx, Ny, kappa_values)
         self.user_action_object = \
                    ProcessSolution(self, u_min=0, u_max=1)
+        # Compare u(x,t) as curve plots for the following times
+        self.times4curveplots = [
+            12*self.time_step(0),
+            0.02, 0.1, 0.3, 0.5]
 
     def init_mesh(self, Nx, Ny, kappa_values=[1, 0.1]):
         """Initialize mesh, boundary parts, and p."""
         self.mesh = UnitSquareMesh(Nx, Ny)
         self.divisions = (Nx, Ny)
 
-        self.boundary_parts = mark_boundaries_in_rectangle(self.mesh)
+        self.boundary_parts = \
+             mark_boundaries_in_hypercube(self.mesh, d=2)
         self.ds =  Measure(
             'ds', domain=self.mesh,
             subdomain_data=self.boundary_parts)
@@ -419,13 +441,25 @@ class Problem2(Problem1):
 
 class Problem3(Problem2):
     """Oscillating surface temperature."""
-    def __init__(self, Nx, Ny, kappa_values, T_A, w):
-        Problem2.__init__(self, Nx, Ny, kappa_values)
+    def __init__(self, Nx, Ny, kappa_values):
         # Oscillating temperature at x=0:
-        self.surface_temp = lambda t: T_A*sin(w*t)
+        self.surface_temp = lambda t: sin(2*t)
+        w = 2.0
         period = 2*np.pi/w
-        self.dt = period/30
+        self.dt = period/30  # need this before Problem2.__init__
         self.T = 4*period
+
+        Problem2.__init__(self, Nx, Ny, kappa_values)
+        # Stretch the mesh in y direction so we get [0,1]x[0,6]
+        self.mesh.coordinates()[:] = np.array(
+            [self.mesh.coordinates()[:,0],
+             6*self.mesh.coordinates()[:,1]]).transpose()
+
+        self.user_action_object = \
+                   ProcessSolution(self, u_min=-1, u_max=1)
+        # Compare u(x,t) as curve plots for the following times
+        self.times4curveplots = [
+            period/4, 4*period/8, 3*period/4, 3*period]
 
     def time_step(self, t):
         return self.dt
@@ -435,11 +469,37 @@ class Problem3(Problem2):
 
     def Dirichlet_conditions(self, t):
         """Return list of (value,boundary) pairs."""
-        # return [(DirichletBC, self.boundary_parts, 2),
-        # t: self.solver.t
-        return [(self.surface_temp(t),
-                 self.boundary_parts, 0),
-                (0.0, self.boundary_parts, 1)]
+        return [(self.surface_temp(t), self.boundary_parts, 3)]
+
+    def user_action(self, t, u, timestep):
+        """Post process solution u at time t."""
+        tol = 1E-14
+        self.user_action_object(t, u, timestep)
+        # Also plot u along line x=1/2
+        y_coor = np.linspace(tol, 6-tol, 101)
+        y = [(0.5, y_) for y_ in y_coor]
+        u = self.solution()
+        u_line = [u(y_) for y_ in y]
+        # Animation in figure(1)
+        self.plt.figure(1)
+        self.plt.plot(
+            y_coor, u_line, 'b-',
+            legend=['u, t=%.4f' % t],
+            title='Solution along x=1/2, time step: %g' %
+            self.time_step(t),
+            xlabel='y', ylabel='u',
+            axis=[0, 6, -1.2, 1.2])
+        self.plt.savefig('tmp_%04d.png' % timestep)
+        # Accumulated selected curves in one plot in figure(2)
+        self.plt.figure(2)
+        for t_ in self.times4curveplots:
+            if abs(t - t_) < 0.5*self.time_step(t):
+                self.plt.plot(
+                    y_coor, u_line, '-',
+                    legend=['u, t=%.4f' % t],
+                    xlabel='y', ylabel='u',
+                    axis=[0, 6, -1.2, 1.2])
+                self.plt.hold('on')
 
 def demo1():
     problem = Problem1(Nx=20, Ny=5)
@@ -451,11 +511,14 @@ def demo2():
     problem = Problem2(Nx=20, Ny=5, kappa_values=[1,1000])
     print('kappa:', problem.kappa.vector().array())
     problem.solve(theta=0.5, linear_solver='direct')
+    problem.plt.savefig('tmp1.png')
+    problem.plt.savefig('tmp1.pdf')
 
 def demo3():
-    problem = Problem3(Nx=20, Ny=5, kappa_values=[1,1000],
-                       T_A=1, w=1.0)
+    problem = Problem3(Nx=5, Ny=20, kappa_values=[1,1000])
     problem.solve(theta=0.5, linear_solver='direct')
+    problem.plt.savefig('tmp1.png')
+    problem.plt.savefig('tmp1.pdf')
 
 class TestProblemExact(DiffusionProblem):
     def __init__(self, Nx, Ny, Nz=None, degree=1, num_time_steps=3):
@@ -509,5 +572,5 @@ def test_DiffusionSolver():
 
 if __name__ == '__main__':
     test_DiffusionSolver()
-    demo1()
+    demo3()
     interactive()

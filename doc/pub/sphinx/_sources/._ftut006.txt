@@ -775,7 +775,7 @@ the speed of the heat source.
    :math:`\kappa` for some chosen material, and then determine relevant values for
    :math:`A`, :math:`L`, etc. There are no approximations in the scaling procedure;
    it just dramatically simplifies numerical simulations.
-   The book [Ref23]_ gives a comprehensive treatment
+   The book [Ref24]_ gives a comprehensive treatment
    of scaling.
 
 
@@ -909,15 +909,11 @@ two, choose **3D View**, load ``Results/Heat source/Heat_source.xmdf``,
 click **Apply**, and run the animation. The two plots are synchronized
 in time.
 
-.. This is only in brief now in development
-
-.. MOVIE: [https://github.com/hplgit/fenics-tutorial/tree/master/doc/pub/mov/welding_gamma1.ogg] Welding example with :math:`\gamma=1`.
-
 .. raw:: html
         
         <div>
         <video  loop controls width='640' height='365' preload='none'>
-            <source src='https://github.com/hplgit/fenics-tutorial/tree/brief/doc/pub/mov/welding_gamma1.ogg'  type='video/ogg;  codecs="theora, vorbis"'>
+            <source src='mov/welding_gamma1.ogg'  type='video/ogg;  codecs="theora, vorbis"'>
         </video>
         </div>
         <p><em>Welding example with :math:`\gamma=1`.</em></p>
@@ -929,7 +925,7 @@ in time.
         </script>
         
 
-[**hpl 19**: I AM HERE!]
+[**hpl 17**: I AM HERE!]
 
 .. _ch:diffusion:refactor:
 
@@ -950,7 +946,7 @@ provided by the user. The following text requires you to be familiar
 with class programming in Python (tailored learning material is
 Chapter 7, 9, and Appendix E in [Ref06]_).
 
-When we work with a PDE project, we often want to explore a range or
+When we work with a PDE project, we often want to explore a range of
 similar problems where the PDE model basically stays the same, but
 coefficients in the PDE, boundary and initial conditions, as well as
 domains change.  This means that some of our code related to solving
@@ -965,15 +961,145 @@ access to a *problem class* where all the application-specific details
 are defined. This problem class defines an API that the solver class
 applies for communication.
 
-The solver class will usually have only a constructor to set up data
-structures (typically the variational formulation), a ``step`` function
+The solver class will usually have a function to set up data
+structures for the variational formulation, a ``step`` function
 to advance the solution one time step, and a ``solve`` function to run
 the time loop. Every time the solver class needs problem-specific
-information, it needs to get that from the problem class, either in
-terms of attributes (variables) in the class or in terms of method
+information, it gets that information from the problem class, either in
+terms of attributes (variables) in the problem class or in terms of method
 (function) calls. The forthcoming examples are tied to the diffusion
 equation, but should be sufficiently general to be reused for
 most time-dependent FEniCS applications.
+
+.. --- begin exercise ---
+
+Problem 5: Find error in implementation
+---------------------------------------
+
+For those who are familiar with object-oriented programming, this is
+seemingly a very simple exercise, but it makes sure you understand
+class hierarchies and the associated program flow, so that you
+are prepared to read the forthcoming text on solver and problem
+classes.  The exercise also points out a very common bug in that
+context. If you have problems with this exercise, we advise you to
+read more about classes in Python (e.g., Chapter 7 and 9 in
+[Ref06]_), before you continue reading with the present book.
+
+Somebody has made a class ``Line`` for straight lines :math:`y=ax+b`
+where :math:`a` and :math:`b` are meant to be defined in subclasses by the
+methods ``constant`` and ``steepness_factor``, respectively.
+
+.. code-block:: python
+
+        class Line(object):
+            def __call__(self, x):
+                return self.constant() + self.steepness_factor()*x
+        
+            def constant(self):
+                return 1.0
+        
+            def steepness_factor(self):
+                return 1.0
+        
+        class MyLine(Line):
+            def steepness_factor(self):
+                return -0.2
+        
+        line = MyLine()
+        x = 2
+        print('x=%g, y=%g' % (x, line(x)))
+
+**a)**
+Simulate the program above by hand. Make sure you understand the program
+flow.
+
+.. --- begin solution of exercise ---
+
+**Solution.**
+
+.. index:: Online Python Tutor
+
+A nice tool to follow the program flow in simple programs is the
+`Online Python Tutor <http://pythontutor.com/visualize.html#mode=edit>`__.
+
+.. raw:: html
+
+        <iframe width="950" height="500" frameborder="0"
+                src="http://pythontutor.com/iframe-embed.html#code=from+__future__+import+print_function%0A%0Aclass+Line%28object%29%3A%0A++++def+__call__%28self%2C+x%29%3A%0A++++++++return+self.constant%28%29+%2B+self.steepness_factor%28%29%2Ax%0A%0A++++def+constant%28self%29%3A%0A++++++++return+1.0%0A%0A++++def+steepness_factor%28self%29%3A%0A++++++++return+1.0%0A%0Aclass+MyLine%28Line%29%3A%0A++++def+steepness_factor%28self%29%3A%0A++++++++return+-0.2%0A%0Aline+%3D+MyLine%28%29%0Ax+%3D+2%0Aprint%28%27x%3D%25g%2C+y%3D%25g%27+%25+%28x%2C+line%28x%29%29%29&curInstr=0&py=2&cumulative=false">
+        </iframe>
+
+The Online Python Tutor is fine for simple test programs, but one cannot
+use third-party Python modules. If that is required,
+a debugger must be used. It is
+visually less pleasant for following program flow, but will always
+be applicable.
+
+The program flow begins at the top of the file and goes down line by
+line. First is the definition of the two classes. Then we have the
+first line in the main program: ``line = MyLine()``.  There is no
+constructor in class ``MyLine``, but it could be inherited from the
+parent class ``Line``. However, there is neither any constructor in
+``Line``.  In such cases, Python equips the ``Line`` class with an empty
+constructor as we had made an ``__init__(self)`` method with just ``pass``
+as body. This constructor is called by ``MyLine()``.  It makes ``line``
+refer to an instance of class ``MyLine``.
+
+In the print statement, one needs to fill the string with
+numbers, and after ``x`` is inserted, the call ``line(x)`` is performed.
+Since ``line`` is an object of type ``MyLine``, a function call
+like ``line(x)`` is legal if the class has a special method
+``__call__``. This is the case, since class ``MyLine`` inherits
+``__call__`` from the parent class ``Line``.
+The program flow moves to ``Line.__call__`` where we first call
+``self.constant()``. Since the ``self`` object is of type ``MyLine``,
+this means we call ``MyLine.constant``, but there is no ``constant``
+method in ``MyLine``, meaning that it just inherits the ``constant``
+method from ``Line``. Consequently, ``Line.constant`` is called and
+returns 1.0. The next call is to ``MyLine.steepness_factor``, and
+this method is implemented in class ``MyLine`` and returns -0.2.
+In ``Line.__call__`` we then evaluate ``1.0 + (-0.2)*x``, which
+results in 0.4 when ``x`` is 2.
+
+.. --- end solution of exercise ---
+
+**b)**
+Somebody makes another subclass:
+
+.. code-block:: python
+
+        class YourLine(MyLine):
+            def steepnes_factor(self):
+                return 2
+        
+        line = YourLine()
+        x = 2
+        print('x=%g, y=%g' % (x, line(x)))
+
+However, this time the printout is ``x=2, y=0.4``, while it should be
+``x=2, y=5``. Where is the error?
+
+.. --- begin solution of exercise ---
+
+**Solution.**
+Doing this by hand might not be successful due to the nature of the error.
+It is probably better to use the Online Python Tutor or a debugger.
+
+.. raw:: html
+
+        <iframe width="950" height="500" frameborder="0"
+                src="http://pythontutor.com/iframe-embed.html#code=from+__future__+import+print_function%0A%0Aclass+Line%28object%29%3A%0A++++def+__call__%28self%2C+x%29%3A%0A++++++++return+self.constant%28%29+%2B+self.steepness_factor%28%29%2Ax%0A%0A++++def+constant%28self%29%3A%0A++++++++return+1.0%0A%0A++++def+steepness_factor%28self%29%3A%0A++++++++return+1.0%0A%0Aclass+MyLine%28Line%29%3A%0A++++def+steepness_factor%28self%29%3A%0A++++++++return+-0.2%0A%0Aclass+YourLine%28MyLine%29%3A%0A++++def+steepnes_factor%28self%29%3A%0A++++++++return+2%0A%0Aline+%3D+YourLine%28%29%0Ax+%3D+2%0Aprint%28%27x%3D%25g%2C+y%3D%25g%27+%25+%28x%2C+line%28x%29%29%29&curInstr=0&py=2&cumulative=false">
+        </iframe>
+
+The problem is that when ``Line.__call__`` tries to call
+``YourLine.steepness_factor``, it cannot find such a method in
+``YourLine``, and instead if uses the inherited method ``Line.steepness_factor``,
+which returns -0.2. The problem is that there is a misspelling: a
+missing s in class ``YourLine``. This is a very common error that can be
+hard to track down.
+
+.. --- end solution of exercise ---
+
+.. --- end exercise ---
 
 .. _ch:diffusion:refactor:math:
 
@@ -1063,15 +1189,16 @@ Introducing the :math:`\theta`-rule in our PDE results in
 A Galerkin method for this initial-boundary value problem consists
 of multiplying :ref:`(83) <Eq:ch:diffusion:refactor:math:problem>` by
 a test function :math:`v\in\hat V`, integrate over :math:`\Omega`, and
-perform integration by parts on second-order derivative terms
-(here the term :math:`\nabla\cdot\left( \kappa\nabla u\right)`):
+perform integration by parts on the second-order derivative term
+:math:`\nabla\cdot\left( \kappa\nabla u\right)`:
 
 .. math::
         
         \int\limits_\Omega \bigl(
         v\varrho c\frac{u^{n+1}-u^n}{\Delta t}{\, \mathrm{d}x}
-        & + \theta \kappa\nabla u^{n+1}\cdot\nabla v + vf(\boldsymbol{x},t_{n+1} \\ 
-        & + (1-\theta) \kappa\nabla u^{n}\cdot\nabla v + vf(\boldsymbol{x},t_{n}\bigr){\, \mathrm{d}x}\\ 
+        & + \theta \kappa\nabla u^{n+1}\cdot\nabla v - v\theta f(\boldsymbol{x},t_{n+1} \\ 
+        & + (1-\theta) \kappa\nabla u^{n}\cdot\nabla v -
+        v(1-\theta)f(\boldsymbol{x},t_{n}\bigr){\, \mathrm{d}x}\\ 
         & - \int\limits_{\Gamma_N\cup\Gamma_R}
         \bigl(\theta \kappa\frac{\partial u^{n+1}}{\partial n}v
         + (1-\theta) \kappa\frac{\partial u^{n}}{\partial n}v\bigr){\, \mathrm{d}s} = 0
@@ -1085,12 +1212,13 @@ us
         
         F(u;v) = \int\limits_\Omega \bigl(
         v\varrho c\frac{u^{n+1}-u^n}{\Delta t}{\, \mathrm{d}x}
-        + \theta \kappa\nabla u^{n+1}\cdot\nabla v + vf(\boldsymbol{x},t_{n+1} \nonumber
+        + \theta \kappa\nabla u^{n+1}\cdot\nabla v - v\theta f(\boldsymbol{x},t_{n+1}) \nonumber
         
 
 .. math::
           
-        \quad + (1-\theta) \kappa\nabla u^{n}\cdot\nabla v + vf(\boldsymbol{x},t_{n}\bigr){\, \mathrm{d}x}\nonumber
+        \quad - (1-\theta) \kappa\nabla u^{n}\cdot\nabla v +
+        v(1-\theta)f(\boldsymbol{x},t_{n}\bigr){\, \mathrm{d}x}\nonumber
         
 
 .. math::
@@ -1113,19 +1241,20 @@ us
         
 
 Since we use ``u`` for the unknown :math:`u^{n+1}` in the code, and ``u_1``
-for :math:`u^n`, we introduce the same notation in the mathematics to:
-:math:`u` for :math:`u^{n+1}` and :math:`u_1` for :math:`u^n`:
+for :math:`u^n`, we introduce the same notation in the mathematics too:
+:math:`u` for :math:`u^{n+1}` and :math:`u_1` for :math:`u^n`,
 
 .. math::
         
         F(u;v) = \int\limits_\Omega \bigl(
         v\varrho c\frac{u-u_1}{\Delta t}{\, \mathrm{d}x}
-        + \theta \kappa\nabla u\cdot\nabla v + vf(\boldsymbol{x},t_{n+1} \nonumber
+        + \theta \kappa\nabla u\cdot\nabla v - v\theta f(\boldsymbol{x},t_{n+1}) \nonumber
         
 
 .. math::
           
-        \quad + (1-\theta) \kappa\nabla u_1\cdot\nabla v + vf(\boldsymbol{x},t_{n}\bigr){\, \mathrm{d}x}\nonumber
+        \quad - (1-\theta) \kappa\nabla u_1\cdot\nabla v +
+        v(1-\theta)f(\boldsymbol{x},t_{n}\bigr){\, \mathrm{d}x}\nonumber
         
 
 .. math::
@@ -1148,7 +1277,7 @@ for :math:`u^n`, we introduce the same notation in the mathematics to:
         
 
 The variational formulation is then: at each time level, find :math:`u\in V`
-such that :math:`F(u;v)=0` $\forall v\in\hat V$.  We do not need to identify
+such that :math:`F(u;v)=0\ \forall v\in\hat V`.  We do not need to identify
 the bilinear and linear terms in the expression :math:`F` since we can use
 the ``lhs`` and ``rhs`` functions for this purpose in the code.  However,
 we should be very convinced that we have a *linear* variational
@@ -1388,8 +1517,7 @@ follows:
                 # Solve linear system
                 [bc.apply(A, b) for bc in self.bcs]
                 if self.V.dim() < 50:
-                    print('A:\n', A.array())
-                    print('b:\n', b.array())
+                    print('A:\n', A.array(), '\nb:\n', b.array())
         
                 if linear_solver == 'direct':
                     solve(A, self.u.vector(), b)
@@ -1443,6 +1571,15 @@ other end we have some equipment to keep the temperature constant at
 :math:`U_s`. The other boundaries are insulated so heat cannot escape.
 There are no heat sources.  How is the temperature development
 in the material due to such sudden heating of one end?
+Figure :ref:`ch:diffusion:refactor:class_solver:fig4` sketches the
+situation (with a scaled variable :math:`u`).
+
+.. _ch:diffusion:refactor:class_solver:fig4:
+
+.. figure:: thermal_layer1_sketch.png
+   :width: 500
+
+   Domain with (scaled) boundary conditions: sudden jump in :math:`u` at :math:`x=0`
 
 Mathematics
 ~~~~~~~~~~~
@@ -1574,8 +1711,8 @@ the temperature profile, but results in somewhat lengthy code
 (we actually use SciTools to cut down the length compared to animation
 code in Matplotlib).
 
-To mark the boundaries, we make a general
-``mark_boundary_in_rectangle`` function:
+To mark the boundaries, we can make a
+function like
 
 .. code-block:: python
 
@@ -1616,6 +1753,34 @@ To mark the boundaries, we make a general
             by1.mark(boundary_parts, 3)
             return boundary_parts
 
+Unfortunately, this is quite tedious and repetitive code, and the
+code has to repeated for a 3D box-shaped domain. It is possible to
+write more general, compact code valid both for an interval, rectangle, or
+box:
+
+.. code-block:: python
+
+        def mark_boundaries_in_hypercube(
+            mesh, d=2, x0=0, x1=1, y0=0, y1=1, z0=0, z1=1):
+            """
+            Return mesh function FacetFunction with each side in a hypercube
+            in d dimensions. Sides are marked by indicators 0, 1, 2, ..., 6.
+            Side 0 is x=x0, 1 is x=x1, 2 is y=y0, 3 is y=y1, and so on.
+            """
+            side_definitions = [
+                'near(x[0], %(x0)s, tol)', 'near(x[0], %(x1)s, tol)',
+                'near(x[1], %(y0)s, tol)', 'near(x[1], %(y1)s, tol)',
+                'near(x[2], %(z0)s, tol)', 'near(x[2], %(z1)s, tol)']
+            boundaries = [CompiledSubDomain(
+                ('on_boundary && ' + side_definition) % vars(), tol=1E-14)
+                          for side_definition in side_definitions[:2*d]]
+            # Mark boundaries
+            boundary_parts = FacetFunction('uint', mesh)
+            boundary_parts.set_all(9999)
+            for i in range(len(boundaries)):
+                boundaries[i].mark(boundary_parts, i)
+            return boundary_parts
+
 Now we are in a position to show our problem class:
 
 .. code-block:: python
@@ -1625,15 +1790,26 @@ Now we are in a position to show our problem class:
             def __init__(self, Nx, Ny):
                 DiffusionProblem.__init__(self)
                 self.init_mesh(Nx, Ny)
+                # Storage and visualization
                 self.user_action_object = \ 
                            ProcessSolution(self, u_min=0, u_max=1)
+                # Compare u(x,t) as curve plots for the following times
+                self.times4curveplots = [
+                    self.time_step(0), 4*self.time_step(0),
+                    8*self.time_step(0), 12*self.time_step(0),
+                    16*self.time_step(0), 0.02, 0.1, 0.2, 0.3]
+                # scitools animation is simpler than FuncAnimation
+                # in matplotlib for the user_action callback function
+                import scitools.std as plt
+                self.plt = plt
         
             def init_mesh(self, Nx, Ny):
                 """Initialize mesh, boundary parts, and p."""
                 self.mesh = UnitSquareMesh(Nx, Ny)
                 self.divisions = (Nx, Ny)
         
-                self.boundary_parts = mark_boundaries_in_rectangle(self.mesh)
+                self.boundary_parts = \ 
+                     mark_boundaries_in_hypercube(self.mesh, d=2)
                 self.ds =  Measure(
                     'ds', domain=self.mesh,
                     subdomain_data=self.boundary_parts)
@@ -1666,149 +1842,475 @@ Now we are in a position to show our problem class:
                 x = [(x_,0.5) for x_ in x_coor]
                 u = self.solution()
                 u_line = [u(x_) for x_ in x]
-                import scitools.std as plt
-                """
-                plt.plot(x_coor, u_line) #, 'r-')
-                plt.xlabel('x');  plt.ylabel('u')
-                plt.legend(['u, t=%.4f' % t])
-                plt.title('time step: %g' % self.time_step())
-                plt.axis([0, 1, 0, 1])
-                """
-                # Smoother matplotlib plot by scitools keyword arguments
-                plt.plot(x_coor, u_line, 'b-',
-                         legend=['u, t=%.4f' % t],
-                         title='Solution along y=1/2, time step: %g' %
-                         self.time_step(t),
-                         xlabel='x', ylabel='u',
-                         axis=[0, 1, 0, 1])
-                plt.savefig('tmp_%04d.png' % timestep)
+                # Animation in figure(1)
+                self.plt.figure(1)
+                self.plt.plot(
+                    x_coor, u_line, 'b-',
+                    legend=['u, t=%.4f' % t],
+                    title='Solution along y=1/2, time step: %g' %
+                    self.time_step(t),
+                    xlabel='x', ylabel='u',
+                    axis=[0, 1, 0, 1])
+                self.plt.savefig('tmp_%04d.png' % timestep)
+                # Accumulated selected curves in one plot in figure(2)
+                self.plt.figure(2)
+                for t_ in self.times4curveplots:
+                    if abs(t - t_) < 0.5*self.time_step(t):
+                        self.plt.plot(
+                            x_coor, u_line, '-',
+                            legend=['u, t=%.4f' % t],
+                            xlabel='x', ylabel='u',
+                            axis=[0, 1, 0, 1])
+                        self.plt.hold('on')
 
-.. --- begin exercise ---
+Notice our definition of the time step: because the growth of the
+thin boundary layer close to :math:`x=0`
+is very rapid for small times, we need to start with a small time
+step. Nevertheless, the speed of the heat transfer slows down with time,
+so we decide to use a longer time step after :math:`t=0.02`. The animation
+would otherwise also be boring to watch, but be aware of the fact that
+the apparent speed of the physical process is dramatically increased in the
+animation at :math:`t=0.02`.
 
-Exercise 5: Find error in implementation
-----------------------------------------
-
-This is seemingly a very simple exercise, but it makes sure you
-understand class hierarchies and the associated program flow, which is
-of fundamental importance when you implement FEniCS solvers and problems
-as classes.  The exercise also points out a very common bug in that
-context.
-
-Somebody has made a class ``Line`` for straight lines :math:`y=ax+b`
-where :math:`a` and :math:`b` are meant to be defined in subclasses by the
-methods ``constant`` and ``steepness_factor``, respectively.
-
-.. code-block:: python
-
-        class Line(object):
-            def __call__(self, x):
-                return self.constant() + self.steepness_factor()*x
-        
-            def constant(self):
-                return 1.0
-        
-            def steepness_factor(self):
-                return 1.0
-        
-        class MyLine(Line):
-            def steepness_factor(self):
-                return -0.2
-        
-        line = MyLine()
-        x = 2
-        print('x=%g, y=%g' % (x, line(x))
-
-**a)**
-Simulate the program above by hand. Make sure you understand the program
-flow.
-
-.. --- begin solution of exercise ---
-
-**Solution.**
-
-.. index:: Online Python Tutor
-
-A nice tool to follow the program flow in simple programs is the
-`Online Python Tutor <http://pythontutor.com/visualize.html#mode=edit>`__.
-
-.. raw:: html
-
-        <iframe width="950" height="500" frameborder="0"
-                src="http://pythontutor.com/iframe-embed.html#code=from+__future__+import+print_function%0A%0Aclass+Line%28object%29%3A%0A++++def+__call__%28self%2C+x%29%3A%0A++++++++return+self.constant%28%29+%2B+self.steepness_factor%28%29%2Ax%0A%0A++++def+constant%28self%29%3A%0A++++++++return+1.0%0A%0A++++def+steepness_factor%28self%29%3A%0A++++++++return+1.0%0A%0Aclass+MyLine%28Line%29%3A%0A++++def+steepness_factor%28self%29%3A%0A++++++++return+-0.2%0A%0Aline+%3D+MyLine%28%29%0Ax+%3D+2%0Aprint%28%27x%3D%25g%2C+y%3D%25g%27+%25+%28x%2C+line%28x%29%29&curInstr=0&py=2&cumulative=false">
-        </iframe>
-
-The Online Python Tutor is fine for simple test programs, but one cannot
-use third-party Python modules. If that is required,
-a debugger must be used. It is
-visually less pleasant for following program flow, but will always
-be applicable.
-
-The program flow begins at the top of the file and goes down line by
-line. First is the definition of the two classes. Then we have the
-first line in the main program: ``line = MyLine()``.  There is no
-constructor in class ``MyLine``, but it could be inherited from the
-parent class ``Line``. However, there is neither any constructor in
-``Line``.  In such cases, Python equips the ``Line`` class with an empty
-constructor as we had made an ``__init__(self)`` method with just ``pass``
-as body. This constructor is called by ``MyLine()``.  It makes ``line``
-refer to an instance of class ``MyLine``.
-
-In the print statement, one needs to fill the string with
-numbers, and after ``x`` is inserted, the call ``line(x)`` is performed.
-Since ``line`` is an object of type ``MyLine``, a function call
-like ``line(x)`` is legal if the class has a special method
-``__call__``. This is the case, since class ``MyLine`` inherits
-``__call__`` from the parent class ``Line``.
-The program flow moves to ``Line.__call__`` where we first call
-``self.constant()``. Since the ``self`` object is of type ``MyLine``,
-this means we call ``MyLine.constant``, but there is no ``constant``
-method in ``MyLine``, meaning that it just inherits the ``constant``
-method from ``Line``. Consequently, ``Line.constant`` is called and
-returns 1.0. The next call is to ``MyLine.steepness_factor``, and
-this method is implemented in class ``MyLine`` and returns -0.2.
-In ``Line.__call__`` we then evaluate ``1.0 + (-0.2)*x``, which
-results in 0.4 when ``x`` is 2.
-
-.. --- end solution of exercise ---
-
-**b)**
-Somebody makes another subclass:
+The problem is solved by
 
 .. code-block:: python
 
-        class YourLine(MyLine):
-            def steepnes_factor(self):
-                return 2
-        
-        line = YourLine()
-        x = 2
-        print('x=%g, y=%g' % (x, line(x))
+        def demo1():
+            problem = Problem1(Nx=20, Ny=5)
+            problem.solve(theta=1, linear_solver='direct')
+            problem.plt.savefig('tmp1.png')
+            problem.plt.savefig('tmp1.pdf')
 
-However, this time the printout is ``x=2, y=0.4``, while it should be
-``x=2, y=5``. Where is the error?
+Results          (1)
+~~~~~~~~~~~~~~~~~~~~
 
-.. --- begin solution of exercise ---
+Figure :ref:`ch:diffusion:refactor:class_solver:fig1` shows accumulated
+curves (from ``self.plt.figure(2)``). The problem is a
+primary example on a *thermal boundary layer*: the sudden rise in
+temperature at :math:`x=0` at :math:`t=0` gives rise to a very steep function, and
+a thin boundary layer that grows with time as heat is transported from
+the boundary into the domain. The jump in the temperature profile at
+:math:`x=0` makes demands to the numerical methods. Quite typically, a
+Crank-Nicolson scheme may show oscillations (as we can see in the
+first curve) because of inaccurate treatment of the shortest spatial
+waves in the Fourier representation of the discrete solution.  The
+oscillations are removed by doubling the spatial resolution from 20 to
+40 elements in the :math:`x` direction.  With :math:`\theta=0`, we never
+experience any oscillations, but the boundary layer gets thicker and
+less accurate (smaller :math:`\Delta t` is needed to compensate).
 
-**Solution.**
-Doing this by hand might not be successful due to the nature of the error.
-It is probably better to use the Online Python Tutor or a debugger.
+.. _ch:diffusion:refactor:class_solver:fig1:
+
+.. figure:: thermal_layer1.png
+   :width: 800
+
+   *Development of thermal boundary layer: Crank-Nicolson (left) and Backward Euler (right) schemes*
+
+From all the plot frames with filenames ``tmp_%04d.png`` we may create
+video files by
+
+.. code-block:: text
+
+        Terminal> ffmpeg -i tmp_%04d.png -r 25 -vcodec libx264   movie.mp4
+        Terminal> ffmpeg -i tmp_%04d.png -r 25 -vcodec libtheora movie.ogg
 
 .. raw:: html
+        
+        <div>
+        <video  loop controls width='640' height='365' preload='none'>
+            <source src='mov/thermal_layer1/movie.mp4'  type='video/mp4;  codecs="avc1.42E01E, mp4a.40.2"'>
+            <source src='mov/thermal_layer1/movie.webm' type='video/webm; codecs="vp8, vorbis"'>
+            <source src='mov/thermal_layer1/movie.ogg'  type='video/ogg;  codecs="theora, vorbis"'>
+        </video>
+        </div>
+        <p><em>Developing thermal boundary layer (notice the jump in speed, i.e., time step!)</em></p>
+        
+        <!-- Issue warning if in a Safari browser -->
+        <script language="javascript">
+        if (!!(window.safari)) {
+          document.write("<div style=\"width: 95%%; padding: 10px; border: 1px solid #100; border-radius: 4px;\"><p><font color=\"red\">The above movie will not play in Safari - use Chrome, Firefox, or Opera.</font></p></div>")}
+        </script>
+        
 
-        <iframe width="950" height="500" frameborder="0"
-                src="http://pythontutor.com/iframe-embed.html#code=from+__future__+import+print_function%0A%0Aclass+Line%28object%29%3A%0A++++def+__call__%28self%2C+x%29%3A%0A++++++++return+self.constant%28%29+%2B+self.steepness_factor%28%29%2Ax%0A%0A++++def+constant%28self%29%3A%0A++++++++return+1.0%0A%0A++++def+steepness_factor%28self%29%3A%0A++++++++return+1.0%0A%0Aclass+MyLine%28Line%29%3A%0A++++def+steepness_factor%28self%29%3A%0A++++++++return+-0.2%0A%0Aclass+YourLine%28MyLine%29%3A%0A++++def+steepnes_factor%28self%29%3A%0A++++++++return+2%0A%0Aline+%3D+YourLine%28%29%0Ax+%3D+2%0Aprint%28%27x%3D%25g%2C+y%3D%25g%27+%25+%28x%2C+line%28x%29%29&curInstr=0&py=2&cumulative=false">
-        </iframe>
+Extension to heterogeneous medium
+---------------------------------
 
-The problem is that when ``Line.__call__`` tries to call
-``YourLine.steepness_factor``, it cannot find such a method in
-``YourLine``, and instead if uses the inherited method ``Line.steepness_factor``,
-which returns -0.2. The problem is that there is a misspelling: a
-missing s in class ``YourLine``. This is a very common error that can be
-hard to track down.
+Suppose we now place another material inside the domain with other
+values material properties (i.e., values of :math:`\varrho`, :math:`c`, and
+:math:`\kappa`).  The new material occupies the rectangle :math:`[0.3,0.7]\times
+[0.3,0.7]` inside the scaled domain.  We also change the boundary
+condition at :math:`x=1` to be "no change", i.e., :math:`\partial u/\partial
+n=0`. Figure :ref:`ch:diffusion:refactor:class_solver:fig5` depicts the
+problem.
 
-.. --- end solution of exercise ---
+.. _ch:diffusion:refactor:class_solver:fig5:
 
-.. --- end exercise ---
+.. figure:: thermal_layer2_sketch.png
+   :width: 500
+
+   *Domain with internal subdomain and (scaled) boundary conditions*
+
+Updated scaling
+~~~~~~~~~~~~~~~
+
+The former scaling is not completely valid as it was based on constant
+:math:`\varrho`, :math:`c`, and :math:`\kappa`. We now introduce
+
+.. math::
+         \bar\varrho = \frac{\varrho}{\varrho_0},\quad
+        \bar c = \frac{c}{c_0},\quad \bar\kappa = \frac{\kappa}{\kappa_0},
+
+where :math:`\varrho_0` is the value of :math:`\varrho` in the outer material,
+now to be known as subdomain 0.
+A similar parameter :math:`\varrho_1` is the value of :math:`\varrho` inside
+the new material, called subdomain 1.
+The constants :math:`c_0`, :math:`\kappa_0`, :math:`c_1`, and :math:`\kappa_1` are
+defined similarly. In subdomain 0, :math:`\bar\varrho = 1`, and in subdomain 1,
+:math:`\bar\varrho = \varrho_1/\varrho_0`, with similar values for
+:math:`\bar c` and :math:`\bar\kappa`. The scaled PDE becomes
+
+.. math::
+         \bar\varrho\bar c\frac{\partial\bar u}{\partial\bar t}
+         = \bar\nabla\cdot(\bar\kappa\bar\nabla\bar u) + \bar f{\thinspace .}
+
+We can call up the solver for the problem with dimensions as long
+as we remember to set :math:`\kappa \varrho = c =1` in subdomain 0.
+In subdomain 1, we divide by :math:`\bar\varrho = \varrho_1/\varrho_0`
+and :math:`\bar c = c_1/c_0`, which results in a coefficient
+
+.. math::
+         \alpha = \frac{\varrho_0c_0\kappa_1}{\varrho_1 c_1\kappa_0} 
+
+on the right-hand side. This means that we can let ``density`` and
+``heat_capacity`` be of unit value and only operate with a spatially
+varying :math:`\kappa`, which takes on the values 1 in subdomain 0 and
+:math:`\alpha` in subdomain 1. For simplicity, we just call this parameter
+lumping :math:`\varrho`, :math:`c`, and :math:`\kappa` together ``kappa`` in the code.
+
+The problem class          (1)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The problem class is very similar to ``Problem1`` above, except for the
+fact that we need to define the inner subdomain, we need to allow for
+:math:`\kappa` values in subdomain 0 and 1, the time points
+for plots and time steps are a bit different, and the Dirichlet condition
+only applies to :math:`x=0` (no need to implement the Neumann condition as
+long as it is zero).
+
+.. code-block:: python
+
+        class Problem2(Problem1):
+            """As Problem 1, but du/dn at x=1 and varying kappa."""
+            def __init__(self, Nx, Ny, kappa_values):
+                Problem1.__init__(self, Nx, Ny)
+                self.init_mesh(Nx, Ny, kappa_values)
+                self.user_action_object = \ 
+                           ProcessSolution(self, u_min=0, u_max=1)
+                # Compare u(x,t) as curve plots for the following times
+                self.times4curveplots = [
+                    12*self.time_step(0),
+                    0.02, 0.1, 0.3, 0.5]
+        
+            def init_mesh(self, Nx, Ny, kappa_values=[1, 0.1]):
+                """Initialize mesh, boundary parts, and p."""
+                self.mesh = UnitSquareMesh(Nx, Ny)
+                self.divisions = (Nx, Ny)
+        
+                self.boundary_parts = \ 
+                     mark_boundaries_in_hypercube(self.mesh, d=2)
+                self.ds =  Measure(
+                    'ds', domain=self.mesh,
+                    subdomain_data=self.boundary_parts)
+        
+                # The domain is the unit square with an embedded rectangle
+                class Rectangle(SubDomain):
+                    def inside(self, x, on_boundary):
+                        return 0.3 <= x[0] <= 0.7 and 0.3 <= x[1] <= 0.7
+        
+                self.materials = CellFunction('size_t', self.mesh)
+                self.materials.set_all(0)  # "the rest"
+                subdomain = Rectangle()
+                subdomain.mark(self.materials, 1)
+                self.V0 = FunctionSpace(self.mesh, 'DG', 0)
+                self.kappa = Function(self.V0)
+                help = np.asarray(self.materials.array(), dtype=np.int32)
+                self.kappa.vector()[:] = np.choose(help, kappa_values)
+        
+            def time_step(self, t):
+                if t < 0.04:
+                    return 0.0005
+                else:
+                    return 0.025
+        
+            def end_time(self):
+                return 0.5
+        
+            def heat_conduction(self):
+                return self.kappa
+        
+            def Dirichlet_conditions(self, t):
+                """Return list of (value,boundary) pairs."""
+                return [(1.0, self.boundary_parts, 0)]
+
+Results          (2)
+~~~~~~~~~~~~~~~~~~~~
+
+We run a case where :math:`\alpha=1000`:
+
+.. code-block:: python
+
+        def demo2():
+            problem = Problem2(Nx=20, Ny=5, kappa_values=[1,1000])
+            print('kappa:', problem.kappa.vector().array())
+            problem.solve(theta=0.5, linear_solver='direct')
+            problem.plt.savefig('tmp1.png')
+            problem.plt.savefig('tmp1.pdf')
+
+As shown in Figure :ref:`ch:diffusion:refactor:class_solver:fig2`,
+the highly conductive inner material leads to a flat temperature profile
+in this region. The start of the process is as before, but
+with an insulated boundary at :math:`x=1`, heat builds up with time.
+
+.. _ch:diffusion:refactor:class_solver:fig2:
+
+.. figure:: thermal_layer2_CN20.png
+   :width: 500
+
+   *Development of thermal boundary layer in heterogeneous medium*
+
+.. raw:: html
+        
+        <div>
+        <video  loop controls width='640' height='365' preload='none'>
+            <source src='mov/thermal_layer2/movie.mp4'  type='video/mp4;  codecs="avc1.42E01E, mp4a.40.2"'>
+            <source src='mov/thermal_layer2/movie.webm' type='video/webm; codecs="vp8, vorbis"'>
+            <source src='mov/thermal_layer2/movie.ogg'  type='video/ogg;  codecs="theora, vorbis"'>
+        </video>
+        </div>
+        <p><em>Developing thermal boundary layer in heterogeneous medium (notice the jump in speed, i.e., time step!)</em></p>
+        
+        <!-- Issue warning if in a Safari browser -->
+        <script language="javascript">
+        if (!!(window.safari)) {
+          document.write("<div style=\"width: 95%%; padding: 10px; border: 1px solid #100; border-radius: 4px;\"><p><font color=\"red\">The above movie will not play in Safari - use Chrome, Firefox, or Opera.</font></p></div>")}
+        </script>
+        
+
+Oscillating boundary temperature
+--------------------------------
+
+The next example concerns the question: How is the temperature in the
+ground affected by day and night variations at the earth's surface?
+We consider a rectangular domain with an embedded subdomain as in the
+previous example. At the side :math:`y=1` (representing the earth's
+surface), we have an oscillating temperature:
+
+.. math::
+         u_B(t) = U_s + A\sin(w t),
+
+where :math:`U_s` is the mean temperature, :math:`[-A,A]` is the temperature variation,
+and :math:`w` is the frequency, here equal to :math:`w=2\pi/P`, where :math:`P` is the
+period of 24 h.
+
+At the other we assume symmetry or "no change", which implies
+:math:`\partial u/\partial n = 0`. The initial condition is taken as
+:math:`u=U_s`, but any value will be lost in long time simulations as a
+steady state oscillatory condition is established.
+Figure :ref:`ch:diffusion:refactor:class_solver:fig6` shows the domain and
+boundary conditions.
+
+.. _ch:diffusion:refactor:class_solver:fig6:
+
+.. figure:: thermal_layer3_scaling_sketch.png
+   :width: 800
+
+   *Domain oscillating temperature at the boundary: unscaled (left) and scaled (left)*
+
+Scaling          (2)
+~~~~~~~~~~~~~~~~~~~~
+
+Now we expect :math:`u` to oscillate around :math:`U_s` with amplitude :math:`A`:
+
+.. math::
+         \bar u = \frac{u-U_s}{A}{\thinspace .}
+
+The scaled boundary condition is then
+
+.. math::
+         \bar u_B(\bar t) = \sin(wt_c\bar t){\thinspace .}
+
+We use a time scale based on :math:`w`, i.e., :math:`t_c=1/w`.
+Chapter 3.2.4 in [Ref24]_ (see `ebook <http://hplgit.github.io/scaling-book/doc/pub/book/html/._scaling-book008.html#___sec142>`__)
+has an in-depth
+coverage of the scaling of this problem. The challenge is that
+the temperature will oscillate close to :math:`y=1`, but the oscillations
+will decay as we move downwards. One can for special set of parameters
+get very thin oscillating boundary layers, which make great demands to
+the numerical methods, or one may not achieve substantial decay
+so the boundary condition on :math:`y=0` becomes wrong. To zoom in on the
+solution in the right way,
+it turns out that the right spatial length scale is
+:math:`\sqrt{2\kappa/(wc\varrho)}`. With this length scale, a typical
+length of the domain in :math:`y` direction is 6.
+The most appropriate time scale is :math:`t_c=2/w`.
+
+We end up with the same scaled problem as in the previous section,
+except that at :math:`y=1` we have
+
+.. math::
+         \bar u_B(\bar t) = \sin(2\bar t){\thinspace .}
+
+The problem class          (2)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+We need a different reasoning about the time steps size since this is an
+oscillatory problem. We also need to stretch the unit square so it becomes
+:math:`[0,1]\times [0,6]` as desired. We also need to change the Dirichlet
+condition. Finally, we need to adjust the curve plotting
+as it now takes place in :math:`y` direction, and the axes are different.
+Much of class ``Problem2`` can be reused, so it makes sense to make
+a subclass and override the methods that do not fit.
+
+.. code-block:: python
+
+        class Problem3(Problem2):
+            """Oscillating surface temperature."""
+            def __init__(self, Nx, Ny, kappa_values):
+                # Oscillating temperature at x=0:
+                self.surface_temp = lambda t: sin(2*t)
+                w = 2.0
+                period = 2*np.pi/w
+                self.dt = period/30  # need this before Problem2.__init__
+                self.T = 4*period
+        
+                Problem2.__init__(self, Nx, Ny, kappa_values)
+                # Stretch the mesh in y direction so we get [0,1]x[0,6]
+                self.mesh.coordinates()[:] = np.array(
+                    [self.mesh.coordinates()[:,0],
+                     6*self.mesh.coordinates()[:,1]]).transpose()
+        
+                self.user_action_object = \ 
+                           ProcessSolution(self, u_min=-1, u_max=1)
+                # Compare u(x,t) as curve plots for the following times
+                self.times4curveplots = [
+                    period/4, 4*period/8, 3*period/4, 3*period]
+        
+            def time_step(self, t):
+                return self.dt
+        
+            def end_time(self):
+                return self.T
+        
+            def Dirichlet_conditions(self, t):
+                """Return list of (value,boundary) pairs."""
+                return [(self.surface_temp(t), self.boundary_parts, 3)]
+        
+            def user_action(self, t, u, timestep):
+                """Post process solution u at time t."""
+                tol = 1E-14
+                self.user_action_object(t, u, timestep)
+                # Also plot u along line x=1/2
+                y_coor = np.linspace(tol, 6-tol, 101)
+                y = [(0.5, y_) for y_ in y_coor]
+                u = self.solution()
+                u_line = [u(y_) for y_ in y]
+                # Animation in figure(1)
+                self.plt.figure(1)
+                self.plt.plot(
+                    y_coor, u_line, 'b-',
+                    legend=['u, t=%.4f' % t],
+                    title='Solution along x=1/2, time step: %g' %
+                    self.time_step(t),
+                    xlabel='y', ylabel='u',
+                    axis=[0, 6, -1.2, 1.2])
+                self.plt.savefig('tmp_%04d.png' % timestep)
+                # Accumulated selected curves in one plot in figure(2)
+                self.plt.figure(2)
+                for t_ in self.times4curveplots:
+                    if abs(t - t_) < 0.5*self.time_step(t):
+                        self.plt.plot(
+                            y_coor, u_line, '-',
+                            legend=['u, t=%.4f' % t],
+                            xlabel='y', ylabel='u',
+                            axis=[0, 6, -1.2, 1.2])
+                        self.plt.hold('on')
+
+The problem is solved by
+
+.. code-block:: python
+
+        def demo3():
+            problem = Problem3(Nx=5, Ny=20, kappa_values=[1,1000])
+            problem.solve(theta=0.5, linear_solver='direct')
+            problem.plt.savefig('tmp1.png')
+            problem.plt.savefig('tmp1.pdf')
+
+Results          (3)
+~~~~~~~~~~~~~~~~~~~~
+
+We have made runs with a homogeneous medium and with a heterogeneous medium
+(using :math:`\alpha=1000` as in the previous section).
+
+.. _ch:diffusion:refactor:class_solver:fig3:
+
+.. figure:: thermal_layer4.png
+   :width: 800
+
+   *Oscillating boundary temperature: homogeneous (left) and heterogeneous (right) medium*
+
+.. raw:: html
+        
+        <div>
+        <video  loop controls width='640' height='365' preload='none'>
+            <source src='mov/thermal_layer3/movie.mp4'  type='video/mp4;  codecs="avc1.42E01E, mp4a.40.2"'>
+            <source src='mov/thermal_layer3/movie.webm' type='video/webm; codecs="vp8, vorbis"'>
+            <source src='mov/thermal_layer3/movie.ogg'  type='video/ogg;  codecs="theora, vorbis"'>
+        </video>
+        </div>
+        <p><em>Oscillating boundary temperature and homogeneous medium.</em></p>
+        
+        <!-- Issue warning if in a Safari browser -->
+        <script language="javascript">
+        if (!!(window.safari)) {
+          document.write("<div style=\"width: 95%%; padding: 10px; border: 1px solid #100; border-radius: 4px;\"><p><font color=\"red\">The above movie will not play in Safari - use Chrome, Firefox, or Opera.</font></p></div>")}
+        </script>
+        
+
+.. raw:: html
+        
+        <div>
+        <video  loop controls width='640' height='365' preload='none'>
+            <source src='mov/thermal_layer4/movie.mp4'  type='video/mp4;  codecs="avc1.42E01E, mp4a.40.2"'>
+            <source src='mov/thermal_layer4/movie.webm' type='video/webm; codecs="vp8, vorbis"'>
+            <source src='mov/thermal_layer4/movie.ogg'  type='video/ogg;  codecs="theora, vorbis"'>
+        </video>
+        </div>
+        <p><em>Oscillating boundary temperature and heterogeneous medium.</em></p>
+        
+        <!-- Issue warning if in a Safari browser -->
+        <script language="javascript">
+        if (!!(window.safari)) {
+          document.write("<div style=\"width: 95%%; padding: 10px; border: 1px solid #100; border-radius: 4px;\"><p><font color=\"red\">The above movie will not play in Safari - use Chrome, Firefox, or Opera.</font></p></div>")}
+        </script>
+        
+
+
+.. admonition:: Tip: Let related problem classes utilize inheritance
+
+   The last three examples regard quite related problems, yet they have
+   substantial differences. The typical approach to making FEniCS software
+   to these applications would be to have three flat programs, each containing
+   a full solver of the PDE, but with details adapted to the problem at
+   hand. The class approach, on the other hand,
+   shows how all applications share the same
+   numerical implementation. The different problem classes can also share
+   a lot of code so inheritance is a way to save writing.
+   However, such class programming requires some experience as it is easy
+   to make mistakes and inherit functionality that is wrong.
+
+
+
 
 .. --- begin exercise ---
 
@@ -1836,370 +2338,7 @@ by
          \frac{u^{n+1}-u^n}{\Delta t} = \frac{1}{2}(G(u^{n+1}) + G(u^n)){\thinspace .}
 
 This method also has a truncation error of order :math:`\Delta t^2`.
-[**hpl 20**: Find some good test problems for comparing the performance of the schemes.]
+[**hpl 18**: Find some good test problems for comparing the performance of the schemes.]
 
 .. --- end exercise ---
-
-.. _ftut:timedep:diffusion2:sin:
-
-A physical example
-------------------
-
-.. index:: ft11_sin_daD.py
-
-With the basic programming techniques for time-dependent problems from
-the sections :ref:`ch:diffusion:opt:noassembly` and
-:ref:`ftut:timedep:diffusion1:impl` we are ready to attack more
-physically realistic examples.  The next example concerns the
-question: How is the temperature in the ground affected by day and
-night variations at the earth's surface?  We consider some box-shaped
-domain :math:`\Omega` in :math:`d` dimensions with coordinates
-:math:`x_0,\ldots,x_{d-1}` (the problem is meaningful in 1D, 2D, and 3D).
-At the top of the domain, :math:`x_{0}=0`, we have an oscillating
-temperature
-
-.. math::
-        
-        T_0(t) = T_R + T_A\sin (\omega t),
-        
-
-where :math:`T_R` is some reference temperature, :math:`T_A` is the amplitude of
-the temperature variations at the surface, and :math:`\omega` is the
-frequency of the temperature oscillations.  At all other boundaries we
-assume that the temperature does not change anymore when we move away
-from the boundary, i.e., the normal derivative is zero.  Initially,
-the temperature can be taken as :math:`T_R` everywhere.  The heat
-conductivity properties of the soil in the ground may vary with space
-so we introduce a variable coefficient :math:`\kappa` reflecting this
-property.  Figure :ref:`ftut:timedep:diffusion2:sin:fig1` shows a sketch
-of the problem, with a small region where the heat conductivity is
-much lower.  [**hpl 21**: All parameters :math:`\varrho`, :math:`c`, and :math:`\kappa` are different!]
-
-.. _ftut:timedep:diffusion2:sin:fig1:
-
-.. figure:: daynight.png
-   :width: 480
-
-   *Sketch of a (2D) problem involving heating and cooling of the ground due to an oscillating surface temperature*
-
-The initial-boundary value problem for this problem reads
-
-.. _Eq:_auto36:
-
-.. math::
-
-    \tag{91}
-    \varrho c{\partial T\over\partial t} = \nabla\cdot\left( \kappa\nabla T\right)\hbox{ in }\Omega\times (0,t_{\hbox{stop}}],
-        
-        
-
-.. _Eq:_auto37:
-
-.. math::
-
-    \tag{92}
-    T = T_0(t)\hbox{ on }\Gamma_0,
-        
-        
-
-.. _Eq:_auto38:
-
-.. math::
-
-    \tag{93}
-    {\partial T\over\partial n} = 0\hbox{ on }\partial\Omega\backslash\Gamma_0,
-        
-        
-
-.. _Eq:_auto39:
-
-.. math::
-
-    \tag{94}
-    T = T_R\hbox{ at }t =0{\thinspace .}
-        
-        
-
-Here, :math:`\varrho` is the density of the soil, :math:`c` is the
-heat capacity, :math:`\kappa` is the thermal conductivity
-(heat conduction coefficient)
-in the soil, and :math:`\Gamma_0` is the surface boundary :math:`x_{0}=0`.
-
-We use a :math:`\theta`-scheme in time, i.e., the evolution equation
-:math:`\partial P/\partial t=Q(t)` is discretized as
-
-.. math::
-        
-        {P^k - P^{k-1}\over{{\Delta t}}} = \theta Q^k + (1-\theta )Q^{k-1},
-        
-
-where :math:`\theta\in[0,1]` is a weighting factor: :math:`\theta =1` corresponds
-to the backward difference scheme, :math:`\theta =1/2` to the Crank-Nicolson
-scheme, and :math:`\theta =0` to a forward difference scheme.
-The :math:`\theta`-scheme applied to our PDE results in
-
-.. math::
-        
-        \varrho c{T^k-T^{k-1}\over{{\Delta t}}} =
-        \theta \nabla\cdot\left( \kappa\nabla T^k\right)
-        + (1-\theta) \nabla\cdot\left( k\nabla T^{k-1}\right){\thinspace .}
-        
-
-Bringing this time-discrete PDE into weak form follows the technique shown
-many times earlier in this tutorial. In the standard notation
-:math:`a(T,v)=L(v)` the weak form has
-
-.. _Eq:_auto40:
-
-.. math::
-
-    \tag{95}
-    a(T,v) = \int_\Omega
-        \left( \varrho c Tv + \theta{{\Delta t}} \kappa\nabla T\cdot \nabla v\right) {\, \mathrm{d}x},
-        
-        
-
-.. _Eq:_auto41:
-
-.. math::
-
-    \tag{96}
-    L(v) = \int_\Omega \left( \varrho c T^{k-1}v - (1-\theta){{\Delta t}}
-        \kappa\nabla T^{k-1}\cdot \nabla v\right) {\, \mathrm{d}x}{\thinspace .}
-        
-        
-
-Observe that boundary integrals vanish because of the Neumann boundary
-conditions.
-
-.. index:: heterogeneous medium
-
-.. index:: multi-material domain
-
-The size of a 3D box is taken as :math:`W\times W\times D`, where :math:`D` is
-the depth and :math:`W=D/2` is the width.
-We give the degree of the basis functions at the command line, then :math:`D`,
-and then the divisions of the domain in the various directions.
-To make a box, rectangle, or interval of arbitrary (not unit) size,
-we have the classes ``BoxMesh``, ``RectangleMesh``, and
-``IntervalMesh`` at our disposal. The mesh and the function space
-can be created by the following code:
-
-.. code-block:: python
-
-        degree = int(sys.argv[1])
-        D = float(sys.argv[2])
-        W = D/2.0
-        divisions = [int(arg) for arg in sys.argv[3:]]
-        d = len(divisions)  # no of space dimensions
-        if d == 1:
-            mesh = IntervalMesh(divisions[0], -D, 0)
-        elif d == 2:
-            mesh = RectangleMesh(-W/2, -D, W/2, 0, divisions[0], divisions[1])
-        elif d == 3:
-            mesh = BoxMesh(-W/2, -W/2, -D, W/2, W/2, 0,
-                       divisions[0], divisions[1], divisions[2])
-        V = FunctionSpace(mesh, 'P', degree)
-
-The ``RectangleMesh`` and ``BoxMesh`` objects are defined by the coordinates
-of the "minimum" and "maximum" corners.
-
-Setting Dirichlet conditions at the upper boundary can be done by
-
-.. code-block:: python
-
-        T_R = 0; T_A = 1.0; omega = 2*pi
-        
-        T_0 = Expression('T_R + T_A*sin(omega*t)',
-                         T_R=T_R, T_A=T_A, omega=omega, t=0.0)
-        
-        def surface(x, on_boundary):
-            return on_boundary and abs(x[d-1]) < 1E-14
-        
-        bc = DirichletBC(V, T_0, surface)
-
-The :math:`\kappa` function can be defined as a constant :math:`\kappa_1` inside
-the particular rectangular area with a special soil composition, as
-indicated in Figure :ref:`ftut:timedep:diffusion2:sin:fig1`. Outside
-this area :math:`\kappa` is a constant :math:`\kappa_0`.
-The domain of the rectangular area is taken as
-
-.. math::
-        
-        [-W/4, W/4]\times [-W/4, W/4]\times [-D/2, -D/2 + D/4]
-        
-
-in 3D, with :math:`[-W/4, W/4]\times [-D/2, -D/2 + D/4]` in 2D and
-:math:`[-D/2, -D/2 + D/4]` in 1D.
-Since we need some testing in the definition of the :math:`\kappa(\boldsymbol{x})`
-function, the most straightforward approach is to define a subclass
-of ``Expression``, where we can use a full Python method instead of
-just a C++ string formula for specifying a function.
-The method that defines the function is called ``eval``:
-
-.. code-block:: python
-
-        class Kappa(Expression):
-            def eval(self, value, x):
-                """x: spatial point, value[0]: function value."""
-                d = len(x)  # no of space dimensions
-                material = 0  # 0: outside, 1: inside
-                if d == 1:
-                    if -D/2. < x[d-1] < -D/2. + D/4.:
-                        material = 1
-                elif d == 2:
-                    if -D/2. < x[d-1] < -D/2. + D/4. and \ 
-                       -W/4. < x[0] < W/4.:
-                        material = 1
-                elif d == 3:
-                    if -D/2. < x[d-1] < -D/2. + D/4. and \ 
-                       -W/4. < x[0] < W/4. and -W/4. < x[1] < W/4.:
-                        material = 1
-                value[0] = kappa_0 if material == 0 else kappa_1
-
-The ``eval`` method gives great flexibility in defining functions,
-but a downside is that C++ calls up ``eval`` in Python for
-each point ``x``, which is a slow process, and the number of calls
-is proportional to the number of numerical
-integration points in the mesh (about
-the number of degrees of freedom).
-Function expressions in terms of strings are compiled to efficient
-C++ functions, being called from C++, so we should try to express functions
-as string expressions if possible. (The ``eval`` method can also be
-defined through C++ code, but this is much
-more complicated and not covered here.)
-Using inline if-tests in C++, we can make string expressions for
-:math:`\kappa`, here stored in a Python dictionary so that ``kappa_str[d-1]``
-is the proper test in a :math:`d` dimensional problem:
-
-.. code-block:: python
-
-        kappa_str = {}
-        kappa_str[1] = 'x[0] > -D/2 && x[0] < -D/2 + D/4 ? kappa_1 : kappa_0'
-        kappa_str[2] = 'x[0] > -W/4 && x[0] < W/4 '\ 
-                       '&& x[1] > -D/2 && x[1] < -D/2 + D/4 ? '\ 
-                       'kappa_1 : kappa_0'
-        kappa_str[3] = 'x[0] > -W/4 && x[0] < W/4 '\ 
-                       'x[1] > -W/4 && x[1] < W/4 '\ 
-                       '&& x[2] > -D/2 && x[2] < -D/2 + D/4 ?'\ 
-                       'kappa_1 : kappa_0'
-        
-        kappa = Expression(kappa_str[d],
-                           D=D, W=W, kappa_0=kappa_0, kappa_1=kappa_1)
-
-Let ``T`` denote the unknown spatial temperature function at the
-current time level, and let ``T_1`` be the corresponding function
-at one earlier time level.
-We are now ready to define the initial condition and the
-``a`` and ``L`` forms of our problem:
-
-.. code-block:: python
-
-        T_prev = interpolate(Constant(T_R), V)
-        
-        rho = 1
-        c = 1
-        period = 2*pi/omega
-        t_stop = 5*period
-        dt = period/20  # 20 time steps per period
-        theta = 1
-        
-        T = TrialFunction(V)
-        v = TestFunction(V)
-        f = Constant(0)
-        a = rho*c*T*v*dx + theta*dt*kappa*\ 
-            dot(grad(T), grad(v))*dx
-        L = (rho*c*T_prev*v + dt*f*v -
-             (1-theta)*dt*kappa*dot(grad(T_1), grad(v)))*dx
-        
-        A = assemble(a)
-        b = None  # variable used for memory savings in assemble calls
-        T = Function(V)   # unknown at the current time level
-
-We could, alternatively, break ``a`` and ``L`` up in subexpressions
-and assemble a mass matrix and stiffness matrix, as exemplified in
-the section :ref:`ch:diffusion:opt:noassembly`, to avoid
-assembly of ``b`` at every time level. This modification is
-straightforward and left as an exercise. The speed-up can be significant
-in 3D problems.
-
-The time loop is very similar to what we have displayed in
-the section :ref:`ftut:timedep:diffusion1:impl`:
-
-.. code-block:: python
-
-        T = Function(V)   # unknown at the current time level
-        t = dt
-        while t <= t_stop:
-            b = assemble(L, tensor=b)
-            T_0.t = t
-            bc.apply(A, b)
-            solve(A, T.vector(), b)
-            # visualization statements
-            t += dt
-            T_prev.assign(T)
-
-The complete code in ``ft11_sin_daD.py`` contains several
-statements related to visualization and animation of the solution, both as a
-finite element field (``plot`` calls) and as a curve in the
-vertical direction. The code also plots the exact analytical solution,
-
-.. math::
-        
-        T(x,t) = T_R + T_Ae^{ax}\sin (\omega t + ax),\quad a =\sqrt{\omega\varrho c\over 2\kappa},
-        
-
-which is valid when :math:`\kappa = \kappa_0=\kappa_1`.
-
-Implementing this analytical solution as a Python function
-taking scalars and numpy arrays as arguments requires a word of caution.
-A straightforward function like
-
-.. code-block:: python
-
-        def T_exact(x):
-            a = sqrt(omega*rho*c/(2*kappa_0))
-            return T_R + T_A*exp(a*x)*sin(omega*t + a*x)
-
-will not work and result in an error message from UFL. The reason is that
-the names ``exp`` and ``sin`` are those imported
-by the ``from fenics import *`` statement, and these names
-come from UFL and are aimed at being used in variational forms.
-In the ``T_exact`` function where ``x`` may be a scalar or a
-``numpy`` array, we therefore need to explicitly specify
-``np.exp`` and ``np.sin`` (if ``numpy`` is imported under the common name ``np``):
-
-.. code-block:: python
-
-        def T_exact(x):
-            a = sqrt(omega*rho*c/(2*kappa_0))
-            return T_R + T_A*np.exp(a*x)*np.sin(omega*t + a*x)
-
-The complete code is found in the file The reader is encouraged to
-play around with the code and test out various parameter sets:
-
- 1. :math:`T_R=0`, :math:`T_A=1`, :math:`\kappa_0 = \kappa_1=0.2`, :math:`\varrho = c = 1`, :math:`\omega = 2\pi`
-
- 2. :math:`T_R=0`, :math:`T_A=1`, :math:`\kappa_0=0.2`, :math:`\kappa_1=0.01`, :math:`\varrho = c = 1`, :math:`\omega = 2\pi`
-
- 3. :math:`T_R=0`, :math:`T_A=1`, :math:`\kappa_0=0.2`, :math:`\kappa_1=0.001`, :math:`\varrho = c = 1`, :math:`\omega = 2\pi`
-
- 4. :math:`T_R=10` C, :math:`T_A=10` C, :math:`\kappa_0= 2.3 \hbox{ K}^{-1}\hbox{Ns}^{-1}`,
-    :math:`\kappa_1= 100 \hbox{ K}^{-1}\hbox{Ns}^{-1}`,
-    :math:`\varrho = 1500\hbox{ kg/m}^3`,
-    :math:`c = 1480\hbox{ Nm}\cdot\hbox{kg}^{-1}\hbox{K}^{-1}`,
-    :math:`\omega = 2\pi/24` 1/h  :math:`= 7.27\cdot 10^{-5}` 1/s, :math:`D=1.5` m
-
- 5. As above, but :math:`\kappa_0= 12.3 \hbox{ K}^{-1}\hbox{Ns}^{-1}` and
-    :math:`\kappa_1= 10^4 \hbox{ K}^{-1}\hbox{Ns}^{-1}`
-
-Data set number 4 is relevant for real temperature variations in
-the ground (not necessarily the large value of :math:`\kappa_1`),
-while data set number 5
-exaggerates the effect of a large heat conduction contrast so that
-it becomes clearly visible in an animation.
-
-.. kappa_1 = 1.1, varrho_1 = 1200, c_1 = 1000 => 9.17E-7
-
-.. kappa_0 = 2.3, varrho_0 = 1800, c_0 = 1500 => 8.52E-7
 

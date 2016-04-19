@@ -532,7 +532,7 @@ def solver_vs_solver_minimize_assembly():
     dt = 0.3
     Nt = 10
     T = Nt*dt
-    degree = 2
+    degree = 1
 
     from diffusion_class import TestProblemExact
     class ClassVersion(TestProblemExact):
@@ -584,13 +584,13 @@ def solver_vs_solver_minimize_assembly():
         N *= 1.5
         N = int(round(N))
 """
-N= 40, std solver: 0.08 opt solver: 0.07 class solver: 0.27 speed-up: 1.2
-N= 80, std solver: 0.31 opt solver: 0.29 class solver: 0.54 speed-up: 1.1
-N=160, std solver: 1.45 opt solver: 1.44 class solver: 2.07 speed-up: 1.0
-N=320, std solver: 7.42 opt solver: 8.27 class solver: 9.65 speed-up: 0.9
-N= 10, std solver: 0.19 opt solver: 0.11 class solver: 0.38 speed-up: 1.7
-N= 15, std solver: 0.98 opt solver: 0.54 class solver: 1.48 speed-up: 1.8
-N= 23, std solver: 14.14 opt solver: 6.32 class solver: 14.38 speed-up: 2.2
+P2:
+N= 40, std solver: 2.34 opt solver: 0.68 class solver: 1.06 speed-up: 3.4
+N= 80, std solver: 2.58 opt solver: 1.83 class solver: 2.08 speed-up: 1.4
+N=160, std solver: 20.63 opt solver: 22.82 class solver: 11.45 speed-up: 0.9
+N=320, std solver: 165.11 opt solver: 100.15 class solver: 71.01 speed-up: 1.6
+N= 10, std solver: 6.84 opt solver: 3.60 class solver: 8.84 speed-up: 1.9
+N= 15, std solver: 96.20 opt solver: 56.10 class solver: 98.82 speed-up: 1.7
 """
 if __name__ == '__main__':
     #application()
