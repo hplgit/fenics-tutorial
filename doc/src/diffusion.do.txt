@@ -133,6 +133,9 @@ $f^{k}=\sum_{j=1}^NF^{k}_j\phi_j$. Inserting these expressions in $L(v)$
 and using
 $v=\hat\phi_i$ result in
 
+[hpl: Why $hat\phi_i$? No need for Petrov-Galerkin here... Cannot remember
+why the hat.]
+
 !bt
 \begin{align*}
 \int_\Omega \left(u^{k-1} + {\dt}f^k\right)v \dx &=
@@ -351,7 +354,8 @@ you run a code a lot.
 label{ch:diffusion:welding}
 
 The focus so far in this tutorial has been on producing the solution
-of PDE problems. For scientific investigations, the primary work is
+of PDE problems. [hpl: This is book 2, it depends on how things end
+up in the previous chapter.] For scientific investigations, the primary work is
 often with post processing results: computing quantities derived from
 the solution and inspecting these with visualization or data analysis tools.
 This is the focus of the present section.
@@ -492,11 +496,11 @@ label{ch:diffusion:welding:scaling}
 There are 10 physical parameters in the problem: $L$, $\varrho$, $c$,
 $\kappa$, $A$, $x_0$, $y_0$, $R$, $\omega$, $\sigma$.  Scaling can
 dramatically reduce the number of parameters and also introduce new
-parameters that are much easier to assign numerical values. We
-therefore scale the problem. As length scale, we choose $L$ so the
-scaled domain becomes the unit square. As time scale and
-characteristic size of $u$, we just introduce $t_c$ ad $u_c$.  This
-means that we introduce scaled variables
+parameters that are much easier to assign numerical values when doing
+numerical experiments. We therefore scale the problem. As length
+scale, we choose $L$ so the scaled domain becomes the unit square. As
+time scale and characteristic size of $u$, we just introduce $t_c$ ad
+$u_c$.  This means that we introduce scaled variables
 
 !bt
 \[
@@ -558,7 +562,7 @@ the source term to balance the time derivative term,
 !bt
 \[ u_c = \frac{A}{\omega\varrho c}\tp\]
 !et
-Our aim is to have $\bar u \in [0,1]$, but this $u_c$ do not capture
+Our aim is to have $\bar u \in [0,1]$, but this $u_c$ does not capture
 the precise magnitude of $u$. However, we believe that the characteristic
 size of $u$ is
 
@@ -1007,7 +1011,7 @@ the `lhs` and `rhs` functions for this purpose in the code.  However,
 we should be very convinced that we have a *linear* variational
 problem at hand and not a nonlinear one.
 
-===== A class-based solver =====
+===== Superclass for problems =====
 label{ch:diffusion:refactor:class_solver}
 
 The solver class contains the data structures
@@ -1027,6 +1031,8 @@ subclasses of `DiffusionProblem`. The `solve` and `flux` methods are
 general and can be inherited, while the rest of the methods must be
 implemented in the subclass for the particular problem at hand.
 
+===== A specific problem class =====
+
 As a simple example, consider the test problem where we have a
 manufactured solution $u=1+x^2 + \alpha y^2 + \beta t$ on
 a uniform mesh over the unit square or cube, with Dirichlet conditions
@@ -1043,6 +1049,8 @@ Our test problem can now be solved in (e.g.) a unit test like
 The solver class will call the `user_action` function at every time level,
 and this function will assert that we recover the solution to machine precision.
 
+===== The solver class =====
+
 The solver class, here based on the $\theta$-rule and the
 variational formulation from the previous section, can be coded as
 follows:
@@ -1058,18 +1066,19 @@ $U_s$. The other boundaries are insulated so heat cannot escape.
 There are no heat sources.  How is the temperature development
 in the material due to such sudden heating of one end?
 Figure ref{ch:diffusion:refactor:class_solver:fig4} sketches the
-situation (with a scaled variable $u$).
+situation (with a scaled variable $u$ that jumps from 0 to 1).
 
 # Program for the sketch below: fig/thermal_layer1.py
 
-FIGURE: [fig/thermal_layer1_sketch, width=500 frac=0.6] Domain with (scaled) boundary conditions: sudden jump in $u$ at $x=0$. label{ch:diffusion:refactor:class_solver:fig4}
+FIGURE: [fig/thermal_layer1_sketch, width=500 frac=0.6] Domain with (scaled) boundary conditions: sudden jump in $u$ at the left boundary. label{ch:diffusion:refactor:class_solver:fig4}
 
 === Mathematics ===
 
 The problem is mathematically one-dimensional, so it means that if we
 create a 2D or 3D domain, the boundaries in $y$ and $z$ directions are
-insulated ($\partial u/\partial n=0$). The heating is applied to $x=0$
-and $x=L$.
+insulated (requiring $\partial u/\partial n=0$ as boundary condition
+on $y=\mathrm{const}$ and $z=\mathrm{const}$).
+The heating is applied to $x=0$ and $x=L$.
 
 It is natural to scale the problem by introducing dimensionless
 independent and dependent variables:
@@ -1105,21 +1114,20 @@ The scaled initial-boundary problem can be written as
 === Implementation ===
 
 We can solve our problem with the general problem and solver
-classes by noticing that we set $\varrho = c= \kappa = 1$,
+classes by setting $\varrho = c= \kappa = 1$,
 and $I=0$. The most labor-intensive part of the problem class is
 the visualization. We can create a helper class, `ProcessSolution`,
-which applies `cbcpost` to store the solution:
+which applies `cbcpost` to store the solution and perform animation
+via the `fenics.plot` tool:
 
 @@@CODE src/diffusion_class.py fromto: import cbcpost@def mark_
 In the `user_action`
 method, we use this tool to store the solution, but we also add
 statements for plotting $u$ along a line from $x=0$ to $x=1$
-through the medium ($y=0.5$). This will gives an animation of
-the temperature profile, but results in somewhat lengthy code
-(we actually use SciTools to cut down the length compared to animation
-code in Matplotlib).
+through the medium ($y=0.5$). This gives an animation of
+the temperature profile, but results in somewhat lengthy code.
 
-To mark the boundaries, we can make a
+To mark the boundaries, so we can set $u=1$ at $x=0$, we can make a
 function like
 
 @@@CODE src/diffusion_class.py fromto: def mark_boundaries_in_rectangle@def mark_boundaries_in_hypercube
@@ -1130,7 +1138,7 @@ box:
 
 @@@CODE src/diffusion_class.py fromto: def mark_boundaries_in_hypercube@class Problem1
 
-Now we are in a position to show our problem class:
+Now we are in a position to show the complete problem class:
 
 @@@CODE src/diffusion_class.py fromto: class Problem1@# Classical matplotlib
 Notice our definition of the time step: because the growth of the
@@ -1144,12 +1152,12 @@ animation at $t=0.02$.
 
 The problem is solved by
 
-@@@CODE src/diffusion_class.py fromto: def demo1@problem\.plt\.
+@@@CODE src/diffusion_class.py fromto: def demo_Problem1@def demo_Problem2
 
 === Results ===
 
 Figure ref{ch:diffusion:refactor:class_solver:fig1} shows accumulated
-curves (from `self.plt.figure(2)`). The problem is a
+curves (from `plt.figure(2)`). The problem is a
 primary example on a *thermal boundary layer*: the sudden rise in
 temperature at $x=0$ at $t=0$ gives rise to a very steep function, and
 a thin boundary layer that grows with time as heat is transported from
@@ -1159,9 +1167,11 @@ Crank-Nicolson scheme may show oscillations (as we can see in the
 first curve) because of inaccurate treatment of the shortest spatial
 waves in the Fourier representation of the discrete solution.  The
 oscillations are removed by doubling the spatial resolution from 20 to
-40 elements in the $x$ direction.  With $\theta=0$, we never
+40 elements in the $x$ direction.  With $\theta=1$, we never
 experience any oscillations, but the boundary layer gets thicker and
 less accurate (smaller $\Delta t$ is needed to compensate).
+However, in this problem, we see from Figure ref{ch:diffusion:refactor:class_solver:fig1} that the inaccuracy is only visible for the very first time
+steps as the boundary layer is thin.
 
 FIGURE: [fig/thermal_layer1, width=800 frac=1] Development of thermal boundary layer: Crank-Nicolson (left) and Backward Euler (right) schemes. label{ch:diffusion:refactor:class_solver:fig1}
 
@@ -1175,7 +1185,7 @@ Terminal> ffmpeg -i tmp_%04d.png -r 25 -vcodec libtheora movie.ogg
 
 MOVIE: [mov/thermal_layer1/movie.ogg] Developing thermal boundary layer (notice the jump in speed, i.e., time step!)
 
-===== Extension to heterogeneous medium =====
+===== Extension to a heterogeneous medium =====
 
 Suppose we now place another material inside the domain with other
 values material properties (i.e., values of $\varrho$, $c$, and
@@ -1226,8 +1236,8 @@ varying $\kappa$, which takes on the values 1 in subdomain 0 and
 $\alpha$ in subdomain 1. For simplicity, we just name this parameter
 `kappa_values` in the code.
 
-[hpl: Would be clearer at more physical code to let all three
-parameters vary...]
+[hpl: Is this trick too tricky?
+Would it be clearer to let all three parameters vary?]
 
 === The problem class ===
 
@@ -1244,12 +1254,13 @@ long as it is zero).
 
 We run a case where $\alpha=1000$:
 
-@@@CODE src/diffusion_class.py fromto: def demo2@problem\.plt\.
+@@@CODE src/diffusion_class.py fromto: def demo_Problem2@def demo_Problem3
 
 As shown in Figure ref{ch:diffusion:refactor:class_solver:fig2},
 the highly conductive inner material leads to a flat temperature profile
 in this region. The start of the process is as before, but
 with an insulated boundary at $x=1$, heat builds up with time.
+The limiting steady state is $u=1$ as $t\rightarrow\infty$.
 
 FIGURE: [fig/thermal_layer2_CN20, width=500 frac=0.8] Development of thermal boundary layer in heterogeneous medium. label{ch:diffusion:refactor:class_solver:fig2}
 
@@ -1270,7 +1281,7 @@ where $U_s$ is the mean temperature, $[-A,A]$ is the temperature variation,
 and $w$ is the frequency, here equal to $w=2\pi/P$, where $P$ is the
 period of 24 h.
 
-At the other we assume symmetry or ``no change'', which implies
+At the other boundaries we assume symmetry or ``no change'', which implies
 $\partial u/\partial n = 0$. The initial condition is taken as
 $u=U_s$, but any value will be lost in long time simulations as a
 steady state oscillatory condition is established.
@@ -1306,7 +1317,7 @@ so the boundary condition on $y=0$ becomes wrong. To zoom in on the
 solution in the right way,
 it turns out that the right spatial length scale is
 $\sqrt{2\kappa/(wc\varrho)}$. With this length scale, a typical
-length of the domain in $y$ direction is 6.
+length of the domain in $y$ direction is 4.
 The most appropriate time scale is $t_c=2/w$.
 
 We end up with the same scaled problem as in the previous section,
@@ -1316,23 +1327,21 @@ except that at $y=1$ we have
 \[ \bar u_B(\bar t) = \sin(2\bar t)\tp\]
 !et
 
-[hpl: The position of the subdomain should be scaled. Now it is
-basically postioned in the scaled domain.]
 
 === The problem class ===
 
 We need a different reasoning about the time steps size since this is an
 oscillatory problem. We also need to stretch the unit square so it becomes
-$[0,1]\times [0,6]$ as desired. We also need to change the Dirichlet
-condition. Finally, we need to adjust the curve plotting
+$[0,4]\times [0,4]$ as desired. In addition, we need to change the Dirichlet
+condition. And finally, we need to adjust the curve plotting
 as it now takes place in $y$ direction, and the axes are different.
 Much of class `Problem2` can be reused, so it makes sense to make
 a subclass and override the methods that do not fit.
 
-@@@CODE src/diffusion_class.py fromto: class Problem3@def demo1
+@@@CODE src/diffusion_class.py fromto: class Problem3@def demo_Problem1
 The problem is solved by
 
-@@@CODE src/diffusion_class.py fromto: def demo3@problem\.plt\.
+@@@CODE src/diffusion_class.py fromto: def demo_Problem3@class TestProblemExact
 
 === Results ===
 

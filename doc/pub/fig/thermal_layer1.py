@@ -5,7 +5,6 @@ from pysketcher import *
 drawing_tool.set_coordinate_system(
     xmin=-0.5, xmax=1.5, ymin=-0.5, ymax=1.5, axis=False)
 
-x = 0
 drawing_tool.set_linecolor('black')
 
 domain = Rectangle((0,0), 1, 1)
@@ -26,6 +25,9 @@ drawing_tool.savefig('tmp1')
 
 drawing_tool.erase()
 fig1['subdomain'] = subdomain
+fig1['x=1'] = Text(r'$\partial u/\partial n = 0$',
+                   (1.3,0.5), alignment='right')
+
 fig1.draw()
 drawing_tool.savefig('tmp2')
 
