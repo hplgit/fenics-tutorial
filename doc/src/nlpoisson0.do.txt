@@ -76,49 +76,7 @@ nonlinear algebraic equations in the unknowns $U_1,\ldots,U_N$.
 ===== A simple implementation =====
 label{ftut:nonlinear:Newton:auto}
 
-=== Overview ===
-
-A working solver for the nonlinear Poisson equation is as easy to
-implement as a solver for the corresponding linear problem.
-All we need to do is to state the formula for $F$ and call
-`solve(F == 0, u, bc)` instead of `solve(a == L, u, bc)` as we did
-in the linear case. Here is a minimalistic code:
-
-!bc pycod
-from fenics import *
-
-def q(u):
-    """Nonlinear coefficient in the PDE."""
-    return 1 + u**2
-
-mesh = UnitSquareMesh(32, 32)
-V = FunctionSpace(mesh, 'P', 1)
-u_b = Expression(...)
-
-def boundary(x, on_boundary):
-    return on_boundary
-
-bc = DirichletBC(V, u_b, boundary)
-
-# Define variational problem
-u = Function(V)
-v = TestFunction(V)
-f = Expression(...)
-F = q(u)*dot(grad(u), grad(v))*dx - f*v*dx
-
-# Compute solution
-solve(F == 0, u, bc)
-!ec
-The major difference from a linear problem is that the unknown function
-`u` in the variational form is in the nonlinear case
-must be defined as a `Function`, not a `TrialFunction`. In some sense
-this is a simplification from the linear case where we must define `u`
-first as a `TrialFunction` and then as a `Function`.
-
-The `solve` function takes the nonlinear equations, derives symbolically
-the Jacobian matrix, and runs a Newton method to compute the solution.
-
-=== Constructing a test problem with SymPy ===
+=== Test problem ===
 
 To solve a test problem, we need to choose the right-hand side $f$,
 the coefficient $q(u)$ and the boundary value $\ub$.  Previously, we
@@ -176,8 +134,6 @@ Similarly, we define the right-hand side function as
 !bc pycod
 f = Expression(f_code)
 !ec
-The complete code is found in the file
-"`${prog["poisson_flat_nonlinear"]}.py`": "${src_url}/${prog['poisson_flat_nonlinear']}.py".
 
 !bwarning Name clash between `fenics` and program variables
 In a program like the one above, strange errors may occur due to
@@ -192,6 +148,51 @@ object names by `fe`. The next best solution is to do the
 that overwrite those imported from `fenics`. This is acceptable
 if we do not need `sym` and `q` from `fenics`.
 !ewarning
+
+=== FEniCS implementation ===
+
+A working solver for the nonlinear Poisson equation is as easy to
+implement as a solver for the corresponding linear problem.
+All we need to do is to state the formula for $F$ and call
+`solve(F == 0, u, bc)` instead of `solve(a == L, u, bc)` as we did
+in the linear case. Here is a minimalistic code:
+
+!bc pycod
+from fenics import *
+
+def q(u):
+    """Nonlinear coefficient in the PDE."""
+    return 1 + u**2
+
+mesh = UnitSquareMesh(32, 32)
+V = FunctionSpace(mesh, 'P', 1)
+u_b = Expression(...)
+
+def boundary(x, on_boundary):
+    return on_boundary
+
+bc = DirichletBC(V, u_b, boundary)
+
+# Define variational problem
+u = Function(V)
+v = TestFunction(V)
+f = Expression(...)
+F = q(u)*dot(grad(u), grad(v))*dx - f*v*dx
+
+# Compute solution
+solve(F == 0, u, bc)
+!ec
+The major difference from a linear problem is that the unknown function
+`u` in the variational form is in the nonlinear case
+must be defined as a `Function`, not a `TrialFunction`. In some sense
+this is a simplification from the linear case where we must define `u`
+first as a `TrialFunction` and then as a `Function`.
+
+The `solve` function takes the nonlinear equations, derives symbolically
+the Jacobian matrix, and runs a Newton method to compute the solution.
+
+The complete code is found in the file
+"`${prog["poisson_flat_nonlinear"]}.py`": "${src_url}/${prog['poisson_flat_nonlinear']}.py".
 
 Running the code gives output that tells how the Newton iteration
 progresses. With $2\times(32\times 32)$ cells we reach convergence in eight

@@ -18,7 +18,7 @@ for the velocity $u$ and pressure $p$ in an incompressible fluid:
 !bt
 \begin{align}
   label{ftut1:ns:momentum}
-  \dot{u} + u \cdot \nabla u - \nabla\cdot\sigma(u, p) &= f, \\
+  \varrho(\dot{u} + u \cdot \nabla u) - \nabla\cdot\sigma(u, p) &= f, \\
   label{ftut1:ns:continuity}
   \nabla \cdot u &= 0.
 \end{align}
@@ -33,7 +33,13 @@ is given by
   \sigma(u, p) = 2\nu\epsilon(u) - pI.
 \end{equation}
 !et
-The parameter $\nu$ is the kinematic viscocity.
+The parameter $\nu$ is the kinematic viscocity. Note that the momentum
+equation (ref{ftut1:ns:momentu}) is very similar to the elasticity
+equation (ref{ftut:elast:varform:equilibrium}). The difference is the
+two additional terms $\varrho(\dot{u} + u \cdot \nabla u)$ and the different
+expression for the stress tensor. The two extra terms express the
+acceleration $\rho \ddot{x}$ balanced by the force $F = f +
+\nabla\cdot\sigma$ per unit voume in Newton's second law.
 
 ===== Variational formulation =====
 
@@ -61,14 +67,18 @@ improved accuracy compared to the original scheme at little extra
 cost.
 
 The IPCS scheme involves three steps. First, we compute a *tentative
-velocotity* $u^{\bigstar}$ by advancing the momentum equation
-(ref{ftut1:ns:momentum}) using the pressure $p^{n-1}$ from the previous time
-interval. The variational problem for this first step is:
+velocity* $u^{\bigstar}$ by advancing the momentum equation
+(ref{ftut1:ns:momentum}) using the pressure $p^{n-1}$ from the
+previous time interval. We will also be using the velocity $u^{n-1}$
+in the nonlinear term $u\cdot\nabla u$. The variational problem for
+this first step is:
 
 [AL: I am here.]
 
 !bt
-  \begin{multline}\label{eq:ipcs,1}
+  \begin{multline} \label{ftut1:ipcs1}
+      \text{\textit{Step 1: Tentative velocity step}}
+      \\
       \renni{v}{(u^{\bigstar} - u^{n-1}) / \dt}
       + \renni{v}{u^{n-1} \cdot \nabla u^{n-1}}
       + \renni{\epsilon(v)}{\sigma(u^{n-\frac{1}{2}}, p^{n-1})}
@@ -78,21 +88,146 @@ interval. The variational problem for this first step is:
       = \renni{v}{f^n}
   \end{multline}
 !et
-This notation requires some explanation.
+This notation requires some explanation. First, we use the short-hand
+notation
+
+!bt
+\[
+  \inner{v}{w} = \int_{\Omega} vw \dx, \quad
+  \inner{v}{w}_{\partial\Omega} = \int_{\partial\Omega} vw \ds.
+\]
+!et
+This allows us to express the variational problem in a more compact
+way. Second, we use the notation $u^{n-\frac{1}{2}}$. This notation
+means the value of $u$ at the midpoint of the interval, which for a
+linearly varying function means
+
+!bt
+\[
+  u^{n-\frac{1}{2}} = (u^{n-1} + u^n) / 2.
+\]
+!et
+Third, we notice that the variational problem (\ref{ftut1:ipcs1})
+arises from the integration by parts of the term
+$\inner{-\nabla\cdot\sigma}{v}$. Just as for the elasticity problem in
+Section (ref{ftut:elast}), we obtain
+
+!bt
+\[
+  \inner{-\nabla\cdot\sigma}{v}
+  = \inner{\sigma}{\epsilon(v)}
+  - \inner{T}{v}_{\partial\Omega},
+\]
+!et
+where $T = \sigma\cdot n$ is the boundary traction. If we solve a
+problem with a free boundary, we can take $T = 0$ on the
+boundary. However, if we compute the flow through a channel or a pipe
+and want to model a flow that continues into an "imaginary channel" at
+the outflow, we need to treat this term with some care. The assumption
+we then make is that the derivative of the velocity in the direction
+of the channel is zero at the outflow, corresponding to a flow that is
+"fully developed" or doesn't change significantly downstream of the
+outflow. Doing so, the remaining boundary term at the outflow becomes
+$p - \nu n \cdot \nabla u$ which is the term appearing in the
+variational problem (\ref{ftut1:ipcs1}).
 
 !bwarning
 grad vs nabla grad!
 !ewarning
 
-Test
+We now move on to the second step in our splitting scheme for the
+incompressible Navier-Stokes equations. In the first step, we computed
+the tentative velocity $u^{\star}$ based on the pressure from the
+previous time step. We may now use the computed tentative velocity to
+compute the new pressure $p^n$:
+
+!bt
+\begin{multline} \label{ftut1:ipcs2}
+  \text{\textit{Step 2: Pressure correction step}} \\
+  \renni{\nabla q}{\nabla p^n}
+  = \renni{\nabla q}{\nabla p^{n-1}} - \renni{q}{\nabla \cdot u^{\bigstar}} / \dt.
+\end{multline}
+!et
+Note here that $q$ is a scalar-valued test function from the pressure
+space, whereas the test function $v$ in (ref{ftut1:ipcs1}) is a
+vector-valued test function from the velocity space.
+
+One way to think about this step is to subtract the Navier-Stokes
+momentum equation (ref{ftut1:ns:momentum}) expressed in terms of the
+tentative velocity $u^{\star}$ and the pressure $p^{n-1}$ from the
+momentum equation expressed in terms of the velocity $u^n$ and
+pressure $p^n$. This results in the equation
+
+!bt
+\begin{equation} \label{ftut1:ipcs:step}
+  (u^n - u^{\star}) / \dt + \nabla p^n - \nabla p^{n-1} = 0.
+\end{equation}
+!et
+Taking the divergence and requiring that $\nabla \cdot u^n = 0$ by the
+Navier-Stokes continuity equation (ref{ftut1:ns:continuity}), we
+obtain the equation $-\nabla\cdot u^{\star} / \dt + \nabla^2 p^n -
+\nabla p^{n-1}$, which is a Poisson problem for the pressure $p^n$
+resulting in the variational problem (ref{ftut1:ipcs2}).
+
+Finally, we compute the corrected velocity $u^n$ from the equation
+(ref{ftut1:ipcs:step}). Multiplying this equation by a test function
+$v$, we obtain
+
+!bt
+\begin{multline} \label{ftut1:ipcs3}
+  \text{\textit{Step 3: Velocity correction step}}\nonumber \\
+  \renni{v}{u^n} =
+  \renni{v}{u^{\bigstar}} - \dt\renni{v}{\nabla(p^n-p^{n-1})}.
+\end{multline}
+!et
+
+In summary, we may thus solve the incompressible Navier-Stokes
+equations efficiently by solving a sequence of three variational
+problems (steps 1, 2, 3) in each time step.
+
+===== A simple implementation =====
+
+=== Test problem ===
+
+As a test probem, we compute Poisseuille flow in the unit square.
+It is easy to see that a quadratic velocity profile and a linearly
+varying pressure is an exact stationary solution to the incompressible
+Navier-Stokes equations. As our exact solution, we take
 
 !bt
 \begin{align}
-  \langle (u_h^{\star} - u_h^{n-1}) / \Delta t_n, v \rangle +
-  \langle \nabla u_h^{n-1} \cdot u_h^{n-1}, v \rangle +
-  \langle \nu \nabla u_h^{\star}, \nabla v \rangle =
-  \langle f, v \rangle.
+  u(x, y, t) &= C(y(1 - y), 0), \\
+  p(x, y, t) &= 1 - x.
 \end{align}
 !et
+We compute the gradients of $u$ and $p$ and obtain
 
-===== A simple implementation =====
+!bt
+\[
+  \nabla u =
+  \left(\begin{array}{cc} 0 & C(1 - 2y) \\ 0 & 0 \end{array}\right),
+  \quad
+  \nabla p = (-1, 0).
+\]
+!et
+It is then easy to see that the first two terms in the momentum
+equation (ref{ftut1:ns:momentum}) vanish: $\dot{u} = 0$
+and $u\cdot \nabla u$ = 0. Furthermore, we have
+
+!bt
+\[
+  -\nabla \cdot \sigma
+  = -\nu \nabla^2 + \nabla p
+  = (2C\nu, 0) + (-1, 0) = (2C\nu - 1, 0)
+  = (0, 0),
+\]
+!et
+if we take $C = 1/(2\nu)$. For this simple test problem, we will
+ignore physical constants and simple take $C = 1$ and $\nu = 0.5$.
+This means that $y(x, y, t) = (y(1 - y), 0)$ and $p(x, y, t) = 1 -
+x$ is an exact solution of the momentum equation
+(ref{ftut:ns:momentum}) with right-hand side $f = (0, 0)$. Since we
+also have $\nabla \cdot u = 0 + 0 = 0$, we have found an exact
+solution to the incompressible Navier-Stokes equations.
+
+=== FEniCS implementation ===
