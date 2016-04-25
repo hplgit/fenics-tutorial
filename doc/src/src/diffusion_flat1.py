@@ -46,7 +46,7 @@ f = Constant(beta - 2 - 2*alpha)
 F = u*v*dx + dt*dot(grad(u), grad(v))*dx - (u_p + dt*f)*v*dx
 a, L = lhs(F), rhs(F)
 
-# Compute solution
+# Time-stepping
 u = Function(V)
 t = 0
 for n in xrange(num_steps):
