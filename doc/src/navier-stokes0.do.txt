@@ -59,7 +59,7 @@ time. We then introduce the following dimensionless quantities:
 !et
 
 If we $u = U\bar u$ insert these quantities into the momentum equation
-({ftut1:ns:momentum}), note that $\nabla = L^{-1} \bar\nabla$, and
+(ref{ftut1:ns:momentum}), note that $\nabla = L^{-1} \bar\nabla$, and
 divide by $\varrho U^2/L$, we obtain and equation for the dimensionless
 quantities $\bar u$ and $\bar p$:
 
@@ -157,7 +157,7 @@ this first step is:
       + \renni{\epsilon(v)}{\sigma(u^{n-\frac{1}{2}}, p^{n-1})}
       \\
       + \renni{v}{p^{n-1} n}_{\partial\Omega}
-      - \renni{v}{\nu n \cdot (\nabla u^{n-\frac{1}{2}})^{\top}}_{\partial\Omega}
+      - \renni{v}{\nu (\nabla u^{n-\frac{1}{2}})^{\top}\cdot n}_{\partial\Omega}
       = \renni{v}{f^n}
   \end{multline}
 !et
@@ -262,7 +262,7 @@ problems (steps 1, 2, 3) in each time step.
 
 === Test problem ===
 
-As a test probem, we compute Poisseuille flow in the unit square.
+As a test probem, we compute Poiseuille flow in the unit square.
 It is easy to see that a quadratic velocity profile and a linearly
 varying pressure is an exact stationary solution to the incompressible
 Navier-Stokes equations. As our exact solution, we take
@@ -305,20 +305,218 @@ solution to the incompressible Navier-Stokes equations.
 
 === FEniCS implementation ===
 
-Test test
+Our previous examples have all started out with the creation of a
+mesh and then the definition of a `FunctionSpace` on the mesh. For the
+splitting scheme we will use to solve the Navier-Stokes equations we
+need to define two function spaces, one for the velocity and one for
+the pressure:
 
-Definition of boundary conditions: code generation from C++ string
+!bc pycod
+V = VectorFunctionSpace(mesh, 'P', 2)
+Q = FunctionSpace(mesh, 'P', 1)
+!ec
+The first space `V` is a vector-valued function space for the velocity
+and the second space `P` is a scalar-valued function space for the
+pressure. We use piecewise quadratic elements for the velocity and
+piecewise linear elements for the pressure. When creating a
+`VectorFunctionSpace` in FEniCS, the value-dimension (the length of
+the vectors) will be set equal to the geometric dimension of the
+finite element mesh. One can easily create vector-valued function
+spaces with other dimensions in FEniCS by adding the keyword parameter
+`dim`:
 
-Definition of stress tensor: Identity, len(v)
+!bc pycod
+V = VectorFunctionSpace(mesh, 'P', 2, dim=10)
+!ec
 
-Assemble + solve
+!bnotice Stable finite element spaces for the Navier-Stokes equations
+It is well-known that certain finite element spaces are not *stable*
+for the Navier-Stokes equations, or even for the simpler Stokes
+equations. The prime example of an unstable pair of finite element
+spaces is to use continuous piecewise polynomials for both the
+velocity and the pressure. Using an
+unstable pair of spaces typically results in a solution with
+*spurious* (unwanted, non-physical) oscillations in the pressure
+solution. The simple remedy is to use piecewise continuous piecewise
+quadratic elements for the velocity and continous piecewise linear
+elements for the pressure. Together, these elements form the so-called
+*Taylor-Hood* element. Spurious oscillations may occur also for
+splitting methods if an unstable element pair is used.
+!enotice
 
-n = FacetNormal
+Since we have to different function spaces, we need to create two sets
+of trial and test functions:
+
+!bc pycod
+u = TrialFunction(V)
+v = TestFunction(V)
+p = TrialFunction(Q)
+q = TestFunction(Q)
+!ec
+
+As we have seen in previous examples, boundaries may be defined in
+FEniCS by defining Python functions that return `True` or `False`
+depending on whether a point should be considered part of the
+boundary, for example
+
+!bc pycod
+def boundary(x, on_boundary):
+    return near(x[0], 0)
+!ec
+This function defines the boundary to be all points with
+$x$-coordinate equal to zero. Alternatively, we may give the boundary
+definition as a string of C++ code, much like we have previously
+defined expressions such as `u0 = Expression('1 + x[0]*x[0] +
+2*x[1]*x[1]')`. The above definition may of the boundary in terms of a
+Python function may thus be replaced by a simple C++ string:
+
+!bc pycod
+boundary = 'near(x[0], 0)'
+!ec
+For the current example, we will set three different boundary
+conditions. First, we will set $u = 0$ at the walls of the channel;
+that is, at $y = 0$ and $y = 1$. Second, we will set $p = 1$ at the
+inflow ($x = 0$) and, finally, $p = 0$ at the outflow ($x = 1$). These
+boundary conditions may be defined as follows:
+
+!bc pycod
+# Define boundaries
+inflow   = 'near(x[0], 0)'
+outflow  = 'near(x[0], 1)'
+walls    = 'near(x[1], 0) || near(x[1], 1)'
+
+# Define boundary conditions
+bcu_noslip  = DirichletBC(V, Constant((0, 0)), walls)
+bcp_inflow  = DirichletBC(Q, Constant(1), inflow)
+bcp_outflow = DirichletBC(Q, Constant(0), outflow)
+bcu = [bcu_noslip]
+bcp = [bcp_inflow, bcp_outflow]
+!ec
+
+At the end, we collect the boundary conditions for the velocity and
+pressure in Python lists so we can easily access and them in the
+following computation.
+
+We now move on to the definition of the variational forms. There are
+three variational problems to be defined, one for each step in the
+IPCS scheme. Let's look at the definition of the first variational
+problem:
+
+!bc pycod
+U  = 0.5*(u0 + u)
+F1 = dot((u - u0) / k, v)*dx + dot(grad(u0)*u0, v)*dx \
+   + inner(sigma(U, p0), epsilon(v))*dx \
+   + dot(p0*n, v)*ds - dot(nu*grad(U).T*n, v)*ds \
+   - dot(f, v)*dx
+a1 = lhs(F1)
+L1 = rhs(F1)
+!ec
+This is very similar to the mathematical definition
+(ref{ftut1:ipcs1}). Since the variational problem contains a mix of
+known and unknown quantities --- the unknown $u^n$ (which we name `u`
+in the variational problem) and the known value $u^{n-1}$ (which we
+name `u0`) --- it is convenient to use the FEniCS function `lhs` and
+`rhs` to extract the left- and right-hand sides of the variational
+problem.
+
+In the definition of the variational problem, we take advantage of the
+Python programming language to define our own operators `sigma` and
+`epsilon`. Using Python this way makes it easy to extend the
+mathematical language of FEniCS with special operators and
+constitutive laws:
+
+!bc pycod
+def epsilon(u):
+    return sym(grad(u))
+
+def sigma(u, p):
+    return 2*nu*sym(grad(u)) - p*Identity(len(u))
+!ec
+
+The splitting scheme requires the solution of a sequence of three
+variational problems in each time step. We have previously used the
+built-in FEniCS function `solve` to solve variational probles. Under
+the hood, when a user calls `solve(a == L, u, bc)`, FEniCS will
+perform the following steps:
+
+!bc pycod
+A = assemble(A)
+b = assemble(L)
+bc.apply(A, b)
+solve(A, u.vector(), b)
+!ec
+In the last step, FEniCS uses the overloaded `solve` function to solve
+the linear system `AU = b` where `U` is the vector of degrees of
+freedom for the function $u(x) = \sum_{j=1} U_j \phi_j(x)$.
+
+In our implementation of the splitting scheme, we will make use of
+these low-level commands to first assemble and then call solve. This
+has the advantage that we may control when we assemble and when we
+solve the linear system. In particular, since the matrices for the
+three variational problems are all time-independent, it makes sense to
+assemble them once and for all outside of the time-stepping loop:
+
+!bc pycod
+A1 = assemble(a1)
+A2 = assemble(a2)
+A3 = assemble(a3)
+!ec
+Within the time-stepping loop, we may then assemble only the
+right-hand side vectors, apply boundary conditions, and call the solve
+function as here for the first of the three steps:
+
+!bc pycd
+b1 = assemble(L1)
+[bc.apply(b1) for bc in bcu]
+solve(A1, u1.vector(), b1)
+!ec
+Notice the Python *list comprehension* `[bc.apply(b1) for bc in bcu]`
+which iterates over all `bc` in the list `bcu`. This is a convenient
+way to apply all boundary conditions in a single line and makes it
+possible to reuse the same code if we later decide to apply more
+boundary conditions.
+
+Finally, let's look at an important detail in how we use parameters
+such as the time step `dt` and kinematic viscosity `nu` in the
+definition of our variational problems. Since we might want to change
+these later, for example if we want to experiment with smaller or
+larger time steps, we wrap these using a FEniCS `Constant`:
+
+!bc pycod
 k = Constant(dt)
+nu = Constant(nu)
+!ec
+The assembly of matrices and vectors in FEniCS is based on code
+generation. This means that whenever we change a variational problem,
+FEniCS will have to generate new code, which may take a little
+time. New code will also be generated when a float value for the time
+step or viscosity is changed. By wrapping these parameters using
+`Constant` FEniCS will treat these parameters as general constants and
+not specific numerical values, which prevents repeated code
+generation. In the case of the time step, we choose a new name `k`
+instead of `dt` for the `Constant` since we also want to use the
+variable `dt` as a Python float as part of the time-stepping.
 
-Initial condition: 0
+The complete code for simulating Poiseuille flow with FEniCS looks as
+follows:
 
-Check density in step 2 and 3
+@@@CODE src/navier_stokes_poiseuille.py fromto: from fenics import@
+
+We compute the error at the nodes as we have done before to verify
+that our implementation is correct. Our Navier-Stokes solver computes
+the solution to the time-dependent incompressible Navier-Stokes
+equations, starting from the initial condition $u = (0, 0)$. We have
+not specified the initial condition explicitly in our solver which
+means that FEniCS will initialize all variables, in particular the
+previous and current velocities `u0` and `u1`, to zero. Since the
+exact solution is quadratic, we expect the solution to be exact to
+within machine precision at the final time. For our implementation,
+the error quickly approaches zero and is approximately $10^{-9}$ at
+final time $T = 10$.
+
+FIGURE:[fig/navier_stokes_poiseuille, width=600 frac=0.8]
+Plot of the velocity profile at the final time for the Navier-Stokes
+Poiseuille flow example. label{ftut1:fig:navier_stokes_poisseuille}
 
 ===== Flow past a cylinder =====
 

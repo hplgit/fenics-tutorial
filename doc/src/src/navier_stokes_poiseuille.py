@@ -18,13 +18,18 @@ nu = 0.5           # kinematic viscosity
 
 # Create mesh and define function spaces
 mesh = UnitSquareMesh(16, 16)
-V = VectorFunctionSpace(mesh, 'P', 1)
+V = VectorFunctionSpace(mesh, 'P', 2)
 Q = FunctionSpace(mesh, 'P', 1)
 
+# Define boundaries
+inflow   = 'near(x[0], 0)'
+outflow  = 'near(x[0], 1)'
+walls    = 'near(x[1], 0) || near(x[1], 1)'
+
 # Define boundary conditions
-bcu_noslip  = DirichletBC(V, Constant((0, 0)), 'near(x[1], 0)||near(x[1], 1)')
-bcp_inflow  = DirichletBC(Q, Constant(1), 'near(x[0], 0)')
-bcp_outflow = DirichletBC(Q, Constant(0), 'near(x[0], 1)')
+bcu_noslip  = DirichletBC(V, Constant((0, 0)), walls)
+bcp_inflow  = DirichletBC(Q, Constant(1), inflow)
+bcp_outflow = DirichletBC(Q, Constant(0), outflow)
 bcu = [bcu_noslip]
 bcp = [bcp_inflow, bcp_outflow]
 
