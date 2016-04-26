@@ -40,7 +40,7 @@ u.rename('u', 'solution')
 plot(u)
 plot(mesh)
 
-# Dump solution to file in VTK format
+# Save solution to file in VTK format
 vtkfile = File('poisson.pvd')
 vtkfile << u
 

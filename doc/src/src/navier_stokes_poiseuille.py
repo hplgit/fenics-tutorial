@@ -3,8 +3,8 @@ FEniCS tutorial demo program: Incompressible Navier-Stokes equations
 for Poisseuille flow in the unit square using the Incremental Pressure
 Correction Scheme (IPCS).
 
-  rho (u' + u . grad(u)) - div(sigma) = f
-                               div(u) = 0
+  u' + u . grad(u)) - div(sigma) = f
+                          div(u) = 0
 """
 
 from __future__ import print_function
@@ -28,14 +28,6 @@ bcp_outflow = DirichletBC(Q, Constant(0), 'near(x[0], 1)')
 bcu = [bcu_noslip]
 bcp = [bcp_inflow, bcp_outflow]
 
-# Define symmetric gradient
-def epsilon(u):
-    return sym(grad(u))
-
-# Define stress tensor
-def sigma(u, p):
-    return 2*nu*sym(grad(u)) - p*Identity(len(u))
-
 # Define trial and test functions
 u = TrialFunction(V)
 v = TestFunction(V)
@@ -49,10 +41,19 @@ p0 = Function(Q)
 p1 = Function(Q)
 
 # Define expressions used in variational forms
-U = 0.5*(u0 + u)
-n = FacetNormal(mesh)
-f = Constant((0, 0))
-k = Constant(dt)
+U   = 0.5*(u0 + u)
+n   = FacetNormal(mesh)
+f   = Constant((0, 0))
+k   = Constant(dt)
+nu  = Constant(nu)
+
+# Define symmetric gradient
+def epsilon(u):
+    return sym(grad(u))
+
+# Define stress tensor
+def sigma(u, p):
+    return 2*nu*sym(grad(u)) - p*Identity(len(u))
 
 # Define variational problem for step 1
 F1 = dot((u - u0) / k, v)*dx + dot(grad(u0)*u0, v)*dx \
