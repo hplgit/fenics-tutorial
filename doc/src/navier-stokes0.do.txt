@@ -87,7 +87,9 @@ is the *Reynolds number*. The Reynolds number is an important
 dimensionless quantity for flow governed by the incompressible
 Navier-Stokes equations. The Reynoldes number measures the ratio
 between inertial and viscous forces and has much to say about the
-characteristics of the flow.
+characteristics of the flow, if the reference velocity $U$ and
+reference velocity $L$ are chosen selected as characteristic of the
+particular problem.
 
 A similar scaling of the continuity equation
 (ref{ftut1:ns:continuity}) gives the dimensionless continuity equation
@@ -204,8 +206,34 @@ outflow. Doing so, the remaining boundary term at the outflow becomes
 $p - \nu n \cdot \nabla u$ which is the term appearing in the
 variational problem (\ref{ftut1:ipcs1}).
 
-!bwarning
-grad vs nabla grad!
+!bwarning `grad(u)` vs. `nabla_grad(u)`
+For scalar functions $\nabla u$ has a clear meaning as the vector
+$\nabla u =
+(\frac{\partial u}{\partial x},
+ \frac{\partial u}{\partial y},
+ \frac{\partial u}{\partial z})$.
+However, if $u$ is vector-valued, the meaning is less clear.
+Some sources define $\nabla u$ as the matrix with elements
+$\partial u_i / \partial x_j$ while other sources prefer
+$\partial u_j / \partial x_i$. In FEniCS, `grad(u)` is defined as the
+matrix with elements $\partial u_i / \partial x_j$, which is the
+natural definition of $\nabla u$ if we think of this as the *gradient* or
+*derivative* of $u$. This way, the matrix $\nabla u$ can be applied to
+a differential $\dx$ to give an increment $\mathrm{d}u = \nabla u \,
+\dx$. Since the alternative interpretation of $\nabla u$ as the matrix
+with elements $\partial u_j / \partial x_i$ is also common, FEniCS
+provides the operator `nabla_grad` for this purpose.
+For the Navier-Stokes equations, it is important to consider the
+term $u \cdot \nabla u$ which should be interpreted as the vector
+$w$ with elements
+$w_i = \sum_j \left(u_j \frac{\partial}{\partial x_j}\right) u_i
+     = \sum_j u_j \frac{\partial u_i}{\partial x_j}$.
+This term can be implemented in FEniCS either as
+`grad(u)*u`, since this is expression becomes
+$\sum_j \partial u_i/\partial x_j u_j$, or as
+`dot(u, nabla_grad(u))` since this expression becomes
+$\sum_i u_i \partial u_j/\partial x_i$. We will use the shorter notation
+`grad(u)*u` below.
 !ewarning
 
 We now move on to the second step in our splitting scheme for the
@@ -520,16 +548,176 @@ Poiseuille flow example. label{ftut1:fig:navier_stokes_poisseuille}
 
 ===== Flow past a cylinder =====
 
-Put solutions in subdirectory
+We now turn our attention to a more interesting example: flow past a
+circular cylinder. The geometry and parameters are taken from problem
+DFG 2D-2 from the "FEATFLOW/1995-DFG benchmark suite":
+"http://www.featflow.de/en/benchmarks/cfdbenchmarking/flow/dfg_benchmark2_re100.html"
+and is illustrated in Figure
+ref{ftut1:navier_stokes_cylinder:geometry}. The kinematic viscosity is
+given by $\nu = 0.001$ and the inflow velocity
+profile is specified as
 
-Use reference geometry from here:
+!bt
+\[
+  u(x, y, t) = (1.5 \cdot \frac{4y(1-y)}{0.41^2}, 0),
+\]
+!et
+which has a maximum magnitue of $1.5$ at $y = 0.41/2$.
 
-`http://www.featflow.de/en/benchmarks/cfdbenchmarking/flow/dfg_benchmark1_re20.html`
+FIGURE:[fig/navier_stokes_cylinder_geometry, width=600 frac=0.95]
+Geometry for the flow past a cylinder test problem. Notice the
+slightly perturbed and unsymmetric geometry. label{ftut1:navier_stokes_cylinder:geometry}.
 
-So far, we have used simple geometries...
+For the previous test problem, scaling with the characteristic mean
+velocity $U = \int_0^1 x (1 - x) \dx = 1/6 = 2/3 \cdot 0.25$ and $L = 1$ gives a small
+Reynolds number of size $L = UL/\nu = \frac{1}{6}/0.5 = 1/3$. For the
+current problem, the characteristic length is $L = 0.1$ (the diameter
+of the cylinder) and mean velocity is $2/3 \cdot 1.5 = 1$
+which gives a Reynolds number of size $\mathrm{Re} = 1 \cdot 0.1 /
+0.001 = 100$. At this Reynolds number the flow develops into a
+periodic flow with vortex shedding behind the cylinder.
 
-`noslip_boundary = 'on_boundary && !(near(x[1], 0) || near(x[1], 1))'`
+=== FEniCS implementation ===
 
-Add plot of mesh
+So far all our domains have been simple shapes such as unit square or
+a rectangular box. A number of such simple meshes may be created in
+FEniCS using the built-in meshes
+`UnitIntervalMesh` (1D),
+`UnitSquareMesh` (2D),
+`UnitCubeMesh` (3D),
+`IntervalMesh` (1D),
+`RectangleMesh` (2D),
+`BoxMesh` (3D), and
+`UnitDiscMesh` (2D).
+FEniCS supports the creation of more complex meshes via a technique
+called *constructive solid geometry* (CSG), which lets users defined
+geometries in terms of simple shapes (primitives) and set operations:
+union, intersection, and set difference. The set operations are
+encoded in FEniCS using the operators `+` (union) `*` (intersection)
+and `-` (set difference). To access the CSG functionality in FEniCS,
+one must important the FEniCS module `mshr` which provides the
+extended meshing functionality of FEniCS.
 
-Also add saving to file
+The geometry for the cylinder flow test problem can be defined easily
+as by first defining the rectangular channel and the subtracting the
+circle:
+
+!bc pycod
+channel = Rectangle(Point(0, 0), Point(2.2, 0.41))
+cylinder = Circle(Point(0.2, 0.2), 0.05)
+geometry = channel - cylinder
+!ec
+We may then create the mesh by calling the function `generate_mesh`:
+
+!bc pycod
+mesh = generate_mesh(geometry, 64)
+!ec
+
+To solve the cylinder test problem, we only need to make a few minor
+changes. Besides defining the new mesh, the only change we need to
+make is to modify the boundary conditions and the time step size. The
+boundaries are specified as follows:
+
+!bc pycod
+inflow   = 'near(x[0], 0)'
+outflow  = 'near(x[0], 2.2)'
+walls    = 'near(x[1], 0) || near(x[1], 0.41)'
+cylinder = 'on_boundary && x[0]>0.1 && x[0]<0.3 && x[1]>0.1 && x[1]<0.3'
+!ec
+
+[AL: We set $p = 0$ at the outflow. This seems to be necessary, but we
+should really not need to specify the pressure at all.]
+
+In addition to these essential changes, we will make a number of small
+changes to improve our solver. First, since we need to choose a
+relatively small time step to compute the solution (a time step that
+is too large will make the solution blow up) we add a progress bar so
+that we can follow the progress of our computation. This can be done
+as follows:
+
+!bc pycod
+progress = Progress('Time-stepping')
+set_log_level(PROGRESS)
+
+t = 0.0
+for n in xrange(num_steps):
+
+    # Update current time
+    t += dt
+
+    # Place computation here
+
+    # Update progress bar
+    progress.update(t / T)
+!ec
+
+!bnotice Log levels and printing in FEniCS
+Notice the call to `set_log_level(PROGRESS)` which is essential to
+make FEniCS actually display the progress bar. FEniCS is actually
+quite informative about what is going on during a computation but the
+amount of information printed to screen depends on the current log
+level. Only messages with a priority higher than or equal to the
+current log level will be displayed. The predefined log levels in
+FEniCS are
+`DBG`,
+`TRACE`,
+`PROGRESS`,
+`INFO`,
+`WARNING`,
+`ERROR`, and
+`CRITICAL`. By default, the log level is set to `INFO` which means
+that messages at level `DBG`, `TRACE`, and `PROGRESS` will not be
+printed. Users may print messages using the FEniCS functions `info`,
+`warning`, and `error` which will print messages at the obvious log
+level (and in the case of `error` also throw an exception and
+exit). One may also use the call `log(level, message)` to print a
+message at a given log level.
+!enotice
+
+Since the system(s) of linear equations in significantly larger than
+for the simple Poiseuille flow test problem, we choose to use an
+iterative method instead of the default direct (sparse) solver used by
+FEniCS when calling `solve`. Efficient solution of linear systems
+arising from the discretization of PDE requires the choice of both a
+good iterative (Krylov subspace) method and a good
+preconditioner. For this problem, we will simply use the biconjugate
+gradient stabilized method (BiCGSTAB). This can be done by adding the
+keyword `bicgstab` in the call to `solve`:
+
+!bc pycod
+solve(A1, u1.vector(), b1, 'bicgstab')
+solve(A2, p1.vector(), b2, 'bicgstab')
+solve(A3, u1.vector(), b3, 'bicgstab')
+!ec
+
+Finally, to be able to postprocess the computed solution in Paraview,
+we store the solution to file in each time step. To make sure that we
+don't clutter our working directory with a large number of solution
+files, we make sure to store the solution in a subdirectory:
+
+!bc pycod
+vtkfile_u = File('solutions/velocity.pvd')
+vtkfile_p = File('solutions/pressure.pvd')
+!ec
+Note that one does not need to create the directory before running the
+program. It will be created automatically by FEniCS.
+
+Figures ref{ftut1:fig:navier_stokes_cylinder:velocity} and
+ref{ftut1:fig:navier_stokes_cylinder:pressure} show the velocity and
+pressure at final time visualized in Paraview. For the visualization
+of the velocity, we have used the **Glyph** filter to visualize the
+vector velocity field. For the visualization of the pressure, we have
+used the **Warp By Scalar** filter.
+
+FIGURE:[fig/navier_stokes_cylinder_velocity, width=600 frac=0.8] Plot
+of the velocity for the cylinder test problem at final
+time. label{ftut1:fig:navier_stokes_cylinder:velocity}
+
+FIGURE:[fig/navier_stokes_cylinder_pressure, width=600 frac=0.8] Plot
+of the pressure for the cylinder test problem at final
+time. label{ftut1:fig:navier_stokes_cylinder:pressure}
+
+The complete code for the cylinder test problem looks as
+follows:
+
+@@@CODE src/navier_stokes_cylinder.py fromto: from fenics import@
