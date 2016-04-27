@@ -22,14 +22,13 @@ def make_sine_Function(N, method):
         print('sin:', sin, type(sin))
 
         class SineXYZ(Expression):
-            def set_parameters(self, a, b):
+            def __init__(self, a, b):
                 self.a, self.b = a, b
 
             def eval(self, value, x):
                 value[0] = self.a*sin(self.b*x[0]*x[1]*x[2])
 
-        expr = SineXYZ()
-        expr.set_parameters(a=1, b=2)
+        expr = SineXYZ(a=1, b=2)
 
     elif method == 'C++':
         expr = Expression('a*sin(b*x[0]*x[1]*x[2])', a=1, b=2)
