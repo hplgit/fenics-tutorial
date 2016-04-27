@@ -3,8 +3,8 @@ FEniCS tutorial demo program: Incompressible Navier-Stokes equations
 for Poisseuille flow in the unit square using the Incremental Pressure
 Correction Scheme (IPCS).
 
-  u' + u . grad(u)) - div(sigma) = f
-                          div(u) = 0
+  u' + u . nabla(u)) - div(sigma) = f
+                           div(u) = 0
 """
 
 from __future__ import print_function
@@ -54,27 +54,27 @@ nu  = Constant(nu)
 
 # Define symmetric gradient
 def epsilon(u):
-    return sym(grad(u))
+    return sym(nabla_grad(u))
 
 # Define stress tensor
 def sigma(u, p):
-    return 2*nu*sym(grad(u)) - p*Identity(len(u))
+    return 2*nu*epsilon(u) - p*Identity(len(u))
 
 # Define variational problem for step 1
-F1 = dot((u - u0) / k, v)*dx + dot(grad(u0)*u0, v)*dx \
+F1 = dot((u - u0) / k, v)*dx + dot(dot(u0, nabla_grad(u0)), v)*dx \
    + inner(sigma(U, p0), epsilon(v))*dx \
-   + dot(p0*n, v)*ds - dot(nu*grad(U).T*n, v)*ds \
+   + dot(p0*n, v)*ds - dot(nu*nabla_grad(U)*n, v)*ds \
    - dot(f, v)*dx
 a1 = lhs(F1)
 L1 = rhs(F1)
 
 # Define variational problem for step 2
-a2 = dot(grad(p), grad(q))*dx
-L2 = dot(grad(p0), grad(q))*dx - (1/k)*div(u1)*q*dx
+a2 = dot(nabla_grad(p), nabla_grad(q))*dx
+L2 = dot(nabla_grad(p0), nabla_grad(q))*dx - (1/k)*div(u1)*q*dx
 
 # Define variational problem for step 3
 a3 = dot(u, v)*dx
-L3 = dot(u1, v)*dx - k*dot(grad(p1 - p0), v)*dx
+L3 = dot(u1, v)*dx - k*dot(nabla_grad(p1 - p0), v)*dx
 
 # Assemble matrices
 A1 = assemble(a1)

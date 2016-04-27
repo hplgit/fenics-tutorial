@@ -6,10 +6,10 @@
 ======= The heat equation =======
 label{ch:fundamentals:diffusion}
 
-As a first extension of the Problem from the previous chapter, we
-consider the time-dependent heat equation, or time-dependent diffusion
-equation. This is the natural extension of the Poisson equation
-describing the stationary distribution of heat in a body to a
+As a first extension of the Poisson problem from the previous chapter,
+we consider the time-dependent heat equation, or time-dependent
+diffusion equation. This is the natural extension of the Poisson
+equation describing the stationary distribution of heat in a body to a
 time-dependent problem.
 
 We will see that by discretizing time into small time intervals and
@@ -55,17 +55,17 @@ idx{time-dependent PDEs}
 
 A straightforward approach to solving time-dependent PDEs by the
 finite element method is to first discretize the time derivative by a
-finite difference approximation, which yields a recursive set of
+finite difference approximation, which yields a sequence of
 stationary problems, and then turn each stationary problem into a
 variational formulation.
 
 Let superscript $n$ denote a quantity at time $t_n$, where $n$ is an
 integer counting time levels. For example, $u^n$ means $u$ at time
 level $n$. A finite difference discretization in time first consists
-in sampling the PDE at some time level, say $n$:
+of sampling the PDE at some time level, say $t_n$:
 
 !bt
-\begin{equation} {\partial \over\partial t}u^k = \nabla^2 u^k + f^k\tp
+\begin{equation} {\partial \over\partial t}u^n = \nabla^2 u^n + f^n\tp
 label{ch:diffusion0:pde1:tk}
 \end{equation}
 !et
@@ -74,7 +74,7 @@ For simplicity and stability reasons, we choose a
 simple backward difference:
 
 !bt
-\begin{equation} {\partial \over\partial t}u^k\approx {u^n - u^{n-1}\over{\dt}},
+\begin{equation} {\partial \over\partial t}u^n\approx {u^n - u^{n-1}\over{\dt}},
 label{ch:diffusion0:BE}
 \end{equation}
 !et
@@ -87,7 +87,7 @@ Inserting (ref{ch:diffusion0:BE}) in (ref{ch:diffusion0:pde1:tk}) yields
 label{ch:diffusion0:pde1:BE}
 \end{equation}
 !et
-This is our time-discrete version of the diffusion PDE
+This is our time-discrete version of the heat equation
 (ref{ch:diffusion0:pde1}). This is a so-called *backward Euler* or
 *implicit Euler* discretization. Alternatively, we may also view this
 as a finite element discretization in time in the form of the first order
@@ -97,7 +97,7 @@ method.
 We may reorder (ref{ch:diffusion0:pde1:BE}) so
 that the left-hand side contains the terms with the unknown $u^n$ and
 the right-hand side contains computed terms only. The result
-is a recursive set of spatial
+is a sequence of spatial
 (stationary) problems for $u^n$ (assuming $u^{n-1}$ is known from
 computations at the previous time level):
 
@@ -133,7 +133,7 @@ can be conveniently written in
 the standard notation:
 
 !bt
-\[ a(u,v)=L(v),\]
+\[ a(u,v)=L_n(v),\]
 !et
 where
 
@@ -141,7 +141,7 @@ where
 \begin{align}
 a(u,v) &= \int_\Omega\left( uv + {\dt}
 \nabla u\cdot \nabla v\right) \dx, label{ch:diffusion0:pde1:a}\\
-L(v) &= \int_\Omega \left(u^{n-1} + {\dt}  f^n\right)v \dx\tp
+L_n(v) &= \int_\Omega \left(u^{n-1} + {\dt}  f^n\right)v \dx\tp
 label{ch:diffusion0:pde1:L}
 \end{align}
 !et
@@ -155,14 +155,14 @@ where
 
 !bt
 \begin{equation}
-F(u; v) = \int_\Omega\left( uv + {\dt}
+F(u; v) = \int_\Omega  uv + {\dt}
 \nabla u\cdot \nabla v -
-(u^{n-1} + {\dt} f^n\right)v \dx\tp
+(u^{n-1} + {\dt} f^n)v \dx\tp
 label{ch:diffusion0:pde1:F}
 \end{equation}
 !et
 
-In addition to the variational problem to be solve in each time step,
+In addition to the variational problem to be solved in each time step,
 we also need to approximate the initial condition
 (ref{ch:diffusion0:pde1:u0}). This equation can also be turned into a
 variational problem:
@@ -178,7 +178,7 @@ a_0(u,v) &= \int_\Omega uv \dx, label{ch:diffusion0:pde1:a0}\\
 L_0(v) &= \int_\Omega u_0 v \dx\tp label{ch:diffusion0:pde1:L0}
 \end{align}
 !et
-When solving this variational problem for $u^0$, $u^0$ becomes the
+When solving this variational problem, $u^0$ becomes the
 $L^2$ projection of the given initial value $u_0$ into the finite
 element space. The alternative is to construct $u^0$ by just
 interpolating the initial value $u_0$; that is,
@@ -189,18 +189,18 @@ projection or interpolation. Both operations are easy to
 compute in FEniCS through one statement, using either the `project` or
 `interpolate` function.
 
-In summary, we thus need to solve the follow sequence of variational
+In summary, we thus need to solve the following sequence of variational
 problems to compute the finite element solution to the heat equation:
 find $u^0\in V$ such that $a_0(u^0,v)=L_0(v)$ holds for all $v\in\hat V$,
 and then find $u^n\in V$
-such that $a(u^n,v)=L(v)$ for all $v\in\hat V$,
+such that $a(u^n,v)=L_n(v)$ for all $v\in\hat V$,
 or alternatively, $F(u^n,v)=0$ for all $v\in\hat V$,
 for $n=1,2,\ldots$.
 
 ===== A simple implementation =====
 label{ftut:timedep:diffusion1:impl}
 
-Our program needs to implement the time-stepping explicitly, but can
+Our program needs to implement the time-stepping manually, but can
 rely on FEniCS to easily compute $a_0$, $L_0$, $F$, $a$, and $L$, and solve
 the linear systems for the unknowns.
 
@@ -224,8 +224,8 @@ the mesh is uniformly partitioned. By inserting
 (ref{ch:diffusion0:pde1:u0test}) into the heat equation
 (ref{ch:diffusion0:pde1}), we find that the right-hand side $f$ must
 be given by $f(x,y,t)=\beta - 2 - 2\alpha$. The boundary value
-$\ub$ is $1 + x^2 + \alpha y^2 + \beta t$ and the initial
-value $u_0$ is $1 + x^2 + \alpha y^2$.
+is $\ub(x, y, t) = 1 + x^2 + \alpha y^2 + \beta t$ and the initial
+value is $u_0(x, y) = 1 + x^2 + \alpha y^2$.
 
 idx{`${prog["diffusion_flat1"]}.py`}
 
@@ -260,7 +260,7 @@ alpha = 3; beta = 1.2
 u_b = Expression('1 + x[0]*x[0] + alpha*x[1]*x[1] + beta*t',
                  degree=2, alpha=alpha, beta=beta, t=0)
 !ec
-This function expression has the components of `x` as independent
+This expression uses the components of `x` as independent
 variables, while `alpha`, `beta`, and `t` are parameters.  The
 parameters can later be updated as in
 
@@ -278,8 +278,8 @@ def boundary(x, on_boundary):
 bc = DirichletBC(V, u0, boundary)
 !ec
 
-We shall use `u` for the unknown $u$ at the new time level and `u_p`
-for $u$ at the previous time level. The initial value of `u_p` can be
+We shall use `u` for the unknown $u^n$ at the new time level and `u_p`
+for $u^{n-1}$ at the previous time level. The initial value of `u_p` can be
 computed by either projection or interpolation of $u_0$. Since we set
 `t = 0` for the boundary value `u_b`, we can use this also to specify
 the initial condition. We can then do
@@ -324,7 +324,6 @@ Finally, we perform the time-stepping in a loop:
 u = Function(V)
 t = 0
 for n in xrange(num_steps):
-while t <= T:
 
     # Update current time
     t += dt
@@ -350,15 +349,15 @@ the variable `u` (the new computed solution) to the variable
 containing the values at the previous time step. This must be done
 using the `assign` member function. If we instead try to do `u_p = u`,
 we will set the `u_p` Python variable to be the *same* variable as `u`
-which is not what we want. (We need to variables, one for the values
+which is not what we want. (We need two variables, one for the values
 at the previous time step and one for the values at the current time
 step.)
 
 !bwarning Remember to update expression objects with the current time!
 Inside the time loop,
-observe that `u0.t` must be updated before the `solve` statement
+observe that `u_b.t` must be updated before the `solve` statement
 to enforce computation of Dirichlet conditions at the
-current time level. (The Dirichlet conditions look up the `u0` object
+current time level. (The Dirichlet conditions look up the `u_b` object
 for values.)
 !ewarning
 
@@ -367,7 +366,8 @@ The time loop above does not contain any comparison of the numerical
 and the exact solution, which we must include in order to verify the
 implementation.  As in the Poisson equation example in
 Section ref{ch:poisson0:impl:dissect}, we compute the
-difference between the array of nodal values of `u` and the array of
+difference between the array of nodal values of `u` and the array
+nodal values of
 the interpolated exact solution. This may be done as follows:
 
 !bc pycod
@@ -396,12 +396,12 @@ a Gaussian hill. It means that the initial value is given by
 \[ u_0(x,y)= e^{-ax^2 - ay^2}\]
 !et
 on a domain $[-2,2]\times [2,2]$. We will take $a = 5$. For this
-problem we will use homogeneous Dirichlet boundary conditions ($u = 0$).
+problem we will use homogeneous Dirichlet boundary conditions ($\ub = 0$).
 
 === FEniCS implementation ===
 
 Which are the required changes to our previous program? One major
-change is that domain is not a unit square anymore. We also want to
+change is that the domain is not a unit square anymore. We also want to
 use much higher resolution. The new domain can
 be created easily in FEniCS using `RectangleMesh`:
 
@@ -419,6 +419,8 @@ format in each time step:
 vtkfile << (u, t)
 !ec
 
+[AL: Remember to output as `(u, t)` also in other examples below.]
+
 The complete program appears below.
 
 [AL: Rename program to `gaussian_diffusion.py`.]
@@ -435,7 +437,7 @@ PLEASE have in-browser visualization!
 To visualize the diffusion of the Gaussian hill, start ParaView,
 choose _File - Open_, open the file `gaussian_diffusion.pvd`, click
 the green _Apply_ button on the left to see the initial condition
-being plotting. Choose _View - Animation View_. Click on the play
+being plotted. Choose _View - Animation View_. Click on the play
 button or (better) the next frame button in the row of buttons at the
 top of the GUI to see the evolution of the scalar field you have just
 computed:
@@ -459,7 +461,7 @@ FIGURE: [fig/paraview_show_center_button, width=150 frac=0.15]
 <linebreak>
 <linebreak>
 
-Choose _File - Save Animation..._ to save the animation to the OGG video format.
+Choose _File - Save Animation..._ to save the animation to the AVI or OGG video format.
 % if FORMAT not in ('latex', 'pdflatex'):
 
 MOVIE: [mov/diffusion0.ogg]
@@ -468,7 +470,8 @@ MOVIE: [mov/diffusion0.ogg]
 FIGURE: [fig/diffusion0_paraview_animation, width=600 frac=0.8]
 
 Once the animation has been saved to file, you can play the animation
-offline using a player such as mplayer or VLC. Below is a sequence of
+offline using a player such as mplayer or VLC, or upload your
+animation to YouTube. Below is a sequence of
 snapshots of the solution.
 
 <linebreak>
