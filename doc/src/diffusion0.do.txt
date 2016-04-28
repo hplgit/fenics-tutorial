@@ -3,22 +3,19 @@
 # #include "mako_code.txt"
 # #endif
 
-
-======= The time-dependent diffusion equation =======
+======= The heat equation =======
 label{ch:fundamentals:diffusion}
 
-% if FORMAT == 'ipynb':
-Previous examples on using FEniCS to solve the Poisson equation
-% else:
-The examples in Section ref{ch:poisson0:impl}
-% endif
-illustrate that solving linear, stationary PDE problems with the aid
-of FEniCS is easy and requires little programming.  FEniCS clearly
-automates the spatial discretization by the finite element method. One
-can use a separate, one-dimensional finite element method in the
-domain as well, but very often, it is easier to just use a finite
-difference method, or to formulate the problem as an ODE system and
-leave the time-stepping to an ODE solver.
+As a first extension of the Poisson problem from the previous chapter,
+we consider the time-dependent heat equation, or time-dependent
+diffusion equation. This is the natural extension of the Poisson
+equation describing the stationary distribution of heat in a body to a
+time-dependent problem.
+
+We will see that by discretizing time into small time intervals and
+applying standard time-stepping methods, we can solve the heat
+equation by solving a sequence of variational problems, much like the
+one we encountered for the Poisson equation.
 
 #The solution of
 #nonlinear problems, as we showed in Section
@@ -33,12 +30,7 @@ leave the time-stepping to an ODE solver.
 #We shall explain how
 #easily this is accomplished through examples.
 
-[hpl: Should exemplify all three approaches? With emphasis on
-simple finite differences?]
-
-===== Variational formulation =====
-label{ftut:timedep:diffusion1}
-idx{time-dependent PDEs}
+===== PDE problem =====
 
 Our model problem for time-dependent PDEs reads
 
@@ -46,39 +38,43 @@ Our model problem for time-dependent PDEs reads
 \begin{align}
 {\partial u\over\partial t} &= \nabla^2 u + f\hbox{ in }\Omega,
 label{ch:diffusion0:pde1}\\
-u &= u_0\hbox{ on } \partial \Omega,
+u &= \ub\hbox{ on } \partial \Omega,
 label{ch:diffusion0:pde1:bc}\\
-u &= I \mbox{ at } t=0\tp
+u &= u_0 \mbox{ at } t=0\tp
 label{ch:diffusion0:pde1:ic}
 \end{align}
 !et
 Here, $u$ varies with space and time, e.g., $u=u(x,y,t)$ if the spatial
 domain $\Omega$ is two-dimensional. The source function $f$ and the
-boundary values $u_0$ may also vary with space and time.
-The initial condition $I$ is a function of space only.
+boundary values $\ub$ may also vary with space and time.
+The initial condition $u_0$ is a function of space only.
+
+===== Variational formulation =====
+label{ftut:timedep:diffusion1}
+idx{time-dependent PDEs}
 
 A straightforward approach to solving time-dependent PDEs by the
 finite element method is to first discretize the time derivative by a
-finite difference approximation, which yields a recursive set of
+finite difference approximation, which yields a sequence of
 stationary problems, and then turn each stationary problem into a
 variational formulation.
 
-Let superscript $k$ denote a quantity at time $t_k$, where $k$ is an
-integer counting time levels. For example, $u^k$ means $u$ at time
-level $k$.  A finite difference discretization in time first consists
-in sampling the PDE at some time level, say $k$:
+Let superscript $n$ denote a quantity at time $t_n$, where $n$ is an
+integer counting time levels. For example, $u^n$ means $u$ at time
+level $n$. A finite difference discretization in time first consists
+of sampling the PDE at some time level, say $t_n$:
 
 !bt
-\begin{equation} {\partial \over\partial t}u^k = \nabla^2 u^k + f^k\tp
+\begin{equation} {\partial \over\partial t}u^n = \nabla^2 u^n + f^n\tp
 label{ch:diffusion0:pde1:tk}
 \end{equation}
 !et
 The time-derivative can be approximated by a finite difference.
-For simplicity and stability reasons we choose a
+For simplicity and stability reasons, we choose a
 simple backward difference:
 
 !bt
-\begin{equation} {\partial \over\partial t}u^k\approx {u^k - u^{k-1}\over{\dt}},
+\begin{equation} {\partial \over\partial t}u^n\approx {u^n - u^{n-1}\over{\dt}},
 label{ch:diffusion0:BE}
 \end{equation}
 !et
@@ -87,28 +83,32 @@ Inserting (ref{ch:diffusion0:BE}) in (ref{ch:diffusion0:pde1:tk}) yields
 
 !bt
 \begin{equation}
-{u^k - u^{k-1}\over{\dt}} = \nabla^2 u^k + f^k\tp
+{u^n - u^{n-1}\over{\dt}} = \nabla^2 u^n + f^n\tp
 label{ch:diffusion0:pde1:BE}
 \end{equation}
 !et
-This is our time-discrete version of the diffusion PDE
-(ref{ch:diffusion0:pde1}).
+This is our time-discrete version of the heat equation
+(ref{ch:diffusion0:pde1}). This is a so-called *backward Euler* or
+*implicit Euler* discretization. Alternatively, we may also view this
+as a finite element discretization in time in the form of the first order
+$\mathrm{dG}(0)$ method, which here is identical to the backward Euler
+method.
 
 We may reorder (ref{ch:diffusion0:pde1:BE}) so
-that the left-hand side contains the terms with the unknown $u^k$ and
+that the left-hand side contains the terms with the unknown $u^n$ and
 the right-hand side contains computed terms only. The result
-is a recursive set of spatial
-(stationary) problems for $u^k$ (assuming $u^{k-1}$ is known from
+is a sequence of spatial
+(stationary) problems for $u^n$ (assuming $u^{n-1}$ is known from
 computations at the previous time level):
 
 !bt
 \begin{align}
-u^0 &= I, label{ch:diffusion0:pde1:u0}\\
-u^k - {\dt}\nabla^2 u^k &=  u^{k-1} + {\dt} f^k,\quad k=1,2,\ldots
+u^0 &= u_0, label{ch:diffusion0:pde1:u0}\\
+u^n - {\dt}\nabla^2 u^n &=  u^{n-1} + {\dt} f^n,\quad n=1,2,\ldots
 label{ch:diffusion0:pde1:uk}
 \end{align}
 !et
-Given $I$, we can solve for $u^0$, $u^1$, $u^2$, and so on.
+Given $u_0$, we can solve for $u^0$, $u^1$, $u^2$, and so on.
 
 An alternative to (ref{ch:diffusion0:pde1:uk}), which can be
 convenient in implementations, is to collect
@@ -116,7 +116,7 @@ all terms on one side of the equality sign:
 
 !bt
 \begin{equation}
-F(u;v) = u^k - {\dt}\nabla^2 u^k -  u^{k-1} - {\dt} f^k = 0,\quad k=1,2,\ldots
+u^n - {\dt}\nabla^2 u^n -  u^{n-1} - {\dt} f^n = 0,\quad n=1,2,\ldots
 label{ch:diffusion0:pde1:uk2}
 \end{equation}
 !et
@@ -126,14 +126,14 @@ We use a finite element method to solve
 (ref{ch:diffusion0:pde1:uk}) or (ref{ch:diffusion0:pde1:uk2}).  This
 requires turning the equations into weak forms.  As usual, we multiply
 by a test function $v\in \hat V$ and integrate second-derivatives by
-parts. Introducing the symbol $u$ for $u^k$ (which is natural in the
+parts. Introducing the symbol $u$ for $u^n$ (which is natural in the
 program), the resulting weak form arising from
 formulation (ref{ch:diffusion0:pde1:uk})
 can be conveniently written in
 the standard notation:
 
 !bt
-\[ a(u,v)=L(v),\]
+\[ a(u,v)=L_n(v),\]
 !et
 where
 
@@ -141,11 +141,10 @@ where
 \begin{align}
 a(u,v) &= \int_\Omega\left( uv + {\dt}
 \nabla u\cdot \nabla v\right) \dx, label{ch:diffusion0:pde1:a}\\
-L(v) &= \int_\Omega \left(u^{k-1} + {\dt}  f^k\right)v \dx\tp
+L_n(v) &= \int_\Omega \left(u^{n-1} + {\dt}  f^n\right)v \dx\tp
 label{ch:diffusion0:pde1:L}
 \end{align}
 !et
-
 The alternative form (ref{ch:diffusion0:pde1:uk2}) has an
 abstract formulation
 
@@ -156,15 +155,17 @@ where
 
 !bt
 \begin{equation}
-F = \int_\Omega\left( uv + {\dt}
+F(u; v) = \int_\Omega  uv + {\dt}
 \nabla u\cdot \nabla v -
-\left(u^{k-1} - {\dt}  f^k\right)v\right) \dx\tp
+(u^{n-1} + {\dt} f^n)v \dx\tp
 label{ch:diffusion0:pde1:F}
 \end{equation}
 !et
 
-The initial condition (ref{ch:diffusion0:pde1:u0})
-can also be turned into a weak form,
+In addition to the variational problem to be solved in each time step,
+we also need to approximate the initial condition
+(ref{ch:diffusion0:pde1:u0}). This equation can also be turned into a
+variational problem:
 
 !bt
 \[ a_0(u,v)=L_0(v),\]
@@ -174,70 +175,61 @@ with
 !bt
 \begin{align}
 a_0(u,v) &= \int_\Omega uv \dx, label{ch:diffusion0:pde1:a0}\\
-L_0(v) &= \int_\Omega Iv \dx\tp label{ch:diffusion0:pde1:L0}
+L_0(v) &= \int_\Omega u_0 v \dx\tp label{ch:diffusion0:pde1:L0}
 \end{align}
 !et
-The alternative is to construct $u_0$ by just interpolating $I$
-(which is also a much cheaper operation since no linear system is
-involved).
-
-The continuous variational problem is to find
-$u^0\in V$ such that $a_0(u^0,v)=L_0(v)$ holds for all $v\in\hat V$,
-and then find $u^k\in V$
-such that $a(u^k,v)=L(v)$ for all $v\in\hat V$,
-or alternatively, $F(u^k,v)=0$ for all $v\in\hat V$,
-$k=1,2,\ldots$.
-
-Approximate solutions in space are found by restricting the functional
-spaces $V$ and $\hat V$ to finite-dimensional spaces, exactly as we
-have done in the Poisson problems.  We shall use the symbol $u$ for
-the finite element approximation at time $t_k$. In case we need to
-distinguish this space-time discrete approximation from the exact
-solution of the continuous diffusion problem, we use $\uex$ for the
-latter.  By $u^{k-1}$ we mean the finite element approximation of the
-solution at time $t_{k-1}$.
-
-Instead of solving (ref{ch:diffusion0:pde1:u0}) by a finite element
-method, i.e., projecting $I$ onto $V$ via the problem
-$a_0(u,v)=L_0(v)$, we could simply interpolate $u^0$ from $I$. That
-is, if $u^0=\sum_{j=1}^N U^0_j\phi_j$, we simply set $U_j=I(x_j,y_j)$,
+When solving this variational problem, $u^0$ becomes the
+$L^2$ projection of the given initial value $u_0$ into the finite
+element space. The alternative is to construct $u^0$ by just
+interpolating the initial value $u_0$; that is,
+if $u^0=\sum_{j=1}^N U^0_j\phi_j$, we simply set $U_j=u_0(x_j,y_j)$,
 where $(x_j,y_j)$ are the coordinates of node number $j$. We refer to
 these two strategies as computing the initial condition by either
-projecting $I$ or interpolating $I$.  Both operations are easy to
-compute through one statement, using either the `project` or
+projection or interpolation. Both operations are easy to
+compute in FEniCS through one statement, using either the `project` or
 `interpolate` function.
+
+In summary, we thus need to solve the following sequence of variational
+problems to compute the finite element solution to the heat equation:
+find $u^0\in V$ such that $a_0(u^0,v)=L_0(v)$ holds for all $v\in\hat V$,
+and then find $u^n\in V$
+such that $a(u^n,v)=L_n(v)$ for all $v\in\hat V$,
+or alternatively, $F(u^n,v)=0$ for all $v\in\hat V$,
+for $n=1,2,\ldots$.
 
 ===== A simple implementation =====
 label{ftut:timedep:diffusion1:impl}
 
-Our program needs to implement the time stepping explicitly, but can
+Our program needs to implement the time-stepping manually, but can
 rely on FEniCS to easily compute $a_0$, $L_0$, $F$, $a$, and $L$, and solve
 the linear systems for the unknowns.
 
 === Test problem ===
 
-Before starting the coding, we shall construct a problem where it is
-easy to determine if the calculations are correct. The simple backward
-time difference is exact for linear functions, so we decide to have
-a linear variation in time. Combining a second-degree polynomial in space
-with a linear term in time,
+Just as for the Poisson problem from the previous chapter, we
+construct a test problem that makes it easy to determine if the
+calculations are correct. Since we know that our first-order
+time-stepping scheme is exact for linear functions, we create a test
+problem which has a linear variation in time. We combine this with a
+quadratic variation in space. We thus take
 
 !bt
 \begin{equation} u = 1 + x^2 + \alpha y^2 + \beta t,
 label{ch:diffusion0:pde1:u0test}
 \end{equation}
 !et
-yields a function whose computed values at the nodes will be exact,
-regardless of the size of the elements and $\dt$, as long as the mesh
-is uniformly partitioned.  By inserting
-(ref{ch:diffusion0:pde1:u0test}) in the PDE problem
-(ref{ch:diffusion0:pde1}), it follows that $u_0$ must be given as
-(ref{ch:diffusion0:pde1:u0test}) and that $f(x,y,t)=\beta - 2 -
-2\alpha$ and $I(x,y)=1+x^2+\alpha y^2$.
+which yields a function whose computed values at the nodes will be
+exact, regardless of the size of the elements and $\dt$, as long as
+the mesh is uniformly partitioned. By inserting
+(ref{ch:diffusion0:pde1:u0test}) into the heat equation
+(ref{ch:diffusion0:pde1}), we find that the right-hand side $f$ must
+be given by $f(x,y,t)=\beta - 2 - 2\alpha$. The boundary value
+is $\ub(x, y, t) = 1 + x^2 + \alpha y^2 + \beta t$ and the initial
+value is $u_0(x, y) = 1 + x^2 + \alpha y^2$.
 
 idx{`${prog["diffusion_flat1"]}.py`}
 
-=== The code ===
+=== FEniCS implementation ===
 
 % if FORMAT == 'ipynb':
 We first create a mesh:
@@ -248,16 +240,16 @@ from fenics import *
 import numpy as np
 
 # Create mesh and define function space
-nx = ny = 4
+nx = ny = 8
 mesh = UnitSquareMesh(nx, ny)
 V = FunctionSpace(mesh, 'P', 1)
 !ec
 % endif
 
 A new programming issue is how to deal with functions that vary in
-space *and time*, such as the boundary condition $u_0$ given by
-(ref{ch:diffusion0:pde1:u0test}).  A natural solution is to apply an
-`Expression` object with time $t$ as a parameter, in addition to the
+space *and time*, such as the boundary condition $\ub(x, y,
+t) = 1 + x^2 + \alpha y^2 + \beta t$. A natural solution is to use a
+FEniCS `Expression` with time $t$ as a parameter, in addition to the
 parameters $\alpha$ and $\beta$:
 
 !bc pycod
@@ -265,49 +257,48 @@ parameters $\alpha$ and $\beta$:
 # Create mesh and define function space
 % endif
 alpha = 3; beta = 1.2
-u0 = Expression('1 + x[0]*x[0] + alpha*x[1]*x[1] + beta*t',
-                alpha=alpha, beta=beta, t=0)
+u_b = Expression('1 + x[0]*x[0] + alpha*x[1]*x[1] + beta*t',
+                 degree=2, alpha=alpha, beta=beta, t=0)
 !ec
-This function expression has the components of `x` as independent
+This expression uses the components of `x` as independent
 variables, while `alpha`, `beta`, and `t` are parameters.  The
 parameters can later be updated as in
 
 !bc pycod-t
-u0.t = t
+u_b.t = t
 !ec
 
 The essential boundary conditions, along the entire boundary in this case,
-are set in the usual way,
+are set in the usual way:
 
 !bc pycod
-def boundary(x, on_boundary):  # define the Dirichlet boundary
+def boundary(x, on_boundary):
     return on_boundary
 
 bc = DirichletBC(V, u0, boundary)
 !ec
 
-We shall use `u` for the unknown $u$ at the new time level and `u_1`
-for $u$ at the previous time level.  The initial value of `u_1`,
-implied by the initial condition on $u$, can be computed by either
-projecting or interpolating $I$.  The $I(x,y)$ function is available
-in the program through `u0`, as long as `u0.t` is zero.  We can then
-do
+We shall use `u` for the unknown $u^n$ at the new time level and `u_p`
+for $u^{n-1}$ at the previous time level. The initial value of `u_p` can be
+computed by either projection or interpolation of $u_0$. Since we set
+`t = 0` for the boundary value `u_b`, we can use this also to specify
+the initial condition. We can then do
 
 !bc pycod-t
-u_1 = interpolate(u0, V)
+u_p = project(u_b, V)
 # or
-u_1 = project(u0, V)
+u_p = interpolate(u_b, V)
 !ec
 
 !bc pyhid
-u_1 = interpolate(u0, V)
+u_p = interpolate(u_b, V)
 !ec
 
 !bwarning Projecting versus interpolating the initial condition
 To actually recover the
 exact solution (ref{ch:diffusion0:pde1:u0test}) to machine precision,
 it is important not to compute the discrete initial condition by
-projecting $I$, but by interpolating $I$ so that the degrees of freedom have
+projecting $u_0$, but by interpolating $u_0$ so that the degrees of freedom have
 exact values at $t=0$ (projection results in approximative values at the
 nodes).
 !ewarning
@@ -319,43 +310,54 @@ $L$. The latter is convenient, especially in more complicated problems,
 so we illustrate that construction:
 
 !bc pycod
-dt = 0.3      # time step
-
 u = TrialFunction(V)
 v = TestFunction(V)
 f = Constant(beta - 2 - 2*alpha)
 
-F = u*v*dx + dt*dot(grad(u), grad(v))*dx - (u_1 + dt*f)*v*dx
+F = u*v*dx + dt*dot(grad(u), grad(v))*dx - (u_p + dt*f)*v*dx
 a, L = lhs(F), rhs(F)
 !ec
 
-Finally, we perform the time stepping in a loop:
+Finally, we perform the time-stepping in a loop:
 
 !bc pycod
-u = Function(V)   # the unknown at a new time level
-T = 2             # total simulation time
-t = dt
+u = Function(V)
+t = 0
+for n in xrange(num_steps):
 
-while t <= T:
-    u0.t = t
+    # Update current time
+    t += dt
+    u_b.t = t
+
+    # Solve variational problem
     solve(a == L, u, bc)
 
 % if FORMAT == 'ipynb':
-    # Verify
-    u_e = interpolate(u0, V)
+    # Compute error
+    u_e = interpolate(u_b, V)
     error = np.abs(u_e.vector().array() -
                    u.vector().array()).max()
-    print('error, t=%.2f: %-10.3g' % (t, max_error))
+    print('t = %.2f: error = %.3g' % (t, error))
 % endif
-    t += dt
-    u_1.assign(u)
+
+    # Update previous solution
+    u_p.assign(u)
 !ec
+
+In the last step of the time-stepping loop, we assign the values of
+the variable `u` (the new computed solution) to the variable
+containing the values at the previous time step. This must be done
+using the `assign` member function. If we instead try to do `u_p = u`,
+we will set the `u_p` Python variable to be the *same* variable as `u`
+which is not what we want. (We need two variables, one for the values
+at the previous time step and one for the values at the current time
+step.)
 
 !bwarning Remember to update expression objects with the current time!
 Inside the time loop,
-observe that `u0.t` must be updated before the `solve` statement
+observe that `u_b.t` must be updated before the `solve` statement
 to enforce computation of Dirichlet conditions at the
-current time level. (The Dirichlet conditions look up the `u0` object
+current time level. (The Dirichlet conditions look up the `u_b` object
 for values.)
 !ewarning
 
@@ -364,54 +366,64 @@ The time loop above does not contain any comparison of the numerical
 and the exact solution, which we must include in order to verify the
 implementation.  As in the Poisson equation example in
 Section ref{ch:poisson0:impl:dissect}, we compute the
-difference between the array of nodal values of `u` and the array of
-the interpolated exact solution.  The following code is to be included
-inside the loop, after `u` is found:
+difference between the array of nodal values of `u` and the array
+nodal values of
+the interpolated exact solution. This may be done as follows:
 
 !bc pycod
-u_e = interpolate(u0, V)
-error = np.abs(u_e.vector().array() -
-               u.vector().array()).max()
-print('error, t=%.2f: %-10.3g' % (t, max_error))
+u_e = interpolate(u_b, V)
+error = np.abs(u_e.vector().array() - u.vector().array()).max()
+print('error, t=%.2f: %-10.3g' % (t, error))
 !ec
 
 The complete program code for this time-dependent case goes as follows:
+
+[AL: Rename program to `heat_equation.py` or just `heat.py`.]
 
 @@@CODE src/diffusion_flat1.py fromto: from fenics import@
 The code is available in the
 file "`${prog['diffusion_flat1']}.py`": "${src_url}/diffusion_flat1.py".
 % endif
 
-
 ===== Diffusion of a Gaussian function =====
 
 === The mathematical problem ===
 
-Now we want to solve a more physical problem, namely the diffusion of
-a Gaussian hill. It means that the initial condition is given by
+Now we want to solve a more relevant test problem, namely the diffusion of
+a Gaussian hill. It means that the initial value is given by
 
 !bt
-\[ I(x,y)= e^{-ax^2 - ay^2}\]
+\[ u_0(x,y)= e^{-ax^2 - ay^2}\]
 !et
-on a domain $[-2,2]\times [2,2]$. A possible value of $a$ is 5.
+on a domain $[-2,2]\times [2,2]$. We will take $a = 5$. For this
+problem we will use homogeneous Dirichlet boundary conditions ($\ub = 0$).
 
-=== Implementation ===
+=== FEniCS implementation ===
 
-What are the necessary changes to the previous program?
+Which are the required changes to our previous program? One major
+change is that the domain is not a unit square anymore. We also want to
+use much higher resolution. The new domain can
+be created easily in FEniCS using `RectangleMesh`:
 
- o The domain is not the unit square and it needs much higher resolution: `mesh = RectangleMesh(Point(-2,-2), Point(2,2), 30, 30)`.
- o The boundary condition is zero everywhere: `DirichletBC(V, Constant(0), boundary)`.
- o The initial condition is different: `I = Expression('exp(...)')`.
- o The time step should be sufficiently small: `dt = 0.01` or `dt = 0.05`.
- o The right-hand side function `f` is zero: `f = Constant(0)` (just `0`
-   will given an error as functions in FEniCS must be `Expression`, `Function`
-   (over a mesh) or `Constant`).
- o The end time for the simulation must be longer: `T = 0.8`.
- o The initial condition and the solution inside the time loop should be
-   stored to file in VTK format for visualization: `vtkfile << (u, t)`.
- o We can add a `plot(u)` command inside the time loop as well.
+!bc pycod
+nx = ny = 30
+mesh = RectangleMesh(Point(-2,-2), Point(2,2), nx, ny)
+!ec
+
+We also need to redefine the initial condition and boundary condition.
+Both are easily changed by defining a new `Expression` and by setting
+$u = 0$ on the boundary. We will also save the solution to file in VTK
+format in each time step:
+
+!bc pycod
+vtkfile << (u, t)
+!ec
+
+[AL: Remember to output as `(u, t)` also in other examples below.]
 
 The complete program appears below.
+
+[AL: Rename program to `gaussian_diffusion.py`.]
 
 @@@CODE src/diffusion_flat1_gaussian.py fromto: from fenics import@
 
@@ -422,11 +434,13 @@ PLEASE have in-browser visualization!
 % if FORMAT != 'ipynb':
 === Visualization in ParaView ===
 
-Start ParaView, choose _File - Open_, open the file `diffusion.pvd`,
-click the green _Apply_ button on the left to see the initial condition
-being plotting. Choose _View - Animation View_. Click on the play button
-or (better) the next frame button in the row of buttons at the top of the GUI
-to see the evolution of the scalar field you just have computed:
+To visualize the diffusion of the Gaussian hill, start ParaView,
+choose _File - Open_, open the file `gaussian_diffusion.pvd`, click
+the green _Apply_ button on the left to see the initial condition
+being plotted. Choose _View - Animation View_. Click on the play
+button or (better) the next frame button in the row of buttons at the
+top of the GUI to see the evolution of the scalar field you have just
+computed:
 
 <linebreak>
 <linebreak>
@@ -447,13 +461,18 @@ FIGURE: [fig/paraview_show_center_button, width=150 frac=0.15]
 <linebreak>
 <linebreak>
 
-Choose _File - Save Animation..._ to save the animation to the OGG video format.
+Choose _File - Save Animation..._ to save the animation to the AVI or OGG video format.
 % if FORMAT not in ('latex', 'pdflatex'):
 
 MOVIE: [mov/diffusion0.ogg]
 % endif
 
 FIGURE: [fig/diffusion0_paraview_animation, width=600 frac=0.8]
+
+Once the animation has been saved to file, you can play the animation
+offline using a player such as mplayer or VLC, or upload your
+animation to YouTube. Below is a sequence of
+snapshots of the solution.
 
 <linebreak>
 <linebreak>

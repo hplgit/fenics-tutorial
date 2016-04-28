@@ -5,23 +5,32 @@
 
 ======= A nonlinear Poisson equation =======
 
+label{ftut1:gallery:nonlinearpoisson}
 
-===== Variational formulation =====
+We shall now address how to solve nonlinear PDEs. We will see that
+nonlinear problems can be solved just as easily as linear problems in
+FEniCS, by simply defining a nonlinear variational problem and calling
+the `solve` function. When doing so, we will encounter a subtle
+difference in how the variational problem is defined.
 
-Now we shall address how to solve nonlinear PDEs in FEniCS. Our
-sample PDE for implementation is taken as a nonlinear Poisson equation:
+===== PDE problem =====
+
+As a sample PDE for the implementation of nonlinear problems, we
+take the following nonlinear Poisson equation:
 
 !bt
 \begin{equation}
 -\nabla\cdot\left( q(u)\nabla u\right) = f,
 \end{equation}
 !et
-in $\Omega$, with $u=u_0$ on the boundary $\partial\Omega$.
+in $\Omega$, with $u=\ub$ on the boundary $\partial\Omega$.
 The coefficient $q(u)$ makes the equation nonlinear (unless $q(u)$
 is constant in $u$).
 
+===== Variational formulation =====
+
 The variational formulation of our model problem reads:
-Find $u \in V$ such that
+find $u \in V$ such that
 
 !bt
 \begin{equation} label{ch:poisson0:nonlinear1}
@@ -33,24 +42,21 @@ where
 !bt
 \begin{equation}
 label{ch:poisson0:nonlinear2}
-F(u; v) = \int_\Omega (q(u)\nabla u\cdot \nabla v + fv)\dx,
+F(u; v) = \int_\Omega q(u)\nabla u\cdot \nabla v + fv \dx,
 \end{equation}
 !et
 and
 
 !bt
 \begin{align*}
-    \hat{V} &= \{v \in H^1(\Omega) : v = 0 \mbox{ on } \partial Omega\}, \\
-     V      &= \{v \in H^1(\Omega) : v = u_0 \mbox{ on } \partial\Omega\}\tp
+     V      &= \{v \in H^1(\Omega) : v = \ub \mbox{ on } \partial\Omega\},\\
+    \hat{V} &= \{v \in H^1(\Omega) : v = 0 \mbox{ on } \partial\Omega\}\tp
 \end{align*}
 !et
 
-The discrete problem arises as usual by restricting $V$ and $\hat V$ to a
-pair of discrete spaces. As usual, we omit any subscript on discrete
-spaces and simply say $V$ and $\hat V$ are chosen finite dimensional
-according to some mesh with some element type.
-Similarly, we let $u$ from now on be the discrete solution.
-
+The discrete problem arises as usual by restricting $V$ and $\hat V$
+to a pair of discrete spaces. As before, we omit any subscript on
+the discrete spaces and discrete solution.
 The discrete nonlinear problem is then written as: find $u\in V$ such that
 
 !bt
@@ -63,15 +69,87 @@ with $u = \sum_{j=1}^N U_j \phi_j$. Since $F$ is a nonlinear function
 of $u$, the variational statement gives rise to a system of
 nonlinear algebraic equations in the unknowns $U_1,\ldots,U_N$.
 
-
 ===== A simple implementation =====
 label{ftut:nonlinear:Newton:auto}
 
-=== Overview ===
+=== Test problem ===
+
+To solve a test problem, we need to choose the right-hand side $f$,
+the coefficient $q(u)$ and the boundary value $\ub$.  Previously, we
+have worked with manufactured solutions that can be reproduced without
+approximation errors. This is more difficult in nonlinear problems,
+and the algebra is more tedious. However, we may utilize SymPy for
+symbolic computing and integrate such computations in the FEniCS
+solver. This allows us to easily experiment with different
+manufactured solutions. The forthcoming code with SymPy requires some
+basic familiarity with this package. In particular, we will use the
+SymPy functions `diff` for symbolic differentiation and `ccode` for
+C/C++ code generation.
+
+We try out a two-dimensional manufactured
+solution that is linear in the unknowns:
+
+[AL: Rename code to `nonlinear_poisson.py`.]
+
+@@@CODE src/poisson_flat_nonlinear.py fromto: from fenics import *@u_code =
+
+!bnotice Define symbolic coordinates as required in `Expression` objects
+Note that we would normally write `x, y = sym.symbols('x y')`, but
+if we want the resulting expressions to have valid syntax for
+FEniCS `Expression` objects, we must use `x[0]` and `x[1]`.
+This is easily accomplished with `sympy` by defining the names of `x` and
+`y` as `x[0]` and `x[1]`: `x, y = sym.symbols('x[0] x[1]')`.
+!enotice
+
+Turning the expressions for `u` and `f` into C or C++ syntax for
+FEniCS `Expression` objects needs two steps. First, we ask for the C
+code of the expressions:
+
+!bc pycod
+u_code = sym.printing.ccode(u)
+f_code = sym.printing.ccode(f)
+!ec
+Sometimes, we need some editing of the result to match the required
+syntax of `Expression` objects, but not in this case. (The primary
+example is that `M_PI` for $\pi$ in C/C++ must be replaced by `pi` for
+`Expression` objects.) In our case here, the output of `c_code` and
+`f_code` is
+
+!bc ccod
+x[0] + 2*x[1] + 1
+-10*x[0] - 20*x[1] - 10
+!ec
+After having defined the mesh, the function space, and the boundary,
+we define the boundary value `u_b` as
+
+!bc pycod
+u_b = Expression(u_code)
+!ec
+Similarly, we define the right-hand side function as
+
+!bc pycod
+f = Expression(f_code)
+!ec
+
+!bwarning Name clash between `fenics` and program variables
+In a program like the one above, strange errors may occur due to
+name clashes. If you define `sym` and `q` prior to doing
+`from fenics import *`, the latter statement will also import
+variables with the names `sym` and `q`, overwriting
+the objects you have previously defined! This may lead to strange
+errors. The safest solution is to do do `import fenics as fe`
+and then prefix all FEniCS
+object names by `fe`. The next best solution is to do
+`from fenics import *` first and then define your own variables
+that overwrite those imported from `fenics`. This is acceptable
+if we do not need `sym` and `q` from `fenics`.
+!ewarning
+
+=== FEniCS implementation ===
 
 A working solver for the nonlinear Poisson equation is as easy to
 implement as a solver for the corresponding linear problem.
-All we need to do is the state the formula for $F$ and call
+All we need to do is to state the formula for $F$ and call
 `solve(F == 0, u, bc)` instead of `solve(a == L, u, bc)` as we did
 in the linear case. Here is a minimalistic code:
 
@@ -82,116 +160,51 @@ def q(u):
     """Nonlinear coefficient in the PDE."""
     return 1 + u**2
 
-mesh = UnitSquareMesh(60, 40)
+mesh = UnitSquareMesh(32, 32)
 V = FunctionSpace(mesh, 'P', 1)
-u0 = Expression(...)
+u_b = Expression(...)
 
-def u0_boundary(x, on_boundary):
+def boundary(x, on_boundary):
     return on_boundary
 
-bc = DirichletBC(V, u0, u0_boundary)
+bc = DirichletBC(V, u_b, boundary)
 
 # Define variational problem
 u = Function(V)
 v = TestFunction(V)
 f = Expression(...)
-F = dot(q(u)*grad(u), grad(v))*dx - f*v*dx
+F = q(u)*dot(grad(u), grad(v))*dx - f*v*dx
 
 # Compute solution
 solve(F == 0, u, bc)
 !ec
 The major difference from a linear problem is that the unknown function
-`u` in the variational form is in the nonlinear case
-a `Function`, not a `TrialFunction`.
+`u` in the variational form in the nonlinear case
+must be defined as a `Function`, not a `TrialFunction`. In some sense
+this is a simplification from the linear case where we must define `u`
+first as a `TrialFunction` and then as a `Function`.
 
-The `solve` function takes the nonlinear equations and derives symbolically
-the Jacobian matrix and runs a Newton method.
+The `solve` function takes the nonlinear equations, derives symbolically
+the Jacobian matrix, and runs a Newton method to compute the solution.
 
-=== Constructing a test problem with SymPy ===
+[AL: Should we display all codes like this one?]
 
-Let us do a specific computation. We then need choices for $f$ and $u_0$.
-Previously, we have worked with manufactured solutions that can be
-reproduced without approximation errors. This is more difficult in
-nonlinear problems, and the algebra is more tedious. However, we may
-utilize SymPy for symbolic computing and integrate such computations in the
-FEniCS solver. This allows us to easily experiment with different
-manufactured solutions. The forthcoming code with SymPy requires some
-basic familiarity with this package (here, defining symbols, `diff` for
-differentiation, `ccode` for C/C++ code generation).
-
-We try out a two-dimensional manufactured
-solution that is linear in the unknowns:
-
-@@@CODE src/poisson_flat_nonlinear.py fromto: from fenics import *@u_code =
-
-!bnotice Define symbolic coordinates as required in `Expression` objects
-Note that we would normally write `x, y = sym.symbols('x y')`, but
-if we want the resulting expressions to be have valid syntax for
-`Expression` objects, and then $x$ reads `x[0]` and $y$ must be `x[1]`.
-This is easily accomplished with `sympy` by defining the names of `x` and
-`y` as `x[0]` and `x[1]`: `x, y = sym.symbols('x[0] x[1]')`.
-!enotice
-
-Turning the expressions for `u` and `f` into C or C++ syntax for
-`Expression` objects needs two steps. First we ask for the C code of
-the expressions,
-
-!bc pycod
-u_code = sym.printing.ccode(u)
-f_code = sym.printing.ccode(f)
-!ec
-Sometimes we need some editing of the result to match the required syntax of
-`Expression` objects, but not in this case. (The primary example is
-that `M_PI` for $\pi$ in C/C++ must be replaced by `pi` for `Expression`
-objects.) In our case here,
-the output of `c_code` and `f_code` is
-
-!bc ccod
-x[0] + 2*x[1] + 1
--10*x[0] - 20*x[1] - 10
-!ec
-After having defined the mesh, the function space, and the boundary,
-we define the boundary values, `u0`, as
-
-!bc pycod
-u0 = Expression(u_code)
-!ec
-Similarly, we define the right-hand side function as
-
-!bc pycod
-f = Expression(f_code)
-!ec
 The complete code is found in the file
 "`${prog["poisson_flat_nonlinear"]}.py`": "${src_url}/${prog['poisson_flat_nonlinear']}.py".
 
-!bwarning Name clash between `fenics` and program variables
-In a program like the one above, strange errors may occur due to
-name clashes. If you define `sym`, `q`, and `f` prior to doing
-`from fenics import *`, the latter statement will also import
-variables with the names `sym`, `q`, and `f` and overwrite
-the objects you had! This may lead to strange errors. The best
-solution is to do `import fenics as fe` and prefix all FEniCS
-object names by `fe`. The next best solution is to do the
-`from fenics import *` first and then define our own variables
-that overwrite those imported from `fenics`. This is acceptable
-if we do not need `f`, `q`, and `sym` from `fenics`.
-!ewarning
-
 Running the code gives output that tells how the Newton iteration
-progresses. With $2(6\times 4)$ cells we get convergence in 7
-iterations with a tolerance of $10^{-9}$, and the error in the
-numerical solution is about $10^{-11}$. Using more elements, e.g.,
-$2(16\times 14)$, brings the error down to about $10^{-15}$,
-which provides evidence for a correct implementation.
+progresses. With $2\times(32\times 32)$ cells, we reach convergence in eight
+iterations with a relative tolerance of $10^{-9}$, and the error in the
+numerical solution is about $10^{-11}$.
 
 The current example shows how easy it is to solve a nonlinear problem
-in FEniCS. However, experts on numerical solution of nonlinear PDEs
+in FEniCS. However, experts on the numerical solution of nonlinear PDEs
 know very well that automated procedures may fail in nonlinear
-problems, and that it is often necessary to have much more manual
+problems, and that it is often necessary to have much better manual
 control of the solution process than what we have in the current
 case. Therefore, we return to this problem in Chapter
 ref{ftut:nonlinear} in cite{ftut2} and show how we can implement our
 own solution algorithms for nonlinear equations and also how we can
 steer the parameters in the automated Newton method used above. You
-will then realize how easy it is to implement tailored solution
+will then see how easy it is to implement tailored solution
 strategies for nonlinear problems in FEniCS.
