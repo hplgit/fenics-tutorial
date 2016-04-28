@@ -19,8 +19,7 @@ import numpy, sys
 
 def solver(
     q, Dq, f, divisions, degree=1,
-    TrialFunction_object='u',
-    J_comp='manual',
+    method='u', J_comp='manual',
     linear_solver='Krylov', # Alt: 'direct'
     abs_tol_Krylov=1E-5,
     rel_tol_Krylov=1E-5,
@@ -46,12 +45,15 @@ def solver(
     def right_boundary(x, on_boundary):
         return on_boundary and abs(x[0]-1) < tol
 
+    # ***** Can this be right? u=1 at x=1? Init guess u_ is just zero at x=1
+    # Or will NonlinearVariationalSolver employ Dirichlet values first
+    # and then use zeros? Seems so...because it's getting right...................
     Gamma_0 = DirichletBC(V, Constant(0.0), left_boundary)
     Gamma_1 = DirichletBC(V, Constant(1.0), right_boundary)
     bcs = [Gamma_0, Gamma_1]
 
     # Define variational problem
-    if TrialFunction_object == 'u':
+    if method == 'alg_Newton':
         v  = TestFunction(V)
         u  = TrialFunction(V)
         F  = dot(q(u)*grad(u), grad(v))*dx
@@ -63,12 +65,12 @@ def solver(
                 dot(Dq(u_)*u*grad(u_), grad(v))*dx
         else:
             J = derivative(F, u_, u)
-    elif TrialFunction_object == 'du':
+    elif method == 'pde_Newton':
         v  = TestFunction(V)
         du = TrialFunction(V)
         u_ = Function(V)  # most recently computed solution
         F  = dot(q(u_)*grad(u_), grad(v))*dx
-        if J_comp == 'm':
+        if J_comp == 'manual':
             J = dot(q(u_)*grad(du), grad(v))*dx + \
                 dot(Dq(u_)*du*grad(u_), grad(v))*dx
         else:
@@ -118,7 +120,7 @@ def application_test():
     def Dq(u):
         return m*(1+u)**(m-1)
 
-    usage = 'manual|automatic Krylog|direct degree nx ny nz'
+    usage = 'manual|automatic Krylov|direct degree nx ny nz'
     try:
         import sys
         J_comp = sys.argv[1]
@@ -130,16 +132,16 @@ def application_test():
         sys.exit(0)
 
     u = solver(q, Dq, f, divisions, degree,
-               'du', J_comp, linear_solver,
-               )
+               'pde_Newton', J_comp, linear_solver)
+
     # Find max error
     u_exact = Expression(
         'pow((pow(2, m+1)-1)*x[0] + 1, 1.0/(m+1)) - 1', m=m)
     u_e = interpolate(u_exact, u.function_space())
     import numpy as np
-    max_error = np.abs(u_e.vector().array() -
-                       u.vector().array()).max()
-    print('max error: %.2E' % max_error)
+    error = np.abs(u_e.vector().array() -
+                   u.vector().array()).max()
+    print('error: %.2E' % error)
 
 
 def test_solver():
@@ -157,14 +159,14 @@ def test_solver():
         'pow((pow(2, m+1)-1)*x[0] + 1, 1.0/(m+1)) - 1', m=m)
     linear_solver = 'direct'
     errors = []
-    for TrialFunction_object in 'u', 'du':
+    for method in 'alg_Newton', 'pde_Newton':
         for J_comp in 'manual', 'automatic':
             for degree in 1, 2, 3:
-                max_error_prev = -1
+                error_prev = -1
                 for divisions in [(10, 10), (20, 20), (40, 40)]:
                     u = solver(
                         q, Dq, f, divisions, degree,
-                        TrialFunction_object, J_comp,
+                        method, J_comp,
                         linear_solver,
                         abs_tol_Krylov=1E-10,
                         rel_tol_Krylov=1E-10,
@@ -174,15 +176,16 @@ def test_solver():
                     # Find max error
                     u_e = interpolate(u_exact, u.function_space())
                     import numpy as np
-                    max_error = np.abs(u_e.vector().array() -
-                                       u.vector().array()).max()
+                    error = np.abs(u_e.vector().array() -
+                                   u.vector().array()).max()
                     # Expect convergence as h**(degree+1)
-                    if max_error_prev > 0:
-                        frac = abs(max_error - max_error_prev/2**(degree+1))
+                    if error_prev > 0:
+                        frac = abs(error - error_prev/2**(degree+1))
                         errors.append(frac)
-                    max_error_prev = max_error
-    for error in errors:
-        assert error < 4E-5, error
+                    error_prev = error
+    tol = 4E-5
+    for error_reduction in errors:
+        assert error_reduction < tol, error_reduction
 
 if __name__ == '__main__':
     #test_solver()

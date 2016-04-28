@@ -301,8 +301,7 @@ def mark_boundaries_in_hypercube(
 class Problem1(DiffusionProblem):
     """Evolving boundary layer, I=0, but u=1 at x=0."""
     def __init__(self, Nx, Ny):
-        DiffusionProblem.__init__(self)
-        self.init_mesh(Nx, Ny)
+        self.make_mesh(self, Nx, Ny)
         # Storage and visualization
         self.user_action_object = \
                    ProcessSolution(self, u_min=0, u_max=1)
@@ -313,8 +312,9 @@ class Problem1(DiffusionProblem):
             16*self.time_step(0), 0.02, 0.1, 0.2, 0.3]
         plt.ion()  # for animation
 
-    def init_mesh(self, Nx, Ny):
+    def make_mesh(self, Nx, Ny):
         """Initialize mesh, boundary parts, and p."""
+        print('XXX in Problem1.make_mesh')
         self.mesh = UnitSquareMesh(Nx, Ny)
         self.divisions = (Nx, Ny)
 
@@ -390,23 +390,22 @@ class Problem1(DiffusionProblem):
 
 class Problem2(Problem1):
     """As Problem 1, but du/dn at x=1 and varying kappa."""
-    def __init__(self, Nx, Ny, kappa_values, subdomain_def):
+    def __init__(self, Nx, Ny, kappa_values, subdomain_corners):
         """
         Nx x Ny mesh. kappa_values=[1,a],
-        subdomain_def='0.3 <= x[0] <= 0.7 && 0.5 <= x[1] <= 0.9'
+        subdomain_corners=[(0.3,0.3), (0.7,0.9)]
         """
-        Problem1.__init__(self, Nx, Ny)
-        self.init_mesh(Nx, Ny, kappa_values, subdomain_def)
+        self.make_mesh(Nx, Ny, kappa_values, subdomain_corners)
         self.user_action_object = \
                    ProcessSolution(self, u_min=0, u_max=1)
         # Compare u(x,t) as curve plots for the following times
         self.times4curveplots = [
             12*self.time_step(0),
             0.02, 0.1, 0.3, 0.5]
+        plt.ion()  # for animation
 
-    def init_mesh(self, Nx, Ny, kappa_values=[1, 0.1],
-                  subdomain_def='0.3 <= x[0] <= 0.7 '\
-                  '&& 0.3 <= x[1] <= 0.7'):
+
+    def make_mesh(self, Nx, Ny, kappa_values, subdomain_corners):
         """Initialize mesh, boundary parts, and p."""
         self.mesh = UnitSquareMesh(Nx, Ny)
         self.divisions = (Nx, Ny)
@@ -428,19 +427,14 @@ class Problem2(Problem1):
                 # 0.3 <= x[0] <= 0.7 && 0.5 <= x[1] <= 0.9
                 return eval(self.subdomain_def)
 
-        class Rectangle(SubDomain):
-            def __init__(self, subdomain_def):
-                self.subdomain_def = subdomain_def
-                SubDomain.__init__(self)
-
-            def inside(self, x, on_boundary):
-                return eval(self.subdomain_def)
-
         self.materials = CellFunction('size_t', self.mesh)
         self.materials.set_all(0)  # "the rest"
         # Give subdomain_corners as (c,c),(b,b)
-        #subdomain = CompiledSubDomain(subdomain_def)
-        subdomain = Rectangle('0.3 <= x[0] <= 0.7 and 0.5 <= x[1] <= 0.9')
+        c = subdomain_corners
+        subdomain_str = '%g <= x[0] <= %g and %g <= x[1] <= %g' % \
+                        (c[0][0], c[1][0], c[0][1], c[1][1])
+        #subdomain = CompiledSubDomain(subdomain_str.replace('and', '&&'))
+        subdomain = Rectangle(subdomain_str)
         subdomain.mark(self.materials, 1)
         self.V0 = FunctionSpace(self.mesh, 'DG', 0)
         self.kappa = Function(self.V0)
@@ -466,7 +460,7 @@ class Problem2(Problem1):
 
 class Problem3(Problem2):
     """Oscillating surface temperature."""
-    def __init__(self, Nx, Ny, kappa_values, subdomain_def):
+    def __init__(self, Nx, Ny, kappa_values, subdomain_corners):
         # Oscillating temperature at x=0:
         self.surface_temp = lambda t: sin(2*t)
         w = 2.0
@@ -474,7 +468,8 @@ class Problem3(Problem2):
         self.dt = period/30  # need this before Problem2.__init__
         self.T = 4*period
 
-        Problem2.__init__(self, Nx, Ny, kappa_values, subdomain_def)
+        Problem2.__init__(
+            self, Nx, Ny, kappa_values, subdomain_corners)
         # Stretch the mesh in y direction so we get [0,4]x[0,4]
         self.mesh.coordinates()[:] *= 4
 
@@ -498,9 +493,9 @@ class Problem3(Problem2):
         """Post process solution u at time t."""
         tol = 1E-14
         self.user_action_object(t, u, timestep)
-        # Also plot u along line x=1/2
+        # Also plot u along line x=2
         y_coor = np.linspace(tol, 4-tol, 101)
-        y = [(0.5, y_) for y_ in y_coor]
+        y = [(2, y_) for y_ in y_coor]
         u = self.solution()
         u_line = [u(y_) for y_ in y]
         # Animation in figure(1)
@@ -508,14 +503,14 @@ class Problem3(Problem2):
         if timestep == 0:
             self.lines = plt.plot(y_coor, u_line, 'b-')
             plt.legend(['u, t=%.4f' % t])
-            plt.title('Solution along x=1/2, time step: %g' %
+            plt.title('Solution along x=2, time step: %g' %
                       self.time_step(t))
             plt.xlabel('y'); plt.ylabel('u')
             plt.axis([0, 4, -1.2, 1.2])
             plt.savefig('tmp_%04d.png' % timestep)
         else:
             self.lines[0].set_ydata(u_line)
-            plt.title('Solution along x=1/2, time step: %g' %
+            plt.title('Solution along x=2, time step: %g' %
                       self.time_step(t))
             plt.draw()
             plt.savefig('tmp_%04d.png' % timestep)
@@ -538,16 +533,14 @@ def demo_Problem1():
 
 def demo_Problem2():
     problem = Problem2(Nx=20, Ny=5, kappa_values=[1,1000],
-        subdomain_def='0.3 <= x[0] <= 0.7 && 0.3 <= x[1] <= 0.7')
-    print('kappa:', problem.kappa.vector().array())
+              subdomain_corners=[(0.3,0.3), (0.7,0.7)])
     problem.solve(theta=0.5, linear_solver='direct')
     plt.figure(2)
     plt.savefig('tmp1.png'); plt.savefig('tmp1.pdf')
 
 def demo_Problem3():
     problem = Problem3(Nx=5, Ny=20, kappa_values=[1, 1000],
-        subdomain_def='0.3 <= x[0] && x[0] <= 0.7 && 0.5 <= x[1] && x[1] <= 0.9')
-        #subdomain_def='0.3 <= x[0] <= 0.7 && 0.5 <= x[1] <= 0.9')
+              subdomain_corners=[(0.3,0.4), (0.7,0.8)])
     problem.solve(theta=0.5, linear_solver='direct')
     plt.figure(2)
     plt.savefig('tmp1.png'); plt.savefig('tmp1.pdf')
@@ -603,6 +596,6 @@ def test_DiffusionSolver():
     u = problem.solution()
 
 if __name__ == '__main__':
-    test_DiffusionSolver()
+    #test_DiffusionSolver()
     demo_Problem3()
     interactive()

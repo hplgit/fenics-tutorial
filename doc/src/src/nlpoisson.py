@@ -30,7 +30,7 @@ print('u=', u_code)
 print('f=', f_code)
 
 # Create mesh and define function space
-mesh = UnitSquareMesh(16, 14)
+mesh = UnitSquareMesh(8, 8)
 V = FunctionSpace(mesh, 'P', 1)
 
 # Define boundary conditions
@@ -52,12 +52,12 @@ solve(F == 0, u, bc)
 
 plot(u)
 
-# Find max error
+# Find max error among the degrees of freedom
 u0_Function = interpolate(u0, V)         # exact solution
 u0_array = u0_Function.vector().array()  # dof values
 import numpy as np
-max_error = np.abs(u0_array - u.vector().array()).max()
-print('max error:', max_error)
+error = np.abs(u0_array - u.vector().array()).max()
+print('error:', error)
 
 """
 u0_at_vertices = u0_Function.compute_vertex_values()

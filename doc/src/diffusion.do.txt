@@ -7,15 +7,17 @@ This chapter is devoted to solving diffusion problems of the
 form
 
 !bt
-\[ -\nabla\cdot(p\nabla u) = f,\]
+\[ \frac{\partial u}{\partial t} = \nabla\cdot(p\nabla u) + f,\]
 !et
 with initial condition $u=I$ and various types of Dirichlet, Neumann,
-and Robin conditions.
-A very simple FEniCS program for a diffusion equation was introduced
-in Section ref{ch:fundamentals:diffusion}, but here we shall
-discuss important algorithmic optimization strategies, how to store
-and animate time-dependent data, and how to construct more advanced
-solvers in terms of classes.
+and Robin conditions.  A very simple FEniCS program for a diffusion
+equation was introduced in ref[Section
+ref{ch:fundamentals:diffusion}][ in cite{ftut1}][in the Section "The
+time-dependent diffusion equation":
+"http://hplgit.github.io/fenics-tutorial/doc/pub/sphinx/._ftut1004.html#the-time-dependent-diffusion-equation"
+in cite{ftut1}], but here we shall discuss algorithmic optimization
+strategies, how to store and animate time-dependent data, and how to
+construct more advanced solvers in terms of classes.
 
 ======= Optimization of algorithms and implementations =======
 label{ch:diffusion:opt}
@@ -49,7 +51,7 @@ writing $u$ for the unknown spatial function at the new time level
    * $t\leftarrow t + {\dt}$
    * $u_1 \leftarrow u$ (be ready for next step)
 
-The code features the following changes from the `${prog["diffusion_flat1"]}.py`
+The code features the following changes from the `${prog["heat"]}.py`
 program. We may define $a$ and $L$ from $F$ as before, or do it explicitly:
 
 !bc pycod
@@ -93,7 +95,7 @@ look up the `u0` object to find the proper values in the Dirichlet condition,
 and these change with time in our test problem!
 
 The complete program is found in the file
-"`${prog['diffusion_flat2']}.py`": "${src_url}/${prog['diffusion_flat2']}.py".
+"`${prog['heat2']}.py`": "${src_url}/${prog['heat2']}.py".
 
 
 ===== Avoiding all assembly =====
@@ -229,9 +231,9 @@ can now be computed by first computing $M$ and $K$, and then forming
 $A=M+{\dt} K$ at $t=0$, while $b$ is computed as
 $b=MU^{k-1} + {\dt}MF^k$ at each time level.
 
-=== Implementation ===
+=== FEniCS implementation ===
 
-The following modifications are needed in the `${prog["diffusion_func"]}.py`
+The following modifications are needed in the `${prog["heat_func"]}.py`
 program from the previous section in order to implement the new
 strategy of avoiding assembly at each time level:
 
@@ -266,14 +268,14 @@ while t <= T:
 !ec
 
 We implement these modifications in a refactored version of the
-program `${prog["diffusion_flat2"]}.py`, where the solver is a function
+program `${prog["heat2"]}.py`, where the solver is a function
 as explained in Section ref{ch:poisson0:impl2} rather than a
 flat program. The domain can also more flexibly be a 1D, 2D, or 3D
 interval, rectangle, or box.
 The new `solver_minimize_assembly` function resides in
-"`${prog['diffusion_func']}.py`": "${prog['diffusion_func']}.py".
+"`${prog['heat_func']}.py`": "${prog['heat_func']}.py".
 
-@@@CODE src/diffusion_func.py fromto: def solver_minimize_assembly@def solver_bc
+@@@CODE src/heat_func.py fromto: def solver_minimize_assembly@def solver_bc
 
 A special feature in this program is the `user_action` callback function:
 at every time level, the solution is sent to `user_action`, which is
@@ -331,7 +333,7 @@ It is key to fix the color scale to get a meaningful animation.
 A complete function calling up `solver_minimize_assembly` for
 animating the solution in two test problems is found in the
 function `application_animate` in
-"`${prog['diffusion_func']}.py`": "${prog['diffusion_func']}.py".
+"`${prog['heat_func']}.py`": "${prog['heat_func']}.py".
 
 Note that `p`, which must survive between subsequent calls to the
 callback function, has to be declared as a global variable. This is
@@ -349,6 +351,7 @@ level. The impact is not huge, just a speed-up factor of 1-2 for 2D problems
 and around 2 for 3D problems. Still, this may be a value factor when
 you run a code a lot.
 
+#===== Methods of lines and ODE solvers =====
 
 ======= A welding example with post processing and animation =======
 label{ch:diffusion:welding}
@@ -644,7 +647,7 @@ most convenient to implement this function in terms of a class with
 to make comparisons between the heat source and the temperature
 response, so we register both fields for storage and plotting:
 
-@@@CODE-4 src/diffusion_func.py fromto: import cbcpost as post@info\('saving results
+@@@CODE-4 src/heat_func.py fromto: import cbcpost as post@info\('saving results
 We took the opportunity to also
 store the `u` and `f` functions to VTK files, although this is really
 not necessary since ParaView or VisIt can read XDMF files.
@@ -658,7 +661,7 @@ Getting an animation on the screen with the built-in plotting tool is
 a matter of running the welding example:
 
 !bc pyshell
->>> from diffusion_func import application_welding as a
+>>> from heat_func import application_welding as a
 >>> a(gamma=10, delta=700)
 !ec
 (We introduced the synonym `a` to save some typing.)
@@ -666,7 +669,7 @@ Or you can run this as a command in the terminal:
 
 !bc sys
 Terminal> python -c '\
-from diffusion_func import application_welding as a;
+from heat_func import application_welding as a;
 a(gamma=10, delta=700)'
 !ec
 
@@ -698,8 +701,8 @@ MOVIE: [mov/welding_gamma1.ogg] Welding example with $\gamma=1$.
 label{ch:diffusion:refactor}
 
 The flat program for the diffusion solver in
-`${prog["diffusion_flat1"]}.py` and `${prog["diffusion_flat2"]}.py`
-was refactored in `${prog["diffusion_func"]}.py` in terms of a
+`${prog["heat"]}.py` and `${prog["heat2"]}.py`
+was refactored in `${prog["heat_func"]}.py` in terms of a
 `solver` function with the general code for solving the PDE problem, a
 callback function for processing the solution at each time step, and
 an application function defining the callback function and calling the
@@ -888,8 +891,8 @@ x = 2
 print('x=%g, y=%g' % (x, line(x)))
 !ec
 % endif
-The problem is that when `Line.__call__` tries to call
-`YourLine.steepness_factor`, it cannot find such a method in
+The problem is that when the method `Line.__call__` tries to call
+the method `YourLine.steepness_factor`, it cannot find such a method in
 `YourLine`, and instead if uses the inherited method `Line.steepness_factor`,
 which returns -0.2. The problem is that there is a misspelling: a
 missing s in class `YourLine`. This is a very common error that can be
@@ -1022,7 +1025,7 @@ how the solver class can ask for the mesh, for instance.
 
 Here is an abstract problem class:
 
-@@@CODE src/diffusion_class.py fromto: class DiffusionProblem\(@import cbcpost
+@@@CODE src/heat_class.py fromto: class DiffusionProblem\(@import cbcpost
 The meaning of the different methods in this class will be evident as
 we present specific examples on implementations.
 
@@ -1039,13 +1042,13 @@ a uniform mesh over the unit square or cube, with Dirichlet conditions
 on the entire boundary. Suppose we have $\Delta t=0.3$ and
 want to simulate for $t\in [0,0.9]$. A problem class is then
 
-@@@CODE src/diffusion_class.py fromto: class TestProblemExact@def test_
+@@@CODE src/heat_class.py fromto: class TestProblemExact@def test_
 Remember that we can inherit all methods from the parent class that are
 appropriate for the problem at hand.
 
 Our test problem can now be solved in (e.g.) a unit test like
 
-@@@CODE src/diffusion_class.py fromto: test_DiffusionSolver@if __name
+@@@CODE src/heat_class.py fromto: test_DiffusionSolver@if __name
 The solver class will call the `user_action` function at every time level,
 and this function will assert that we recover the solution to machine precision.
 
@@ -1055,7 +1058,7 @@ The solver class, here based on the $\theta$-rule and the
 variational formulation from the previous section, can be coded as
 follows:
 
-@@@CODE src/diffusion_class.py fromto: class DiffusionSolver@def debug_Dirichlet
+@@@CODE src/heat_class.py fromto: class DiffusionSolver@def debug_Dirichlet
 
 ===== Example: Thermal boundary layer =====
 
@@ -1111,7 +1114,7 @@ The scaled initial-boundary problem can be written as
 \end{align}
 !et
 
-=== Implementation ===
+=== FEniCS implementation ===
 
 We can solve our problem with the general problem and solver
 classes by setting $\varrho = c= \kappa = 1$,
@@ -1120,7 +1123,7 @@ the visualization. We can create a helper class, `ProcessSolution`,
 which applies `cbcpost` to store the solution and perform animation
 via the `fenics.plot` tool:
 
-@@@CODE src/diffusion_class.py fromto: import cbcpost@def mark_
+@@@CODE src/heat_class.py fromto: import cbcpost@def mark_
 In the `user_action`
 method, we use this tool to store the solution, but we also add
 statements for plotting $u$ along a line from $x=0$ to $x=1$
@@ -1130,17 +1133,17 @@ the temperature profile, but results in somewhat lengthy code.
 To mark the boundaries, so we can set $u=1$ at $x=0$, we can make a
 function like
 
-@@@CODE src/diffusion_class.py fromto: def mark_boundaries_in_rectangle@def mark_boundaries_in_hypercube
+@@@CODE src/heat_class.py fromto: def mark_boundaries_in_rectangle@def mark_boundaries_in_hypercube
 Unfortunately, this is quite tedious and repetitive code, and the
 code has to repeated for a 3D box-shaped domain. It is possible to
 write more general, compact code valid both for an interval, rectangle, or
 box:
 
-@@@CODE src/diffusion_class.py fromto: def mark_boundaries_in_hypercube@class Problem1
+@@@CODE src/heat_class.py fromto: def mark_boundaries_in_hypercube@class Problem1
 
 Now we are in a position to show the complete problem class:
 
-@@@CODE src/diffusion_class.py fromto: class Problem1@# Classical matplotlib
+@@@CODE src/heat_class.py fromto: class Problem1@# Classical matplotlib
 Notice our definition of the time step: because the growth of the
 thin boundary layer close to $x=0$
 is very rapid for small times, we need to start with a small time
@@ -1152,7 +1155,7 @@ animation at $t=0.02$.
 
 The problem is solved by
 
-@@@CODE src/diffusion_class.py fromto: def demo_Problem1@def demo_Problem2
+@@@CODE src/heat_class.py fromto: def demo_Problem1@def demo_Problem2
 
 === Results ===
 
@@ -1248,13 +1251,13 @@ for plots and time steps are a bit different, and the Dirichlet condition
 only applies to $x=0$ (no need to implement the Neumann condition as
 long as it is zero).
 
-@@@CODE src/diffusion_class.py fromto: class Problem2@class Problem3
+@@@CODE src/heat_class.py fromto: class Problem2@class Problem3
 
 === Results ===
 
 We run a case where $\alpha=1000$:
 
-@@@CODE src/diffusion_class.py fromto: def demo_Problem2@def demo_Problem3
+@@@CODE src/heat_class.py fromto: def demo_Problem2@def demo_Problem3
 
 As shown in Figure ref{ch:diffusion:refactor:class_solver:fig2},
 the highly conductive inner material leads to a flat temperature profile
@@ -1318,7 +1321,7 @@ solution in the right way,
 it turns out that the right spatial length scale is
 $\sqrt{2\kappa/(wc\varrho)}$. With this length scale, a typical
 length of the domain in $y$ direction is 4.
-The most appropriate time scale is $t_c=2/w$.
+The most appealing time scale is $t_c=2/w$.
 
 We end up with the same scaled problem as in the previous section,
 except that at $y=1$ we have
@@ -1338,10 +1341,10 @@ as it now takes place in $y$ direction, and the axes are different.
 Much of class `Problem2` can be reused, so it makes sense to make
 a subclass and override the methods that do not fit.
 
-@@@CODE src/diffusion_class.py fromto: class Problem3@def demo_Problem1
+@@@CODE src/heat_class.py fromto: class Problem3@def demo_Problem1
 The problem is solved by
 
-@@@CODE src/diffusion_class.py fromto: def demo_Problem3@class TestProblemExact
+@@@CODE src/heat_class.py fromto: def demo_Problem3@class TestProblemExact
 
 === Results ===
 

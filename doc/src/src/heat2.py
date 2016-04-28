@@ -2,7 +2,7 @@
 FEniCS tutorial demo program: Diffusion equation with Dirichlet
 conditions and a solution that will be exact at all nodes on
 a uniform mesh.
-Difference from diffusion_flat1.py: A (coeff.matrix) is assembled
+Difference from heat.py: A (coeff.matrix) is assembled
 only once.
 """
 

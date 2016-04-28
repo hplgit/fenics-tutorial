@@ -24,7 +24,7 @@ domain_type = [UnitIntervalMesh, UnitSquareMesh, UnitCubeMesh]
 mesh = domain_type[d-1](*divisions)
 V = FunctionSpace(mesh, 'P', degree)
 
-# Define boundary conditions for initial guess
+# Define boundary conditions at x=0,1 for initial guess
 tol = 1E-14
 def left_boundary(x, on_boundary):
     return on_boundary and abs(x[0]) < tol
@@ -39,13 +39,10 @@ bcs = [Gamma_0, Gamma_1]
 # Define variational problem for initial guess (q(u)=1, i.e., m=0)
 u = TrialFunction(V)
 v = TestFunction(V)
-a = dot(grad(u), grad(v))*dx
-f = Constant(0.0)
-L = f*v*dx
-A, b = assemble_system(a, L, bcs)
-u_k = Function(V)
-solve(A, u_k.vector(), b, 'lu')
-
+F = dot(grad(u), grad(v))*dx + Constant(0)*v*dx
+A, b = assemble_system(lhs(F), rhs(F), bcs)
+u_ = Function(V)
+solve(A, u_.vector(), b, 'lu')
 
 # Note that all Dirichlet conditions must be zero for
 # the correction function in a Newton-type method
@@ -62,40 +59,34 @@ def q(u):
 def Dq(u):
     return m*(1+u)**(m-1)
 
-# Define variational problem for the matrix and vector
-# in a Newton iteration
-du = TrialFunction(V) # u = u_k + omega*du
-a = dot(q(u_k)*grad(du), grad(v))*dx + \
-    dot(Dq(u_k)*du*grad(u_k), grad(v))*dx
-L = -dot(q(u_k)*grad(u_k), grad(v))*dx
+# Define variational problem in a Newton iteration
+du = TrialFunction(V) # u = u_ + omega*du
+F = dot(q(u_)*grad(du), grad(v))*dx + \
+    dot(Dq(u_)*du*grad(u_), grad(v))*dx + \
+    dot(q(u_)*grad(u_), grad(v))*dx
 
 # Newton iteration at the algebraic level
 du = Function(V)
-u  = Function(V)  # u = u_k + omega*du
+u  = Function(V)  # u = u_ + omega*du
 omega = 1.0       # relaxation parameter
 eps = 1.0
 tol = 1.0E-5
-iter = 0
-maxiter = 25
-# u_k must have right boundary conditions
-while eps > tol and iter < maxiter:
-    iter += 1
-    print(iter, 'iteration', end=' ')
-    A, b = assemble_system(a, L, bcs_du)
+num_iter = 0
+max_iter = 25
+# u_ must have right boundary conditions
+while eps > tol and iter < max_iter:
+    num_iter += 1
+    print(num_iter, 'iteration', end=' ')
+    A, b = assemble_system(lhs(F), rhs(F), bcs_du)
     solve(A, du.vector(), b)
     eps = numpy.linalg.norm(du.vector().array(), ord=numpy.Inf)
     print('Norm:', eps)
-    u.vector()[:] = u_k.vector() + omega*du.vector()
-    # or
-    #u.vector()[:] += omega*du.vector()
-    # or
-    #u.assign(u_k)  # u = u_k
-    #u.vector().axpy(omega, du.vector())
-    u_k.assign(u)
+    u.vector()[:] = u_.vector() + omega*du.vector()
+    u_.assign(u)
 
 
-convergence = 'convergence after %d Newton iterations at the algebraic level' % iter
-if iter >= maxiter:
+convergence = 'convergence after %d Newton iterations at the algebraic level' % num_iter
+if num_iter >= max_iter:
     convergence = 'no ' + convergence
 
 print("""
@@ -108,5 +99,5 @@ with f=0, q(u) = (1+u)^m, u=0 at x=0 and u=1 at x=1.
 # Find max error
 u_exact = Expression('pow((pow(2, m+1)-1)*x[0] + 1, 1.0/(m+1)) - 1', m=m)
 u_e = interpolate(u_exact, V)
-diff = numpy.abs(u_e.vector().array() - u.vector().array()).max()
-print('Max error:', diff)
+error = numpy.abs(u_e.vector().array() - u.vector().array()).max()
+print('error:', error)

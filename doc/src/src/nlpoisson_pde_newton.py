@@ -12,8 +12,9 @@ q(u) = (1+u)^m
 Solution method: Newton method at the PDE level.
 """
 from __future__ import print_function
+import sys
 from fenics import *
-import numpy, sys
+import numpy as np
 
 # Create mesh and define function space
 degree = int(sys.argv[1])
@@ -41,8 +42,8 @@ v = TestFunction(V)
 a = dot(grad(u), grad(v))*dx
 f = Constant(0.0)
 L = f*v*dx
-u_k = Function(V)
-solve(a == L, u_k, bcs)
+u_ = Function(V)
+solve(a == L, u_, bcs)
 
 # Note that all Dirichlet conditions must be zero for
 # the correction function in a Newton-type method
@@ -60,36 +61,34 @@ def Dq(u):
     return m*(1+u)**(m-1)
 
 # Define variational problem for Newton iteration
-du = TrialFunction(V)  # u = u_k + omega*du
-a = dot(q(u_k)*grad(du), grad(v))*dx + \
-    dot(Dq(u_k)*du*grad(u_k), grad(v))*dx
-L = -dot(q(u_k)*grad(u_k), grad(v))*dx
+du = TrialFunction(V)  # u = u_ + omega*du
+a = dot(q(u_)*grad(du), grad(v))*dx + \
+    dot(Dq(u_)*du*grad(u_), grad(v))*dx
+L = -dot(q(u_)*grad(u_), grad(v))*dx
 
 # Newton iteration at the PDE level
 du = Function(V)
-u  = Function(V)  # u = u_k + omega*du
+u  = Function(V)  # u = u_ + omega*du
 omega = 1.0       # relaxation parameter
 eps = 1.0
 tol = 1.0E-5
-iter = 0
-maxiter = 25
-# u_k must have right boundary conditions here
+num_iter = 0
+max_iter = 25
+# u_ must have right boundary conditions here
 while eps > tol and iter < maxiter:
-    iter += 1
-    print(iter, 'iteration', end=' ')
+    num_iter += 1
+    print(num_iter, 'iteration', end=' ')
     A, b = assemble_system(a, L, bcs_du)
     solve(A, du.vector(), b)
-    diff = du.vector().array()
-    eps = numpy.linalg.norm(diff, ord=numpy.Inf)
+    eps = numpy.linalg.norm(du.vector().array(), ord=numpy.Inf)
     print('Norm:', eps)
-    u.vector()[:] = u_k.vector() + omega*du.vector()
+    u.vector()[:] = u_.vector() + omega*du.vector()
     # or
     #u.vector()[:] += omega*du.vector()
     # or
-    #u.assign(u_k)  # u = u_k
+    #u.assign(u_)  # u = u_
     #u.vector().axpy(omega, du.vector())
-    u_k.assign(u)
-
+    u_.assign(u)
 
 convergence = 'convergence after %d Newton iterations at the PDE level' % iter
 if iter >= maxiter:
@@ -105,5 +104,5 @@ with f=0, q(u) = (1+u)^m, u=0 at x=0 and u=1 at x=1.
 # Find max error
 u_exact = Expression('pow((pow(2, m+1)-1)*x[0] + 1, 1.0/(m+1)) - 1', m=m)
 u_e = interpolate(u_exact, V)
-diff = numpy.abs(u_e.vector().array() - u.vector().array()).max()
-print('Max error:', diff)
+error = numpy.abs(u_e.vector().array() - u.vector().array()).max()
+print('error:', diff)

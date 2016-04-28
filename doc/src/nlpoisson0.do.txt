@@ -4,9 +4,7 @@
 # #endif
 
 ======= A nonlinear Poisson equation =======
-
-
-===== Variational formulation =====
+label{ftut1:nlpoisson0}
 
 Now we shall address how to solve nonlinear PDEs in FEniCS. Our
 sample PDE for implementation is taken as a nonlinear Poisson equation:
@@ -20,7 +18,13 @@ in $\Omega$, with $u=u_0$ on the boundary $\partial\Omega$.
 The coefficient $q(u)$ makes the equation nonlinear (unless $q(u)$
 is constant in $u$).
 
-The variational formulation of our model problem reads:
+===== Variational formulation =====
+
+As usual, we multiply  our PDE by a test function $v\in\hat V$, integrate
+over the domain, and integrate the second-order derivatives by parts.
+The boundary integral arising from integration by parts vanishes wherever we
+employ Dirichlet conditions.
+The resulting variational formulation of our model problem becomes:
 Find $u \in V$ such that
 
 !bt
@@ -64,7 +68,7 @@ of $u$, the variational statement gives rise to a system of
 nonlinear algebraic equations in the unknowns $U_1,\ldots,U_N$.
 
 
-===== A simple implementation =====
+===== A simple FEniCS implementation =====
 label{ftut:nonlinear:Newton:auto}
 
 === Overview ===
@@ -75,7 +79,7 @@ All we need to do is the state the formula for $F$ and call
 `solve(F == 0, u, bc)` instead of `solve(a == L, u, bc)` as we did
 in the linear case. Here is a minimalistic code:
 
-!bc pycod
+!bc pycod-t
 from fenics import *
 
 def q(u):
@@ -122,7 +126,7 @@ differentiation, `ccode` for C/C++ code generation).
 We try out a two-dimensional manufactured
 solution that is linear in the unknowns:
 
-@@@CODE src/poisson_flat_nonlinear.py fromto: from fenics import *@u_code =
+@@@CODE src/nlpoisson.py fromto: from fenics import *@u_code =
 
 !bnotice Define symbolic coordinates as required in `Expression` objects
 Note that we would normally write `x, y = sym.symbols('x y')`, but
@@ -146,7 +150,7 @@ that `M_PI` for $\pi$ in C/C++ must be replaced by `pi` for `Expression`
 objects.) In our case here,
 the output of `c_code` and `f_code` is
 
-!bc ccod
+!bc ccod-t
 x[0] + 2*x[1] + 1
 -10*x[0] - 20*x[1] - 10
 !ec
@@ -161,8 +165,27 @@ Similarly, we define the right-hand side function as
 !bc pycod
 f = Expression(f_code)
 !ec
+% if FORMAT == 'ipynb':
+
+Here is the complete code to be executed and experimented with:
+
+@@@CODE src/nlpoisson.py fromto: from __future__ import print@print\('error
+
+We can examine the solution at the vertices:
+
+!bc pycod
+u0_at_vertices = u0_Function.compute_vertex_values()
+u_at_vertices = u.compute_vertex_values()
+coor = V.mesh().coordinates()
+for i, x in enumerate(coor):
+    print('vertex %2d (%9g,%9g): error=%g'
+          % (i, x[0], x[1],
+             u0_at_vertices[i] - u_at_vertices[i]))
+!ec
+% else:
 The complete code is found in the file
-"`${prog["poisson_flat_nonlinear"]}.py`": "${src_url}/${prog['poisson_flat_nonlinear']}.py".
+"`${prog["nlpoisson"]}.py`": "${src_url}/${prog['nlpoisson']}.py".
+% endif
 
 !bwarning Name clash between `fenics` and program variables
 In a program like the one above, strange errors may occur due to
@@ -180,9 +203,21 @@ if we do not need `f`, `q`, and `sym` from `fenics`.
 Running the code gives output that tells how the Newton iteration
 progresses. With $2(6\times 4)$ cells we get convergence in 7
 iterations with a tolerance of $10^{-9}$, and the error in the
-numerical solution is about $10^{-11}$. Using more elements, e.g.,
-$2(16\times 14)$, brings the error down to about $10^{-15}$,
-which provides evidence for a correct implementation.
+numerical solution is about $10^{-11}$. With $2(3\times 3)$ and
+$2(8\times 8)$ cells the error is identically zero.
+Other resolutions may bring the error up to the level of the
+tolerance in the Newton iterations. These results
+bring evidence for a correct implementation.
+Thinking in terms of finite differences on a uniform mesh, P1
+elements mimics standard second-order differences, which compute
+the derivative of a linear function exactly, also a quadratic
+function. Here, $\nabla u$ is a constant vector, but then multiplied
+by $(1+u^2)$, which is a second-order polynomial in $x$ and $y$, which
+the divergence ``difference operator'' should compute exactly.
+We can therefore, even with P1 elements, expect the manufactured $u$
+to be reproduced by our method. With a nonlinearity like $1+u^4$,
+this will not be the case, and we would need to verify convergence
+rates instead.
 
 The current example shows how easy it is to solve a nonlinear problem
 in FEniCS. However, experts on numerical solution of nonlinear PDEs

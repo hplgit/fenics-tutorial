@@ -534,7 +534,7 @@ def solver_vs_solver_minimize_assembly():
     T = Nt*dt
     degree = 1
 
-    from diffusion_class import TestProblemExact
+    from heat_class import TestProblemExact
     class ClassVersion(TestProblemExact):
         def user_action(self, t, u, timestep):
             return
@@ -584,6 +584,15 @@ def solver_vs_solver_minimize_assembly():
         N *= 1.5
         N = int(round(N))
 """
+P1:
+N= 40, std solver: 0.10 opt solver: 0.08 class solver: 0.28 speed-up: 1.2
+N= 80, std solver: 0.31 opt solver: 0.29 class solver: 0.54 speed-up: 1.1
+N=160, std solver: 1.46 opt solver: 1.44 class solver: 2.06 speed-up: 1.0
+N=320, std solver: 7.65 opt solver: 7.87 class solver: 10.58 speed-up: 1.0
+N= 10, std solver: 0.20 opt solver: 0.11 class solver: 0.69 speed-up: 1.8
+N= 15, std solver: 1.03 opt solver: 0.56 class solver: 1.40 speed-up: 1.9
+N= 23, std solver: 13.39 opt solver: 6.15 class solver: 13.95 speed-up: 2.2
+
 P2:
 N= 40, std solver: 2.34 opt solver: 0.68 class solver: 1.06 speed-up: 3.4
 N= 80, std solver: 2.58 opt solver: 1.83 class solver: 2.08 speed-up: 1.4

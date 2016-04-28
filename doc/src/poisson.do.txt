@@ -179,7 +179,7 @@ Make an illustrative plot of the solution too.
 file=poisson_fsin_flat
 
 Base your implementation on editing the program
-`${prog["poisson_flat"]}.py`.
+`${prog["poisson"]}.py`.
 
 !bhint
 In the string for an `Expression` object, `pi` is the value of
@@ -200,7 +200,7 @@ one may start with $N_x=N_y=20$.
 !ehint
 
 !bsol
-Looking at the `${prog["poisson_flat"]}.py` code, we realize that
+Looking at the `${prog["poisson"]}.py` code, we realize that
 the following edits are required:
 
  * Modify the `mesh` computation.
@@ -268,7 +268,7 @@ flat programs.
 ===== Exercise: Refactor the code for membrane deflection =====
 label{ch:poisson0:exer:membrane}
 
-The `${prog["poisson_flat_membrane"]}.py` simulates the deflection of
+The `${prog["poisson_membrane"]}.py` simulates the deflection of
 a membrane. Refactor this code such that we have a `solver` function
 as in the `${prog["poisson_func"]}.py` file. Let the user have the
 option to choose a direct or iterative solver for the linear system.
@@ -784,7 +784,7 @@ idx{dimension-independent code}
 FEniCS makes it is easy to write a unified simulation code that can
 operate in 1D, 2D, and 3D. We will conveniently make use of this
 feature in forthcoming examples.  As an appetizer, go back to the
-introductory programs `${prog["poisson_flat"]}.py` or
+introductory programs `${prog["poisson"]}.py` or
 `${prog["poisson_func"]}.py` and change the
 mesh construction from `UnitSquareMesh(6, 4)` to `UnitCubeMesh(6, 4,
 5)`. Now the domain is the unit cube partitioned into $6\times 4\times
@@ -2173,11 +2173,11 @@ L(v) &= \int_{\Omega} fv \dx -
 \end{align}
 !et
 
-=== Implementation ===
+=== FEniCS implementation ===
 
 How does the Neumann condition impact the implementation?
 Let us go back to the very simplest file,
-`${prog["poisson_flat"]}.py`, from
+`${prog["poisson"]}.py`, from
 Section ref{ch:poisson0:impl:code},
 we realize that the statements remain almost the same.
 Only two adjustments are necessary:
@@ -2862,7 +2862,7 @@ label{ch:poisson0:2D:DN3:var:L}
 ## /usr/share/fenics/demo/documented/subdomains/python/demo_subdomains.py
 ## contains a good example, followed up in stokes solvers
 
-=== Implementation of boundary conditions ===
+=== FEniCS implementation of boundary conditions ===
 
 Looking at our previous `solver` functions for solving the 2D Poisson equation,
 the following new aspects must be taken care of:
@@ -3055,7 +3055,7 @@ elements, add the corresponding vertex coordinate to the output.
 In addition, it is helpful to print the exact and the numerical solution
 at all the vertices as shown in Section ref{ch:poisson0:verify1}.
 
-=== Implementation of multiple subdomains ===
+=== FEniCS implementation of multiple subdomains ===
 
 Section ref{ftut:possion:2D:2mat:impl} explains how to deal with
 multiple subdomains of $\Omega$ and a piecewise constant coefficient
@@ -3147,18 +3147,17 @@ spaces:
 
 ##===== Speeding up SubDomain implementations by C++ strings =====
 
-# Refactoring with classes? Separate section?
-===== Refactoring of a solver function into solver and problem classes =====
+======= Refactoring of a solver function into solver and problem classes =======
+label{ch:poisson0:refactor:class}
 
-A FEniCS solver for a PDE can be implemented in a general way, but
-the problem-dependent data, like boundary conditions, must be specified
-in each case by the user. The implementation in the previous section
-required the user to supply a `boundary_conditions` dictionary with
-specifications of the boundary condition on each of the four sides of
-the unit square. If we, e.g., want two Dirichlet conditions at one
-side, as our mathematical formulation of the problem in the previous
-section in fact supports, this is not possible without extending
-the `solver_bc` function.
+A FEniCS solver for a PDE can be implemented in a general way, but the
+problem-dependent data, like boundary conditions, must be specified in
+each case by the user. For example, the implementation in Section
+ref{ch:poisson0:multi:bc} requires the user to supply a
+`boundary_conditions` dictionary with specifications of the boundary
+condition on each of the four sides of the unit square. If we, e.g.,
+want two Dirichlet conditions at one side, this is not possible
+without modifying the solver function.
 
 A different software design is to introduce a problem class and
 methods, supplied by the user from case to case, where boundary
@@ -3170,7 +3169,10 @@ are instead method calls to an instance of a *problem class*. This
 puts a somewhat greater burden on the programmer, but it allows for
 more flexibility, and the code for, e.g., boundary conditions can be
 more tailored to the problem at hand than the code we introduced in
-the `solver_bc` function in the previous section.
+the `solver_bc` function in Section ref{ch:poisson0:multi:bc}.
+
+===== The solver class =====
+label{ch:poisson0:refactor:class:solver}
 
 The solver class will need problem information and for this purpose
 call up the methods in a problem class. For example, the solver
@@ -3186,9 +3188,9 @@ functions as methods in a class, but some of the code for handling
 boundary conditions in `solver_bc` is now delegated to the user in
 the problem class.
 
-@@@CODE src/poisson_class.py fromto: from fenics import@class Problem
+@@@CODE src/poisson_class.py fromto: from fenics import@class Problem1
 Note that this is a general Poisson problem solver that works in any number
-of space dimensions and with any mesh and composition of boundary conditions.
+of space dimensions and with any mesh and composition of boundary conditions!
 
 !bnotice Tip: Be careful with the `mesh` variable!
 In classes, one often stores the mesh in `self.mesh`. When you need
@@ -3198,6 +3200,22 @@ by `from fenics import *` and already available as a name in your file.
 When encountering strange error messages in statements containing a
 variable `mesh`, make sure you use `self.mesh`.
 !enotice
+
+===== A problem class =====
+label{ch:poisson0:refactor:class:problem0}
+
+Let us start with a relatively simple problem class for our favorite
+test problem where we manufacture a solution $u_0=1+x^2 + 2y^2$ and
+solve $-\nabla^2 u = f$ with $f=6$ and $u=u_0$ at the entire boundary.
+
+@@@CODE src/poisson_class.py fromto: class TestProblemExact@def test_Poisson
+
+We can then make a simple unit test for the problem and solver class:
+
+@@@CODE src/poisson_class.py fromto: def test_PoissonSolver@if __name
+
+===== A more complicated problem class =====
+label{ch:poisson0:refactor:class:problem1}
 
 Below is the specific problem class for solving a scaled 2D Poisson
 problem.  We have a two-material domain where a rectangle
