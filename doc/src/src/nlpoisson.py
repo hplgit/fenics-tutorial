@@ -7,17 +7,16 @@ u = u0 on the boundary.
 """
 from __future__ import print_function
 
-# Warning: from fenics import * imports f, q, and sym
-# (which overwrites our own f and q (function) objects
-# and also sym if we do import sympy as sym).
-# Therefore, do fenics import first and then overwrite
+# Warning: from fenics import * will import both `sym` and
+# `q` from FEniCS. We therefore import FEniCS first and then
+# overwrite these objects.
 from fenics import *
 
 def q(u):
     """Nonlinear coefficient in the PDE."""
     return 1 + u**2
 
-# Use sympy to compute f given manufactured solution u
+# Use SymPy to compute f given manufactured solution u
 import sympy as sym
 x, y = sym.symbols('x[0] x[1]')
 u = 1 + x + 2*y
@@ -26,47 +25,39 @@ f = - sym.diff(q(u)*sym.diff(u, x), x) - \
 f = sym.simplify(f)
 u_code = sym.printing.ccode(u)
 f_code = sym.printing.ccode(f)
-print('u=', u_code)
-print('f=', f_code)
+print('u =', u_code)
+print('f =', f_code)
 
 # Create mesh and define function space
 mesh = UnitSquareMesh(8, 8)
 V = FunctionSpace(mesh, 'P', 1)
 
-# Define boundary conditions
-u0 = Expression(u_code)
+# Define boundary condition
+u_b = Expression(u_code, degree=2)
 
-def u0_boundary(x, on_boundary):
+def boundary(x, on_boundary):
     return on_boundary
 
-bc = DirichletBC(V, u0, u0_boundary)
+bc = DirichletBC(V, u_b, boundary)
 
 # Define variational problem
-u = Function(V)  # not TrialFunction!
+u = Function(V) # not TrialFunction!
 v = TestFunction(V)
-f = Expression(f_code)
-F = dot(q(u)*grad(u), grad(v))*dx - f*v*dx
+f = Expression(f_code, degree=2)
+F = q(u)*dot(grad(u), grad(v))*dx - f*v*dx
 
 # Compute solution
 solve(F == 0, u, bc)
 
-plot(u)
+# Plot solution
+u.rename('u', 'solution')
+#plot(u)
 
-# Find max error among the degrees of freedom
-u0_Function = interpolate(u0, V)         # exact solution
-u0_array = u0_Function.vector().array()  # dof values
+# Compute error at vertices
+u_e = interpolate(u_b, V)
 import numpy as np
-error = np.abs(u0_array - u.vector().array()).max()
-print('error:', error)
+error = np.abs(u_e.vector().array() - u.vector().array()).max()
+print('error = %.3g' % error)
 
-"""
-u0_at_vertices = u0_Function.compute_vertex_values()
-u_at_vertices = u.compute_vertex_values()
-coor = V.mesh().coordinates()
-for i, x in enumerate(coor):
-    print('vertex %2d (%9g,%9g): error=%g'
-          % (i, x[0], x[1],
-             u0_at_vertices[i] - u_at_vertices[i]))
-"""
 # Hold plot
 interactive()

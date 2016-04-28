@@ -3,7 +3,7 @@ from __future__ import print_function
 from fenics import *
 
 def solver(
-    f, u0, Nx, Ny, degree=1,
+    f, u_b, Nx, Ny, degree=1,
     linear_solver='Krylov', # Alt: 'direct'
     abs_tol=1E-5,           # Absolute tolerance in Krylov solver
     rel_tol=1E-3,           # Relative tolerance in Krylov solver
@@ -13,17 +13,17 @@ def solver(
     ):
     """
     Solve -Laplace(u)=f on [0,1]x[0,1] with 2*Nx*Ny Lagrange
-    elements of specified degree and u=u0 (Expresssion) on
+    elements of specified degree and u=u_b (Expresssion) on
     the boundary.
     """
     # Create mesh and define function space
     mesh = UnitSquareMesh(Nx, Ny)
     V = FunctionSpace(mesh, 'P', degree)
 
-    def u0_boundary(x, on_boundary):
+    def boundary(x, on_boundary):
         return on_boundary
 
-    bc = DirichletBC(V, u0, u0_boundary)
+    bc = DirichletBC(V, u_b, boundary)
 
     # Define variational problem
     u = TrialFunction(V)
@@ -52,7 +52,7 @@ def solver(
     return u
 
 def solver_objects(
-    f, u0, Nx, Ny, degree=1,
+    f, u_b, Nx, Ny, degree=1,
     linear_solver='Krylov', # Alt: 'direct'
     abs_tol=1E-5,           # Absolute tolerance in Krylov solver
     rel_tol=1E-3,           # Relative tolerance in Krylov solver
@@ -66,10 +66,10 @@ def solver_objects(
     mesh = UnitSquareMesh(Nx, Ny)
     V = FunctionSpace(mesh, 'P', degree)
 
-    def u0_boundary(x, on_boundary):
+    def boundary(x, on_boundary):
         return on_boundary
 
-    bc = DirichletBC(V, u0, u0_boundary)
+    bc = DirichletBC(V, u_b, boundary)
 
     # Define variational problem
     u = TrialFunction(V)
@@ -111,7 +111,7 @@ def test_solvers():
     # meshes in the test.
     tol = {'direct': {1: 1E-11, 2: 1E-11, 3: 1E-11},
            'Krylov': {1: 1E-14, 2: 1E-05, 3: 1E-03}}
-    u0 = Expression('1 + x[0]*x[0] + 2*x[1]*x[1]')
+    u_b = Expression('1 + x[0]*x[0] + 2*x[1]*x[1]')
     f = Constant(-6.0)
     for Nx, Ny in [(3,3), (3,5), (5,3)]:
         for degree in 1, 2, 3:
@@ -124,16 +124,16 @@ def test_solvers():
                     # Important: Krylov solver error must be smaller
                     # than tol!
                     u = solver_func(
-                         f, u0, Nx, Ny, degree,
+                         f, u_b, Nx, Ny, degree,
                          linear_solver=linear_solver,
                          abs_tol=0.1*tol[linear_solver][degree],
                          rel_tol=0.1*tol[linear_solver][degree])
-                    # Make a finite element function of the exact u0
+                    # Make a finite element function of the exact u_b
                     V = u.function_space()
-                    u0_Function = interpolate(u0, V)  # exact solution
+                    u_b_Function = interpolate(u_b, V)  # exact solution
                     # Check that dof arrays are equal
-                    u0_array = u0_Function.vector().array()  # dof values
-                    max_error = (u0_array - u.vector().array()).max()
+                    u_b_array = u_b_Function.vector().array()  # dof values
+                    max_error = (u_b_array - u.vector().array()).max()
                     msg = 'max error: %g for 2(%dx%d) mesh, degree=%d,'\
                           ' %s solver, %s' % \
                       (max_error, Nx, Ny, degree, linear_solver,
@@ -143,9 +143,9 @@ def test_solvers():
 
 def application_test():
     """Plot the solution in the test problem."""
-    u0 = Expression('1 + x[0]*x[0] + 2*x[1]*x[1]')
+    u_b = Expression('1 + x[0]*x[0] + 2*x[1]*x[1]')
     f = Constant(-6.0)
-    u = solver(f, u0, 6, 4, 1)
+    u = solver(f, u_b, 6, 4, 1)
     # Dump solution to file in VTK format
     u.rename('u', 'potential')  # name 'u' is used in plot
     vtkfile = File("poisson.pvd")
@@ -154,23 +154,23 @@ def application_test():
     plot(u)
 
 def compare_exact_and_numerical_solution(Nx, Ny, degree=1):
-    u0 = Expression('1 + x[0]*x[0] + 2*x[1]*x[1]')
+    u_b = Expression('1 + x[0]*x[0] + 2*x[1]*x[1]')
     f = Constant(-6.0)
-    u = solver(f, u0, Nx, Ny, degree, linear_solver='direct')
+    u = solver(f, u_b, Nx, Ny, degree, linear_solver='direct')
     # Grab exact and numerical solution at the vertices and compare
     V = u.function_space()
-    u0_Function = interpolate(u0, V)
-    u0_at_vertices = u0_Function.compute_vertex_values()
+    u_b_Function = interpolate(u_b, V)
+    u_b_at_vertices = u_b_Function.compute_vertex_values()
     u_at_vertices = u.compute_vertex_values()
     coor = V.mesh().coordinates()
     for i, x in enumerate(coor):
         print('vertex %2d (%9g,%9g): error=%g'
               % (i, x[0], x[1],
-                 u0_at_vertices[i] - u_at_vertices[i]))
-        # Could compute u0(x) - u_at_vertices[i] but this
+                 u_b_at_vertices[i] - u_at_vertices[i]))
+        # Could compute u_b(x) - u_at_vertices[i] but this
         # is much more expensive and gives more rounding errors
     center = (0.5, 0.5)
-    error = u0(center) - u(center)
+    error = u_b(center) - u(center)
     print('numerical error at %s: %g' % (center, error))
 
 def normalize_solution(u):
@@ -183,9 +183,9 @@ def normalize_solution(u):
     return u
 
 def test_normalize_solution():
-    u0 = Expression('1 + x[0]*x[0] + 2*x[1]*x[1]')
+    u_b = Expression('1 + x[0]*x[0] + 2*x[1]*x[1]')
     f = Constant(-6.0)
-    u = solver(f, u0, 4, 2, 1, linear_solver='direct')
+    u = solver(f, u_b, 4, 2, 1, linear_solver='direct')
     u = normalize_solution(u)
     computed = u.vector().array().max()
     expected = 1.0
@@ -201,9 +201,9 @@ def gradient(u):
     return grad_u
 
 def application_test_gradient(Nx=6, Ny=4):
-    u0 = Expression('1 + x[0]*x[0] + 2*x[1]*x[1]')
+    u_b = Expression('1 + x[0]*x[0] + 2*x[1]*x[1]')
     f = Constant(-6.0)
-    u = solver(f, u0, Nx, Ny, 1, linear_solver='direct')
+    u = solver(f, u_b, Nx, Ny, 1, linear_solver='direct')
     u.rename('u', 'solution')
     grad_u = gradient(u)
     # Grab each component as a scalar field
@@ -232,7 +232,7 @@ def efficiency():
     # convergence in such cases but GMRES is seemingly not affected
     u_exact = Expression('sin(DOLFIN_PI*x[0])*sin(DOLFIN_PI*x[1])')
     f = Expression('2*pow(DOLFIN_PI,2)*sin(DOLFIN_PI*x[0])*sin(DOLFIN_PI*x[1])')
-    u0 = Constant(0)
+    u_b = Constant(0)
 
     # Establish what the errors for P1, P2 and P3 elements are,
     # because initial tolerances for Krylov solvers must be lower
@@ -244,7 +244,7 @@ def efficiency():
     n = 80
     tol = {}
     for degree in 1, 2, 3:
-        u = solver(f, u0, n, n, degree, linear_solver='direct')
+        u = solver(f, u_b, n, n, degree, linear_solver='direct')
         u_e = interpolate(u_exact, u.function_space())
         error = np.abs(u_e.vector().array() - u.vector().array()).max()
         print('error degree=%d: %g' % (degree, error))
@@ -257,7 +257,7 @@ def efficiency():
             # Run direct solver
             print('n=%d, degree=%d, N:' % (n, degree)),
             t0 = time.clock()
-            u = solver(f, u0, n, n, degree, linear_solver='direct')
+            u = solver(f, u_b, n, n, degree, linear_solver='direct')
             t1 = time.clock()
             N = u.function_space().dim()
             print(N),
@@ -267,7 +267,7 @@ def efficiency():
             tol[degree] /= 2.0**(degree+1)
             print(' tol=%E' % tol[degree])
             t0 = time.clock()
-            u = solver(f, u0, n, n, degree, linear_solver='Krylov',
+            u = solver(f, u_b, n, n, degree, linear_solver='Krylov',
                        abs_tol=tol[degree], rel_tol=tol[degree])
             t1 = time.clock()
             timings_Krylov.append((N, t1-t0))

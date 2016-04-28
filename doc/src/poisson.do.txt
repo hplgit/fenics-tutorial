@@ -25,18 +25,19 @@ mathematics) is often mixed together.
 
 ===== A general solver function =====
 
-We consider the flat program developed in Section ref{ch:poisson0:impl}.
-Some of the code in this program is needed to solve any
-Poisson problem $-\nabla^2 u=f$ on $[0,1]\times [0,1]$ with $u=u_0$ on
-the boundary, while other statements arise from our simple test
-problem. Let us collect the general, reusable code in a function
-`solver`.  Our special test problem will then just be an application
-of `solver` with some additional statements.  We limit the `solver`
-function to just *compute the numerical solution*. Plotting and
-comparing the solution with the exact solution are considered to be
-problem-specific activities to be performed elsewhere.
+We consider the flat program developed in ref[Section
+ref{ch:poisson0:impl}][ in cite{ftut1}][the section "FEniCS
+implementation": "" in cite{ftut1}].  Some of the code in this program
+is needed to solve any Poisson problem $-\nabla^2 u=f$ on $[0,1]\times
+[0,1]$ with $u=\ub$ on the boundary, while other statements arise from
+our simple test problem. Let us collect the general, reusable code in
+a function `solver`.  Our special test problem will then just be an
+application of `solver` with some additional statements.  We limit the
+`solver` function to just *compute the numerical solution*. Plotting
+and comparing the solution with the exact solution are considered to
+be problem-specific activities to be performed elsewhere.
 
-We parameterize `solver` by $f$, $u_0$, and the resolution of the
+We parameterize `solver` by $f$, $\ub$, and the resolution of the
 mesh. Since it is so trivial to use higher-order finite element
 functions by changing the third argument to `FunctionSpace`, we let
 also the degree of the polynomials in the finite element basis
@@ -84,16 +85,17 @@ tool `unittest`, but here we are going to use pytest (or nose) since it demands
 shorter and clearer code.
 
 Mathematically, our unit test is that the finite element solution of
-our problem when $f=-6$ equals the exact solution $u=u_0=1+x^2+2y^2$.
+our problem when $f=-6$ equals the exact solution $u=\ub=1+x^2+2y^2$.
 We have already created code that finds the maximum error in the
 numerical solution. Because of rounding errors, we cannot demand this
 maximum error to be zero, but we have to use a tolerance, which depends
 to the number of elements and the degrees of the polynomials in the finite
-element basis functions. In Section ref{ch:poisson0:impl:dissect} we
-reported some experiments with the size of the maximum error. If we want
+element basis functions.  If we want
 to test that `solver` works for meshes up to $2(20\times 20)$ elements
 and cubic Lagrange elements, $10^{-11}$ is
-an appropriate tolerance for testing that the maximum error vanishes.
+an appropriate tolerance for testing that the maximum error vanishes
+(see ref[Section ref{ch:poisson0:impl:dissect}][ in cite{ftut1}][the
+section "Dissection of the program": "" in cite{ftut1}]).
 
 Only three statements are necessary to carry out the unit test. However,
 we shall embed these statements in software that the testing frameworks
@@ -204,7 +206,7 @@ Looking at the `${prog["poisson"]}.py` code, we realize that
 the following edits are required:
 
  * Modify the `mesh` computation.
- * Modify `u0` and `f`.
+ * Modify `u_b` and `f`.
  * Add expression for the exact solution.
  * Modify the computation of the numerical error.
  * Insert a loop to enable solving the problem twice.
@@ -240,7 +242,7 @@ we need code that is close to what we have in `test_solver`.
 The unit test is embedded in a proper test function `test_solver`
 for the pytest or
 nose testing frameworks. Visualization of the solution is encapsulated
-in the `application` function. Since we need `u_e`, `u0`, and `f`
+in the `application` function. Since we need `u_e`, `u_b`, and `f`
 in two functions, we place the definitions in a function `data` to
 avoid copies of these expressions.
 
@@ -286,7 +288,7 @@ and `Ny`):
 
 !bc pycod
 def solver(
-    f, u0, mesh, degree=1,
+    f, u_b, mesh, degree=1,
     linear_solver='Krylov', # Alt: 'direct'
     ...):
     V = FunctionSpace(mesh, 'P', degree)
@@ -734,7 +736,7 @@ of the domain and compare it with the exact solution:
 
 !bc pycod
 center = (0.5, 0.5)
-error = u0(center) - u(center)
+error = u_b(center) - u(center)
 print('numerical error at %s: %g' % (center, error)
 !ec
 Trying a $2(3\times 3)$ mesh, the output from the
@@ -746,7 +748,7 @@ numerical error at (0.5, 0.5): -0.0833333
 The discrepancy is due to the fact that the center point is not a node
 in this particular mesh, but a point in the interior of a cell,
 and `u` varies linearly over the cell while
-`u0` is a quadratic function. When the center point is a node, as in
+`u_b` is a quadratic function. When the center point is a node, as in
 a $2(t\times 2)$ or $2(4\times 4)$ mesh, the error is of the order
 $10^{-15}$.
 
@@ -1020,7 +1022,7 @@ as in the boundary-value problem
     - \nabla\cdot \left\lbrack
 p(x,y)\nabla u(x,y)\right\rbrack &= f(x,y) \quad \mbox{in } \Omega,
     \\
-    u(x,y) &= u_0(x,y) \quad \mbox{on}\  \partial\Omega\tp
+    u(x,y) &= \ub(x,y) \quad \mbox{on}\  \partial\Omega\tp
   \end{split}
 \end{equation}
 !et
@@ -1031,7 +1033,7 @@ problem only requires an equally simple extension of the FEniCS program.
 
 Let us continue to use our favorite solution $u(x,y)=1+x^2+2y^2$ and
 then prescribe $p(x,y)=x+y$. It follows that
-$u_0(x,y) = 1 + x^2 + 2y^2$ and $f(x,y)=-8x-10y$.
+$\ub(x,y) = 1 + x^2 + 2y^2$ and $f(x,y)=-8x-10y$.
 
 === Modifications of the PDE solver ===
 
@@ -1058,7 +1060,7 @@ in
 \end{equation*}
 !et
 The function spaces for $u$ and $v$ are the same as in
-Section ref{ch:poisson0:varform}, implying that the boundary integral
+the problem with $p=1$, implying that the boundary integral
 vanishes since $v=0$ on $\partial\Omega$ where we have Dirichlet conditions.
 The weak form $a(u,v)=L(v)$ then has
 
@@ -1370,9 +1372,6 @@ advantages in more advanced problem settings. For example, $A$ may
 be constant throughout a time-dependent simulation, so we can avoid
 recalculating $A$ at every time level and save a significant amount
 of simulation time.
-#Sections ref{ftut:timedep:diffusion1:impl}
-#and ref{ch:diffusion:opt:noassembly} deal with this topic
-#in detail.
 
 
 # In other problems, we may divide the variational
@@ -1454,7 +1453,7 @@ Section ref{ftut:possion:2D:varcoeff}, compute `u`, map it onto a
 write out the coordinates and function values at all mesh points:
 
 !bc pycod
-u = solver(p, f, u0, nx, ny, 1, linear_solver='direct')
+u = solver(p, f, u_b, nx, ny, 1, linear_solver='direct')
 u_box = structured_mesh(u, (nx, ny))
 u_ = u_box.values       # numpy array
 X = 0;  Y = 1           # for indexing in x and y direction
@@ -1551,7 +1550,7 @@ $y=0.5$ (snapped from $y=0.4$) is made by the following code:
 !bc pycod
 start = (0, 0.4)
 x, u_val, y_fixed, snapped = u_box.gridline(start, direction=X)
-u_e_val = [u0((x_, y_fixed)) for x_ in x]
+u_e_val = [u_b((x_, y_fixed)) for x_ in x]
 
 plt.figure()
 plt.plot(x, u_val, 'r-')
@@ -1614,7 +1613,9 @@ differentiation of $f$ by hand and hardcode the resulting expressions
 in an `Expression` object, a more reliable habit is to use Python's
 symbolic computing engine, SymPy, to perform mathematics and
 automatically turn formulas into C++ syntax for `Expression` objects.
-A short introduction was given in Section ref{ftut:nonlinear:Newton:auto}.
+A short introduction was given in
+ref[Section ref{ftut:nonlinear:Newton:auto}][ in cite{ftut1}][the
+section "A simple FEniCS implementation": "" in cite{ftut1}].
 
 We start out with defining the exact solution in `sympy`:
 
@@ -1652,7 +1653,7 @@ the symbol `M_PI` for $\pi$ in C/C++ by `pi` (or `DOLFIN_PI`):
 
 !bc pycod
 u_c = u_c.replace('M_PI', 'pi')
-u0 = Expression(u_c)
+u_b = Expression(u_c)
 !ec
 
 Thereafter, we can progress with the computation of $f = -\nabla\cdot(p\nabla u)$:
@@ -1991,7 +1992,7 @@ u(x,y) = \sin(\omega\pi x)\sin(\omega\pi y)
 on the unit square.
 This choice implies $f(x,y)=2\omega^2\pi^2 u(x,y)$.
 With $\omega$ restricted to an integer
-it follows that $u_0=0$.
+it follows that $\ub=0$.
 
 We need to define the
 appropriate boundary conditions, the exact solution, and the $f$ function
@@ -2072,9 +2073,9 @@ as in Section ref{ch:poisson0:verify1} and many other places in this tutorial).
 label{ch:poisson0:DN}
 
 Let us make a slight extension of our two-dimensional Poisson problem
-from Chapter ref{ch:fundamentals} and add a Neumann boundary
+with Dirichlet conditions on the entire boundary and add a Neumann boundary
 condition. The domain is still the unit square, but now we set the
-Dirichlet condition $u=u_0$ at the left and right sides, $x=0$ and
+Dirichlet condition $u=\ub$ at the left and right sides, $x=0$ and
 $x=1$, while the Neumann condition
 
 !bt
@@ -2098,12 +2099,12 @@ complete boundary-value problem can be written as
 !bt
 \begin{align}
     - \nabla^2 u &= f \mbox{ in } \Omega,  \\
-    u &= u_0 \mbox{ on } \Gamma_D,       \\
+    u &= \ub \mbox{ on } \Gamma_D,       \\
     - {\partial u\over\partial n} &= g \mbox{ on } \Gamma_N  \tp
 \end{align}
 !et
 Again we choose $u=1+x^2 + 2y^2$ as the exact solution and adjust $f$, $g$, and
-$u_0$ accordingly:
+$\ub$ accordingly:
 
 !bt
 \begin{align*}
@@ -2112,7 +2113,7 @@ g &= \left\lbrace\begin{array}{ll}
 -4, & y=1\\
 0,  & y=0
 \end{array}\right.\\
-u_0 &= 1 + x^2 + 2y^2\tp
+\ub &= 1 + x^2 + 2y^2\tp
 \end{align*}
 !et
 For ease of programming we may introduce a $g$ function defined over the whole
@@ -2178,7 +2179,8 @@ L(v) &= \int_{\Omega} fv \dx -
 How does the Neumann condition impact the implementation?
 Let us go back to the very simplest file,
 `${prog["poisson"]}.py`, from
-Section ref{ch:poisson0:impl:code},
+ref[Section ref{ch:poisson0:impl:code}][ in cite{ftut1}][the
+section "FEniCS implementation": "" in cite{ftut1}],
 we realize that the statements remain almost the same.
 Only two adjustments are necessary:
 
@@ -2273,7 +2275,7 @@ No more modifications are necessary.
 ===== Multiple Dirichlet conditions =====
 label{ch:poisson0:multiple:Dirichlet}
 
-The PDE problem from the previous section applies a function $u_0(x,y)$
+The PDE problem from the previous section applies a function $\ub(x,y)$
 for setting Dirichlet conditions at two parts of the boundary.
 Having a single function to set multiple Dirichlet conditions is
 seldom possible. The more general case is to have $m$ functions for
@@ -2910,7 +2912,7 @@ For example,
 
 !bc
 boundary_conditions = {
-  0: {'Dirichlet': u0},
+  0: {'Dirichlet': u_b},
   1: {'Robin': (r, s)},
   2: {'Neumann: g}},
   3: {'Neumann', 0}}
@@ -2919,7 +2921,7 @@ specifies
 
  * a Dirichlet condition, with values implemented by an `Expression`
    or `Constant` object
-   `u0`, on subdomain 0, i.e., the $x=1$ boundary;
+   `u_b`, on subdomain 0, i.e., the $x=1$ boundary;
  * a Robin condition (ref{ch:poisson0:multi:bc:Robin})
    on subdomain 1, $x=1$, with `Expression` or `Constant` objects
    `r` and `s` specifying $r$ and $s$;
@@ -3145,7 +3147,7 @@ spaces:
 ##Don't show this without fancy ParaView plot.
 
 
-##===== Speeding up SubDomain implementations by C++ strings =====
+# #include "prepro.do.txt"
 
 ======= Refactoring of a solver function into solver and problem classes =======
 label{ch:poisson0:refactor:class}
@@ -3205,8 +3207,8 @@ variable `mesh`, make sure you use `self.mesh`.
 label{ch:poisson0:refactor:class:problem0}
 
 Let us start with a relatively simple problem class for our favorite
-test problem where we manufacture a solution $u_0=1+x^2 + 2y^2$ and
-solve $-\nabla^2 u = f$ with $f=6$ and $u=u_0$ at the entire boundary.
+test problem where we manufacture a solution $\ub=1+x^2 + 2y^2$ and
+solve $-\nabla^2 u = f$ with $f=6$ and $u=\ub$ at the entire boundary.
 
 @@@CODE src/poisson_class.py fromto: class TestProblemExact@def test_Poisson
 
@@ -3244,3 +3246,19 @@ to supply more code in the class version, but gets greater flexibility.
 The disadvantage of the class version is that it applies the class
 concept so one needs experience with Python class programming.
 !enotice
+
+======= Solving Neumann problems =======
+
+Could have a section here with pure Neumann problems and different
+methods for handling that case:
+
+ * Fixing the value at a point.
+ * Integral constraint: vanishing average value of $u$ for instance.
+ * Others.
+
+Applications: Potential theory in fluid flow. Always pure Neumann
+problems and (most likely) a headache for teachers how to code demos.
+
+======= Mixed methods for the Poisson equation =======
+
+Natural topic in this chapter. Or maybe already in the gallery?

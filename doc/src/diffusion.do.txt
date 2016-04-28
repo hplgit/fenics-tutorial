@@ -38,7 +38,7 @@ writing $u$ for the unknown spatial function at the new time level
 ($u^k$) and $u_1$ for the spatial solution at one earlier time level
 ($u^{k-1}$):
 
- * define Dirichlet boundary condition ($u_0$, Dirichlet boundary, etc.)
+ * define Dirichlet boundary condition ($\ub$, Dirichlet boundary, etc.)
  * let $u_1$ interpolate $I$ or be the projection of $I$
  * define $a$ and $L$
  * assemble matrix $A$ from $a$
@@ -86,12 +86,12 @@ The necessary changes inside the time loop go as follows:
 !bc pycod
 while t <= T:
     b = assemble(L, tensor=b)
-    u0.t = t
+    u_b.t = t
     bc.apply(A, b)
     solve(A, u.vector(), b)
 !ec
-The update `u0.t = t` is of key importance as `bc.apply(A, b)` will
-look up the `u0` object to find the proper values in the Dirichlet condition,
+The update `u_b.t = t` is of key importance as `bc.apply(A, b)` will
+look up the `u_b` object to find the proper values in the Dirichlet condition,
 and these change with time in our test problem!
 
 The complete program is found in the file
@@ -121,19 +121,20 @@ of a finite element code in time-dependent problems.
 === Deriving recursive linear systems ===
 
 To see how repeated assembly can be avoided, we look at the $L(v)$
-form in  (ref{ch:diffusion0:pde1:L}),
-which in general varies with
-time through $u^{k-1}$, $f^k$, and possibly also with $\dt$
-if the time step is adjusted during the simulation.
-The technique for avoiding repeated assembly consists in
-expanding the finite element functions in sums over the basis functions
-$\phi_i$, as explained
-in Section ref{ch:poisson0:linalg}, to identify matrix-vector
-products that build up the complete system. We have
-$u^{k-1}=\sum_{j=1}^NU^{k-1}_j\phi_j$, and we can expand $f^k$ as
-$f^{k}=\sum_{j=1}^NF^{k}_j\phi_j$. Inserting these expressions in $L(v)$
-and using
-$v=\hat\phi_i$ result in
+form,
+
+!bt
+\[ \int_\Omega \left(u^{n-1} + {\dt}  f^n\right)v \dx, \]
+!et
+which in general varies with time through $u^{k-1}$, $f^k$, and
+possibly also with $\dt$ if the time step is adjusted during the
+simulation.  The technique for avoiding repeated assembly consists in
+expanding the finite element functions in sums over the basis
+functions $\phi_i$ to identify matrix-vector products that build up
+the complete system. We have $u^{k-1}=\sum_{j=1}^NU^{k-1}_j\phi_j$,
+and we can expand $f^k$ as
+$f^{k}=\sum_{j=1}^NF^{k}_j\phi_j$. Inserting these expressions in
+$L(v)$ and using $v=\hat\phi_i$ result in
 
 [hpl: Why $hat\phi_i$? No need for Petrov-Galerkin here... Cannot remember
 why the hat.]
@@ -287,17 +288,17 @@ numerical approximation errors, we can write a call to the solver function,
 def test_solver():
     import numpy as np
     alpha = 3; beta = 1.2
-    u0 = Expression('1 + x[0]*x[0] + alpha*x[1]*x[1] + beta*t',
-                    alpha=alpha, beta=beta, t=0)
+    u_b = Expression('1 + x[0]*x[0] + alpha*x[1]*x[1] + beta*t',
+                     alpha=alpha, beta=beta, t=0)
     f = Constant(beta - 2 - 2*alpha)
     dt = 0.3; T = 1.9
-    u0.t = 0
+    u_b.t = 0
 
     # Define assert_error callback function
     ...
 
     solver_minimize_assembly(
-        f, u0, u0, dt, T, Nx, Ny, degree,
+        f, u_b, u_b, dt, T, Nx, Ny, degree,
         user_action=assert_error, I_project=False)
 !ec
 The `user_action` function `assert_error` asserts equality of the
@@ -305,7 +306,7 @@ exact and numerical solution at every time level:
 
 !bc pycod
 def assert_error(t, u, timestep):
-    u_e = interpolate(u0, u.function_space())
+    u_e = interpolate(u_b, u.function_space())
     error= np.abs(u_e.vector().array() -
     	          u.vector().array()).max()
     tol = 2E-12
@@ -619,7 +620,7 @@ parameters and calls the solver function:
 def application_welding(gamma=1, delta=1, beta=10, num_rotations=2):
     """Circular moving heat source for simulating welding."""
     from math import pi, sin, cos
-    u0 = Constant(0)
+    u_b = Constant(0)
     I = Constant(0)
     R = 0.2
     f = Expression(
@@ -633,7 +634,7 @@ def application_welding(gamma=1, delta=1, beta=10, num_rotations=2):
     dt = P/40        # 40 steps per rotation
     Nx = Ny = 60
     solver_minimize_assembly(
-        gamma, f, u0, I, dt, T, (Nx, Ny), (1, 1), degree=1,
+        gamma, f, u_b, I, dt, T, (Nx, Ny), (1, 1), degree=1,
         user_action=ProcessResults(), I_project=False)
 !ec
 
@@ -912,7 +913,7 @@ Neumann, and Robin conditions:
 \varrho c{\partial u\over\partial t} &= \nabla\cdot\left( \kappa\nabla u\right)
 + f(\x,t)\hbox{ in }\Omega\times (0,T],\\
 u(\x,0) &= I\hbox{ on }\Omega,\\
-u &= u_0(t)\hbox{ on }\Gamma_D,\\
+u &= \ub(t)\hbox{ on }\Gamma_D,\\
 -\kappa{\partial u\over\partial n} &= g\hbox{ on }\Gamma_N,\\
 -\kappa{\partial u\over\partial n} &= r(u-U_s)\hbox{ on }\Gamma_R\tp
 \end{align}

@@ -2,26 +2,30 @@
 label{ftut:nonlinear}
 
 !bquote
-FEniCS can be used in alternative ways for solving a nonlinear PDE
-problem. We shall in the following subsections go through three
-solution strategies:
+FEniCS almost automates the solution of nonlinear problems, as shown
+in ref[Section ref{ftut1:gallery:nonlinearpoisson}][ in cite{ftut1}][the
+section "A nonlinear Poisson equation": "" in cite{ftut1}].
+However, in problems with severe nonlinearities it can be hard to
+obtain convergence of the iterative methods, and one needs to
+tailor the solution to the problem at hand. FEniCS is very well suited
+for this, but then the nonlinear iteration algorithm must be hand-coded.
+This chapter shows the implementation of three basic solution strategies:
 
   * a simple Picard-type iteration
   * a Newton method at the algebraic level
   * a Newton method at the PDE level
 
-The examples will show how tailored solution algorithms can easily be
-implemented in a FEniCS solver. The exposition will hopefully also
+The detailed exposition will hopefully also
 help newcomers to the finite element method to understand the method
 better.
-However, first we provide more
-information for using the built-in automated Newton solver that
-was demonstrated in Section ref{ftut:nonlinear:Newton:auto}.
+##However, first we provide more
+##information for using the built-in automated Newton solver that
+##was demonstrated in Section ref{ftut:nonlinear:Newton:auto}.
 !equote
 
 === Test problem ===
 
-As basic test problem, we use the nonlinear Poisson problem
+As basic test problem in this chapter, we use the nonlinear Poisson problem
 
 !bt
 \[ -\nabla\cdot(q(u)\nabla u)=f\tp\]
@@ -52,12 +56,12 @@ label{ch:poisson0:nonlinear}
 
 Solving nonlinear problems in FEniCS is a matter of defining the
 nonlinear variational form `F` and calling `solve(F == 0, ...)` as
-explained in Section ref{ftut:nonlinear:Newton:auto}.
+explained in ref[Section ref{ftut:nonlinear:Newton:auto}][ in cite{ftut1}][
+the section "A simple FEniCS implementation": "" in cite{ftut1}].
 However, in real problems we will at least have control of the
 tolerance used in the stopping criterion in Newton's method.
 Sometimes we also want to derive the Jacobian ourselves or
 provide approximations. Such customizations are shown next.
-
 
 ===== Computing the Jacobian =====
 
@@ -83,9 +87,17 @@ represents the essential boundary conditions (in general a list of
 `DirichletBC` objects), and
 `J` is a variational form for the Jacobian of `F`.
 
-The `F` form corresponding to (ref{ch:poisson0:nonlinear2})
+The `F` form corresponding to
+
+!bt
+\begin{equation}
+F(u; v) = \int_\Omega q(u)\nabla u\cdot \nabla v + fv \dx,
+\end{equation}
+!et
 is straightforwardly defined as follows, assuming `q(u)` is
-coded as a Python function (see Section ref{ftut:nonlinear:Newton:auto} for
+coded as a Python function (see
+ref[Section ref{ftut:nonlinear:Newton:auto}][ in cite{ftut1}][
+the section "A simple FEniCS implementation": "" in cite{ftut1}]) for
 code):
 
 !bc pycod
@@ -667,7 +679,9 @@ linear algebra level, i.e., as a solution method for systems of nonlinear
 algebraic equations, we can also formulate the method at the PDE level.
 This approach yields a linearization of the PDEs before they are discretized.
 FEniCS users will probably find this technique simpler to apply than
-the more standard method in Section ref{ftut:nonlinear:Newton:algebraic}.
+the more standard method in Section ref{ftut:nonlinear:Newton:algebraic},
+which needs an unfamiliar interpretation of a linear system as a
+variational formulation.
 
 === The mathematical method ===
 
@@ -708,42 +722,49 @@ We may collect the terms with the unknown $\delta u$ on the left-hand side,
 \begin{equation}
 \nabla\cdot\left( q(u^k)\nabla\delta u\right) +
 \nabla\cdot\left( q'(u^k)\delta u\nabla u^k\right) =
--\nabla\cdot\left( q(u^k)\nabla u^k\right),
+-\nabla\cdot\left( q(u^k)\nabla u^k\right)\tp
 \end{equation}
 !et
-The weak form of this PDE is derived by multiplying by a test function $v$
-and integrating over $\Omega$, integrating as usual
-the second-order derivatives by parts:
+We may state this equation using the code-friendly notation $u^{-}$ for $u^k$:
 
 !bt
 \begin{equation}
-\int_\Omega \left(
-q(u^k)\nabla\delta u\cdot \nabla v
-+ q'(u^k)\delta u\nabla u^k\cdot \nabla v\right) \dx
-= -\int_\Omega q(u^k)\nabla u^k\cdot \nabla v \dx\tp
+\nabla\cdot\left( q(u^{-})\nabla\delta u\right) +
+\nabla\cdot\left( q'(u^{-})\delta u\nabla u^{-}\right) =
+-\nabla\cdot\left( q(u^{-})\nabla u^{-}\right)\tp
 \end{equation}
 !et
-The variational problem reads: find $\delta u\in V$ such that
-$a(\delta u,v) = L(v)$ for all $v\in \hat V$, where
+
+
+The weak form of this PDE is derived by multiplying by a test function $v$
+and integrating over $\Omega$, integrating as usual
+the second-order derivatives by parts. This results in the
+variational formulation: find $u\in V$ such
+that $F(\delta u;v)=0\ \forall v\in\hat V$, where
 
 !bt
-\begin{align}
-a(\delta u,v) &=
-\int_\Omega \left(
-q(u^k)\nabla\delta u\cdot \nabla v
-+ q'(u^k)\delta u\nabla u^k\cdot \nabla v\right) \dx,
-label{ftut:nonlinear:poisson:pdelevel:eqa}\\
-L(v) &= -
-\int_\Omega q(u^k)\nabla u^k\cdot \nabla v \dx\tp
-label{ftut:nonlinear:poisson:pdelevel:eqL}
-\end{align}
+\begin{equation}
+F= \int_\Omega \left(
+q(u^{-})\nabla\delta u\cdot \nabla v
++ q'(u^{-})\delta u\nabla u^{-}\cdot \nabla v\right) \dx
+= -\int_\Omega q(u^{-})\nabla u^{-}\cdot \nabla v \dx\tp
+\end{equation}
 !et
-The function spaces $V$ and $\hat V$, being continuous or discrete,
-are as in the
-linear Poisson problem from Section ref{ch:poisson0:varform}.
+Note that this $F(\delta u;v)$ expression is linear in the unknown
+$\delta u$. We know that FEniCS can neatly extract the corresponding bilinear
+form and the linear form by the `lhs` and `rhs` commands, so in
+a program we prefer to state $F$ rather than the bilinear and linear forms.
 
-We must provide some initial guess, e.g., the solution of the
-PDE with $q(u)=1$. The corresponding weak form $a_0(u^0,v)=L_0(v)$
+The function spaces $V$ and $\hat V$, being continuous or discrete,
+are as in the corresponding
+linear Poisson problem, see ref[Section ref{ch:poisson0:varform}][ in
+cite{ftut1}][the section "Finite element variational formulation":
+"" in cite{ftut1}].
+
+We must provide some initial guess. In the present problem, the
+solution of the corresponding linear PDE is a natural choice.
+The linear PDE corresponds to
+$q(u)=1$. The corresponding weak form $a_0(u^0,v)=L_0(v)$
 has
 
 !bt
@@ -751,10 +772,10 @@ has
 a_0(u,v)=\int_\Omega\nabla u\cdot \nabla v \dx,\quad L_0(v)=0\tp
 \end{equation*}
 !et
-Thereafter, we enter a loop and solve
-$a(\delta u,v)=L(v)$ for $\delta u$ and compute a new approximation
-$u^{k+1} = u^k + \delta u$. Note that $\delta u$ is a correction, so if
-$u^0$ satisfies the prescribed
+Thereafter, we enter a loop and solve the linearized
+$F(\delta u;v)=0$ for $\delta u$ and compute a new approximation
+$u^{-} + \delta u$. Note that $\delta u$ is a correction, so if
+the initial guess $u^0$ satisfies the prescribed
 Dirichlet conditions on some part $\Gamma_D$ of the boundary,
 we must demand $\delta u=0$ on $\Gamma_D$.
 
@@ -778,15 +799,18 @@ idx{`${prog["nlpoisson_pde_newton"]}.py`}
 
 The implementation is identical to the one in Section
 ref{ftut:nonlinear:Newton:algebraic} and is found in the file
-`${prog["nlpoisson_pde_newton"]}.py`. The reader is encouraged to
+"`${prog['nlpoisson_pde_newton']}.py`":
+"${src_url}/nlpoisson_pde_newton.py". The reader is encouraged to
 go through this code to be convinced that the present method actually
-ends up with the same program as needed for the Newton method at the
+ends up with the same program
+("`${prog['nlpoisson_alg_newton']}.py`":
+"${src_url}/nlpoisson_alg_newton.py") as needed for the Newton method at the
 linear algebra level in Section ref{ftut:nonlinear:Newton:algebraic}.
 
 ===== Implementations with functions and classes =====
 
 The implementations of the Picard and Newton methods so far in
-this chapter have been done in terms of flat programs to miximize
+this chapter have been done in terms of flat programs to maximize
 the focus on the numerical details. However, for real-life
 applications of the software you will most likely prefer to
 have a solver function or problem and solver classes.
@@ -801,7 +825,7 @@ series of unit tests, respectively.
 A downside of the solver function mentioned is that it is quite restricted
 with respect to boundary conditions and meshes. Much more flexibility
 is enabled through a class implementation, although the code is also
-much more lenghty. The file "`${prog['nlpoisson_func']}.py`":
+much more lengthy. The file "`${prog['nlpoisson_func']}.py`":
 "${src_url}/nlpoisson_func.py" contains all the details:
 
  * class `NonlinearPoissonSolver` for solving $-\nabla\cdot (q(u)\nabla u)=f$

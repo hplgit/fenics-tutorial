@@ -3,12 +3,723 @@
 # #include "mako_code.txt"
 # #endif
 
-
 ======= The Navier--Stokes equations =======
 
-Should we here also include coupling to a transport equation? It shows
-multi-physics capabilities.
+As our final example in this chapter, we will solve the incompressible
+Navier-Stokes equations. This problem combines many of the challenges
+from our previously studied problems: time-dependence, nonlinearity,
+and vector-valued variables.
+
+===== PDE problem =====
+
+The incompressible Navier-Stokes equations are a system of equations
+for the velocity $u$ and pressure $p$ in an incompressible fluid:
+
+!bt
+\begin{align}
+  label{ftut1:ns:momentum}
+  \varrho(\dot{u} + u \cdot \nabla u) - \nabla\cdot\sigma(u, p) &= f, \\
+  label{ftut1:ns:continuity}
+  \nabla \cdot u &= 0.
+\end{align}
+!et
+The right-hand side $f$ is a given force per unit volume and
+just as for the equations of linear elasticity,
+$\sigma(u, p)$ denotes the stress tensor which for a Newtonian fluid
+is given by
+
+!bt
+\begin{equation}
+  \sigma(u, p) = 2\mu\epsilon(u) - pI.
+\end{equation}
+!et
+The parameter $\mu$ is the dynamic viscosity. Note that the momentum
+equation (ref{ftut1:ns:momentum}) is very similar to the elasticity
+equation (ref{ftut:elast:varform:equilibrium}). The difference is the
+two additional terms $\varrho(\dot{u} + u \cdot \nabla u)$ and the different
+expression for the stress tensor. The two extra terms express the
+acceleration $\rho \ddot{x}$ balanced by the force $F = f +
+\nabla\cdot\sigma$ per unit volume in Newton's second law.
+
+Before we state the variational formulation of the incompressible
+Navier-Stokes equations, let's scale the equation to obtain
+dimensionless quantities and parameters. We let $U$ be a reference
+velocity, $L$ be a reference length, and $T = L/U$ be a reference
+time. We then introduce the following dimensionless quantities:
+!bt
+\[
+\bar x = \frac{x}{L},\;
+\bar y = \frac{y}{L},\;
+\bar z = \frac{z}{L},\;
+\bar t = \frac{t}{T},\;
+\bar u = \frac{u}{U},\;
+\bar p = \frac{p}{\varrho U^2},\;
+\bar f = \frac{fL}{\varrho U^2}.
+\]
+!et
+
+If we insert $u = U\bar u$ and $p=\varrho U^2\bar p$ into the momentum
+equation (ref{ftut1:ns:momentum}), note that $\nabla = L^{-1}
+\bar\nabla$, and divide by $\varrho U^2/L$, we obtain an equation for
+the dimensionless quantities $\bar u$ and $\bar p$:
+
+!bt
+\[
+  \frac{\partial\bar u }{\partial\bar t} +
+  \bar u \cdot \bar\nabla \bar u -
+  \bar\nabla\cdot\bar\sigma(\bar u, \bar p) = \bar f,
+\]
+!et
+where the dimensionless stress tensor is given by
+!bt
+\[
+  \bar\sigma(\bar u, \bar p)
+  = 2\mathrm{Re}^{-1}\bar\epsilon(u) - \bar p I.
+\]
+!et
+We have here introduced the dimensionless *Reynolds number*:
+!bt
+\[
+  \mathrm{Re} = \frac{\varrho U L}{\mu}.
+\]
+!et
+The Reynolds number $\mathrm{Re}$is an important
+dimensionless quantity for flow governed by the incompressible
+Navier-Stokes equations. The Reynolds number measures the ratio
+between inertial and viscous forces and has much to say about the
+characteristics of the flow, if the reference velocity $U$ and
+reference length $L$ are chosen selected as characteristic of the
+particular problem.
+
+A similar scaling of the continuity equation
+(ref{ftut1:ns:continuity}) gives the dimensionless continuity equation
+$\bar\nabla \cdot \bar u = 0$. In the following, we will simply write
+$u$ and $p$ in place of $\bar u$ and $\bar p$ and consider the
+following scaled version of the incompressible Navier-Stokes
+equations:
+
+!bt
+\begin{align}
+  label{ftut1:ns:momentum:scaled}
+  \dot{u} + u \cdot \nabla u - \nabla\cdot\sigma(u, p) &= f, \\
+  label{ftut1:ns:continuity:scaled}
+  \nabla \cdot u &= 0,
+\end{align}
+!et
+where
+
+!bt
+\begin{equation}
+  \sigma(u, p) = 2\nu\epsilon(u) - pI.
+\end{equation}
+!et
+Here $\nu = \mathrm{Re}^{-1} = \frac{\mu}{\varrho U L}$ is the scaled
+kinematic viscosity.
 
 ===== Variational formulation =====
 
-===== A simple FEniCS implementation =====
+The Navier--Stokes equations are different from
+the time-dependent heat equation in that we need to solve a system of
+equations and this system is of a special type. If we apply the same
+technique as for the heat equation; that is, replacing the time
+derivative with a simple difference quotient, we face two
+challenges. First, we obtain a nonlinear system of equations. This in
+itself is not a problem for FEniCS as we saw in Section
+ref{ftut1:gallery:nonlinearpoisson}, but the system has a so-called
+*saddle point structure* and requires special techniques
+(preconditioners and iterative methods) to be solved efficiently.
+
+Instead, we will apply a simpler and often very efficient approach
+which is to use a *splitting method*. In a splitting method, we
+consider the two equations (ref{ftut1:ns:momentum}) and
+(ref{ftut1:ns:continuity}) separately. There exist many splitting
+strategies for the incompressible Navier-Stokes equations. One of the
+oldest is the method proposed by Chorin cite{Chorin1968} and
+Temam cite{Temam1969}, often referred to as *Chorin's method*. We will
+use a modified version of Chorin's method, the so-called incremental
+pressure correction scheme (IPCS) due to cite{Goda1979} which gives
+improved accuracy compared to the original scheme at little extra
+cost.
+
+The IPCS scheme involves three steps. First, we compute a *tentative
+velocity* $u^{\bigstar}$ by advancing the momentum equation
+(ref{ftut1:ns:momentum}) using the pressure $p^{n-1}$ from the
+previous time interval. We will also be using the velocity $u^{n-1}$
+in the nonlinear term $u\cdot\nabla u$. The variational problem for
+this first step is:
+
+!bt
+  \begin{multline} \label{ftut1:ipcs1}
+      \text{\textit{Step 1: Tentative velocity step}}
+      \\
+      \renni{v}{(u^{\bigstar} - u^{n-1}) / \dt}
+      + \renni{v}{u^{n-1} \cdot \nabla u^{n-1}}
+      + \renni{\epsilon(v)}{\sigma(u^{n-\frac{1}{2}}, p^{n-1})}
+      \\
+      + \renni{v}{p^{n-1} n}_{\partial\Omega}
+      - \renni{v}{\nu \nabla u^{n-\frac{1}{2}}\cdot n}_{\partial\Omega}
+      = \renni{v}{f^n}
+  \end{multline}
+!et
+This notation requires some explanation. First, we use the short-hand
+notation
+
+!bt
+\[
+  \inner{v}{w} = \int_{\Omega} vw \dx, \quad
+  \inner{v}{w}_{\partial\Omega} = \int_{\partial\Omega} vw \ds.
+\]
+!et
+This allows us to express the variational problem in a more compact
+way. Second, we use the notation $u^{n-\frac{1}{2}}$. This notation
+means the value of $u$ at the midpoint of the interval, which for a
+linearly varying function means
+
+!bt
+\[
+  u^{n-\frac{1}{2}} = (u^{n-1} + u^n) / 2.
+\]
+!et
+Third, we notice that the variational problem (ref{ftut1:ipcs1})
+arises from the integration by parts of the term
+$\inner{-\nabla\cdot\sigma}{v}$. Just as for the elasticity problem in
+Section (ref{ftut:elast}), we obtain
+
+!bt
+\[
+  \inner{-\nabla\cdot\sigma}{v}
+  = \inner{\sigma}{\epsilon(v)}
+  - \inner{T}{v}_{\partial\Omega},
+\]
+!et
+where $T = \sigma\cdot n$ is the boundary traction. If we solve a
+problem with a free boundary, we can take $T = 0$ on the
+boundary. However, if we compute the flow through a channel or a pipe
+and want to model a flow that continues into an "imaginary channel" at
+the outflow, we need to treat this term with some care. The assumption
+we then make is that the derivative of the velocity in the direction
+of the channel is zero at the outflow, corresponding to a flow that is
+"fully developed" or doesn't change significantly downstream of the
+outflow. Doing so, the remaining boundary term at the outflow becomes
+$pn - \nu \nabla u \cdot n$ which is the term appearing in the
+variational problem (\ref{ftut1:ipcs1}).
+
+[AL: Apostrophes like "these" don't look like what I would expect in LaTeX.]
+
+!bwarning `grad(u)` vs. `nabla_grad(u)`
+For scalar functions $\nabla u$ has a clear meaning as the vector
+$\nabla u =
+(\frac{\partial u}{\partial x},
+ \frac{\partial u}{\partial y},
+ \frac{\partial u}{\partial z})$.
+However, if $u$ is vector-valued, the meaning is less clear.
+Some sources define $\nabla u$ as the matrix with elements
+$\partial u_j / \partial x_i$ while other sources prefer
+$\partial u_i / \partial x_j$. In FEniCS, `grad(u)` is defined as the
+matrix with elements $\partial u_i / \partial x_j$, which is the
+natural definition of $\nabla u$ if we think of this as the *gradient* or
+*derivative* of $u$. This way, the matrix $\nabla u$ can be applied to
+a differential $\dx$ to give an increment $\mathrm{d}u = \nabla u \,
+\dx$. Since the alternative interpretation of $\nabla u$ as the matrix
+with elements $\partial u_j / \partial x_i$ is very common, in
+particular in continuum mechanics, FEniCS
+provides the operator `nabla_grad` for this purpose.
+For the Navier-Stokes equations, it is important to consider the
+term $u \cdot \nabla u$ which should be interpreted as the vector
+$w$ with elements
+$w_i = \sum_j \left(u_j \frac{\partial}{\partial x_j}\right) u_i
+     = \sum_j u_j \frac{\partial u_i}{\partial x_j}$.
+This term can be implemented in FEniCS either as
+`grad(u)*u`, since this is expression becomes
+$\sum_j \partial u_i/\partial x_j u_j$, or as
+`dot(u, nabla_grad(u))` since this expression becomes
+$\sum_i u_i \partial u_j/\partial x_i$. We will use the notation
+`dot(u, nabla_grad(u))` below since it corresponds more closely
+to the standard notation $u \cdot \nabla u$.
+!ewarning
+
+We now move on to the second step in our splitting scheme for the
+incompressible Navier-Stokes equations. In the first step, we computed
+the tentative velocity $u^{\star}$ based on the pressure from the
+previous time step. We may now use the computed tentative velocity to
+compute the new pressure $p^n$:
+
+!bt
+\begin{multline} \label{ftut1:ipcs2}
+  \text{\textit{Step 2: Pressure correction step}} \\
+  \renni{\nabla q}{\nabla p^n}
+  = \renni{\nabla q}{\nabla p^{n-1}} - \dt^{-1}\renni{q}{\nabla \cdot u^{\bigstar}}.
+\end{multline}
+!et
+Note here that $q$ is a scalar-valued test function from the pressure
+space, whereas the test function $v$ in (ref{ftut1:ipcs1}) is a
+vector-valued test function from the velocity space.
+
+One way to think about this step is to subtract the Navier-Stokes
+momentum equation (ref{ftut1:ns:momentum}) expressed in terms of the
+tentative velocity $u^{\star}$ and the pressure $p^{n-1}$ from the
+momentum equation expressed in terms of the velocity $u^n$ and
+pressure $p^n$. This results in the equation
+
+!bt
+\begin{equation} \label{ftut1:ipcs:step}
+  (u^n - u^{\star}) / \dt + \nabla p^n - \nabla p^{n-1} = 0.
+\end{equation}
+!et
+Taking the divergence and requiring that $\nabla \cdot u^n = 0$ by the
+Navier-Stokes continuity equation (ref{ftut1:ns:continuity}), we
+obtain the equation $-\nabla\cdot u^{\star} / \dt + \nabla^2 p^n -
+\nabla p^{n-1}$, which is a Poisson problem for the pressure $p^n$
+resulting in the variational problem (ref{ftut1:ipcs2}).
+
+Finally, we compute the corrected velocity $u^n$ from the equation
+(ref{ftut1:ipcs:step}). Multiplying this equation by a test function
+$v$, we obtain
+
+!bt
+\begin{multline} \label{ftut1:ipcs3}
+  \text{\textit{Step 3: Velocity correction step}}\nonumber \\
+  \renni{v}{u^n} =
+  \renni{v}{u^{\bigstar}} - \dt\renni{v}{\nabla(p^n-p^{n-1})}.
+\end{multline}
+!et
+
+In summary, we may thus solve the incompressible Navier-Stokes
+equations efficiently by solving a sequence of three linear variational
+problems (steps 1, 2, 3) in each time step.
+
+===== A simple implementation =====
+
+=== Test problem ===
+
+As a test problem, we compute Poiseuille flow in the unit square.
+It is easy to see that a quadratic velocity profile and a linearly
+varying pressure is an exact stationary solution to the incompressible
+Navier-Stokes equations. As our exact solution, we take
+
+!bt
+\begin{align}
+  u(x, y, t) &= C(y(1 - y), 0), \\
+  p(x, y, t) &= 1 - x.
+\end{align}
+!et
+We compute the gradients of $u$ and $p$ and obtain
+
+!bt
+\[
+  \nabla u =
+  \left(\begin{array}{cc} 0 & C(1 - 2y) \\ 0 & 0 \end{array}\right),
+  \quad
+  \nabla p = (-1, 0).
+\]
+!et
+It is then easy to see that the first two terms in the momentum
+equation (ref{ftut1:ns:momentum}) vanish: $\dot{u} = 0$
+and $u\cdot \nabla u$ = 0. Furthermore, we have
+
+!bt
+\[
+  -\nabla \cdot \sigma
+  = -\nu \nabla^2 u + \nabla p
+  = (2C\nu, 0) + (-1, 0) = (2C\nu - 1, 0)
+  = (0, 0),
+\]
+!et
+if we take $C = 1/(2\nu)$. For this simple test problem, we will
+ignore physical constants and simple take $C = 1$ and $\nu = 0.5$.
+This means that $u(x, y, t) = (y(1 - y), 0)$ and $p(x, y, t) = 1 -
+x$ is an exact solution of the momentum equation
+(ref{ftut1:ns:momentum}) with right-hand side $f = (0, 0)$. Since we
+also have $\nabla \cdot u = 0 + 0 = 0$, we have found an exact
+solution to the incompressible Navier-Stokes equations.
+
+=== FEniCS implementation ===
+
+Our previous examples have all started out with the creation of a
+mesh and then the definition of a `FunctionSpace` on the mesh. For the
+splitting scheme we will use to solve the Navier-Stokes equations we
+need to define two function spaces, one for the velocity and one for
+the pressure:
+
+!bc pycod
+V = VectorFunctionSpace(mesh, 'P', 2)
+Q = FunctionSpace(mesh, 'P', 1)
+!ec
+The first space `V` is a vector-valued function space for the velocity
+and the second space `P` is a scalar-valued function space for the
+pressure. We use piecewise quadratic elements for the velocity and
+piecewise linear elements for the pressure. When creating a
+`VectorFunctionSpace` in FEniCS, the value-dimension (the length of
+the vectors) will be set equal to the geometric dimension of the
+finite element mesh. One can easily create vector-valued function
+spaces with other dimensions in FEniCS by adding the keyword parameter
+`dim`:
+
+!bc pycod
+V = VectorFunctionSpace(mesh, 'P', 2, dim=10)
+!ec
+
+!bnotice Stable finite element spaces for the Navier-Stokes equations
+It is well-known that certain finite element spaces are not *stable*
+for the Navier-Stokes equations, or even for the simpler Stokes
+equations. The prime example of an unstable pair of finite element
+spaces is to use continuous piecewise polynomials for both the
+velocity and the pressure. Using an
+unstable pair of spaces typically results in a solution with
+*spurious* (unwanted, non-physical) oscillations in the pressure
+solution. The simple remedy is to use piecewise continuous piecewise
+quadratic elements for the velocity and continuous piecewise linear
+elements for the pressure. Together, these elements form the so-called
+*Taylor-Hood* element. Spurious oscillations may occur also for
+splitting methods if an unstable element pair is used.
+!enotice
+
+Since we have two different function spaces, we need to create two sets
+of trial and test functions:
+
+!bc pycod
+u = TrialFunction(V)
+v = TestFunction(V)
+p = TrialFunction(Q)
+q = TestFunction(Q)
+!ec
+
+As we have seen in previous examples, boundaries may be defined in
+FEniCS by defining Python functions that return `True` or `False`
+depending on whether a point should be considered part of the
+boundary, for example
+
+!bc pycod
+def boundary(x, on_boundary):
+    return near(x[0], 0)
+!ec
+This function defines the boundary to be all points with
+$x$-coordinate equal to (near) zero. Alternatively, we may give the boundary
+definition as a string of C++ code, much like we have previously
+defined expressions such as `u0 = Expression('1 + x[0]*x[0] +
+2*x[1]*x[1]')`. The above definition of the boundary in terms of a
+Python function may thus be replaced by a simple C++ string:
+
+!bc pycod
+boundary = 'near(x[0], 0)'
+!ec
+This has the advantage of moving the computation of which nodes
+belong to boundary to C++ from Python, which improves the efficiency
+of the program.
+For the current example, we will set three different boundary
+conditions. First, we will set $u = 0$ at the walls of the channel;
+that is, at $y = 0$ and $y = 1$. Second, we will set $p = 1$ at the
+inflow ($x = 0$) and, finally, $p = 0$ at the outflow ($x = 1$). This
+will result in a pressure gradient that will accelerate the flow from an
+initial stationary state. These
+boundary conditions may be defined as follows:
+
+!bc pycod
+# Define boundaries
+inflow   = 'near(x[0], 0)'
+outflow  = 'near(x[0], 1)'
+walls    = 'near(x[1], 0) || near(x[1], 1)'
+
+# Define boundary conditions
+bcu_noslip  = DirichletBC(V, Constant((0, 0)), walls)
+bcp_inflow  = DirichletBC(Q, Constant(1), inflow)
+bcp_outflow = DirichletBC(Q, Constant(0), outflow)
+bcu = [bcu_noslip]
+bcp = [bcp_inflow, bcp_outflow]
+!ec
+
+At the end, we collect the boundary conditions for the velocity and
+pressure in Python lists so we can easily access them in the
+following computation.
+
+We now move on to the definition of the variational forms. There are
+three variational problems to be defined, one for each step in the
+IPCS scheme. Let's look at the definition of the first variational
+problem:
+
+!bc pycod
+U  = 0.5*(u0 + u)
+F1 = dot((u - u0) / k, v)*dx + dot(dot(u0, nabla_grad(u0)), v)*dx \
+   + inner(sigma(U, p0), epsilon(v))*dx \
+   + dot(p0*n, v)*ds - dot(nu*nabla_grad(U)*n, v)*ds \
+   - dot(f, v)*dx
+a1 = lhs(F1)
+L1 = rhs(F1)
+!ec
+This is very similar to the mathematical definition
+(ref{ftut1:ipcs1}). Since the variational problem contains a mix of
+known and unknown quantities --- the unknown $u^n$ (which we name `u`
+in the variational problem) and the known value $u^{n-1}$ (which we
+name `u0`) --- it is convenient to use the FEniCS functions `lhs` and
+`rhs` to extract the left- and right-hand sides of the variational
+problem.
+
+In the definition of the variational problem, we take advantage of the
+Python programming language to define our own operators `sigma` and
+`epsilon`. Using Python this way makes it easy to extend the
+mathematical language of FEniCS with special operators and
+constitutive laws:
+
+!bc pycod
+def epsilon(u):
+    return sym(nabla_grad(u))
+
+def sigma(u, p):
+    return 2*nu*epsilon(u) - p*Identity(len(u))
+!ec
+
+The splitting scheme requires the solution of a sequence of three
+variational problems in each time step. We have previously used the
+built-in FEniCS function `solve` to solve variational problems. Under
+the hood, when a user calls `solve(a == L, u, bc)`, FEniCS will
+perform the following steps:
+
+!bc pycod
+A = assemble(A)
+b = assemble(L)
+bc.apply(A, b)
+solve(A, u.vector(), b)
+!ec
+In the last step, FEniCS uses the overloaded `solve` function to solve
+the linear system `AU = b` where `U` is the vector of degrees of
+freedom for the function $u(x) = \sum_{j=1} U_j \phi_j(x)$.
+
+In our implementation of the splitting scheme, we will make use of
+these low-level commands to first assemble and then call solve. This
+has the advantage that we may control when we assemble and when we
+solve the linear system. In particular, since the matrices for the
+three variational problems are all time-independent, it makes sense to
+assemble them once and for all outside of the time-stepping loop:
+
+!bc pycod
+A1 = assemble(a1)
+A2 = assemble(a2)
+A3 = assemble(a3)
+!ec
+Within the time-stepping loop, we may then assemble only the
+right-hand side vectors, apply boundary conditions, and call the solve
+function as here for the first of the three steps:
+
+!bc pycod
+b1 = assemble(L1)
+[bc.apply(b1) for bc in bcu]
+solve(A1, u1.vector(), b1)
+!ec
+Notice the Python *list comprehension* `[bc.apply(b1) for bc in bcu]`
+which iterates over all `bc` in the list `bcu`. This is a convenient
+way to apply all boundary conditions in a single line and makes it
+possible to reuse the same code if we later decide to apply more
+boundary conditions.
+
+Finally, let's look at an important detail in how we use parameters
+such as the time step `dt` and kinematic viscosity `nu` in the
+definition of our variational problems. Since we might want to change
+these later, for example if we want to experiment with smaller or
+larger time steps, we wrap these using a FEniCS `Constant`:
+
+!bc pycod
+k = Constant(dt)
+nu = Constant(nu)
+!ec
+The assembly of matrices and vectors in FEniCS is based on code
+generation. This means that whenever we change a variational problem,
+FEniCS will have to generate new code, which may take a little
+time. New code will also be generated when a float value for the time
+step or viscosity is changed. By wrapping these parameters using
+`Constant`, FEniCS will treat these parameters as generic constants and
+not specific numerical values, which prevents repeated code
+generation. In the case of the time step, we choose a new name `k`
+instead of `dt` for the `Constant` since we also want to use the
+variable `dt` as a Python float as part of the time-stepping.
+
+The complete code for simulating Poiseuille flow with FEniCS looks as
+follows:
+
+@@@CODE src/navier_stokes_poiseuille.py fromto: from fenics import@
+
+We compute the error at the nodes as we have done before to verify
+that our implementation is correct. Our Navier-Stokes solver computes
+the solution to the time-dependent incompressible Navier-Stokes
+equations, starting from the initial condition $u = (0, 0)$. We have
+not specified the initial condition explicitly in our solver which
+means that FEniCS will initialize all variables, in particular the
+previous and current velocities `u0` and `u1`, to zero. Since the
+exact solution is quadratic, we expect the solution to be exact to
+within machine precision at the nodes at the final time. For our
+implementation, the error quickly approaches zero and is approximately
+$10^{-9}$ at final time $T = 10$.
+
+FIGURE:[fig/navier_stokes_poiseuille, width=600 frac=0.8] Plot of the velocity profile at the final time for the Navier-Stokes Poiseuille flow example. label{ftut1:fig:navier_stokes_poisseuille}
+
+===== Flow past a cylinder =====
+
+We now turn our attention to a more interesting example: flow past a
+circular cylinder. The geometry and parameters are taken from problem
+DFG 2D-2 in the "FEATFLOW/1995-DFG benchmark suite":
+"http://www.featflow.de/en/benchmarks/cfdbenchmarking/flow/dfg_benchmark2_re100.html"
+and is illustrated in Figure
+ref{ftut1:navier_stokes_cylinder:geometry}. The kinematic viscosity is
+given by $\nu = 0.001$ and the inflow velocity
+profile is specified as
+
+!bt
+\[
+  u(x, y, t) = \left(1.5 \cdot \frac{4y(1-y)}{0.41^2}, 0\right),
+\]
+!et
+which has a maximum magnitude of $1.5$ at $y = 0.41/2$.
+
+FIGURE:[fig/navier_stokes_cylinder_geometry, width=600 frac=0.95] Geometry for the flow past a cylinder test problem. Notice the slightly perturbed and unsymmetric geometry. label{ftut1:navier_stokes_cylinder:geometry}.
+
+For the previous test problem, scaling with the characteristic mean
+velocity $U = \int_0^1 x (1 - x) \dx = 1/6 = 2/3 \cdot 0.25$ and $L = 1$ gives a small
+Reynolds number of size $L = UL/\nu = \frac{1}{6}/0.5 = 1/3$. For the
+current problem, the characteristic length is $L = 0.1$ (the diameter
+of the cylinder) and the mean velocity is $2/3 \cdot 1.5 = 1$
+which gives a Reynolds number of size $\mathrm{Re} = 1 \cdot 0.1 /
+0.001 = 100$. At this Reynolds number the flow develops into a
+periodic flow with vortex shedding behind the cylinder.
+
+=== FEniCS implementation ===
+
+So far all our domains have been simple shapes such as a unit square or
+a rectangular box. A number of such simple meshes may be created in
+FEniCS using the built-in meshes
+`UnitIntervalMesh` (1D),
+`UnitSquareMesh` (2D),
+`UnitCubeMesh` (3D),
+`IntervalMesh` (1D),
+`RectangleMesh` (2D),
+`BoxMesh` (3D), and
+`UnitDiscMesh` (2D).
+FEniCS supports the creation of more complex meshes via a technique
+called *constructive solid geometry* (CSG), which lets us define
+geometries in terms of simple shapes (primitives) and set operations:
+union, intersection, and set difference. The set operations are
+encoded in FEniCS using the operators `+` (union), `*` (intersection),
+and `-` (set difference). To access the CSG functionality in FEniCS,
+one must import the FEniCS module `mshr` which provides the
+extended meshing functionality of FEniCS.
+
+[AL: Need to cite mshr.]
+
+The geometry for the cylinder flow test problem can be defined easily
+by first defining the rectangular channel and then subtracting the
+circle:
+
+!bc pycod
+channel = Rectangle(Point(0, 0), Point(2.2, 0.41))
+cylinder = Circle(Point(0.2, 0.2), 0.05)
+geometry = channel - cylinder
+!ec
+We may then create the mesh by calling the function `generate_mesh`:
+
+!bc pycod
+mesh = generate_mesh(geometry, 64)
+!ec
+
+To solve the cylinder test problem, we only need to make a few minor
+changes to the code we wrote for the Poiseuille flow test
+case. Besides defining the new mesh, the only change we need to make
+is to modify the boundary conditions and the time step size. The
+boundaries are specified as follows:
+
+!bc pycod
+inflow   = 'near(x[0], 0)'
+outflow  = 'near(x[0], 2.2)'
+walls    = 'near(x[1], 0) || near(x[1], 0.41)'
+cylinder = 'on_boundary && x[0]>0.1 && x[0]<0.3 && x[1]>0.1 && x[1]<0.3'
+!ec
+
+[AL: We set $p = 0$ at the outflow. This seems to be necessary, but we
+should really not need to specify the pressure at all.]
+
+In addition to these essential changes, we will make a number of small
+changes to improve our solver. First, since we need to choose a
+relatively small time step to compute the solution (a time step that
+is too large will make the solution blow up) we add a progress bar so
+that we can follow the progress of our computation. This can be done
+as follows:
+
+!bc pycod
+progress = Progress('Time-stepping')
+set_log_level(PROGRESS)
+
+t = 0.0
+for n in xrange(num_steps):
+
+    # Update current time
+    t += dt
+
+    # Place computation here
+
+    # Update progress bar
+    progress.update(t / T)
+!ec
+
+!bnotice Log levels and printing in FEniCS
+Notice the call to `set_log_level(PROGRESS)` which is essential to
+make FEniCS actually display the progress bar. FEniCS is actually
+quite informative about what is going on during a computation but the
+amount of information printed to screen depends on the current log
+level. Only messages with a priority higher than or equal to the
+current log level will be displayed. The predefined log levels in
+FEniCS are
+`DBG`,
+`TRACE`,
+`PROGRESS`,
+`INFO`,
+`WARNING`,
+`ERROR`, and
+`CRITICAL`. By default, the log level is set to `INFO` which means
+that messages at level `DBG`, `TRACE`, and `PROGRESS` will not be
+printed. Users may print messages using the FEniCS functions `info`,
+`warning`, and `error` which will print messages at the obvious log
+level (and in the case of `error` also throw an exception and
+exit). One may also use the call `log(level, message)` to print a
+message at a specific log level.
+!enotice
+
+Since the system(s) of linear equations are significantly larger than
+for the simple Poiseuille flow test problem, we choose to use an
+iterative method instead of the default direct (sparse) solver used by
+FEniCS when calling `solve`. Efficient solution of linear systems
+arising from the discretization of PDEs requires the choice of both a
+good iterative (Krylov subspace) method and a good
+preconditioner. For this problem, we will simply use the biconjugate
+gradient stabilized method (BiCGSTAB). This can be done by adding the
+keyword `bicgstab` in the call to `solve`:
+
+!bc pycod
+solve(A1, u1.vector(), b1, 'bicgstab')
+solve(A2, p1.vector(), b2, 'bicgstab')
+solve(A3, u1.vector(), b3, 'bicgstab')
+!ec
+
+Finally, to be able to postprocess the computed solution in Paraview,
+we store the solution to file in each time step. To avoid cluttering
+our working directory with a large number of solution
+files, we make sure to store the solution in a subdirectory:
+
+!bc pycod
+vtkfile_u = File('solutions/velocity.pvd')
+vtkfile_p = File('solutions/pressure.pvd')
+!ec
+Note that one does not need to create the directory before running the
+program. It will be created automatically by FEniCS.
+
+Figures ref{ftut1:fig:navier_stokes_cylinder:velocity} and
+ref{ftut1:fig:navier_stokes_cylinder:pressure} show the velocity and
+pressure at final time visualized in Paraview. For the visualization
+of the velocity, we have used the _Glyph_ filter to visualize the
+vector velocity field. For the visualization of the pressure, we have
+used the _Warp By Scalar_ filter.
+
+FIGURE:[fig/navier_stokes_cylinder_velocity, width=600 frac=0.8] Plot of the velocity for the cylinder test problem at final time. label{ftut1:fig:navier_stokes_cylinder:velocity}
+
+FIGURE:[fig/navier_stokes_cylinder_pressure, width=600 frac=0.8] Plot of the pressure for the cylinder test problem at final time. label{ftut1:fig:navier_stokes_cylinder:pressure}
+
+The complete code for the cylinder test problem looks as
+follows:
+
+@@@CODE src/navier_stokes_cylinder.py fromto: from fenics import@
