@@ -142,9 +142,9 @@ def solver_minimize_assembly(
     t = dt
     while t <= T:
         t0 = time.clock()
-        f_k = interpolate(f, V)
-        F_k = f_k.vector()
-        b = M*u_1.vector() + dt*M*F_k
+        f_n = interpolate(f, V)
+        F_n = f_n.vector()
+        b = M*u_1.vector() + dt*M*F_n
         b_assemble += time.clock() - t0
         try:
             u0.t = t
@@ -390,9 +390,9 @@ def solver_bc(
     timestep = 1
     t = dt
     while t <= T:
-        f_k = interpolate(f, V)
-        F_k = f_k.vector()
-        b = M*u_1.vector() + dt*M*F_k + dt*b_surface_int
+        f_n = interpolate(f, V)
+        F_n = f_n.vector()
+        b = M*u_1.vector() + dt*M*F_n + dt*b_surface_int
         update_boundary_conditions(boundary_conditions, t)
         [bc.apply(A, b) for bc in bcs]
 

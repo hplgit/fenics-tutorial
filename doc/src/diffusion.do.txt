@@ -1,4 +1,4 @@
-========= The diffusion solver revisited =========
+========= Developing a more advanced heat equation solver =========
 label{ch:diffusion}
 
 # Pointers backward...what is needed to be recaptured?
@@ -25,18 +25,22 @@ label{ch:diffusion:opt}
 ===== Avoiding some assembly =====
 label{ch:diffusion:opt:bassembly}
 
+[hpl: This can just be an exercise now that the Navier-Stokes example
+cover the topic.]
+
 The time-dependent diffusion equation gives rise to a linear system
 $AU=b$ at each time level, where the coefficient matrix $A$ is constant,
 but $b$ depends on $u$ at the previous time level. To increase the
 computational efficiency, we can therefore assemble $A$ once and
 for all before the time loop. To be able to do this, we need to
-explicitly create matrices and vectors as demonstrated in Section
-ref{ch:poisson0:linalg}.
+explicitly create matrices and vectors from variational
+formulations.
+#as demonstrated in Section ref{ch:poisson0:linalg}.
+#in N-S as well
 
-Let us express the solution procedure in algorithmic form,
-writing $u$ for the unknown spatial function at the new time level
-($u^k$) and $u_1$ for the spatial solution at one earlier time level
-($u^{k-1}$):
+Let us express the solution procedure in algorithmic form, writing $u$
+for the unknown spatial function at the new time level ($u^n$) and
+$u_1$ for the spatial solution at one earlier time level ($u^{n-1}$):
 
  * define Dirichlet boundary condition ($\ub$, Dirichlet boundary, etc.)
  * let $u_1$ interpolate $I$ or be the projection of $I$
@@ -126,14 +130,14 @@ form,
 !bt
 \[ \int_\Omega \left(u^{n-1} + {\dt}  f^n\right)v \dx, \]
 !et
-which in general varies with time through $u^{k-1}$, $f^k$, and
+which in general varies with time through $u^{n-1}$, $f^n$, and
 possibly also with $\dt$ if the time step is adjusted during the
 simulation.  The technique for avoiding repeated assembly consists in
 expanding the finite element functions in sums over the basis
 functions $\phi_i$ to identify matrix-vector products that build up
-the complete system. We have $u^{k-1}=\sum_{j=1}^NU^{k-1}_j\phi_j$,
-and we can expand $f^k$ as
-$f^{k}=\sum_{j=1}^NF^{k}_j\phi_j$. Inserting these expressions in
+the complete system. We have $u^{n-1}=\sum_{j=1}^NU^{n-1}_j\phi_j$,
+and we can expand $f^n$ as
+$f^{n}=\sum_{j=1}^NF^{n}_j\phi_j$. Inserting these expressions in
 $L(v)$ and using $v=\hat\phi_i$ result in
 
 [hpl: Why $hat\phi_i$? No need for Petrov-Galerkin here... Cannot remember
@@ -141,10 +145,10 @@ why the hat.]
 
 !bt
 \begin{align*}
-\int_\Omega \left(u^{k-1} + {\dt}f^k\right)v \dx &=
-\int_\Omega \left(\sum_{j=1}^N U^{k-1}_j\phi_j + {\dt}\sum_{j=1}^N F^{k}_j\phi_j\right)\hat\phi_i \dx,\\
-&=\sum_{j=1}^N\left(\int_\Omega \hat\phi_i\phi_j \dx\right)U^{k-1}_j
- + {\dt}\sum_{j=1}^N\left(\int_\Omega \hat\phi_i\phi_j \dx\right)F^{k}_j\tp
+\int_\Omega \left(u^{n-1} + {\dt}f^n\right)v \dx &=
+\int_\Omega \left(\sum_{j=1}^N U^{n-1}_j\phi_j + {\dt}\sum_{j=1}^N F^{n}_j\phi_j\right)\hat\phi_i \dx,\\
+&=\sum_{j=1}^N\left(\int_\Omega \hat\phi_i\phi_j \dx\right)U^{n-1}_j
+ + {\dt}\sum_{j=1}^N\left(\int_\Omega \hat\phi_i\phi_j \dx\right)F^{n}_j\tp
 \end{align*}
 !et
 Introducing $M_{ij} = \int_\Omega \hat\phi_i\phi_j \dx$, we see that
@@ -152,59 +156,59 @@ the last expression can be written
 
 !bt
 \begin{equation*}
-\sum_{j=1}^NM_{ij}U^{k-1}_j + {\dt} \sum_{j=1}^NM_{ij}F^{k}_j,
+\sum_{j=1}^NM_{ij}U^{n-1}_j + {\dt} \sum_{j=1}^NM_{ij}F^{n}_j,
 \end{equation*}
 !et
 which is nothing but two matrix-vector products,
 
 !bt
 \begin{equation*}
-MU^{k-1} + {\dt} MF^k,
+MU^{n-1} + {\dt} MF^n,
 \end{equation*}
 !et
 if $M$ is the matrix with entries $M_{ij}$,
 
 !bt
 \begin{equation*}
-U^{k-1}=(U^{k-1}_1,\ldots,U^{k-1}_N)^T,
+U^{n-1}=(U^{n-1}_1,\ldots,U^{n-1}_N)^T,
 \end{equation*}
 !et
 and
 
 !bt
 \begin{equation*}
-F^k=(F^{k}_1,\ldots,F^{k}_N)^T\tp
+F^n=(F^{n}_1,\ldots,F^{n}_N)^T\tp
 \end{equation*}
 !et
 
-We have immediate access to $U^{k-1}$ in the program since that is the
-vector in the `u_1` function. The $F^k$ vector can easily be computed
+We have immediate access to $U^{n-1}$ in the program since that is the
+vector in the `u_1` function. The $F^n$ vector can easily be computed
 by interpolating the prescribed $f$ function (at each time level if
-$f$ varies with time). Given $M$, $U^{k-1}$, and $F^k$, the right-hand
+$f$ varies with time). Given $M$, $U^{n-1}$, and $F^n$, the right-hand
 side $b$ can be calculated as
 
 !bt
 \begin{equation*}
-b = MU^{k-1} + {\dt} MF^k \tp
+b = MU^{n-1} + {\dt} MF^n \tp
 \end{equation*}
 !et
 That is, no assembly is necessary to compute $b$.
 
 The coefficient matrix $A$ can also be split into two terms.  We
-insert $v=\hat\phi_i$ and $u^k = \sum_{j=1}^N U^k_j\phi_j$ in the
-expression (ref{ch:diffusion0:pde1:a}) to get
+insert $v=\hat\phi_i$ and $u^n = \sum_{j=1}^N U^n_j\phi_j$ in the
+bilinear expression to get
 
 !bt
 \begin{equation*}
-\sum_{j=1}^N \left(\int_\Omega \hat\phi_i\phi_j \dx\right)U^k_j + {\dt}
-\sum_{j=1}^N \left(\int_\Omega \nabla\hat\phi_i\cdot\nabla\phi_j \dx\right)U^k_j,
+\sum_{j=1}^N \left(\int_\Omega \hat\phi_i\phi_j \dx\right)U^n_j + {\dt}
+\sum_{j=1}^N \left(\int_\Omega \nabla\hat\phi_i\cdot\nabla\phi_j \dx\right)U^n_j,
 \end{equation*}
 !et
 which can be written as a sum of matrix-vector products,
 
 !bt
 \begin{equation*}
-MU^k + {\dt} KU^k = (M + {\dt} K)U^k,
+MU^n + {\dt} KU^n = (M + {\dt} K)U^n,
 \end{equation*}
 !et
 if we identify the matrix $M$ with entries $M_{ij}$ as above and
@@ -223,14 +227,15 @@ FEniCS program, become
 \begin{align}
 a_K(u,v) &= \int_\Omega\nabla u\cdot\nabla v \dx,
 label{ch:diffusion0:pde1:aK}\\
-a_M(u,v) &= \int_\Omega uv \dx label{ch:diffusion0:pde1:aM}\tp
+a_M(u,v) &= \int_\Omega uv \dx
+label{ch:diffusion0:pde1:aM}\tp
 \end{align}
 !et
 
-The linear system at each time level, written as $AU^k=b$,
+The linear system at each time level, written as $AU^n=b$,
 can now be computed by first computing $M$ and $K$, and then forming
 $A=M+{\dt} K$ at $t=0$, while $b$ is computed as
-$b=MU^{k-1} + {\dt}MF^k$ at each time level.
+$b=MU^{n-1} + {\dt}MF^n$ at each time level.
 
 === FEniCS implementation ===
 
@@ -242,8 +247,8 @@ strategy of avoiding assembly at each time level:
   o Assemble $a_M$ to $M$ and $a_K$ to $K$
   o Compute $A=M+{\dt}K$
   o Define $f$ as an `Expression`
-  o Interpolate the formula for $f$ to a finite element function $F^k$
-  o Compute $b=MU^{k-1} + {\dt}MF^k$
+  o Interpolate the formula for $f$ to a finite element function $F^n$
+  o Compute $b=MU^{n-1} + {\dt}MF^n$
 
 The relevant code segments become
 
@@ -263,14 +268,15 @@ f = Expression('beta - 2 - 2*alpha', beta=beta, alpha=alpha)
 
 # 5. and 6.
 while t <= T:
-    f_k = interpolate(f, V)
-    F_k = f_k.vector()
-    b = M*u_1.vector() + dt*M*F_k
+    f_n = interpolate(f, V)
+    F_n = f_n.vector()
+    b = M*u_1.vector() + dt*M*F_n
 !ec
 
 We implement these modifications in a refactored version of the
 program `${prog["heat2"]}.py`, where the solver is a function
-as explained in Section ref{ch:poisson0:impl2} rather than a
+as explained in ref[Section ref{ch:poisson0:impl2}][ in cite{ftut1}][the
+section "Refactored implementation": "" in cite{ftut1}] rather than a
 flat program. The domain can also more flexibly be a 1D, 2D, or 3D
 interval, rectangle, or box.
 The new `solver_minimize_assembly` function resides in
@@ -349,8 +355,8 @@ impact of the optimization technique in this section compared to
 the simpler technique from the previous section where we need
 to assemble the right-hand side of the linear system at every time
 level. The impact is not huge, just a speed-up factor of 1-2 for 2D problems
-and around 2 for 3D problems. Still, this may be a value factor when
-you run a code a lot.
+and around 2 for 3D problems. Still, this may be an important
+improvement when you run a code a lot.
 
 #===== Methods of lines and ODE solvers =====
 
@@ -696,9 +702,116 @@ in time.
 
 MOVIE: [mov/welding_gamma1.ogg] Welding example with $\gamma=1$.
 
-[hpl: I AM HERE!]
 
-======= Refactored implementation =======
+========= Implementing PDE solvers as classes =========
+label{ch:classes}
+
+[hpl: Much stuff is moved around here so rewriting of glue text
+is necessary!]
+
+======= Refactoring a Poisson solver in terms of classes =======
+label{ch:poisson0:refactor:class}
+
+A FEniCS solver for a PDE can be implemented in a general way, but the
+problem-dependent data, like boundary conditions, must be specified in
+each case by the user. For example, the implementation in ref[Section
+ref{ch:poisson0:multi:bc}][ in cite{ftut1}][in cite{ftut1}]
+requires the user to supply a
+`boundary_conditions` dictionary with specifications of the boundary
+condition on each of the four sides of the unit square. If we, e.g.,
+want two Dirichlet conditions at one side, this is not possible
+without modifying the solver function. What do to with a general
+mesh is an open question. To avoid changing the code in what is
+meant to be a general PDE solver for a wide class of problems, we need
+a different software design.
+
+Such a different design is to introduce a problem class and
+methods, supplied by the user from case to case, where boundary
+conditions and other input data are defined. Such a design is used in
+a lot of more advanced FEniCS application codes, and it is time to
+exemplify it here.  As a counterpart to the solver function, we
+introduce a solver class, but all the arguments for various input data
+are instead method calls to an instance of a *problem class*. This
+puts a somewhat greater burden on the programmer, but it allows for
+more flexibility, and the code for, e.g., boundary conditions can be
+more tailored to the problem at hand than the code we introduced in
+the `solver_bc` function in Section ref{ch:poisson0:multi:bc}.
+
+===== The solver class =====
+label{ch:poisson0:refactor:class:solver}
+
+The solver class will need problem information and for this purpose
+call up the methods in a problem class. For example, the solver
+gets the $f$ and $p$ functions in the PDE problem by calling
+`problem.f_rhs()` and `problem.p_coeff()`. The mesh object and the
+polynomial degree of the elements are supposed to be returned from
+`problem.mesh_degree()`. Furthermore, the problem class defines the
+boundary conditions in the problem as lists of minimal information
+from which the solver can build proper data structures.
+
+The solver class is a wrapping of the previous `solver_bc` and `flux`
+functions as methods in a class, but some of the code for handling
+boundary conditions in `solver_bc` is now delegated to the user in
+the problem class.
+
+@@@CODE src/poisson_class.py fromto: from fenics import@class Problem1
+Note that this is a general Poisson problem solver that works in any number
+of space dimensions and with any mesh and composition of boundary conditions!
+
+!bnotice Tip: Be careful with the `mesh` variable!
+In classes, one often stores the mesh in `self.mesh`. When you need
+the mesh, it is easy to write just `mesh`, but this gives rise to
+peculiar error messages, since `mesh` is a Python module imported
+by `from fenics import *` and already available as a name in your file.
+When encountering strange error messages in statements containing a
+variable `mesh`, make sure you use `self.mesh`.
+!enotice
+
+===== A problem class =====
+label{ch:poisson0:refactor:class:problem0}
+
+Let us start with a relatively simple problem class for our favorite
+test problem where we manufacture a solution $\ub=1+x^2 + 2y^2$ and
+solve $-\nabla^2 u = f$ with $f=6$ and $u=\ub$ at the entire boundary.
+
+@@@CODE src/poisson_class.py fromto: class TestProblemExact@def test_Poisson
+
+We can then make a simple unit test for the problem and solver class:
+
+@@@CODE src/poisson_class.py fromto: def test_PoissonSolver@if __name
+
+===== A more complicated problem class =====
+label{ch:poisson0:refactor:class:problem1}
+
+Below is the specific problem class for solving a scaled 2D Poisson
+problem.  We have a two-material domain where a rectangle
+$[0.3,0.7]\times [0.3,0.7]$ is embedded in the unit square and where
+$p$ has a constant value inside the rectangle and another value
+outside. On $x=0$ and $x=1$ we have homogeneous Neumann conditions,
+and on $y=0$ and $y=1$ we have the Dirichlet conditions $u=1$ and
+$u=0$, respectively.
+
+@@@CODE src/poisson_class.py fromto: class Problem1@def demo
+
+A specific problem can be solved by
+
+@@@CODE src/poisson_class.py fromto: def demo@def test_Solver
+The complete code is found in the file `${prog["poisson_class"]}.py`.
+
+!bnotice Pros and cons of solver/problem classes vs solver function
+What are the advantages of class `Solver` and `Problem` over the
+function implementation in Section ref{ch:poisson0:multi:bc}?
+The primary advantage is that
+the class version works for any mesh and any composition of
+boundary conditions, while the solver function is tied to a mesh
+over the unit square, only one type of boundary condition on a
+each side, and a piecewise constant $p$ function. The programmer has
+to supply more code in the class version, but gets greater flexibility.
+The disadvantage of the class version is that it applies the class
+concept so one needs experience with Python class programming.
+!enotice
+
+======= Refactoring a heat equation solver =======
 label{ch:diffusion:refactor}
 
 The flat program for the diffusion solver in
@@ -709,7 +822,7 @@ callback function for processing the solution at each time step, and
 an application function defining the callback function and calling the
 solver to solve a specific problem. However, for time-dependent
 problems a solver function that gets all its input through a set of
-arguments is less flexible than a solver *class*, which can demand its
+arguments is less flexible than a solver class, which can demand its
 input both through arguments and through functions (in subclasses)
 provided by the user. The following text requires you to be familiar
 with class programming in Python (tailored learning material is
@@ -1061,7 +1174,14 @@ follows:
 
 @@@CODE src/heat_class.py fromto: class DiffusionSolver@def debug_Dirichlet
 
-===== Example: Thermal boundary layer =====
+======= Applications to heat conduction =======
+
+We shall now through some real physical examples show how the problem
+classes can be constructed for various types of applications.
+The goal is to achieve PDE solvers that are flexible and convenient for
+performing scientific investigations.
+
+===== Thermal boundary layer =====
 
 Assume we have some medium at temperature $U_s$ and then we suddenly
 heat one end so the temperature here stays constant at $U_1$. At the
