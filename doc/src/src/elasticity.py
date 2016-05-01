@@ -42,7 +42,7 @@ def sigma(u):
 u = TrialFunction(V)
 d = u.geometric_dimension()  # no of space dim
 v = TestFunction(V)
-f = rho*Constant((0,0,g))
+f = Constant((0,0,rho*g))
 T = Constant((0,0,0))
 a = inner(sigma(u), epsilon(v))*dx
 L = -dot(f, v)*dx + dot(T, v)*ds
@@ -54,7 +54,9 @@ solve(a == L, u, bc)
 # Plot solution and mesh
 plot(u, title='Displacement', mode='displacement')
 
-von_Mises = inner(sigma(u), sigma(u)) - div(u)
+s = sigma(u) - (1./3)*tr(sigma(u))*Identity(d)  # deviatoric stress
+von_Mises = sqrt(3./2*inner(s, s))
+
 V = FunctionSpace(mesh, 'P', 1)
 von_Mises = project(von_Mises, V)
 plot(von_Mises, title='Stress intensity', mode='displacement')
