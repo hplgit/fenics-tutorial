@@ -78,7 +78,7 @@ system doconce split_html $name.html --pagination
 
 # Publish in doc/pub
 dest=../pub
-rm -rf $dest/sphinx*
+rm -rf $dest/sphinx${bookno}
 cp fenics-tutorial*.pdf $dest
 cp -r $name.html ._*.html fig mov $dest
 cp -r sphinx-rootdir${bookno}/_build/html $dest

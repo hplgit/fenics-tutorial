@@ -1016,13 +1016,13 @@ numerical solution is about :math:`10^{-11}`. With :math:`2(3\times 3)` and
 may bring the error up to the level of the tolerance in the Newton
 iterations. These results bring evidence for a correct implementation.
 Thinking in terms of finite differences on a uniform mesh, P1 elements
-mimics standard second-order differences, which compute the derivative
-of a linear function exactly, also a quadratic function. Here, :math:`\nabla
+mimic standard second-order differences, which compute the derivative
+of a linear or quadratic function exactly. Here, :math:`\nabla
 u` is a constant vector, but then multiplied by :math:`(1+u^2)`, which is a
 second-order polynomial in :math:`x` and :math:`y`, which the divergence
 "difference operator" should compute exactly.  We can therefore,
 even with P1 elements, expect the manufactured :math:`u` to be reproduced by
-our method. With a nonlinearity like :math:`1+u^4`, this will not be the
+the numerical method. With a nonlinearity like :math:`1+u^4`, this will not be the
 case, and we would need to verify convergence rates instead.
 
 The current example shows how easy it is to solve a nonlinear problem
@@ -1245,12 +1245,12 @@ compared to the Poisson equation case.
     
     # Scaled variables
     L = 1; W = 0.2
-    lambda_ = 1
+    mu = 1
     rho = 1
     delta = W/L
-    gamma = 0.25*delta**2
-    beta = 0.8
-    mu = beta
+    gamma = 0.4*delta**2
+    beta = 1.25
+    lambda_ = beta
     g = gamma
     
     # Create mesh and define function space
@@ -1293,10 +1293,10 @@ compared to the Poisson equation case.
     
     V = FunctionSpace(mesh, 'P', 1)
     von_Mises = project(von_Mises, V)
-    plot(von_Mises, title='Stress intensity', mode='displacement')
+    plot(von_Mises, title='Stress intensity')
     u_magnitude = sqrt(dot(u,u))
     u_magnitude = project(u_magnitude, V)
-    plot(u_magnitude, 'Displacement magnitude', mode='displacement')
+    plot(u_magnitude, 'Displacement magnitude')
     print('min/max u:', u_magnitude.vector().array().min(),
           u_magnitude.vector().array().max())
 
@@ -1335,10 +1335,10 @@ New feature: stress computation
 
 As soon as ``u`` is computed, we can compute various stress measures, here
 the von Mises stress defined as :math:`\sigma_M = \sqrt{\frac{3}{2}s:s}`
-where :math:`s` is a component of the deviatoric stress tensor
+where :math:`s` is the deviatoric stress tensor
 
 .. math::
-         s = \sigma - \frac{1}{3}\mathrm{tr}(\sigma)I{\thinspace .}
+         s = \sigma - \frac{1}{3}\mathrm{tr}\,\sigma\,I{\thinspace .}
 
 There is a one to one mapping between these formulas and the FEniCS code:
 
@@ -1372,17 +1372,17 @@ which results in the dimensionless governing equation
 
 .. math::
         
-        \bar\nabla\cdot(\bar\nabla\cdot \bar u) + \beta\bar\nabla^2 \bar u =
+        \beta\bar\nabla\cdot(\bar\nabla\cdot \bar u) + \bar\nabla^2 \bar u =
         \bar f,\quad \bar f = (0,0,\gamma),
 
-where :math:`\beta = \mu/\lambda` is a dimensionless elasticity parameter and
+where :math:`\beta = \lambda/\mu` is a dimensionless elasticity parameter and
 
 .. math::
-         \gamma = \frac{\varrho gL^2}{U\lambda}
+         \gamma = \frac{\varrho gL^2}{\mu U}
 
 is also a dimensionless variable reflecting the ratio of the load
-:math:`\varrho g` and the term :math:`\lambda\nabla(\nabla u))\sim \lambda U/L^2`
-in the PDE.
+:math:`\varrho g` and the shear stress
+term :math:`\mu\nabla^2 u\sim \mu U/L^2` in the PDE.
 
 [**AL 8**: Need to change above scaling argument now that :math:`\varrho` is not part of the equation?]
 [**hpl 9**: No, we just inserted our particular :math:`f` which is :math:`\varrho g`.]
@@ -1390,7 +1390,7 @@ in the PDE.
 [**AL 10**: :math:`W` not defined below. Width?] [**hpl 11**: Defined in the test problem in the intro. But a comment what :math:`L/W` is, is now inserted.]
 
 Sometimes, one will argue to chose :math:`U` to make :math:`\gamma` unity (:math:`U
-= \varrho gL^2/\lambda`). However, in elasticity, this leads us
+= \varrho gL^2/\mu`). However, in elasticity, this leads us
 to displacements of the size of the geometry, which makes plots look
 very strange. We therefore want the characteristic displacement to be a
 small fraction of the characteristic length of the geometry.
@@ -1399,15 +1399,15 @@ Actually, for a clamped beam, one has a deflection formula which gives
 a parameter reflecting how slender the beam is.
 Thus, the dimensionless parameter :math:`\delta` is very important in the
 problem (as expected, since :math:`\delta\gg 1` is what gives beam theory!).
-Taking :math:`E` to be of the same order as :math:`\lambda`, we realize that
+Taking :math:`E` to be of the same order as :math:`\mu`, we realize that
 :math:`\gamma \sim \delta^{-2}`.  Experiments with the code point to :math:`\gamma
-= 0.25\delta^{-2}` as an appropriate choice of :math:`\gamma`.
+= 0.4\delta^{-2}` as an appropriate choice of :math:`\gamma`.
 
 The simulation code implements the problem with dimensions and
 physical parameters :math:`\lambda`, :math:`\mu`, :math:`\varrho`, :math:`g`, :math:`L`, and :math:`W`.
 However, we can usually easily reuse this code for a scaled problem.
-In the present case, we just set :math:`\lambda = \varrho = L = 1`, :math:`W` as
-:math:`W/L`, :math:`g=\gamma`, and :math:`\mu=\beta`.
+In the present case, we just set :math:`\mu = \varrho = L = 1`, :math:`W` as
+:math:`W/L`, :math:`g=\gamma`, and :math:`\lambda=\beta`.
 
 [**AL 12**: I find this somewhat confusing. First we talk about a rescaled equation but then we solve the unscaled equation, but we choose the parameters so that it is somehow related to the scaled problem...?]
 
@@ -1415,10 +1415,10 @@ In the present case, we just set :math:`\lambda = \varrho = L = 1`, :math:`W` as
 
 [**hpl 14**: This is the way to do it ;-) Implement with dimensions to have the code as general as possible. Then scale a particular problem - and the scaling is restricted to this problem.  It makes it much easier to set parameters for numerical investigations and to understand the model and what the competing effects are. You can run the scaled model with the original program by a proper choice of parameters.]
 
-.. figure:: beam1.png
+.. figure:: beam2.png
    :width: 800
 
-   Gravity-induced deformation of a clamped beam: deflection (left) and stress intensity (right)
+   Gravity-induced deformation of a clamped beam: deflection (left) and stress intensity seen from below (right)
 
 .. Stand-alone notebook?
 
@@ -1473,7 +1473,7 @@ is given by
 where :math:`\epsilon(u)` is the strain-rate tensor
 
 .. math::
-         \epsilon(u) = \frac{1}{2}(nabla u + (nabla u)^T)){\thinspace .}
+         \epsilon(u) = \frac{1}{2}(\nabla u + (\nabla u)^T)){\thinspace .}
 
 The parameter :math:`\mu` is the dynamic viscosity. Note that the momentum
 equation :ref:`(45) <Eq:ftut1:ns:momentum>` is very similar to the elasticity
@@ -1517,26 +1517,22 @@ previous time interval. We will also be using the velocity :math:`u^{n-1}`
 in the nonlinear term :math:`u\cdot\nabla u`. The variational problem for
 this first step is:
 
-[**hpl 16**: This equation applies ``textit``, ``multiline`` and ``renni`` in math. At least ``textit`` does not work in MathJax. Must test what works in Sphinx.]
+[**hpl 16**: This equation applies ``textit`` and ``multiline`` in math. At least ``textit`` does not work in MathJax. Must test what works in Sphinx. Answer: Sphinx MathJax did not accept anything of this.]
 
 .. _Eq:ftut1:ipcs1:
 
 .. math::
 
     \tag{48}
-    \
-              \text{\textit{Step 1: Tentative velocity step}}
-              \\ 
-              {\langle (u^{\bigstar, v \rangle} - u^{n-1}) / {\Delta t}}
-              + {\langle u^{n-1, v \rangle} \cdot \nabla u^{n-1}}
+    {\langle \rho(u^{\bigstar, v \rangle} - u^{n-1}) / {\Delta t}}
+              + {\langle \rho u^{n-1, v \rangle} \cdot \nabla u^{n-1}}
               + {\langle \sigma(u^{n-\frac{1, \epsilon(v) \rangle}{2}}, p^{n-1})}
               \\ 
               + {\langle p^{n-1, v \rangle} n}_{\partial\Omega}
               - {\langle \mu \nabla u^{n-\frac{1, v \rangle}{2}}\cdot n}_{\partial\Omega}
-              = {\langle f^n, v \rangle}
-          
+              = {\langle \rho f^n, v \rangle}
+        
 
-[**hpl 17**: Here a boundary term :math:`(\mu n\cdot \nabla u^{n-\frac{1}{2}},v)` is missing. This is the intricate discussions we had back in 2009-2010 with Harish on using N-S with :math:`\sigma` or :math:`\nabla^2 u`.]
 This notation requires some explanation. First, we use the short-hand
 notation
 
@@ -1559,7 +1555,7 @@ by an arithmetic mean
 Third, we notice that the variational problem :ref:`(48) <Eq:ftut1:ipcs1>`
 arises from the integration by parts of the term
 :math:`{\langle -\nabla\cdot\sigma, v \rangle}`. Just as for the elasticity problem in
-Section (:ref:`ftut:elast`), we obtain
+the section :ref:`ftut:elast`, we obtain
 
 .. math::
         
@@ -1578,19 +1574,22 @@ of the channel is zero at the outflow, corresponding to a flow that is
 "fully developed" or doesn't change significantly downstream of the
 outflow. Doing so, the remaining boundary term at the outflow becomes
 :math:`pn - \nu \nabla u \cdot n` which is the term appearing in the
-variational problem (\:ref:`ftut1:ipcs1`).
+variational problem :ref:`(48) <Eq:ftut1:ipcs1>`.
+
+[**hpl 17**: Here a boundary term :math:`(\mu n\cdot \nabla u^{n-\frac{1}{2}},v)` is missing. This is the intricate discussions we had back in 2009-2010 with Harish on using N-S with :math:`\sigma` or :math:`\nabla^2 u`.]
 
 [**AL 18**: Apostrophes like "these" don't look like what I would expect in LaTeX.]
-[**hpl 19**: No, double quotes must be written as in LaTeX "quotes". They become the right double quotes then in various output formats.]
+[**hpl 19**: No, double quotes must be written as in LaTeX "quotes". Two backticks and two forward ticks become the right double quotes in various output formats.]
 
 
 .. admonition:: ``grad(u)`` vs. ``nabla_grad(u)``
 
    For scalar functions :math:`\nabla u` has a clear meaning as the vector
-   :math:`\nabla u =
-   (\frac{\partial u}{\partial x},
-    \frac{\partial u}{\partial y},
-    \frac{\partial u}{\partial z})`.
+   
+   .. math::
+            \nabla u =(\frac{\partial u}{\partial x}, \frac{\partial u}{\partial y},
+           \frac{\partial u}{\partial z}){\thinspace .}
+   
    However, if :math:`u` is vector-valued, the meaning is less clear.
    Some sources define :math:`\nabla u` as the matrix with elements
    :math:`\partial u_j / \partial x_i` while other sources prefer
@@ -1606,8 +1605,12 @@ variational problem (\:ref:`ftut1:ipcs1`).
    For the Navier-Stokes equations, it is important to consider the
    term :math:`u \cdot \nabla u` which should be interpreted as the vector
    :math:`w` with elements
-   :math:`w_i = \sum_j \left(u_j \frac{\partial}{\partial x_j}\right) u_i
-        = \sum_j u_j \frac{\partial u_i}{\partial x_j}`.
+   
+   .. math::
+           
+           w_i = \sum_j \left(u_j \frac{\partial}{\partial x_j}\right) u_i
+           = \sum_j u_j \frac{\partial u_i}{\partial x_j}{\thinspace .}
+   
    This term can be implemented in FEniCS either as
    ``grad(u)*u``, since this is expression becomes
    :math:`\sum_j \partial u_i/\partial x_j u_j`, or as
@@ -1618,11 +1621,12 @@ variational problem (\:ref:`ftut1:ipcs1`).
    
    [**hpl 20**: I like the straightforward formulation above, but it should be complemented by the arguments below since it is not a matter of taste in the end, but dictated by derivation of the PDE and what :math:`\nabla` was meant to be there.]
    
-   To be more precise, there are different notations used for PDEs.
+   To be more precise, there are three different notations used for PDEs
+   involving gradient, divergence, and curl operators.
    One employs :math:`\mathrm{grad}\, u`, :math:`\mathrm{div}\, u`, and
-   :math:`\mathrm{curl}\, u` operators; another employs :math:`\nabla u`
+   :math:`\mathrm{curl}\, u` operators. Another employs :math:`\nabla u`
    as a synonym for :math:`\mathrm{grad}\, u`, :math:`\nabla\cdot u` means :math:`\mathrm{div}\, u`,
-   and :math:`\nabla\times u` is the notation for :math:`\mathrm{curl}\, u`; while the
+   and :math:`\nabla\times u` is the name for :math:`\mathrm{curl}\, u`. The
    third operates with :math:`\nabla u`, :math:`\nabla\cdot u`, and :math:`\nabla\times u`
    in which :math:`\nabla` is a *vector* and, e.g., :math:`\nabla u` is a dyadic
    expression (:math:`(\nabla u)_{i,j} = \partial u_j/\partial x_i =
@@ -1630,8 +1634,8 @@ variational problem (\:ref:`ftut1:ipcs1`).
    The latter notation, with :math:`\nabla` as a vector operator,
    is often handy when deriving equations in continuum mechanics, and if
    this interpretation of :math:`\nabla` is the foundation of your PDE, you must
-   use ``nabla_grad``, ``nabla_div``, and ``nabla_curl`` in FEniCS code.
-   These operators are compatible with dyadic computations.
+   use ``nabla_grad``, ``nabla_div``, and ``nabla_curl`` in FEniCS code as
+   these operators are compatible with dyadic computations.
    From the Navier-Stokes equations we can easily see what :math:`\nabla` means:
    if the convective term has the form :math:`u\cdot \nabla u` (actually meaning
    :math:`(u\cdot\nabla) u`), :math:`\nabla` is a vector operator, reading
@@ -1654,9 +1658,7 @@ compute the new pressure :math:`p^n`:
 .. math::
 
     \tag{49}
-    \
-          \text{\textit{Step 2: Pressure correction step}} \\ 
-          {\langle \nabla p^n, \nabla q \rangle}
+    {\langle \nabla p^n, \nabla q \rangle}
           = {\langle \nabla p^{n-1, \nabla q \rangle}} - {\Delta t}^{-1}{\langle \nabla \cdot u^{\bigstar, q \rangle}}.
         
 
@@ -1694,11 +1696,11 @@ Finally, we compute the corrected velocity :math:`u^n` from the equation
 .. math::
 
     \tag{51}
-    \
-          \text{\textit{Step 3: Velocity correction step}}\nonumber \\ 
-          {\langle u^n, v \rangle} =
+    {\langle u^n, v \rangle} =
           {\langle u^{\bigstar, v \rangle}} - {\Delta t}{\langle \nabla(p^n-p^{n-1, v \rangle})}.
         
+
+[**hpl 21**: Check that :math:`\rho` is correctly handled in the three steps.]
 
 In summary, we may thus solve the incompressible Navier-Stokes
 equations efficiently by solving a sequence of three linear variational
@@ -1724,12 +1726,12 @@ scale and :math:`H` the spatial scale. The pressure scale is taken as the
 characteristic shear stress, :math:`\mu U/H`, since this is a primary
 example of shear flow.  Inserting :math:`\bar x = x/H`, :math:`\bar y = y/H`,
 :math:`\bar z = z/H`, :math:`\bar u =u/U`, :math:`\bar p = Hp/(\mu U)`, and :math:`\bar t =
-L^/\nu` in the equations results in the scaled Navier-Stokes equations
+H^2/\nu` in the equations results in the scaled Navier-Stokes equations
 (dropping bars after the scaling):
 
 .. math::
         
-        \frac{partial u}{\partial t} + \mathrm{Re}\, u\cdot\nabla u
+        \frac{\partial u}{\partial t} + \mathrm{Re}\, u\cdot\nabla u
         &= -\nabla p + \mu\nabla^2 u + \mu\nabla(\nabla\cdot u),\\ 
         \nabla\cdot u &= 0{\thinspace .}
         
@@ -1737,7 +1739,9 @@ L^/\nu` in the equations results in the scaled Navier-Stokes equations
 Here, Re is the Reynolds number :math:`\rho UH/\mu`. Because of the time and
 pressure scale, which are different from convection-dominated fluid flow,
 the Reynolds number is associated with the convective term and not the
-viscosity term (as usual).
+viscosity term (as usual). Note that the last term in the first
+equation is zero, but we included this term as it arises naturally
+from the original :math:`\nabla\cdot\sigma` term.
 
 The exact solution is derived by assuming :math:`u=(u_x(x,y,z),0,0)`, with
 the :math:`x` axis pointing along the channel. Since :math:`\nabla\cdot u=0`, :math:`u`
@@ -1756,6 +1760,11 @@ The length of the channel, :math:`L/H` in the scaled model, has no impact on
 the result, so for simplicity we just compute on the unit square.  The
 pressure can then be set to :math:`p=0` at the outlet :math:`x=1`, giving
 :math:`p(x)=8(1-x)` and :math:`u_x=4y(1-y)`.
+
+The boundary conditions can be taken as :math:`p=1` on :math:`x=0`, :math:`p=0` on
+:math:`x=1` and :math:`u=0` on the walls :math:`y=0,1`. This defines the pressure
+drop and should result in unit maximum velocity at the inlet and outlet
+and a parabolic velocity profile without further specifications.
 
 The scaled model is not so easy to simulate using a standard Navier-Stokes
 solver with dimensions. However, one can argue that the convection term
@@ -1862,7 +1871,7 @@ boundary conditions may be defined as follows:
     
     # Define boundary conditions
     bcu_noslip  = DirichletBC(V, Constant((0, 0)), walls)
-    bcp_inflow  = DirichletBC(Q, Constant(1), inflow)
+    bcp_inflow  = DirichletBC(Q, Constant(8), inflow)
     bcp_outflow = DirichletBC(Q, Constant(0), outflow)
     bcu = [bcu_noslip]
     bcp = [bcp_inflow, bcp_outflow]
@@ -1878,15 +1887,14 @@ problem:
 
 .. code-block:: python
 
-    U  = 0.5*(u0 + u)
-    F1 = dot((u - u0) / k, v)*dx + dot(dot(u0, nabla_grad(u0)), v)*dx \ 
-       + inner(sigma(U, p0), epsilon(v))*dx \ 
-       + dot(p0*n, v)*ds - dot(nu*nabla_grad(U)*n, v)*ds \ 
-       - dot(f, v)*dx
-    a1 = lhs(F1)
-    L1 = rhs(F1)
+    U   = 0.5*(u0 + u)
+    n   = FacetNormal(mesh)
+    f   = Constant((0, 0))
+    k   = Constant(dt)
+    mu  = Constant(mu)
+    rho = Constant(rho)
 
-This is very similar to the mathematical definition
+This expression for ``F1`` is very similar to the mathematical definition
 :ref:`(48) <Eq:ftut1:ipcs1>`. Since the variational problem contains a mix of
 known and unknown quantities - the unknown :math:`u^n` (which we name ``u``
 in the variational problem) and the known value :math:`u^{n-1}` (which we
@@ -1906,7 +1914,7 @@ constitutive laws:
         return sym(nabla_grad(u))
     
     def sigma(u, p):
-        return 2*nu*epsilon(u) - p*Identity(len(u))
+        return 2*mu*epsilon(u) - p*Identity(len(u))
 
 The splitting scheme requires the solution of a sequence of three
 variational problems in each time step. We have previously used the
@@ -1950,12 +1958,12 @@ function as here for the first of the three steps:
 
 Notice the Python *list comprehension* ``[bc.apply(b1) for bc in bcu]``
 which iterates over all ``bc`` in the list ``bcu``. This is a convenient
-way to apply all boundary conditions in a single line and makes it
-possible to reuse the same code if we later decide to apply more
-boundary conditions.
+and compact way to construct a loop that applies
+all boundary conditions in a single line. Also, the code works if
+we add more Dirichlet boundary conditions in the future.
 
 Finally, let's look at an important detail in how we use parameters
-such as the time step ``dt`` and kinematic viscosity ``nu`` in the
+such as the time step ``dt`` and viscosity ``mu`` in the
 definition of our variational problems. Since we might want to change
 these later, for example if we want to experiment with smaller or
 larger time steps, we wrap these using a FEniCS ``Constant``:
@@ -1963,7 +1971,7 @@ larger time steps, we wrap these using a FEniCS ``Constant``:
 .. code-block:: python
 
     k = Constant(dt)
-    nu = Constant(nu)
+    mu = Constant(mu)
 
 The assembly of matrices and vectors in FEniCS is based on code
 generation. This means that whenever we change a variational problem,
@@ -1976,8 +1984,10 @@ generation. In the case of the time step, we choose a new name ``k``
 instead of ``dt`` for the ``Constant`` since we also want to use the
 variable ``dt`` as a Python float as part of the time-stepping.
 
-The complete code for simulating Poiseuille flow with FEniCS looks as
-follows:
+[**hpl 22**: Some pure fluid mechanics guys will think of Poiseulle as 1D, so they get confused why you need to launch 2D/3D when it's about :math:`u''=4`... Renamed file to ``navier_stokes_channel.py``.]
+
+The complete code for simulating 2D channel flow
+with FEniCS looks as follows:
 
 .. code-block:: python
 
@@ -1987,7 +1997,8 @@ follows:
     T = 10.0           # final time
     num_steps = 500    # number of time steps
     dt = T / num_steps # time step size
-    nu = 0.5           # kinematic viscosity
+    mu = 1             # kinematic viscosity
+    rho = 1            # density
     
     # Create mesh and define function spaces
     mesh = UnitSquareMesh(16, 16)
@@ -2001,7 +2012,7 @@ follows:
     
     # Define boundary conditions
     bcu_noslip = DirichletBC(V, Constant((0, 0)), walls)
-    bcp_inflow = DirichletBC(Q, Constant(1), inflow)
+    bcp_inflow = DirichletBC(Q, Constant(8), inflow)
     bcp_outflow = DirichletBC(Q, Constant(0), outflow)
     bcu = [bcu_noslip]
     bcp = [bcp_inflow, bcp_outflow]
@@ -2023,21 +2034,23 @@ follows:
     n   = FacetNormal(mesh)
     f   = Constant((0, 0))
     k   = Constant(dt)
-    nu  = Constant(nu)
+    mu  = Constant(mu)
+    rho = Constant(rho)
     
-    # Define symmetric gradient
+    # Define strain-rate tensor
     def epsilon(u):
         return sym(nabla_grad(u))
     
     # Define stress tensor
     def sigma(u, p):
-        return 2*nu*epsilon(u) - p*Identity(len(u))
+        return 2*mu*epsilon(u) - p*Identity(len(u))
     
     # Define variational problem for step 1
-    F1 = dot((u - u0) / k, v)*dx + dot(dot(u0, nabla_grad(u0)), v)*dx \ 
+    F1 = rho*dot((u - u0) / k, v)*dx + \ 
+         rho*dot(dot(u0, nabla_grad(u0)), v)*dx \ 
        + inner(sigma(U, p0), epsilon(v))*dx \ 
-       + dot(p0*n, v)*ds - dot(nu*nabla_grad(U)*n, v)*ds \ 
-       - dot(f, v)*dx
+       + dot(p0*n, v)*ds - dot(mu*nabla_grad(U)*n, v)*ds \ 
+       - rho*dot(f, v)*dx
     a1 = lhs(F1)
     L1 = rhs(F1)
     
@@ -2082,11 +2095,12 @@ follows:
         # Plot solution
         plot(u1)
     
-        # Compute error at vertices
-        u_e = Expression(('x[1]*(1.0 - x[1])', '0'), degree=2)
+        # Compute error
+        u_e = Expression(('4*x[1]*(1.0 - x[1])', '0'), degree=2)
         u_e = interpolate(u_e, V)
         error = np.abs(u_e.vector().array() - u1.vector().array()).max()
         print('t = %.2f: error = %.3g' % (t, error))
+        print('max u:', u1.vector().array().max())
     
         # Update previous solution
         u0.assign(u1)
@@ -2117,12 +2131,12 @@ implementation, the error quickly approaches zero and is approximately
 Flow past a cylinder
 --------------------
 
-We now turn our attention to a more interesting example: flow past a
+We now turn our attention to a more challenging physical example: flow past a
 circular cylinder. The geometry and parameters are taken from problem
 DFG 2D-2 in the `FEATFLOW/1995-DFG benchmark suite <http://www.featflow.de/en/benchmarks/cfdbenchmarking/flow/dfg_benchmark2_re100.html>`__
 and is illustrated in Figure
 :ref:`ftut1:navier_stokes_cylinder:geometry`. The kinematic viscosity is
-given by :math:`\nu = 0.001` and the inflow velocity
+given by :math:`\nu = 0.001 = \mu/\rho` and the inflow velocity
 profile is specified as
 
 .. math::
@@ -2130,7 +2144,8 @@ profile is specified as
           u(x, y, t) = \left(1.5 \cdot \frac{4y(1-y)}{0.41^2}, 0\right),
         
 
-which has a maximum magnitude of :math:`1.5` at :math:`y = 0.41/2`.
+which has a maximum magnitude of :math:`1.5` at :math:`y = 0.41/2`. We do not
+scale anything in this benchmark.
 
 .. _ftut1:navier_stokes_cylinder:geometry:
 
@@ -2138,15 +2153,6 @@ which has a maximum magnitude of :math:`1.5` at :math:`y = 0.41/2`.
    :width: 600
 
    *Geometry for the flow past a cylinder test problem. Notice the slightly perturbed and unsymmetric geometry*
-
-For the previous test problem, scaling with the characteristic mean
-velocity :math:`U = \int_0^1 x (1 - x) {\, \mathrm{d}x} = 1/6 = 2/3 \cdot 0.25` and :math:`L = 1` gives a small
-Reynolds number of size :math:`L = UL/\nu = \frac{1}{6}/0.5 = 1/3`. For the
-current problem, the characteristic length is :math:`L = 0.1` (the diameter
-of the cylinder) and the mean velocity is :math:`2/3 \cdot 1.5 = 1`
-which gives a Reynolds number of size :math:`\mathrm{Re} = 1 \cdot 0.1 /
-0.001 = 100`. At this Reynolds number the flow develops into a
-periodic flow with vortex shedding behind the cylinder.
 
 FEniCS implementation          (6)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -2170,7 +2176,7 @@ and ``-`` (set difference). To access the CSG functionality in FEniCS,
 one must import the FEniCS module ``mshr`` which provides the
 extended meshing functionality of FEniCS.
 
-[**AL 21**: Need to cite mshr.]
+[**AL 23**: Need to cite mshr.]
 
 The geometry for the cylinder flow test problem can be defined easily
 by first defining the rectangular channel and then subtracting the
@@ -2183,6 +2189,8 @@ circle:
     geometry = channel - cylinder
 
 We may then create the mesh by calling the function ``generate_mesh``:
+
+[**hpl 24**: Should do some refinement of the boundary layer? Can we mark elements in a distance from the cylinder and ask these elements to be refine a given number of times?]
 
 .. code-block:: python
 
@@ -2201,7 +2209,16 @@ boundaries are specified as follows:
     walls    = 'near(x[1], 0) || near(x[1], 0.41)'
     cylinder = 'on_boundary && x[0]>0.1 && x[0]<0.3 && x[1]>0.1 && x[1]<0.3'
 
-[**AL 22**: We set :math:`p = 0` at the outflow. This seems to be necessary, but we should really not need to specify the pressure at all.]
+[**hpl 25**: I did not understand the ``cylinder`` line. Seems to be all points in a square that also lie on the boundary? Are there any?]
+
+[**AL 26**: We set :math:`p = 0` at the outflow. This seems to be necessary, but we should really not need to specify the pressure at all.]
+[**hpl 27**: Need to specify the pressure at one point, mathematically.]
+
+.. index:: set_log_level
+
+.. index:: DEBUG log level
+
+.. index:: PROGRESS log level
 
 In addition to these essential changes, we will make a number of small
 changes to improve our solver. First, since we need to choose a
@@ -2261,12 +2278,13 @@ arising from the discretization of PDEs requires the choice of both a
 good iterative (Krylov subspace) method and a good
 preconditioner. For this problem, we will simply use the biconjugate
 gradient stabilized method (BiCGSTAB). This can be done by adding the
-keyword ``bicgstab`` in the call to ``solve``:
+keyword ``bicgstab`` in the call to ``solve``. We also add a preconditioner,
+``ilu`` to further speed up the computations:
 
 .. code-block:: python
 
-    solve(A1, u1.vector(), b1, 'bicgstab')
-    solve(A2, p1.vector(), b2, 'bicgstab')
+    solve(A1, u1.vector(), b1, 'bicgstab', 'ilu')
+    solve(A2, p1.vector(), b2, 'bicgstab', 'ilu')
     solve(A3, u1.vector(), b3, 'bicgstab')
 
 Finally, to be able to postprocess the computed solution in Paraview,
@@ -2315,7 +2333,8 @@ follows:
     T = 5.0            # final time
     num_steps = 5000   # number of time steps
     dt = T / num_steps # time step size
-    nu = 0.001         # scaled kinematic viscosity
+    mu = 0.001         # dynamic viscosity
+    rho = 1            # density
     
     # Create mesh
     channel = Rectangle(Point(0, 0), Point(2.2, 0.41))
@@ -2361,7 +2380,7 @@ follows:
     n   = FacetNormal(mesh)
     f   = Constant((0, 0))
     k   = Constant(dt)
-    nu  = Constant(nu)
+    mu  = Constant(mu)
     
     # Define symmetric gradient
     def epsilon(u):
@@ -2369,13 +2388,14 @@ follows:
     
     # Define stress tensor
     def sigma(u, p):
-        return 2*nu*epsilon(u) - p*Identity(len(u))
+        return 2*mu*epsilon(u) - p*Identity(len(u))
     
     # Define variational problem for step 1
-    F1 = dot((u - u0) / k, v)*dx + dot(dot(u0, nabla_grad(u0)), v)*dx \ 
+    F1 = rho*dot((u - u0) / k, v)*dx \ 
+       + rho*dot(dot(u0, nabla_grad(u0)), v)*dx \ 
        + inner(sigma(U, p0), epsilon(v))*dx \ 
-       + dot(p0*n, v)*ds - dot(nu*nabla_grad(U)*n, v)*ds \ 
-       - dot(f, v)*dx
+       + dot(p0*n, v)*ds - dot(mu*nabla_grad(U)*n, v)*ds \ 
+       - rho*dot(f, v)*dx
     a1 = lhs(F1)
     L1 = rhs(F1)
     
@@ -2397,8 +2417,8 @@ follows:
     [bc.apply(A2) for bc in bcp]
     
     # Create VTK files for saving solution
-    vtkfile_u = File('solutions/velocity.pvd')
-    vtkfile_p = File('solutions/pressure.pvd')
+    vtkfile_u = File('ns/velocity.pvd')
+    vtkfile_p = File('ns/pressure.pvd')
     
     # Create progress bar
     progress = Progress('Time-stepping')
@@ -2414,12 +2434,12 @@ follows:
         # Step 1: Tentative velocity step
         b1 = assemble(L1)
         [bc.apply(b1) for bc in bcu]
-        solve(A1, u1.vector(), b1, 'bicgstab')
+        solve(A1, u1.vector(), b1, 'bicgstab', 'ilu')
     
         # Step 2: Pressure correction step
         b2 = assemble(L2)
         [bc.apply(b2) for bc in bcp]
-        solve(A2, p1.vector(), b2, 'bicgstab')
+        solve(A2, p1.vector(), b2, 'bicgstab', 'ilu')
     
         # Step 3: Velocity correction step
         b3 = assemble(L3)
@@ -2430,8 +2450,8 @@ follows:
         plot(p1, title='Pressure')
     
         # Save solution to file
-        vtkfile_u << u1
-        vtkfile_p << p1
+        vtkfile_u << (u1, t)
+        vtkfile_p << (p1, t)
     
         # Update previous solution
         u0.assign(u1)
@@ -2439,6 +2459,7 @@ follows:
     
         # Update progress bar
         progress.update(t / T)
+        print('u max:', u1.vector().array().max())
     
     # Hold plot
     interactive()
