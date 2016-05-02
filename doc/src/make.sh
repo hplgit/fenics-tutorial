@@ -2,7 +2,7 @@
 # Usage: make.sh latex|sphinx
 
 if [ $# -gt 0 ]; then
-    name=ftut${1}
+    name=ftut$1
     bookno=$1
 else
     name=ftut1
@@ -69,7 +69,7 @@ preprocess -DFORMAT=html newcommands.p.tex > newcommands.tex
 dir=sphinx-rootdir
 system doconce format sphinx $name --encoding=utf-8 EXV=$EXV --allow_refs_to_external_docs
 system doconce split_rst $name.rst
-system doconce sphinx_dir dirname=$dir version=$version theme=fenics $name
+system doconce sphinx_dir dirname=${dir}${bookno} version=$version theme=fenics $name
 system python automake_sphinx.py
 
 # Make Bootstrap HTML (but enlargen the journal font)
@@ -78,7 +78,8 @@ system doconce split_html $name.html --pagination
 
 # Publish in doc/pub
 dest=../pub
-rm -rf $dest/sphinx
-cp -r fenics-tutorial*.pdf sphinx-rootdir/_build/html $dest
-mv -f $dest/html $dest/sphinx
+rm -rf $dest/sphinx*
+cp fenics-tutorial*.pdf $dest
 cp -r $name.html ._*.html fig mov $dest
+cp -r sphinx-rootdir${bookno}/_build/html $dest
+mv -f $dest/html $dest/sphinx${bookno}

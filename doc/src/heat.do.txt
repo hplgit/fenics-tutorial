@@ -1,0 +1,1534 @@
+========= Developing a more advanced heat equation solver =========
+label{ch:diffusion}
+
+# Pointers backward...what is needed to be recaptured?
+
+This chapter is devoted to solving diffusion problems of the
+form
+
+!bt
+\[ \frac{\partial u}{\partial t} = \nabla\cdot(p\nabla u) + f,\]
+!et
+with initial condition $u=I$ and various types of Dirichlet, Neumann,
+and Robin conditions.  A very simple FEniCS program for a diffusion
+equation was introduced in ref[Section
+ref{ch:fundamentals:diffusion}][ in cite{ftut1}][in the Section "The
+time-dependent diffusion equation":
+"http://hplgit.github.io/fenics-tutorial/doc/pub/sphinx/._ftut1004.html#the-time-dependent-diffusion-equation"
+in cite{ftut1}], but here we shall discuss algorithmic optimization
+strategies, how to store and animate time-dependent data, and how to
+construct more advanced solvers in terms of classes.
+
+======= Optimization of algorithms and implementations =======
+label{ch:diffusion:opt}
+
+===== Avoiding assembly of the coefficient matrix =====
+label{ch:diffusion:opt:bassembly}
+
+[hpl: I though this example
+can just be an exercise now that the Navier-Stokes example
+cover the topic. However, the Navier-Stokes example is relatively
+complicated, and many students do not have the background to
+really understand it. Therefore, I don't everybody will grasp
+the `assemble` idea. We probably need to repeat it for Poisson and
+heat. It can also be an idea to study this example and then go back
+to N-S for a better understanding.]
+
+The time-dependent diffusion equation gives rise to a linear system
+$AU=b$ at each time level, where the coefficient matrix $A$ is constant,
+but $b$ depends on $u$ at the previous time level. To increase the
+computational efficiency, we can therefore assemble $A$ once and
+for all before the time loop. To be able to do this, we need to
+explicitly create matrices and vectors from variational
+formulations.
+#as demonstrated in Section ref{ch:poisson0:linalg}.
+#in N-S as well
+
+Let us express the solution procedure in algorithmic form, writing $u$
+for the unknown spatial function at the new time level ($u^n$) and
+$u_1$ for the spatial solution at one earlier time level ($u^{n-1}$):
+
+ * define Dirichlet boundary condition ($\ub$, Dirichlet boundary, etc.)
+ * let $u_1$ interpolate $I$ or be the projection of $I$
+ * define $a$ and $L$
+ * assemble matrix $A$ from $a$
+ * set some stopping time $T$
+ * $t={\dt}$
+ * while $t\leq T$
+   * assemble vector $b$ from $L$
+   * apply essential boundary conditions
+   * solve $AU=b$ for $U$ and store in $u$
+   * $t\leftarrow t + {\dt}$
+   * $u_1 \leftarrow u$ (be ready for next step)
+
+The code features the following changes from the `${prog["heat"]}.py`
+program. We may define $a$ and $L$ from $F$ as before, or do it explicitly:
+
+!bc pycod
+a = u*v*dx + dt*dot(grad(u), grad(v))*dx
+L = (u_1 + dt*f)*v*dx
+!ec
+Prior to the time loop we assemble the coefficient matrix $A$ once and
+for all:
+
+idx{`assemble`}
+
+!bc pycod
+A = assemble(a)   # assemble only once, before the time stepping
+!ec
+At each time level we can do a similar `b = assemble(L)`. With this
+construction, a new vector for `b` is allocated in memory in every
+pass of the time loop.  It would be much more memory friendly to reuse
+the storage of the `b` we already have.  This is easily accomplished
+by
+
+!bc pycod
+b = assemble(L, tensor=b)
+!ec
+That is, we send in our previous `b`, which is then filled with new values
+and returned from `assemble`. Now there will be only a single
+memory allocation of the right-hand side vector. Before the time loop
+we set `b = None` such that `b` is defined in the first call to
+`assemble`.
+
+The necessary changes inside the time loop go as follows:
+
+!bc pycod
+while t <= T:
+    b = assemble(L, tensor=b)
+    u_b.t = t
+    bc.apply(A, b)
+    solve(A, u.vector(), b)
+!ec
+The update `u_b.t = t` is of key importance as `bc.apply(A, b)` will
+look up the `u_b` object to find the proper values in the Dirichlet condition,
+and `u_b` changes with time in our test problem!
+
+The complete program is found in the file
+"`${prog['heat2']}.py`": "${src_url}/${prog['heat2']}.py".
+
+
+===== Avoiding all assembly =====
+label{ch:diffusion:opt:noassembly}
+
+idx{assembly, increasing efficiency}
+
+The purpose of this section is to present a technique for speeding up
+FEniCS simulators for time-dependent problems where it is possible to
+perform all assembly operations prior to the time loop.  There are two
+costly operations in the time loop: assembly of the right-hand side
+$b$ and solution of the linear system via the `solve` call. The
+assembly process involves work proportional to the number of degrees
+of freedom $N$, while the solve operation has a work estimate of
+$\mathcal{O}( N^{\alpha})$, for some $\alpha\geq 1$.  Typically,
+$\alpha\in [1,2]$.  As $N\rightarrow\infty$, the solve operation will
+dominate for $\alpha>1$, but for the values of $N$ typically used on
+smaller computers, the assembly step may still represent a
+considerable part of the total work at each time level. Avoiding
+repeated assembly can therefore contribute to a significant speed-up
+of a finite element code in time-dependent problems.
+
+=== Deriving recursive linear systems ===
+
+To see how repeated assembly can be avoided, we look at the $L(v)$
+form,
+
+!bt
+\[ \int_\Omega \left(u^{n-1} + {\dt}  f^n\right)v \dx, \]
+!et
+which in general varies with time through $u^{n-1}$, $f^n$, and
+possibly also with $\dt$ if the time step is adjusted during the
+simulation.  The technique for avoiding repeated assembly consists in
+expanding the finite element functions in sums over the basis
+functions $\phi_i$ to identify matrix-vector products that build up
+the complete system. We have $u^{n-1}=\sum_{j=1}^NU^{n-1}_j\phi_j$,
+and we can expand $f^n$ as
+$f^{n}=\sum_{j=1}^NF^{n}_j\phi_j$. Inserting these expressions in
+$L(v)$ and using $v=\hat\phi_i$ result in
+
+[hpl: Why $hat\phi_i$? No need for Petrov-Galerkin here... Cannot remember
+why the hat.]
+
+!bt
+\begin{align*}
+\int_\Omega \left(u^{n-1} + {\dt}f^n\right)v \dx &=
+\int_\Omega \left(\sum_{j=1}^N U^{n-1}_j\phi_j + {\dt}\sum_{j=1}^N F^{n}_j\phi_j\right)\hat\phi_i \dx,\\
+&=\sum_{j=1}^N\left(\int_\Omega \hat\phi_i\phi_j \dx\right)U^{n-1}_j
+ + {\dt}\sum_{j=1}^N\left(\int_\Omega \hat\phi_i\phi_j \dx\right)F^{n}_j\tp
+\end{align*}
+!et
+Introducing $M_{ij} = \int_\Omega \hat\phi_i\phi_j \dx$, we see that
+the last expression can be written
+
+!bt
+\begin{equation*}
+\sum_{j=1}^NM_{ij}U^{n-1}_j + {\dt} \sum_{j=1}^NM_{ij}F^{n}_j,
+\end{equation*}
+!et
+which is nothing but two matrix-vector products,
+
+!bt
+\begin{equation*}
+MU^{n-1} + {\dt} MF^n,
+\end{equation*}
+!et
+if $M$ is the matrix with entries $M_{ij}$,
+
+!bt
+\begin{equation*}
+U^{n-1}=(U^{n-1}_1,\ldots,U^{n-1}_N)^T,
+\end{equation*}
+!et
+and
+
+!bt
+\begin{equation*}
+F^n=(F^{n}_1,\ldots,F^{n}_N)^T\tp
+\end{equation*}
+!et
+
+We have immediate access to $U^{n-1}$ in the program since that is the
+vector in the `u_1` function. The $F^n$ vector can easily be computed
+by interpolating the prescribed $f$ function (at each time level if
+$f$ varies with time). Given $M$, $U^{n-1}$, and $F^n$, the right-hand
+side $b$ can be calculated as
+
+!bt
+\begin{equation*}
+b = MU^{n-1} + {\dt} MF^n \tp
+\end{equation*}
+!et
+That is, no assembly is necessary to compute $b$.
+
+The coefficient matrix $A$ can also be split into two terms.  We
+insert $v=\hat\phi_i$ and $u^n = \sum_{j=1}^N U^n_j\phi_j$ in the
+bilinear expression to get
+
+!bt
+\begin{equation*}
+\sum_{j=1}^N \left(\int_\Omega \hat\phi_i\phi_j \dx\right)U^n_j + {\dt}
+\sum_{j=1}^N \left(\int_\Omega \nabla\hat\phi_i\cdot\nabla\phi_j \dx\right)U^n_j,
+\end{equation*}
+!et
+which can be written as a sum of matrix-vector products,
+
+!bt
+\begin{equation*}
+MU^n + {\dt} KU^n = (M + {\dt} K)U^n,
+\end{equation*}
+!et
+if we identify the matrix $M$ with entries $M_{ij}$ as above and
+the matrix $K$ with entries
+
+!bt
+\begin{equation} K_{ij} = \int_\Omega \nabla\hat\phi_i\cdot\nabla\phi_j \dx\tp
+\end{equation}
+!et
+The matrix $M$ is often called the ``mass matrix'' while ``stiffness
+matrix'' is a common nickname for $K$. The associated bilinear forms
+for these matrices, as we need them for the assembly process in a
+FEniCS program, become
+
+!bt
+\begin{align}
+a_K(u,v) &= \int_\Omega\nabla u\cdot\nabla v \dx,
+label{ch:diffusion0:pde1:aK}\\
+a_M(u,v) &= \int_\Omega uv \dx
+label{ch:diffusion0:pde1:aM}\tp
+\end{align}
+!et
+
+The linear system at each time level, written as $AU^n=b$,
+can now be computed by first computing $M$ and $K$, and then forming
+$A=M+{\dt} K$ at $t=0$, while $b$ is computed as
+$b=MU^{n-1} + {\dt}MF^n$ at each time level.
+
+=== FEniCS implementation ===
+
+The following modifications are needed in the `${prog["heat_func"]}.py`
+program from the previous section in order to implement the new
+strategy of avoiding assembly at each time level:
+
+  o Define separate forms $a_M$ and $a_K$
+  o Assemble $a_M$ to $M$ and $a_K$ to $K$
+  o Compute $A=M+{\dt}K$
+  o Define $f$ as an `Expression`
+  o Interpolate the formula for $f$ to a finite element function $F^n$
+  o Compute $b=MU^{n-1} + {\dt}MF^n$
+
+The relevant code segments become
+
+!bc pycod
+# 1.
+a_K = dot(grad(u), grad(v))*dx
+a_M = u*v*dx
+# No need for L
+
+# 2. and 3.
+M = assemble(a_M)
+K = assemble(a_K)
+A = M + dt*K
+
+# 4.
+f = Expression('beta - 2 - 2*alpha', beta=beta, alpha=alpha)
+
+# 5. and 6.
+while t <= T:
+    f_n = interpolate(f, V)
+    F_n = f_n.vector()
+    b = M*u_1.vector() + dt*M*F_n
+!ec
+
+We implement these modifications in a refactored version of the
+program `${prog["heat2"]}.py`, where the solver is a function
+as explained in ref[Section ref{ch:poisson0:impl2}][ in cite{ftut1}][the
+section "Refactored implementation": "" in cite{ftut1}] rather than a
+flat program. The domain can also more flexibly be a 1D, 2D, or 3D
+interval, rectangle, or box.
+The new `solver_minimize_assembly` function resides in
+"`${prog['heat_func']}.py`": "${prog['heat_func']}.py".
+
+@@@CODE src/heat_func.py fromto: def solver_minimize_assembly@def solver_bc
+
+A special feature in this program is the `user_action` callback function:
+at every time level, the solution is sent to `user_action`, which is
+some function provided by the user where the solution can be processed, e.g.,
+stored, analyzed, or visualized. In a unit test for the test example without
+numerical approximation errors, we can write a call to the solver function,
+
+!bc pycod
+def test_solver():
+    import numpy as np
+    alpha = 3; beta = 1.2
+    u_b = Expression('1 + x[0]*x[0] + alpha*x[1]*x[1] + beta*t',
+                     alpha=alpha, beta=beta, t=0)
+    f = Constant(beta - 2 - 2*alpha)
+    dt = 0.3; T = 1.9
+    u_b.t = 0
+
+    # Define assert_error callback function
+    ...
+
+    solver_minimize_assembly(
+        f, u_b, u_b, dt, T, Nx, Ny, degree,
+        user_action=assert_error, I_project=False)
+!ec
+The `user_action` function `assert_error` asserts equality of the
+exact and numerical solution at every time level:
+
+!bc pycod
+def assert_error(t, u, timestep):
+    u_e = interpolate(u_b, u.function_space())
+    error= np.abs(u_e.vector().array() -
+    	          u.vector().array()).max()
+    tol = 2E-12
+    assert error < tol, 'error: %g' % error
+!ec
+
+One can also use the user action callback function to visualize
+the solution:
+
+!bc pycod
+def assert_error(t, u, timestep):
+    global p
+    if t == 0:
+        p = plot(u, title='u',
+	         # Fix the color scale
+                 range_min=float(u_range[0]),  # must be float
+                 range_max=float(u_range[1]))  # must be float
+    else:
+        p.plot(u)
+    print('t=%g' % t)
+    time.sleep(0.5)
+!ec
+It is key to fix the color scale to get a meaningful animation.
+
+A complete function calling up `solver_minimize_assembly` for
+animating the solution in two test problems is found in the
+function `application_animate` in
+"`${prog['heat_func']}.py`": "${prog['heat_func']}.py".
+
+Note that `p`, which must survive between subsequent calls to the
+callback function, has to be declared as a global variable. This is
+necessary when the user action function is a *closure* (function
+inside function, ``remembering'' variables in the parent function) and
+`p` is changed inside the closure.  Some programmers find it more
+convenient to let the user action be class instead, where `p` can be
+an attribute. Later examples employ the class design.
+
+The function `solver_vs_solver_minimize_assembly` measures the
+impact of the optimization technique in this section compared to
+the simpler technique from the previous section where we need
+to assemble the right-hand side of the linear system at every time
+level. The impact is not huge, just a speed-up factor of 1-2 for 2D problems
+and around 2 for 3D problems. Still, this may be an important
+improvement when you run a code a lot.
+
+#===== Methods of lines and ODE solvers =====
+
+======= A welding example with post processing and animation =======
+label{ch:diffusion:welding}
+
+The focus so far in this tutorial has been on producing the solution
+of PDE problems. [hpl: This is book 2, it depends on how things end
+up in the previous chapter.] For scientific investigations, the primary work is
+often with post processing results: computing quantities derived from
+the solution and inspecting these with visualization or data analysis tools.
+This is the focus of the present section.
+To ease the programming, we shall make use of a convenient tool, `cbcpost`,
+for post processing, saving data to file(s), and animating solutions.
+We recommend to use
+`cbcpost` in all time-dependent FEniCS solvers, but it also has a lot
+to offer in stationary problems too.
+
+To explain the usage of `cbcpost` for storage and plotting, we address
+a real physical application: welding of a plate, where a moving heat
+source gives rise to a moving temperature field.
+
+===== Post processing data and saving to file =====
+label{ch:diffusion:welding:cbcpost}
+
+=== Installation ===
+
+The `cbcpost` package is not a part of the `fenics` package so you
+will need to install it.  The simplest installation method is to use
+`pip`. We recommend to install a companion package `fenicstools` as
+well. Just run
+
+!bc
+sudo pip install git+https://bitbucket.org/simula_cbc/cbcpost.git
+sudo pip install git+https://github.com/mikaem/fenicstools.git
+!ec
+in a terminal window (skip `sudo` on Windows machines).
+Alternatively, you can grab the source code and run `setup.py` the usual
+way Python packages are installed from source:
+
+!bc sys
+Terminal> git clone https://bitbucket.org/simula_cbc/cbcpost.git
+Terminal> cd cbcpost
+Terminal> python setup.py install
+Terminal> cd ..
+Terminal> git clone https://github.com/mikaem/fenicstools.git
+Terminal> cd fenicstools
+Terminal> python setup.py install
+!ec
+
+
+=== Basic commands ===
+
+We must create a *post processor* and then specify what kind of
+results we want to be stored on file and (optionally) get visualized.
+Suppose we have a field with logical name `Temperature` that we want
+to save in XDMF/HDF5 format in files in a fresh subdirectory `Results`:
+
+!bc pycod
+import cbcpost as post
+# Create post processor
+pp = post.PostProcessor(dict(casedir='Results', clean_casedir=True))
+# Specify storage of a "Temperature" field
+pp.add_field(post.SolutionField(
+    'Temperature',
+    dict(save=True,
+         save_as=['hdf5', 'xdmf'],
+         plot=True,
+         plot_args=dict(range_min=0.0, range_max=1.2))))
+!ec
+The `plot=True` automatically launches `fenics.plot` commands of
+this scalar field during the simulation. The ranges of the color
+scale must be given (as `float` variables) so that the color scale
+stays fixed during the animation on the screen.
+
+Inside the time loop, we have to feed a new solution to the post processor
+to get it saved:
+
+!bc pycod
+pp.update_all({'Temperature': lambda: T}, t, timestep)
+!ec
+Here, `T` is the `Function` object that we have solved for, `t` is
+current time, and `timestep` is the corresponding time step number.
+
+One can specify many fields to be saved (and plotted), but even more
+important: `cbcpost` can calculate a lot of derived quantities from
+the solution, such as
+
+ * time derivatives and integrals of vector/scalar fields
+ * extraction of fields over subdomains
+ * slicing of fields in 3D geometries
+ * averaging of fields in space or time
+ * norms and point values of fields as function of time
+ * user-defined post processing of fields
+
+We refer to the online "cbcpost documentation": "http://cbcpost.readthedocs.org/en/latest/index.html" for further information on all the capabilities of this
+package.
+
+!bnotice Tip: Use `cbcpost` to visualize time-dependent data
+Instead of issuing your own `plot` commands in time-dependent
+problems, it is safer and more convenient to specify `plot=True`
+and fix the range of the color scale, when you add fields
+to the post processor. Multiple fields will be synchronized during
+the animation.
+!enotice
+
+===== Heat transfer due to a moving welding source =====
+label{ch:diffusion:welding:problem}
+
+Let us solve a diffusion problem taken from welding.  A moving
+welding equipment acts as a moving heat source at the top of a thin
+metal plate.  The question is how the heat from the equipment spreads
+out in the material that is being welded. We use the standard heat
+equation, treat the material as two dimensional, and do not take phase
+transitions into account.  The governing PDE is then
+
+!bt
+\[ \varrho c \frac{\partial u}{\partial t} = \kappa\nabla^2 u + f,\]
+!et
+where $u$ is temperature, $\varrho$ is the density of the material,
+$c$ is the heat capacity at constant volume, $\kappa$ is the heat
+conduction coefficient, and $f$ models the heat source from the
+welding equipment. The domain is $\Omega = [0,L]\times [0,L]$.  An
+additional major simplification is that we set $u=U_s$ at the
+boundary, where $U_s$ is the temperature of the surroundings (a Robin
+condition, modeling cooling at the boundary would be more accurate,
+but then we should also consider cooling in the third dimension as
+well).  The initial condition reads $u=U_s$.
+
+A welding source is moving and very localized in space.  The
+localization can be modeled by a peak-shaped Gaussian function.  The
+movement is taken to be a circle with radius $R$ about a point
+$(x_0,y_0)$. An appropriate $f$ is
+
+!bt
+\[ f(x,y,t) = A\exp{\left(-\frac{1}{2\sigma^2}
+\left({x-(x_0 + R\cos\omega t)}\right)^2 -\frac{1}{2\sigma^2}
+\left({y-(y_0 + R\sin\omega t)}\right)^2\right)}\tp\]
+!et
+The parameter $A$ is the strength of the heat source, and $\sigma$ is
+the ``standard deviation'' (i.e., a measure of the width) of the Gaussian
+function.
+
+===== Scaling of the welding problem =====
+label{ch:diffusion:welding:scaling}
+
+There are 10 physical parameters in the problem: $L$, $\varrho$, $c$,
+$\kappa$, $A$, $x_0$, $y_0$, $R$, $\omega$, $\sigma$.  Scaling can
+dramatically reduce the number of parameters and also introduce new
+parameters that are much easier to assign numerical values when doing
+numerical experiments. We therefore scale the problem. As length
+scale, we choose $L$ so the scaled domain becomes the unit square. As
+time scale and characteristic size of $u$, we just introduce $t_c$ ad
+$u_c$.  This means that we introduce scaled variables
+
+!bt
+\[
+\bar x = \frac{x}{L},\quad \bar y = \frac{y}{L},\quad \bar t =\frac{t}{t_c},
+\quad\bar u = \frac{u-U_s}{u_c}\tp
+\]
+!et
+The scaled form of $f$ is naturally $\bar f = f/A$, since this makes
+$\bar f\in (0,1]$. The arguments in the exponential function in $f$ can
+also be scaled:
+
+!bt
+\begin{align*}
+\bar f &= \exp{\left(-\frac{1}{2\sigma^2}
+\left({\bar xL -(L \bar x_0 + L\bar R\cos\omega t_c t)}\right)^2 -\frac{1}{2\sigma^2}
+\left({L \bar y-(L\bar y0 + L\bar R\sin\omega t_c t)}\right)^2\right)}\\
+&= \exp{\left(-\frac{1}{2}\frac{L^2}{\sigma^2}
+\left(x -(\bar x_0 + \bar R\cos\omega t_c \bar t)\right)^2 -
+\frac{1}{2}\frac{L^2}{\sigma^2}
+\left(\bar y-(\bar y0 + \bar R\sin\omega t_c \bar t)\right)^2\right)}\\
+&= \exp{\left(-\frac{1}{2}\beta^2
+\left((x -(\frac{1}{2} + \bar R\cos\bar t)\right)^2 -
+\left(\bar y-(\frac{1}{2} + \bar R\sin\bar t))^2\right)\right)},
+\end{align*}
+!et
+where $\beta$ is a dimensionless parameter,
+
+!bt
+\[ \beta = \frac{L}{\sigma},\]
+!et
+reflecting the ratio of the domain size and the width of the heat source.
+Moreover, we have restricted the rotation point to be the center point
+of the domain:
+
+!bt
+\[ (\bar x_0,\bar y_0) = (\frac{1}{2},\frac{1}{2})\tp\]
+!et
+The time scale
+in diffusion problems is usually related to the ``speed of the
+diffusion'', but in this problem it is more natural to base the time
+scale on the movement of the heat source, which suggests setting
+$t_c = 1/\omega$.
+
+Inserting the new scaled variables in the PDE leads to
+
+!bt
+\[ \frac{\partial \bar u}{\partial\bar t} =
+\frac{\kappa}{\omega\varrho c L^2}\bar\nabla^2\bar u +
+\frac{A}{\omega u_c\varrho c}\bar f(\bar x,\bar y,\bar t)\tp\]
+!et
+The first coefficient is a dimensionless number,
+
+!bt
+\[ \gamma = \frac{\kappa}{\omega\varrho c L^2},\]
+!et
+while the second coefficient can be used to determine $u_c$ by demanding
+the source term to balance the time derivative term,
+
+!bt
+\[ u_c = \frac{A}{\omega\varrho c}\tp\]
+!et
+Our aim is to have $\bar u \in [0,1]$, but this $u_c$ does not capture
+the precise magnitude of $u$. However, we believe that the characteristic
+size of $u$ is
+
+!bt
+\[ u_c = \delta^{-1}\frac{A}{\omega\varrho c},\]
+!et
+for a scaling factor $\delta$. Using this $u_c$ gives the PDE
+
+!bt
+\[ \frac{\partial \bar u}{\partial\bar t} =
+\gamma\bar\nabla^2\bar u +
+\delta\bar f(\bar x,\bar y,\bar t),\]
+!et
+with two dimensionless variables, but $\delta$ is quite easily
+tuned from experiments to give $\bar u$ a typically size of unity.
+
+Looking at $\gamma$, we see that it can be written
+
+!bt
+\[ \gamma = \frac{1/\omega}{\varrho c L^2/\kappa},\]
+!et
+which is the ratio of the time scale for the heat source and the
+time scale for diffusion. Multiplying by $R/R$ gives another
+interpretation: $\gamma$ is the ratio of the speed of diffusion and
+the speed of the heat source.
+
+!bnotice The benefits of scaling
+The physics of our problem depends now on $\beta$, $\bar
+R$, and $\gamma$, just three ratios of physical effects instead
+of 10 independent parameters.  Setting
+$\bar R = 0.2$ is an appropriate choice. For a quite localized heat
+source in space, $\beta=10$ is a suitable value.  Then we are
+actually left with only one interesting parameter to adjust: $\gamma$.
+It is so much easier to assign this parameter a value (speed of
+diffusion versus speed of heat source) than to set $\varrho$, $c$, and
+$\kappa$ for some chosen material, and then determine relevant values for
+$A$, $L$, etc. There are no approximations in the scaling procedure;
+it just dramatically simplifies numerical simulations.
+The book cite{Langtangen_scaling} gives a comprehensive treatment
+of scaling.
+!enotice
+
+===== A function-based solver =====
+label{ch:diffusion:welding:funcsolver}
+
+We can use the `solver_minimize_assembly` function to solve the
+welding problem. The application code just declares the problem-dependent
+parameters and calls the solver function:
+
+!bc pycod
+def application_welding(gamma=1, delta=1, beta=10, num_rotations=2):
+    """Circular moving heat source for simulating welding."""
+    from math import pi, sin, cos
+    u_b = Constant(0)
+    I = Constant(0)
+    R = 0.2
+    f = Expression(
+        'delta*exp(-0.5*pow(beta,2)*(pow(x[0]-(0.5+R*cos(t)),2) + '
+                                    'pow(x[1]-(0.5+R*sin(t)),2)))',
+        delta=delta, beta=beta, R=R, t=0)
+    # Simulate to rotations with the equipment
+    omega = 1.0      # Scaled angular velocity
+    P = 2*pi/omega   # One period of rotation
+    T = 2*P          # Total simulation time
+    dt = P/40        # 40 steps per rotation
+    Nx = Ny = 60
+    solver_minimize_assembly(
+        gamma, f, u_b, I, dt, T, (Nx, Ny), (1, 1), degree=1,
+        user_action=ProcessResults(), I_project=False)
+!ec
+
+The remaining task is to write the user action callback function to
+process the solution at teach time step. We want to make use of
+`cbcpost` for storage and plotting.  Since we need the post processor
+variable, called `pp` in Section ref{ch:diffusion:welding:cbcpost},
+to survive between calls to the user action function, we find it
+most convenient to implement this function in terms of a class with
+`pp` as attribute and `__call__` as the user action function.  We want
+to make comparisons between the heat source and the temperature
+response, so we register both fields for storage and plotting:
+
+@@@CODE-4 src/heat_func.py fromto: import cbcpost as post@info\('saving results
+We took the opportunity to also
+store the `u` and `f` functions to VTK files, although this is really
+not necessary since ParaView or VisIt can read XDMF files.
+
+Note that the use of `cbcpost` is usually very dependent on the
+problem at hand, so it does not make sense to include `cbcpost` code
+in a general PDE solver, only in problem-specific code such as the
+user action function.
+
+Getting an animation on the screen with the built-in plotting tool is
+a matter of running the welding example:
+
+!bc pyshell
+>>> from heat_func import application_welding as a
+>>> a(gamma=10, delta=700)
+!ec
+(We introduced the synonym `a` to save some typing.)
+Or you can run this as a command in the terminal:
+
+!bc sys
+Terminal> python -c '\
+from heat_func import application_welding as a;
+a(gamma=10, delta=700)'
+!ec
+
+Since we have fixed the color scale of the temperature to have values
+in $[0,1.1]$, we must adjust $\delta$ appropriately to $\gamma$.  For
+example, running $\gamma=40$ reveals, from the output in the terminal,
+that the maximum temperature is about 0.25, and consequently we do not
+see much. For any given $\gamma$, run the problem with $\delta=1$ (and
+say `num_rotations=0.2` to make a quick simulation), and rerun with
+$\delta$ as one over the maximum temperature.  Here we get an
+approximate $\delta = 66.7\gamma$ for $\gamma \leq 0.1$. Try running
+$\gamma=0.01$ and $\delta=1$ to observe some more significant heat
+transfer away from the welding equipment. With $\gamma =0.001$ there
+is significant heat build-up, but for so small $\gamma$ we should
+re-scale the problem and use the diffusion time scale as time scale.
+
+In ParaView, load `Results/Temperature/Temperature.xdmf` as file,
+click _Apply_, then the play button for animation. If the animation is
+not correct, repeat the procedure. Thereafter, split the layout in
+two, choose _3D View_, load `Results/Heat source/Heat_source.xmdf`,
+click _Apply_, and run the animation. The two plots are synchronized
+in time.
+
+MOVIE: [mov/welding_gamma1.ogg] Welding example with $\gamma=1$.
+
+
+========= Implementing PDE solvers as classes =========
+label{ch:classes}
+
+[hpl: Much stuff is moved around here so rewriting of glue text
+is necessary!]
+
+======= Refactoring a Poisson solver in terms of classes =======
+label{ch:poisson0:refactor:class}
+
+A FEniCS solver for a PDE can be implemented in a general way, but the
+problem-dependent data, like boundary conditions, must be specified in
+each case by the user. For example, the implementation in ref[Section
+ref{ch:poisson0:multi:bc}][ in cite{ftut1}][in cite{ftut1}]
+requires the user to supply a
+`boundary_conditions` dictionary with specifications of the boundary
+condition on each of the four sides of the unit square. If we, e.g.,
+want two Dirichlet conditions at one side, this is not possible
+without modifying the solver function. What do to with a general
+mesh is an open question. To avoid changing the code in what is
+meant to be a general PDE solver for a wide class of problems, we need
+a different software design.
+
+Such a different design is to introduce a problem class and
+methods, supplied by the user from case to case, where boundary
+conditions and other input data are defined. Such a design is used in
+a lot of more advanced FEniCS application codes, and it is time to
+exemplify it here.  As a counterpart to the solver function, we
+introduce a solver class, but all the arguments for various input data
+are instead method calls to an instance of a *problem class*. This
+puts a somewhat greater burden on the programmer, but it allows for
+more flexibility, and the code for, e.g., boundary conditions can be
+more tailored to the problem at hand than the code we introduced in
+the `solver_bc` function in Section ref{ch:poisson0:multi:bc}.
+
+===== The solver class =====
+label{ch:poisson0:refactor:class:solver}
+
+The solver class will need problem information and for this purpose
+call up the methods in a problem class. For example, the solver
+gets the $f$ and $p$ functions in the PDE problem by calling
+`problem.f_rhs()` and `problem.p_coeff()`. The mesh object and the
+polynomial degree of the elements are supposed to be returned from
+`problem.mesh_degree()`. Furthermore, the problem class defines the
+boundary conditions in the problem as lists of minimal information
+from which the solver can build proper data structures.
+
+The solver class is a wrapping of the previous `solver_bc` and `flux`
+functions as methods in a class, but some of the code for handling
+boundary conditions in `solver_bc` is now delegated to the user in
+the problem class.
+
+@@@CODE src/poisson_class.py fromto: from fenics import@class Problem1
+Note that this is a general Poisson problem solver that works in any number
+of space dimensions and with any mesh and composition of boundary conditions!
+
+!bnotice Tip: Be careful with the `mesh` variable!
+In classes, one often stores the mesh in `self.mesh`. When you need
+the mesh, it is easy to write just `mesh`, but this gives rise to
+peculiar error messages, since `mesh` is a Python module imported
+by `from fenics import *` and already available as a name in your file.
+When encountering strange error messages in statements containing a
+variable `mesh`, make sure you use `self.mesh`.
+!enotice
+
+===== A problem class =====
+label{ch:poisson0:refactor:class:problem0}
+
+Let us start with a relatively simple problem class for our favorite
+test problem where we manufacture a solution $\ub=1+x^2 + 2y^2$ and
+solve $-\nabla^2 u = f$ with $f=6$ and $u=\ub$ at the entire boundary.
+
+@@@CODE src/poisson_class.py fromto: class TestProblemExact@def test_Poisson
+
+We can then make a simple unit test for the problem and solver class:
+
+@@@CODE src/poisson_class.py fromto: def test_PoissonSolver@if __name
+
+===== A more complicated problem class =====
+label{ch:poisson0:refactor:class:problem1}
+
+Below is the specific problem class for solving a scaled 2D Poisson
+problem.  We have a two-material domain where a rectangle
+$[0.3,0.7]\times [0.3,0.7]$ is embedded in the unit square and where
+$p$ has a constant value inside the rectangle and another value
+outside. On $x=0$ and $x=1$ we have homogeneous Neumann conditions,
+and on $y=0$ and $y=1$ we have the Dirichlet conditions $u=1$ and
+$u=0$, respectively.
+
+@@@CODE src/poisson_class.py fromto: class Problem1@def demo
+
+A specific problem can be solved by
+
+@@@CODE src/poisson_class.py fromto: def demo@def test_Solver
+The complete code is found in the file `${prog["poisson_class"]}.py`.
+
+!bnotice Pros and cons of solver/problem classes vs solver function
+What are the advantages of class `Solver` and `Problem` over the
+function implementation in Section ref{ch:poisson0:multi:bc}?
+The primary advantage is that
+the class version works for any mesh and any composition of
+boundary conditions, while the solver function is tied to a mesh
+over the unit square, only one type of boundary condition on a
+each side, and a piecewise constant $p$ function. The programmer has
+to supply more code in the class version, but gets greater flexibility.
+The disadvantage of the class version is that it applies the class
+concept so one needs experience with Python class programming.
+!enotice
+
+======= Refactoring a heat equation solver =======
+label{ch:diffusion:refactor}
+
+The flat program for the diffusion solver in
+`${prog["heat"]}.py` and `${prog["heat2"]}.py`
+was refactored in `${prog["heat_func"]}.py` in terms of a
+`solver` function with the general code for solving the PDE problem, a
+callback function for processing the solution at each time step, and
+an application function defining the callback function and calling the
+solver to solve a specific problem. However, for time-dependent
+problems a solver function that gets all its input through a set of
+arguments is less flexible than a solver class, which can demand its
+input both through arguments and through functions (in subclasses)
+provided by the user. The following text requires you to be familiar
+with class programming in Python (tailored learning material is
+Chapter 7, 9, and Appendix E in cite{Langtangen2009a}).
+
+When we work with a PDE project, we often want to explore a range of
+similar problems where the PDE model basically stays the same, but
+coefficients in the PDE, boundary and initial conditions, as well as
+domains change.  This means that some of our code related to solving
+the PDE is always the same, while some of our code is strongly
+dependent upon a particular application. To avoid copying code (which
+is considered evil in computer programming), we need to collect the
+common code for all problems of this type in one place and then create
+an API (application programming interface) to the code that will be
+different from application to application. To this end, we introduce a
+*solver class* that applies FEniCS to solve the PDE. It requires
+access to a *problem class* where all the application-specific details
+are defined. This problem class defines an API that the solver class
+applies for communication.
+
+The solver class will usually have a function to set up data
+structures for the variational formulation, a `step` function
+to advance the solution one time step, and a `solve` function to run
+the time loop. Every time the solver class needs problem-specific
+information, it gets that information from the problem class, either in
+terms of attributes (variables) in the problem class or in terms of method
+(function) calls. The forthcoming examples are tied to the diffusion
+equation, but should be sufficiently general to be reused for
+most time-dependent FEniCS applications.
+
+
+% if EXV:
+
+===== Problem: Find error in implementation =====
+
+For those who are familiar with object-oriented programming, this is
+seemingly a very simple exercise, but it makes sure you understand
+class hierarchies and the associated program flow, so that you
+are prepared to read the forthcoming text on solver and problem
+classes.  The exercise also points out a very common bug in that
+context. If you have problems with this exercise, we advise you to
+read more about classes in Python (e.g., Chapter 7 and 9 in
+cite{Langtangen2009a}), before you continue reading with the present book.
+
+Somebody has made a class `Line` for straight lines $y=ax+b$
+where $a$ and $b$ are meant to be defined in subclasses by the
+methods `constant` and `steepness_factor`, respectively.
+
+!bc pypro
+class Line(object):
+    def __call__(self, x):
+        return self.constant() + self.steepness_factor()*x
+
+    def constant(self):
+        return 1.0
+
+    def steepness_factor(self):
+        return 1.0
+
+class MyLine(Line):
+    def steepness_factor(self):
+        return -0.2
+
+line = MyLine()
+x = 2
+print('x=%g, y=%g' % (x, line(x)))
+!ec
+
+!bsubex
+Simulate the program above by hand. Make sure you understand the program
+flow.
+
+!bsol
+idx{Online Python Tutor}
+
+% if FORMAT in ('html', 'sphinx'):
+A nice tool to follow the program flow in simple programs is the
+"Online Python Tutor": "http://pythontutor.com/visualize.html#mode=edit".
+
+!bc pyoptpro
+from __future__ import print_function
+
+class Line(object):
+    def __call__(self, x):
+        return self.constant() + self.steepness_factor()*x
+
+    def constant(self):
+        return 1.0
+
+    def steepness_factor(self):
+        return 1.0
+
+class MyLine(Line):
+    def steepness_factor(self):
+        return -0.2
+
+line = MyLine()
+x = 2
+print('x=%g, y=%g' % (x, line(x)))
+!ec
+
+The Online Python Tutor is fine for simple test programs, but one cannot
+use third-party Python modules. If that is required,
+a debugger must be used. It is
+visually less pleasant for following program flow, but will always
+be applicable.
+% endif
+
+The program flow begins at the top of the file and goes down line by
+line. First is the definition of the two classes. Then we have the
+first line in the main program: `line = MyLine()`.  There is no
+constructor in class `MyLine`, but it could be inherited from the
+parent class `Line`. However, there is neither any constructor in
+`Line`.  In such cases, Python equips the `Line` class with an empty
+constructor as we had made an `__init__(self)` method with just `pass`
+as body. This constructor is called by `MyLine()`.  It makes `line`
+refer to an instance of class `MyLine`.
+
+In the print statement, one needs to fill the string with
+numbers, and after `x` is inserted, the call `line(x)` is performed.
+Since `line` is an object of type `MyLine`, a function call
+like `line(x)` is legal if the class has a special method
+`__call__`. This is the case, since class `MyLine` inherits
+`__call__` from the parent class `Line`.
+The program flow moves to `Line.__call__` where we first call
+`self.constant()`. Since the `self` object is of type `MyLine`,
+this means we call `MyLine.constant`, but there is no `constant`
+method in `MyLine`, meaning that it just inherits the `constant`
+method from `Line`. Consequently, `Line.constant` is called and
+returns 1.0. The next call is to `MyLine.steepness_factor`, and
+this method is implemented in class `MyLine` and returns -0.2.
+In `Line.__call__` we then evaluate `1.0 + (-0.2)*x`, which
+results in 0.4 when `x` is 2.
+!esol
+!esubex
+
+!bsubex
+Somebody makes another subclass:
+
+!bc pycod
+class YourLine(MyLine):
+    def steepnes_factor(self):
+        return 2
+
+line = YourLine()
+x = 2
+print('x=%g, y=%g' % (x, line(x)))
+!ec
+However, this time the printout is `x=2, y=0.4`, while it should be
+`x=2, y=5`. Where is the error?
+
+!bsol
+% if FORMAT in ('html', 'sphinx'):
+Doing this by hand might not be successful due to the nature of the error.
+It is probably better to use the Online Python Tutor or a debugger.
+
+!bc pyoptpro
+from __future__ import print_function
+
+class Line(object):
+    def __call__(self, x):
+        return self.constant() + self.steepness_factor()*x
+
+    def constant(self):
+        return 1.0
+
+    def steepness_factor(self):
+        return 1.0
+
+class MyLine(Line):
+    def steepness_factor(self):
+        return -0.2
+
+class YourLine(MyLine):
+    def steepnes_factor(self):
+        return 2
+
+line = YourLine()
+x = 2
+print('x=%g, y=%g' % (x, line(x)))
+!ec
+% endif
+The problem is that when the method `Line.__call__` tries to call
+the method `YourLine.steepness_factor`, it cannot find such a method in
+`YourLine`, and instead if uses the inherited method `Line.steepness_factor`,
+which returns -0.2. The problem is that there is a misspelling: a
+missing s in class `YourLine`. This is a very common error that can be
+hard to track down.
+!esol
+!esubex
+% endif
+
+===== Mathematical problem =====
+label{ch:diffusion:refactor:math}
+
+We address a variable-coefficient diffusion equation with Dirichlet,
+Neumann, and Robin conditions:
+
+!bt
+\begin{align}
+\varrho c{\partial u\over\partial t} &= \nabla\cdot\left( \kappa\nabla u\right)
++ f(\x,t)\hbox{ in }\Omega\times (0,T],\\
+u(\x,0) &= I\hbox{ on }\Omega,\\
+u &= \ub(t)\hbox{ on }\Gamma_D,\\
+-\kappa{\partial u\over\partial n} &= g\hbox{ on }\Gamma_N,\\
+-\kappa{\partial u\over\partial n} &= r(u-U_s)\hbox{ on }\Gamma_R\tp
+\end{align}
+!et
+The spatial domain $\Omega$ has boundary $\partial\Omega = \Gamma_D\cup
+\Gamma_N\cup\Gamma_R$. We shall assume that all coefficients $\varrho$,
+$c$, $\kappa$ may vary in space, while $f$ and $g$ may vary in time too.
+The coefficients $r$ and $U_s$ are assumed to depend on time only.
+
+We discretize in time by the general $\theta$-rule.  For an evolution
+equation $\partial P/\partial t=Q(t)$, this rule reads
+
+!bt
+\begin{equation*}
+{P^{n+1} - P^{n}\over{\dt}} = \theta Q^{n+1} + (1-\theta )Q^{n},
+\end{equation*}
+!et
+where $\theta\in[0,1]$ is a weighting factor. The attractive property
+of this scheme is that $\theta =1$ corresponds
+to the Backward Euler scheme, $\theta =1/2$ to the Crank-Nicolson
+scheme, and $\theta =0$ to the Forward Euler scheme.
+
+Introducing the $\theta$-rule in our PDE results in
+
+!bt
+\begin{equation}
+\varrho c\frac{u^{n+1}-u^n}{\Delta t}
+= \theta(\nabla\cdot\left( \kappa\nabla u^{n+1}\right) + f(\x,t_{n+1})) +
+(1-\theta)(\nabla\cdot\left( \kappa\nabla u^{n}\right) + f(\x,t_{n}))\tp
+label{ch:diffusion:refactor:math:problem}
+\end{equation}
+!et
+
+A Galerkin method for this initial-boundary value problem consists
+of multiplying (ref{ch:diffusion:refactor:math:problem}) by
+a test function $v\in\hat V$, integrate over $\Omega$, and
+perform integration by parts on the second-order derivative term
+$\nabla\cdot\left( \kappa\nabla u\right)$:
+
+!bt
+\begin{align*}
+\int\limits_\Omega \bigl(
+v\varrho c\frac{u^{n+1}-u^n}{\Delta t}\dx
+& + \theta \kappa\nabla u^{n+1}\cdot\nabla v - v\theta f(\x,t_{n+1} \\
+& + (1-\theta) \kappa\nabla u^{n}\cdot\nabla v -
+v(1-\theta)f(\x,t_{n}\bigr)\dx\\
+& - \int\limits_{\Gamma_N\cup\Gamma_R}
+\bigl(\theta \kappa\frac{\partial u^{n+1}}{\partial n}v
++ (1-\theta) \kappa\frac{\partial u^{n}}{\partial n}v\bigr)\ds = 0
+\tp
+\end{align*}
+!et
+Inserting the boundary conditions at $\Gamma_N$ and $\Gamma_R$  gives
+us
+
+!bt
+\begin{align}
+F(u;v) &= \int\limits_\Omega \bigl(
+v\varrho c\frac{u^{n+1}-u^n}{\Delta t}\dx
++ \theta \kappa\nabla u^{n+1}\cdot\nabla v - v\theta f(\x,t_{n+1}) \nonumber\\
+&\quad - (1-\theta) \kappa\nabla u^{n}\cdot\nabla v +
+v(1-\theta)f(\x,t_{n}\bigr)\dx\nonumber\\
+&\quad + \int\limits_{\Gamma_N}
+\bigl(\theta g(\x,t_{n+1})v
++ (1-\theta) g(\x,t_n)v\bigr)\ds\nonumber\\
+&\quad + \int\limits_{\Gamma_R}
+\bigl(\theta r(u^{n+1} - U_s(t_{n+1}))v
++ (1-\theta) r(u^{n} - U_s(t_{n}))v\bigr)\ds
+= 0\tp
+label{ch:diffusion:refactor:math:varform0}
+\end{align}
+!et
+Since we use `u` for the unknown $u^{n+1}$ in the code, and `u_1`
+for $u^n$, we introduce the same notation in the mathematics too:
+$u$ for $u^{n+1}$ and $u_1$ for $u^n$,
+
+!bt
+\begin{align}
+F(u;v) &= \int\limits_\Omega \bigl(
+v\varrho c\frac{u-u_1}{\Delta t}\dx
++ \theta \kappa\nabla u\cdot\nabla v - v\theta f(\x,t_{n+1}) \nonumber\\
+&\quad - (1-\theta) \kappa\nabla u_1\cdot\nabla v +
+v(1-\theta)f(\x,t_{n}\bigr)\dx\nonumber\\
+&\quad + \int\limits_{\Gamma_N}
+\bigl(\theta g(\x,t_{n+1})v
++ (1-\theta) g(\x,t_n)v\bigr)\ds\nonumber\\
+&\quad + \int\limits_{\Gamma_R}
+\bigl(\theta r(u - U_s(t_{n+1}))v
++ (1-\theta) r(u_1 - U_s(t_{n}))v\bigr)\ds
+= 0\tp
+label{ch:diffusion:refactor:math:varform}
+\end{align}
+!et
+
+The variational formulation is then: at each time level, find $u\in V$
+such that $F(u;v)=0\ \forall v\in\hat V$.  We do not need to identify
+the bilinear and linear terms in the expression $F$ since we can use
+the `lhs` and `rhs` functions for this purpose in the code.  However,
+we should be very convinced that we have a *linear* variational
+problem at hand and not a nonlinear one.
+
+===== Superclass for problems =====
+label{ch:diffusion:refactor:class_solver}
+
+The solver class contains the data structures
+and actions from previous programs, but needs to ask the problem class
+about the mesh, boundary conditions, the time step, and so forth. We
+therefore need to define the API of the problem class first so we know
+how the solver class can ask for the mesh, for instance.
+
+Here is an abstract problem class:
+
+@@@CODE src/heat_class.py fromto: class DiffusionProblem\(@import cbcpost
+The meaning of the different methods in this class will be evident as
+we present specific examples on implementations.
+
+The idea now is that different problems are implemented as different
+subclasses of `DiffusionProblem`. The `solve` and `flux` methods are
+general and can be inherited, while the rest of the methods must be
+implemented in the subclass for the particular problem at hand.
+
+===== A specific problem class =====
+
+As a simple example, consider the test problem where we have a
+manufactured solution $u=1+x^2 + \alpha y^2 + \beta t$ on
+a uniform mesh over the unit square or cube, with Dirichlet conditions
+on the entire boundary. Suppose we have $\Delta t=0.3$ and
+want to simulate for $t\in [0,0.9]$. A problem class is then
+
+@@@CODE src/heat_class.py fromto: class TestProblemExact@def test_
+Remember that we can inherit all methods from the parent class that are
+appropriate for the problem at hand.
+
+Our test problem can now be solved in (e.g.) a unit test like
+
+@@@CODE src/heat_class.py fromto: test_DiffusionSolver@if __name
+The solver class will call the `user_action` function at every time level,
+and this function will assert that we recover the solution to machine precision.
+
+===== The solver class =====
+
+The solver class, here based on the $\theta$-rule and the
+variational formulation from the previous section, can be coded as
+follows:
+
+@@@CODE src/heat_class.py fromto: class DiffusionSolver@def debug_Dirichlet
+
+======= Applications to heat conduction =======
+
+We shall now through some real physical examples show how the problem
+classes can be constructed for various types of applications.
+The goal is to achieve PDE solvers that are flexible and convenient for
+performing scientific investigations.
+
+===== Thermal boundary layer =====
+
+Assume we have some medium at temperature $U_s$ and then we suddenly
+heat one end so the temperature here stays constant at $U_1$. At the
+other end we have some equipment to keep the temperature constant at
+$U_s$. The other boundaries are insulated so heat cannot escape.
+There are no heat sources.  How is the temperature development
+in the material due to such sudden heating of one end?
+Figure ref{ch:diffusion:refactor:class_solver:fig4} sketches the
+situation (with a scaled variable $u$ that jumps from 0 to 1).
+
+# Program for the sketch below: fig/thermal_layer1.py
+
+FIGURE: [fig/thermal_layer1_sketch, width=500 frac=0.6] Domain with (scaled) boundary conditions: sudden jump in $u$ at the left boundary. label{ch:diffusion:refactor:class_solver:fig4}
+
+=== Mathematics ===
+
+The problem is mathematically one-dimensional, so it means that if we
+create a 2D or 3D domain, the boundaries in $y$ and $z$ directions are
+insulated (requiring $\partial u/\partial n=0$ as boundary condition
+on $y=\mathrm{const}$ and $z=\mathrm{const}$).
+The heating is applied to $x=0$ and $x=L$.
+
+It is natural to scale the problem by introducing dimensionless
+independent and dependent variables:
+
+!bt
+\[ \bar x = \frac{x}{L},\quad \bar y = \frac{y}{L},\quad
+\bar u = \frac{u-U_s}{U_1-U_s},\quad \bar t = \frac{t}{t_c}\tp\]
+!et
+The suggested scaling for $u$ makes a simple boundary condition at $x=0$:
+$\bar u = 1$. This scaling also results in $\bar u \in [0,1]$ as is
+always desired.
+
+After inserting the dimensionless variables in the PDE, we demand the
+time-derivative term and the heat conduction term to balance, and
+find $t_c$ from that condition: $t_c = \varrho c L^2/\kappa$.
+
+The spatial domain is the unit square. We introduce the boundaries
+$\Gamma_{D_1}$ as the side $x=0$, $\Gamma_{D_2}$ as the side $x=1$,
+and $\Gamma_N$ as the rest of the boundary.
+The scaled initial-boundary problem can be written as
+
+!bt
+\begin{align}
+\frac{\partial\bar u}{\partial\bar t} &= \bar\nabla^2\bar u\hbox{ in }
+\Omega = (0,1)\times (0,1)\times (0,T],\\
+\bar u(\x, 0) &= 0\hbox{ in }\Omega,\\
+\bar u &= 1\hbox{ at } \Gamma_{D_1},\\
+\bar u &= 0\hbox{ at } \Gamma_{D_2},\\
+\frac{\partial\bar u}{\partial\bar n} &= 0\hbox{ at }\Gamma_N\tp
+\end{align}
+!et
+
+=== FEniCS implementation ===
+
+We can solve our problem with the general problem and solver
+classes by setting $\varrho = c= \kappa = 1$,
+and $I=0$. The most labor-intensive part of the problem class is
+the visualization. We can create a helper class, `ProcessSolution`,
+which applies `cbcpost` to store the solution and perform animation
+via the `fenics.plot` tool:
+
+@@@CODE src/heat_class.py fromto: import cbcpost@def mark_
+In the `user_action`
+method, we use this tool to store the solution, but we also add
+statements for plotting $u$ along a line from $x=0$ to $x=1$
+through the medium ($y=0.5$). This gives an animation of
+the temperature profile, but results in somewhat lengthy code.
+
+To mark the boundaries, so we can set $u=1$ at $x=0$, we can make a
+function like
+
+@@@CODE src/heat_class.py fromto: def mark_boundaries_in_rectangle@def mark_boundaries_in_hypercube
+Unfortunately, this is quite tedious and repetitive code, and the
+code has to repeated for a 3D box-shaped domain. It is possible to
+write more general, compact code valid both for an interval, rectangle, or
+box:
+
+@@@CODE src/heat_class.py fromto: def mark_boundaries_in_hypercube@class Problem1
+
+Now we are in a position to show the complete problem class:
+
+@@@CODE src/heat_class.py fromto: class Problem1@# Classical matplotlib
+Notice our definition of the time step: because the growth of the
+thin boundary layer close to $x=0$
+is very rapid for small times, we need to start with a small time
+step. Nevertheless, the speed of the heat transfer slows down with time,
+so we decide to use a longer time step after $t=0.02$. The animation
+would otherwise also be boring to watch, but be aware of the fact that
+the apparent speed of the physical process is dramatically increased in the
+animation at $t=0.02$.
+
+The problem is solved by
+
+@@@CODE src/heat_class.py fromto: def demo_Problem1@def demo_Problem2
+
+=== Results ===
+
+Figure ref{ch:diffusion:refactor:class_solver:fig1} shows accumulated
+curves (from `plt.figure(2)`). The problem is a
+primary example on a *thermal boundary layer*: the sudden rise in
+temperature at $x=0$ at $t=0$ gives rise to a very steep function, and
+a thin boundary layer that grows with time as heat is transported from
+the boundary into the domain. The jump in the temperature profile at
+$x=0$ makes demands to the numerical methods. Quite typically, a
+Crank-Nicolson scheme may show oscillations (as we can see in the
+first curve) because of inaccurate treatment of the shortest spatial
+waves in the Fourier representation of the discrete solution.  The
+oscillations are removed by doubling the spatial resolution from 20 to
+40 elements in the $x$ direction.  With $\theta=1$, we never
+experience any oscillations, but the boundary layer gets thicker and
+less accurate (smaller $\Delta t$ is needed to compensate).
+However, in this problem, we see from Figure ref{ch:diffusion:refactor:class_solver:fig1} that the inaccuracy is only visible for the very first time
+steps as the boundary layer is thin.
+
+FIGURE: [fig/thermal_layer1, width=800 frac=1] Development of thermal boundary layer: Crank-Nicolson (left) and Backward Euler (right) schemes. label{ch:diffusion:refactor:class_solver:fig1}
+
+From all the plot frames with filenames `tmp_%04d.png` we may create
+video files by
+
+!bc sys
+Terminal> ffmpeg -i tmp_%04d.png -r 25 -vcodec libx264   movie.mp4
+Terminal> ffmpeg -i tmp_%04d.png -r 25 -vcodec libtheora movie.ogg
+!ec
+
+MOVIE: [mov/thermal_layer1/movie.ogg] Developing thermal boundary layer (notice the jump in speed, i.e., time step!)
+
+===== Extension to a heterogeneous medium =====
+
+Suppose we now place another material inside the domain with other
+values material properties (i.e., values of $\varrho$, $c$, and
+$\kappa$).  The new material occupies the rectangle $[0.3,0.7]\times
+[0.3,0.7]$ inside the scaled domain.  We also change the boundary
+condition at $x=1$ to be ``no change'', i.e., $\partial u/\partial
+n=0$. Figure ref{ch:diffusion:refactor:class_solver:fig5} depicts the
+problem.
+
+# Program for the sketch below: fig/thermal_layer1.py
+
+FIGURE: [fig/thermal_layer2_sketch, width=500 frac=0.6] Domain with internal subdomain and (scaled) boundary conditions. label{ch:diffusion:refactor:class_solver:fig5}
+
+
+=== Updated scaling ===
+
+The former scaling is not completely valid as it was based on constant
+$\varrho$, $c$, and $\kappa$. We now introduce
+
+!bt
+\[ \bar\varrho = \frac{\varrho}{\varrho_0},\quad
+\bar c = \frac{c}{c_0},\quad \bar\kappa = \frac{\kappa}{\kappa_0},\]
+!et
+where $\varrho_0$ is the value of $\varrho$ in the outer material,
+now to be known as subdomain 0.
+A similar parameter $\varrho_1$ is the value of $\varrho$ inside
+the new material, called subdomain 1.
+The constants $c_0$, $\kappa_0$, $c_1$, and $\kappa_1$ are
+defined similarly. In subdomain 0, $\bar\varrho = 1$, and in subdomain 1,
+$\bar\varrho = \varrho_1/\varrho_0$, with similar values for
+$\bar c$ and $\bar\kappa$. The scaled PDE becomes
+
+!bt
+\[ \bar\varrho\bar c\frac{\partial\bar u}{\partial\bar t}
+ = \bar\nabla\cdot(\bar\kappa\bar\nabla\bar u) + \bar f\tp\]
+!et
+We can call up the solver for the problem with dimensions as long
+as we remember to set $\kappa = \varrho = c =1$ in subdomain 0.
+In subdomain 1, we divide by $\bar\varrho = \varrho_1/\varrho_0$
+and $\bar c = c_1/c_0$, which results in a coefficient
+
+!bt
+\[ \alpha = \frac{\varrho_0c_0\kappa_1}{\varrho_1 c_1\kappa_0} \]
+!et
+on the right-hand side. This means that we can let `density` and
+`heat_capacity` be of unit value and only operate with a spatially
+varying $\kappa$, which takes on the values 1 in subdomain 0 and
+$\alpha$ in subdomain 1. For simplicity, we just name this parameter
+`kappa_values` in the code.
+
+[hpl: Is this trick too tricky?
+Would it be clearer to let all three parameters vary?]
+
+=== The problem class ===
+
+The problem class is very similar to `Problem1` above, except for the
+fact that we need to define the inner subdomain, we need to allow for
+$\kappa$ values in subdomain 0 and 1, the time points
+for plots and time steps are a bit different, and the Dirichlet condition
+only applies to $x=0$ (no need to implement the Neumann condition as
+long as it is zero).
+
+@@@CODE src/heat_class.py fromto: class Problem2@class Problem3
+
+=== Results ===
+
+We run a case where $\alpha=1000$:
+
+@@@CODE src/heat_class.py fromto: def demo_Problem2@def demo_Problem3
+
+As shown in Figure ref{ch:diffusion:refactor:class_solver:fig2},
+the highly conductive inner material leads to a flat temperature profile
+in this region. The start of the process is as before, but
+with an insulated boundary at $x=1$, heat builds up with time.
+The limiting steady state is $u=1$ as $t\rightarrow\infty$.
+
+FIGURE: [fig/thermal_layer2_CN20, width=500 frac=0.8] Development of thermal boundary layer in heterogeneous medium. label{ch:diffusion:refactor:class_solver:fig2}
+
+MOVIE: [mov/thermal_layer2/movie.ogg] Developing thermal boundary layer in heterogeneous medium (notice the jump in speed, i.e., time step!)
+
+===== Oscillating boundary temperature =====
+
+The next example concerns the question: How is the temperature in the
+ground affected by day and night variations at the earth's surface?
+We consider a rectangular domain with an embedded subdomain as in the
+previous example. At the side $y=1$ (representing the earth's
+surface), we have an oscillating temperature:
+
+!bt
+\[ u_B(t) = U_s + A\sin(w t),\]
+!et
+where $U_s$ is the mean temperature, $[-A,A]$ is the temperature variation,
+and $w$ is the frequency, here equal to $w=2\pi/P$, where $P$ is the
+period of 24 h.
+
+At the other boundaries we assume symmetry or ``no change'', which implies
+$\partial u/\partial n = 0$. The initial condition is taken as
+$u=U_s$, but any value will be lost in long time simulations as a
+steady state oscillatory condition is established.
+Figure ref{ch:diffusion:refactor:class_solver:fig6} shows the domain and
+boundary conditions.
+
+# Program for the sketch below: fig/thermal_layer3.py
+
+FIGURE: [fig/thermal_layer3_scaling_sketch, width=800 frac=1] Domain with oscillating temperature at the boundary: unscaled (left) and scaled (left). label{ch:diffusion:refactor:class_solver:fig6}
+
+=== Scaling ===
+
+Now we expect $u$ to oscillate around $U_s$ with amplitude $A$, so to
+have $\bar u\in [-1,1]$, we set
+
+!bt
+\[ \bar u = \frac{u-U_s}{A}\tp\]
+!et
+The scaled boundary condition is then
+
+!bt
+\[ \bar u_B(\bar t) = \sin(wt_c\bar t)\tp\]
+!et
+We use a time scale based on $w$, i.e., $t_c=1/w$.
+Chapter 3.2.4 in cite{Langtangen_scaling} (see "ebook": "http://hplgit.github.io/scaling-book/doc/pub/book/html/._scaling-book008.html#___sec142")
+has an in-depth
+coverage of the scaling of this problem. The challenge is that
+the temperature will oscillate close to $y=1$, but the oscillations
+will decay as we move downwards. One can for special set of parameters
+get very thin oscillating boundary layers, which make great demands to
+the numerical methods, or one may not achieve substantial decay
+so the boundary condition on $y=0$ becomes wrong. To zoom in on the
+solution in the right way,
+it turns out that the right spatial length scale is
+$\sqrt{2\kappa/(wc\varrho)}$. With this length scale, a typical
+length of the domain in $y$ direction is 4.
+The most appealing time scale is $t_c=2/w$.
+
+We end up with the same scaled problem as in the previous section,
+except that at $y=1$ we have
+
+!bt
+\[ \bar u_B(\bar t) = \sin(2\bar t)\tp\]
+!et
+
+
+=== The problem class ===
+
+We need a different reasoning about the time steps size since this is an
+oscillatory problem. We also need to stretch the unit square so it becomes
+$[0,4]\times [0,4]$ as desired. In addition, we need to change the Dirichlet
+condition. And finally, we need to adjust the curve plotting
+as it now takes place in $y$ direction, and the axes are different.
+Much of class `Problem2` can be reused, so it makes sense to make
+a subclass and override the methods that do not fit.
+
+@@@CODE src/heat_class.py fromto: class Problem3@def demo_Problem1
+The problem is solved by
+
+@@@CODE src/heat_class.py fromto: def demo_Problem3@class TestProblemExact
+
+=== Results ===
+
+We have made runs with a homogeneous medium and with a heterogeneous medium
+(using $\alpha=1000$ as in the previous section). Animation in ParaView
+meets the problem that $u=\hbox{const}$ initially so we must manually set a
+range for the data. Bring up the Color Map Editor (click on _Edit_ in
+the *Coloring* section in the left part of the GUI), click on the second
+icon from the top, to ``rescale the custom range'', give -1 and 1
+as the data range, and click _Update_ to bring this range into action.
+
+FIGURE: [fig/thermal_layer4, width=800 frac=1] Oscillating boundary temperature: homogeneous (left) and heterogeneous (right) medium. label{ch:diffusion:refactor:class_solver:fig3}
+
+MOVIE: [mov/thermal_layer3/movie.ogg] Oscillating boundary temperature and homogeneous medium.
+
+MOVIE: [mov/thermal_layer4/movie.ogg] Oscillating boundary temperature and heterogeneous medium.
+
+MOVIE: [mov/thermal_layer3/paraview.ogg] Scalar field animation (homogeneous medium).
+
+!bnotice Tip: Let related problem classes utilize inheritance
+The last three examples regard quite related problems, yet they have
+substantial differences. The typical approach to making FEniCS software
+to these applications would be to have three flat programs, each containing
+a full solver of the PDE, but with details adapted to the problem at
+hand. The class approach, on the other hand,
+shows how all applications share the same
+numerical implementation. The different problem classes can also share
+a lot of code so inheritance is a way to save writing.
+However, such class programming requires some experience as it is easy
+to make mistakes and inherit functionality that is wrong.
+!enotice
+
+% if EXV:
+
+===== Exercise: Implement second-order schemes in time =====
+
+A backward difference of accuracy $\mathcal{O}(\Delta t^2)$ involves
+three time levels:
+
+!bt
+\[ \frac{\partial}{\partial t}u(x, y, t_{n+1}) \approx
+\frac{u^{n+1} - 4u^n + u^{n-1}}{2\Delta t}\tp\]
+!et
+Make a solver based on this scheme. For the first time step, use the
+two-level
+Backward Euler method. The implementation should also offer the Backward Euler
+method. In addition, implement the Crank-Nicolson method where you solve
+
+!bt
+\[ \frac{\partial u}{\partial t} = G(u)\]
+!et
+by
+
+!bt
+\[ \frac{u^{n+1}-u^n}{\Delta t} = \frac{1}{2}(G(u^{n+1}) + G(u^n))\tp\]
+!et
+This method also has a truncation error of order $\Delta t^2$.
+[hpl: Find some good test problems for comparing the performance of the schemes.]
+
+% endif

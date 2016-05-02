@@ -4,7 +4,6 @@
 # #endif
 
 ======= A nonlinear Poisson equation =======
-
 label{ftut1:gallery:nonlinearpoisson}
 
 We shall now address how to solve nonlinear PDEs. We will see that
@@ -29,20 +28,25 @@ is constant in $u$).
 
 ===== Variational formulation =====
 
-The variational formulation of our model problem reads:
-find $u \in V$ such that
+As usual, we multiply our PDE by a test function $v\in\hat V$,
+integrate over the domain, and integrate the second-order derivatives
+by parts.  The boundary integral arising from integration by parts
+vanishes wherever we employ Dirichlet conditions.  The resulting
+variational formulation of our model problem becomes: find $u \in V$
+such that
 
 !bt
-\begin{equation} label{ch:poisson0:nonlinear1}
-  F(u; v) = 0 \quad \forall v \in \hat{V},
+\begin{equation}
+F(u; v) = 0 \quad \forall v \in \hat{V},
+label{ch:poisson0:nonlinear1}
 \end{equation}
 !et
 where
 
 !bt
 \begin{equation}
-label{ch:poisson0:nonlinear2}
 F(u; v) = \int_\Omega q(u)\nabla u\cdot \nabla v + fv \dx,
+label{ch:poisson0:nonlinear2}
 \end{equation}
 !et
 and
@@ -69,7 +73,7 @@ with $u = \sum_{j=1}^N U_j \phi_j$. Since $F$ is a nonlinear function
 of $u$, the variational statement gives rise to a system of
 nonlinear algebraic equations in the unknowns $U_1,\ldots,U_N$.
 
-===== A simple implementation =====
+===== A simple FEniCS implementation =====
 label{ftut:nonlinear:Newton:auto}
 
 === Test problem ===
@@ -89,9 +93,7 @@ C/C++ code generation.
 We try out a two-dimensional manufactured
 solution that is linear in the unknowns:
 
-[AL: Rename code to `nonlinear_poisson.py`.]
-
-@@@CODE src/poisson_flat_nonlinear.py fromto: from fenics import *@u_code =
+@@@CODE src/nlpoisson.py fromto: from fenics import *@u_code =
 
 !bnotice Define symbolic coordinates as required in `Expression` objects
 Note that we would normally write `x, y = sym.symbols('x y')`, but
@@ -115,7 +117,7 @@ example is that `M_PI` for $\pi$ in C/C++ must be replaced by `pi` for
 `Expression` objects.) In our case here, the output of `c_code` and
 `f_code` is
 
-!bc ccod
+!bc ccod-t
 x[0] + 2*x[1] + 1
 -10*x[0] - 20*x[1] - 10
 !ec
@@ -130,6 +132,24 @@ Similarly, we define the right-hand side function as
 !bc pycod
 f = Expression(f_code)
 !ec
+% if FORMAT == 'ipynb':
+
+Here is the complete code to be executed and experimented with:
+
+@@@CODE src/nlpoisson.py fromto: from __future__ import print@print\('error
+
+We can examine the solution at the vertices:
+
+!bc pycod
+u0_at_vertices = u0_Function.compute_vertex_values()
+u_at_vertices = u.compute_vertex_values()
+coor = V.mesh().coordinates()
+for i, x in enumerate(coor):
+    print('vertex %2d (%9g,%9g): error=%g' %
+          (i, x[0], x[1],
+           u0_at_vertices[i] - u_at_vertices[i]))
+!ec
+% endif
 
 !bwarning Name clash between `fenics` and program variables
 In a program like the one above, strange errors may occur due to
@@ -137,7 +157,7 @@ name clashes. If you define `sym` and `q` prior to doing
 `from fenics import *`, the latter statement will also import
 variables with the names `sym` and `q`, overwriting
 the objects you have previously defined! This may lead to strange
-errors. The safest solution is to do do `import fenics as fe`
+errors. The safest solution is to do `import fenics as fe`
 and then prefix all FEniCS
 object names by `fe`. The next best solution is to do
 `from fenics import *` first and then define your own variables
@@ -188,14 +208,32 @@ The `solve` function takes the nonlinear equations, derives symbolically
 the Jacobian matrix, and runs a Newton method to compute the solution.
 
 [AL: Should we display all codes like this one?]
+[hpl: Now experimenting with refernce to repo and in html and sphinx
+a button will fold out the code.]
 
 The complete code is found in the file
-"`${prog["poisson_flat_nonlinear"]}.py`": "${src_url}/${prog['poisson_flat_nonlinear']}.py".
+"`${prog["nlpoisson"]}.py`": "${src_url}/${prog['nlpoisson']}.py".
+
+% if FORMAT in ('html', 'sphinx'):
+@@@CODE src/nlpoisson.py envir=pypro-h
+% endif
 
 Running the code gives output that tells how the Newton iteration
-progresses. With $2\times(32\times 32)$ cells, we reach convergence in eight
-iterations with a relative tolerance of $10^{-9}$, and the error in the
-numerical solution is about $10^{-11}$.
+progresses. With $2(6\times 4)$ cells we get convergence in 7
+iterations with a tolerance of $10^{-9}$, and the error in the
+numerical solution is about $10^{-11}$. With $2(3\times 3)$ and
+$2(8\times 8)$ cells the error is identically zero.  Other resolutions
+may bring the error up to the level of the tolerance in the Newton
+iterations. These results bring evidence for a correct implementation.
+Thinking in terms of finite differences on a uniform mesh, P1 elements
+mimics standard second-order differences, which compute the derivative
+of a linear function exactly, also a quadratic function. Here, $\nabla
+u$ is a constant vector, but then multiplied by $(1+u^2)$, which is a
+second-order polynomial in $x$ and $y$, which the divergence
+``difference operator'' should compute exactly.  We can therefore,
+even with P1 elements, expect the manufactured $u$ to be reproduced by
+our method. With a nonlinearity like $1+u^4$, this will not be the
+case, and we would need to verify convergence rates instead.
 
 The current example shows how easy it is to solve a nonlinear problem
 in FEniCS. However, experts on the numerical solution of nonlinear PDEs

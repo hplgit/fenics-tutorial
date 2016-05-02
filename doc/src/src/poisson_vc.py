@@ -3,7 +3,7 @@ from __future__ import print_function
 from fenics import *
 
 def solver(
-    p, f, u0, Nx, Ny, degree=1,
+    p, f, u_b, Nx, Ny, degree=1,
     linear_solver='Krylov', # Alt: 'direct'
     abs_tol=1E-5,           # Absolute tolerance in Krylov solver
     rel_tol=1E-3,           # Relative tolerance in Krylov solver
@@ -13,17 +13,17 @@ def solver(
     ):
     """
     Solve -div(p*grad(u)=f on [0,1]x[0,1] with 2*Nx*Ny Lagrange
-    elements of specified degree and u=u0 (Expresssion) on
+    elements of specified degree and u=u_b (Expresssion) on
     the boundary.
     """
     # Create mesh and define function space
     mesh = UnitSquareMesh(Nx, Ny)
     V = FunctionSpace(mesh, 'P', degree)
 
-    def u0_boundary(x, on_boundary):
+    def boundary(x, on_boundary):
         return on_boundary
 
-    bc = DirichletBC(V, u0, u0_boundary)
+    bc = DirichletBC(V, u_b, boundary)
 
     # Define variational problem
     u = TrialFunction(V)
@@ -52,7 +52,7 @@ def solver(
     return u
 
 def solver_objects(
-    p, f, u0, Nx, Ny, degree=1,
+    p, f, u_b, Nx, Ny, degree=1,
     linear_solver='Krylov', # Alt: 'direct'
     abs_tol=1E-5,           # Absolute tolerance in Krylov solver
     rel_tol=1E-3,           # Relative tolerance in Krylov solver
@@ -66,10 +66,10 @@ def solver_objects(
     mesh = UnitSquareMesh(Nx, Ny)
     V = FunctionSpace(mesh, 'P', degree)
 
-    def u0_boundary(x, on_boundary):
+    def boundary(x, on_boundary):
         return on_boundary
 
-    bc = DirichletBC(V, u0, u0_boundary)
+    bc = DirichletBC(V, u_b, boundary)
 
     # Define variational problem
     u = TrialFunction(V)
@@ -111,7 +111,7 @@ def test_solvers():
     # meshes in the test.
     tol = {'direct': {1: 1E-11, 2: 1E-11, 3: 1E-11},
            'Krylov': {1: 1E-14, 2: 1E-05, 3: 1E-03}}
-    u0 = Expression('1 + x[0]*x[0] + 2*x[1]*x[1]')
+    u_b = Expression('1 + x[0]*x[0] + 2*x[1]*x[1]')
     p = Expression('x[0] + x[1]')
     f = Expression('-8*x[0] - 10*x[1]')
     for Nx, Ny in [(3,3), (3,5), (5,3)]:
@@ -125,16 +125,16 @@ def test_solvers():
                     # Important: Krylov solver error must be smaller
                     # than tol!
                     u = solver_func(
-                         p, f, u0, Nx, Ny, degree,
+                         p, f, u_b, Nx, Ny, degree,
                          linear_solver=linear_solver,
                          abs_tol=0.1*tol[linear_solver][degree],
                          rel_tol=0.1*tol[linear_solver][degree])
-                    # Make a finite element function of the exact u0
+                    # Make a finite element function of the exact u_b
                     V = u.function_space()
-                    u0_Function = interpolate(u0, V)  # exact solution
+                    u_b_Function = interpolate(u_b, V)  # exact solution
                     # Check that dof arrays are equal
-                    u0_array = u0_Function.vector().array()  # dof values
-                    max_error = (u0_array - u.vector().array()).max()
+                    u_b_array = u_b_Function.vector().array()  # dof values
+                    max_error = (u_b_array - u.vector().array()).max()
                     msg = 'max error: %g for 2(%dx%d) mesh, degree=%d,'\
                           ' %s solver, %s' % \
                       (max_error, Nx, Ny, degree, linear_solver,
@@ -144,10 +144,10 @@ def test_solvers():
 
 def application_test():
     """Plot the solution in the test problem."""
-    u0 = Expression('1 + x[0]*x[0] + 2*x[1]*x[1]')
+    u_b = Expression('1 + x[0]*x[0] + 2*x[1]*x[1]')
     p = Expression('x[0] + x[1]')
     f = Expression('-8*x[0] - 10*x[1]')
-    u = solver(p, f, u0, 6, 4, 1)
+    u = solver(p, f, u_b, 6, 4, 1)
     # Dump solution to file in VTK format
     file = File("poisson.pvd")
     file << u
@@ -155,24 +155,24 @@ def application_test():
     plot(u)
 
 def compare_exact_and_numerical_solution(Nx, Ny, degree=1):
-    u0 = Expression('1 + x[0]*x[0] + 2*x[1]*x[1]')
+    u_b = Expression('1 + x[0]*x[0] + 2*x[1]*x[1]')
     p = Expression('x[0] + x[1]')
     f = Expression('-8*x[0] - 10*x[1]')
-    u = solver(p, f, u0, Nx, Ny, degree, linear_solver='direct')
+    u = solver(p, f, u_b, Nx, Ny, degree, linear_solver='direct')
     # Grab exact and numerical solution at the vertices and compare
     V = u.function_space()
-    u0_Function = interpolate(u0, V)
-    u0_at_vertices = u0_Function.compute_vertex_values()
+    u_b_Function = interpolate(u_b, V)
+    u_b_at_vertices = u_b_Function.compute_vertex_values()
     u_at_vertices = u.compute_vertex_values()
     coor = V.mesh().coordinates()
     for i, x in enumerate(coor):
         print('vertex %2d (%9g,%9g): error=%g'
               % (i, x[0], x[1],
-                 u0_at_vertices[i] - u_at_vertices[i]))
-        # Could compute u0(x) - u_at_vertices[i] but this
+                 u_b_at_vertices[i] - u_at_vertices[i]))
+        # Could compute u_b(x) - u_at_vertices[i] but this
         # is much more expensive and gives more rounding errors
     center = (0.5, 0.5)
-    error = u0(center) - u(center)
+    error = u_b(center) - u(center)
     print('numerical error at %s: %g' % (center, error))
 
 def normalize_solution(u):
@@ -185,9 +185,9 @@ def normalize_solution(u):
     return u
 
 def test_normalize_solution():
-    u0 = Expression('1 + x[0]*x[0] + 2*x[1]*x[1]')
+    u_b = Expression('1 + x[0]*x[0] + 2*x[1]*x[1]')
     f = Constant(-6.0)
-    u = solver(f, u0, 4, 2, 1, linear_solver='direct')
+    u = solver(f, u_b, 4, 2, 1, linear_solver='direct')
     u = normalize_solution(u)
     computed = u.vector().array().max()
     expected = 1.0
@@ -204,10 +204,10 @@ def flux(u, p):
     return flux_u
 
 def application_test_flux(Nx=6, Ny=4):
-    u0 = Expression('1 + x[0]*x[0] + 2*x[1]*x[1]')
+    u_b = Expression('1 + x[0]*x[0] + 2*x[1]*x[1]')
     p = Expression('x[0] + x[1]')
     f = Expression('-8*x[0] - 10*x[1]')
-    u = solver(p, f, u0, Nx, Ny, 1, linear_solver='direct')
+    u = solver(p, f, u_b, Nx, Ny, 1, linear_solver='direct')
     u.rename('u', 'solution')
     flux_u = flux(u, p)
     # Grab each component as a scalar field
@@ -303,7 +303,7 @@ def compute_errors(u, u_exact):
 
     return errors
 
-def convergence_rate(u_exact, f, u0, p, degrees,
+def convergence_rate(u_exact, f, u_b, p, degrees,
                      n=[2**(k+3) for k in range(5)]):
     """
     Compute convergence rates for various error norms for a
@@ -325,7 +325,7 @@ def convergence_rate(u_exact, f, u0, p, degrees,
         for i in range(num_meshes):
             n *= 2
             h[degree].append(1.0/n)
-            u = solver(p, f, u0, n, n, degree,
+            u = solver(p, f, u_b, n, n, degree,
                        linear_solver='direct')
             errors = compute_errors(u, u_exact)
             E[degree].append(errors)
@@ -353,10 +353,10 @@ def convergence_rate_sin():
     u_exact = Expression('sin(omega*pi*x[0])*sin(omega*pi*x[1])',
                          omega=omega)
     f = 2*omega**2*pi**2*u_exact
-    u0 = Constant(0)
+    u_b = Constant(0)
     p = Constant(1)
     # Note: P4 for n>=128 seems to break down
-    rates = convergence_rates(u_exact, f, u0, p, degrees=4,
+    rates = convergence_rates(u_exact, f, u_b, p, degrees=4,
                               n=[2**(k+3) for k in range(5)])
     # Print rates
     print('\n\n')
@@ -380,7 +380,7 @@ def structured_mesh(u, divisions):
 def application_structured_mesh(model_problem=1):
     if model_problem == 1:
         # Numerical solution is exact
-        u0 = Expression('1 + x[0]*x[0] + 2*x[1]*x[1]')
+        u_b = Expression('1 + x[0]*x[0] + 2*x[1]*x[1]')
         p = Expression('x[0] + x[1]')
         f = Expression('-8*x[0] - 10*x[1]')
         flux_u_x_exact = lambda x, y: -(x + y)*2*x
@@ -397,7 +397,7 @@ def application_structured_mesh(model_problem=1):
         # 'sin(3*M_PI*x)*sin(3*M_PI*y)'
         u_c = u_c.replace('M_PI', 'DOLFIN_PI')
         print('u in C:', u_c)
-        u0 = Expression(u_c)
+        u_b = Expression(u_c)
 
         p = 1  # Don't use Constant(1) here (!)
         f = sym.diff(-p*sym.diff(u, x), x) + \
@@ -412,7 +412,7 @@ def application_structured_mesh(model_problem=1):
         p = Constant(1)
         nx = 22;  ny = 22
 
-    u = solver(p, f, u0, nx, ny, 1, linear_solver='direct')
+    u = solver(p, f, u_b, nx, ny, 1, linear_solver='direct')
     u_box = structured_mesh(u, (nx, ny))
     u_ = u_box.values  # numpy array
     X = 0;  Y = 1      # for indexing in x and y direction
@@ -452,7 +452,7 @@ def application_structured_mesh(model_problem=1):
     # Plot u along a line y=const and compare with exact solution
     start = (0, 0.4)
     x, u_val, y_fixed, snapped = u_box.gridline(start, direction=X)
-    u_e_val = [u0((x_, y_fixed)) for x_ in x]
+    u_e_val = [u_b((x_, y_fixed)) for x_ in x]
 
     plt.figure()
     plt.plot(x, u_val, 'r-')
@@ -486,7 +486,7 @@ def application_structured_mesh(model_problem=1):
     plt.show()
 
 def solver_linalg(
-    p, f, u0, Nx, Ny, degree=1,
+    p, f, u_b, Nx, Ny, degree=1,
     linear_solver='Krylov', # Alt: 'direct'
     abs_tol=1E-5,           # Absolute tolerance in Krylov solver
     rel_tol=1E-3,           # Relative tolerance in Krylov solver
@@ -498,17 +498,17 @@ def solver_linalg(
     ):
     """
     Solve -div(p*grad(u)=f on [0,1]x[0,1] with 2*Nx*Ny Lagrange
-    elements of specified degree and u=u0 (Expresssion) on
+    elements of specified degree and u=u_b (Expresssion) on
     the boundary.
     """
     # Create mesh and define function space
     mesh = UnitSquareMesh(Nx, Ny)
     V = FunctionSpace(mesh, 'P', degree)
 
-    def u0_boundary(x, on_boundary):
+    def boundary(x, on_boundary):
         return on_boundary
 
-    bc = DirichletBC(V, u0, u0_boundary)
+    bc = DirichletBC(V, u_b, boundary)
 
     # Define variational problem
     u = TrialFunction(V)
@@ -572,7 +572,7 @@ def solver_linalg(
     return u, A
 
 def application_linalg():
-    u0 = Expression('1 + x[0]*x[0] + 2*x[1]*x[1]')
+    u_b = Expression('1 + x[0]*x[0] + 2*x[1]*x[1]')
     p = Expression('x[0] + x[1]')
     f = Expression('-8*x[0] - 10*x[1]')
     meshes = [2, 8, 32, 128]
@@ -580,7 +580,7 @@ def application_linalg():
         for assembly in 'variational', 'matvec', 'system':
             print('--- %dx%d mesh, %s assembly ---' % (n, n, assembly))
             u, A = solver_linalg(
-                p, f, u0, n, n, linear_solver='Krylov',
+                p, f, u_b, n, n, linear_solver='Krylov',
                 assembly=assembly)
             if A is not None and u.function_space().dim() < 10:
                 import numpy as np
@@ -672,7 +672,7 @@ def solver_bc(
     ds = Measure('ds', domain=mesh, subdomain_data=boundary_parts)
 
     # boundary_conditions is a dict of dicts:
-    # {0: {'Dirichlet': u0},
+    # {0: {'Dirichlet': u_b},
     #  1: {'Robin': (r, s)},
     #  2: {'Neumann: g}},
     #  3: {'Neumann', 0}}
@@ -881,7 +881,7 @@ def test_solvers_bc():
                 linear_solver=linear_solver,
                     abs_tol=0.1*tol,
                     rel_tol=0.1*tol)
-                # Make a finite element function of the exact u0
+                # Make a finite element function of the exact u_b
                 V = u.function_space()
                 u_e_Function = interpolate(u_exact, V)  # exact solution
                 # Check that dof arrays are equal

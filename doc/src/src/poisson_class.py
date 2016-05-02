@@ -4,9 +4,11 @@ import numpy as np
 
 class PoissonSolver(object):
     def __init__(self, problem, debug=False):
-        self.mesh, degree = problem.mesh_degree()
-        self.V = V = FunctionSpace(self.mesh, 'P', degree)
-        Dirichlet_cond = problem.Dirichlet_conditions()
+        self.problem = problem
+        self.debug = debug
+
+    def solve(self, linear_solver='direct'):
+        Dirichlet_cond = self.problem.Dirichlet_conditions()
         if isinstance(Dirichlet_cond, (Expression)):
             # Just one Expression for Dirichlet conditions on
             # the entire boundary
@@ -20,7 +22,7 @@ class PoissonSolver(object):
                 for value, boundaries, index
                 in Dirichlet_cond]
 
-        if debug:
+        if self.debug:
             # Print the Dirichlet conditions
             print('No of Dirichlet conditions:', len(self.bcs))
             coor = self.mesh.coordinates()
@@ -32,27 +34,6 @@ class PoissonSolver(object):
                     if V.ufl_element().degree() == 1:
                         print('   at point %s' %
                               (str(tuple(coor[d2v[dof]].tolist()))))
-
-        u = TrialFunction(V)
-        v = TestFunction(V)
-        p = problem.p_coeff()
-        self.p = p  # store for flux computations
-        f = problem.f_rhs()
-        F = dot(p*grad(u), grad(v))*dx
-        F -= f*v*dx
-        F -= sum([g*v*ds_
-                  for g, ds_ in problem.Neumann_conditions()])
-        F += sum([r*(u-s)*ds_
-                  for r, s, ds_ in problem.Robin_conditions()])
-        self.a, self.L = lhs(F), rhs(F)
-
-        if debug and V.dim() < 50:
-            A = assemble(self.a)
-            print('A:\n', A.array())
-            b = assemble(self.L)
-            print('b:\n', b.array())
-
-    def solve(self, linear_solver='direct'):
         # Compute solution
         self.u = Function(self.V)
 
@@ -62,16 +43,40 @@ class PoissonSolver(object):
         else:
             solver_parameters = {'linear_solver': 'lu'}
 
+        self.define_variational_problem()
         solve(self.a == self.L, self.u, self.bcs,
               solver_parameters=solver_parameters)
         return self.u
+
+    def define_variational_problem(self):
+        self.mesh, degree = self.problem.mesh_degree()
+        self.V = V = FunctionSpace(self.mesh, 'P', degree)
+
+        u = TrialFunction(V)
+        v = TestFunction(V)
+        p = self.problem.p_coeff()
+        f = self.problem.f_rhs()
+        F = dot(p*grad(u), grad(v))*dx
+        F -= f*v*dx
+        F -= sum([g*v*ds_
+                  for g, ds_ in self.problem.Neumann_conditions()])
+        F += sum([r*(u-s)*ds_
+                  for r, s, ds_ in self.problem.Robin_conditions()])
+        self.a, self.L = lhs(F), rhs(F)
+
+        if self.debug and V.dim() < 50:
+            A = assemble(self.a)
+            print('A:\n', A.array())
+            b = assemble(self.L)
+            print('b:\n', b.array())
 
     def flux(self):
         """Compute and return flux -p*grad(u)."""
         mesh = self.u.function_space().mesh()
         degree = self.u.ufl_element().degree()
         V_g = VectorFunctionSpace(mesh, 'P', degree)
-        self.flux_u = project(-self.p*grad(self.u), V_g)
+        p = self.problem.p_coeff()
+        self.flux_u = project(-p*grad(self.u), V_g)
         self.flux_u.rename('flux(u)', 'continuous flux field')
         return self.flux_u
 
@@ -203,27 +208,28 @@ def demo():
     vtkfile << u
     interactive()
 
+class TestProblemExact(PoissonProblem):
+    def __init__(self, Nx, Ny):
+        """Initialize mesh, boundary parts, and p."""
+        self.mesh = UnitSquareMesh(Nx, Ny)
+        self.u_b = Expression('1 + x[0]*x[0] + 2*x[1]*x[1]')
+
+    def mesh_degree(self):
+        return self.mesh, 1
+
+    def f_rhs(self):
+        return Constant(-6.0)
+
+    def Dirichlet_conditions(self):
+        return self.u_b
+
+
 def test_PoissonSolver():
     """Recover numerial solution to "machine precision"."""
-    class TestProblemExact(PoissonProblem):
-        def __init__(self, Nx, Ny):
-            """Initialize mesh, boundary parts, and p."""
-            self.mesh = UnitSquareMesh(Nx, Ny)
-            self.u0 = Expression('1 + x[0]*x[0] + 2*x[1]*x[1]')
-
-        def mesh_degree(self):
-            return self.mesh, 1
-
-        def f_rhs(self):
-            return Constant(-6.0)
-
-        def Dirichlet_conditions(self):
-            return self.u0
-
     problem = TestProblemExact(Nx=2, Ny=2)
     problem.solve(linear_solver='direct')
     u = problem.solution()
-    u_e = interpolate(problem.u0, u.function_space())
+    u_e = interpolate(problem.u_b, u.function_space())
     max_error = np.abs(u_e.vector().array() -
                        u.vector().array()).max()
     tol = 1E-14
