@@ -97,8 +97,8 @@ A3 = assemble(a3)
 [bc.apply(A2) for bc in bcp]
 
 # Create VTK files for saving solution
-vtkfile_u = File('solutions/velocity.pvd')
-vtkfile_p = File('solutions/pressure.pvd')
+vtkfile_u = File('ns/velocity.pvd')
+vtkfile_p = File('ns/pressure.pvd')
 
 # Create progress bar
 progress = Progress('Time-stepping')
@@ -114,12 +114,12 @@ for n in xrange(num_steps):
     # Step 1: Tentative velocity step
     b1 = assemble(L1)
     [bc.apply(b1) for bc in bcu]
-    solve(A1, u1.vector(), b1, 'bicgstab')
+    solve(A1, u1.vector(), b1, 'bicgstab', 'ilu')
 
     # Step 2: Pressure correction step
     b2 = assemble(L2)
     [bc.apply(b2) for bc in bcp]
-    solve(A2, p1.vector(), b2, 'bicgstab')
+    solve(A2, p1.vector(), b2, 'bicgstab', 'ilu')
 
     # Step 3: Velocity correction step
     b3 = assemble(L3)
@@ -130,8 +130,8 @@ for n in xrange(num_steps):
     plot(p1, title='Pressure')
 
     # Save solution to file
-    vtkfile_u << u1
-    vtkfile_p << p1
+    vtkfile_u << (u1, t)
+    vtkfile_p << (p1, t)
 
     # Update previous solution
     u0.assign(u1)
@@ -139,6 +139,7 @@ for n in xrange(num_steps):
 
     # Update progress bar
     progress.update(t / T)
+    print('u max:', u1.vector().array().max())
 
 # Hold plot
 interactive()
