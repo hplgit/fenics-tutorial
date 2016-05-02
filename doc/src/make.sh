@@ -68,7 +68,7 @@ cp $name.pdf fenics-tutorial${bookno}-4screen.pdf
 preprocess -DFORMAT=html newcommands.p.tex > newcommands.tex
 dir=sphinx-rootdir
 system doconce format sphinx $name --encoding=utf-8 EXV=$EXV --allow_refs_to_external_docs
-system doconce split_rst $name.rst
+system doconce split_rst dirname=sphinx-rootdir${bookno} $name.rst
 system doconce sphinx_dir dirname=$dir version=$version theme=fenics $name
 system python automake_sphinx.py
 
@@ -78,7 +78,10 @@ system doconce split_html $name.html --pagination
 
 # Publish in doc/pub
 dest=../pub
-rm -rf $dest/sphinx
-cp -r fenics-tutorial*.pdf sphinx-rootdir/_build/html $dest
-mv -f $dest/html $dest/sphinx
+rm -rf $dest/sphinx*
+cp fenics-tutorial*.pdf $dest
 cp -r $name.html ._*.html fig mov $dest
+cp -r sphinx-rootdir1/_build/html $dest
+mv -f $dest/html $dest/sphinx1
+cp -r sphinx-rootdir2/_build/html $dest
+mv -f $dest/html $dest/sphinx2
