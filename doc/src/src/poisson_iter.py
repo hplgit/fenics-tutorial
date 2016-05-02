@@ -1,6 +1,7 @@
 """As poisson_func.py, but iterative linear solver."""
 from __future__ import print_function
 from fenics import *
+import numpy as np
 
 def solver(
     f, u_b, Nx, Ny, degree=1,
@@ -174,12 +175,12 @@ def compare_exact_and_numerical_solution(Nx, Ny, degree=1):
     print('numerical error at %s: %g' % (center, error))
 
 def normalize_solution(u):
-    """Normalize u: return u divided by max(u)."""
-    u_array = u.vector().array()
-    u_max = u_array.max()
-    u_array /= u_max
-    u.vector()[:] = u_array
-    u.vector().set_local(u_array)  # alternative
+    """Normalize u: return u divided by max(|u|)."""
+    dofs = u.vector().array()
+    u_max = np.abs(dofs).max()
+    dofs /= u_max
+    u.vector()[:] = dofs
+    u.vector().set_local(dofs) # alternative
     return u
 
 def test_normalize_solution():
@@ -227,7 +228,6 @@ def application_test_gradient(Nx=6, Ny=4):
 def efficiency():
     """Measure CPU time: direct vs Krylov solver."""
     import time
-    import numpy as np
     # This solution is an eigenfunction, CG may have superlinear
     # convergence in such cases but GMRES is seemingly not affected
     u_exact = Expression('sin(DOLFIN_PI*x[0])*sin(DOLFIN_PI*x[1])')

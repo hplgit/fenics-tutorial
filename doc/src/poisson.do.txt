@@ -16,31 +16,35 @@ We have previously focused on how to quickly put together solvers for
 a number of different PDEs. FEniCS makes it simple and straightforward
 to write the commands needed to set up a variational problem, define
 domains and boundary conditions. However, for a real application you
-will likely want to be able to reuse the code you write for a
+will likely want to reuse the code you write for a
 particular PDE to solve multiple different problems with different
 domains, boundary conditions and other parameters. In this chapter, we
 look at how to structure FEniCS Python code to create flexible,
-reusable, and efficient PDE solvers.
+reusable, and efficient PDE solvers. We will revisit the code we wrote
+for solving Poisson's equation in Chapter ref{ch:fundamentals} and see
+how it can be improved.
 !equote
 
-======= Refactored implementation =======
+======= Refactoring the Poisson solver =======
 label{ch:poisson0:impl2}
 
-Our first programs in this book are all ``flat''. That is,
+All programs created in this book so far ''flat''; that is,
 they are not organized
 into logical, reusable units in terms of Python functions. Such flat
-programs are popular for quickly testing out some software, but not
-well suited for serious problem solving. We shall therefore at once
-*refactor* the program, meaning that we divide it into functions, but
+programs are useful for quickly testing out some software, but not
+well suited for serious problem solving. We shall therefore look at how
+to *refactor* the Poisson solver from Chapter ref{ch:fundamentals}.
+For a start, this means splitting the code into functions, but
 this is just a reordering of the existing statements. During
-refactoring, we try make functions as reusable as possible in other
-contexts, but statements specific to a certain problem or task are
-also encapsulated in (non-reusable) functions.  Being able to
+refactoring, we also try make the functions we create
+as reusable as possible in other
+contexts. We will also encapsulate statements specific to a
+certain problem into (non-reusable) functions. Being able to
 distinguish reusable code from specialized code is a key issue when
 refactoring code, and this ability depends on a good mathematical
 understanding of the problem at hand (``what is general, what is
 special?'').  In a flat program, general and specialized code (and
-mathematics) is often mixed together.
+mathematics) are often mixed together.
 
 ===== A more general solver function =====
 label{ch:poisson0:impl2:func}
@@ -51,8 +55,8 @@ implementation": "" in cite{ftut1}].  Some of the code in this program
 is needed to solve any Poisson problem $-\nabla^2 u=f$ on $[0,1]\times
 [0,1]$ with $u=\ub$ on the boundary, while other statements arise from
 our simple test problem. Let us collect the general, reusable code in
-a function `solver`.  Our special test problem will then just be an
-application of `solver` with some additional statements.  We limit the
+a function called `solver`. Our special test problem will then just be an
+application of `solver` with some additional statements. We limit the
 `solver` function to just *compute the numerical solution*. Plotting
 and comparing the solution with the exact solution are considered to
 be problem-specific activities to be performed elsewhere.
@@ -60,26 +64,28 @@ be problem-specific activities to be performed elsewhere.
 We parameterize `solver` by $f$, $\ub$, and the resolution of the
 mesh. Since it is so trivial to use higher-order finite element
 functions by changing the third argument to `FunctionSpace`, we let
-also the degree of the polynomials in the finite element basis
-functions be an argument to `solver`.
+also the polynomial degree of the finite element function space
+be an argument to `solver`.
 
 @@@CODE src/poisson_func.py fromto: from fenics import@def test_solver
 
-=== Plotting for the test problem ===
-
-The additional tasks we did in our initial program can be placed in
-other functions. For example, plotting the solution in our particular
-test problem is placed in an
-`application_test` function:
+The remaining tasks of our initial program, such calling the `solve`
+function with problem-specific parameters and plotting,
+can be placed in a separate function. Here we choose to put this code
+in a function named `application_test`:
 
 @@@CODE src/poisson_func.py fromto: def application_test@if __name
 
-=== Make a module! ===
+The solution can now be computed, plotted, and saved to file by
+simply calling the `application_test` function.
+
+===== Writing the solver as a Python module =====
 
 The refactored code is put in a file "`${prog['poisson_func']}.py`":
 "${src_url}/poisson/${prog['poisson_func']}.py". We should make
 sure that such a file can be imported (and hence reused) in other programs.
-Then all statements in the main program should appear with a test
+Then all statements in the main program that are not inside functions
+should appear within a test
 `if __name__ == '__main__':`. This test is true if the file is executed
 as a program, but false if the file is imported.
 If we want to run this file in the same way as we can
@@ -93,65 +99,70 @@ idx{unit testing}
 ===== Verification and unit tests =====
 
 The remaining part of our first program is to compare the numerical and
-the exact solution. Every time we edit the code we must rerun the test
+the exact solutions. Every time we edit the code we must rerun the test
 and examine that `max_error` is sufficiently small so we know that the
 code still works. To this end, we shall adopt *unit testing*, meaning
 that we create a mathematical test and corresponding software that
 can run all our tests automatically and check that all tests pass.
 Python has several tools for unit testing. Two very popular ones are
-pytest and nose. These are almost identical and very easy to use.
+`pytest` and `nose`. These are almost identical and very easy to use.
 More classical unit testing with test classes is offered by the built-in
-tool `unittest`, but here we are going to use pytest (or nose) since it demands
-shorter and clearer code.
+tool `unittest`, but here we are going to use `pytest` (or `nose`)
+since that will result in shorter and clearer code.
 
 Mathematically, our unit test is that the finite element solution of
 our problem when $f=-6$ equals the exact solution $u=\ub=1+x^2+2y^2$.
 We have already created code that finds the maximum error in the
 numerical solution. Because of rounding errors, we cannot demand this
-maximum error to be zero, but we have to use a tolerance, which depends
-to the number of elements and the degrees of the polynomials in the finite
-element basis functions.  If we want
-to test that `solver` works for meshes up to $2(20\times 20)$ elements
-and cubic Lagrange elements, $10^{-11}$ is
-an appropriate tolerance for testing that the maximum error vanishes
-(see ref[Section ref{ch:poisson0:impl:dissect}][ in cite{ftut1}][the
-section "Dissection of the program": "" in cite{ftut1}]).
+maximum error to be zero, but we have to use a tolerance, which
+depends to the number of elements and the degrees of the polynomials
+in the finite element basis functions.  If we want to test that the
+`solver` function works for meshes up to $2\times(20\times 20)$ elements and
+cubic Lagrange elements, $10^{-11}$ is an appropriate tolerance for
+testing that the maximum error vanishes (see ref[Section
+ref{ch:poisson0:impl:dissect}][ in cite{ftut1}][the section
+"Dissection of the program": "" in cite{ftut1}]).
+
+[AL: Changed to `pytest` and `nose` here (in computer font). Change
+back if not appropriate.]
 
 Only three statements are necessary to carry out the unit test. However,
-we shall embed these statements in software that the testing frameworks
-pytest and nose can recognize. This means that each unit test
-must be placed in a function that
+we shall embed these statements a special way in our code so that they
+are recognized by `pytest` and `nose`. The simple rule is that each
+test must be placed in a function that
 
- * has a name starting with `test_`
- * has no arguments
- * implements the test as `assert success, msg`
+ * has a name starting with `test_`,
+ * has no arguments,
+ * implements a test expressed as `assert success, msg`.
 
 Regarding the last point, `success` is a boolean expression that is `False`
 if the test fails, and in that case the string `msg` is written to the
 screen. When the test fails, `assert` raises an `AssertionError` exception
 in Python, otherwise the statement runs silently. The `msg` string is
 optional, so `assert success` is the minimal test. In our case, we
-will do `assert max_error < tol`, where `tol` is the tolerance ($10^{-11}$)
+will write `assert max_error < tol`, where `tol` is the tolerance ($10^{-11}$)
 mentioned above.
 
-A proper *test function* for implementing this unit test in the pytest
-or nose testing frameworks has the following form. Note that we perform
+A proper *test function* for implementing this unit test in the `pytest`
+or `nose` testing frameworks has the following form. Note that we perform
 the test for different mesh resolutions and degrees of finite elements.
 
 @@@CODE src/poisson_func.py fromto: def test_solver@def application_test
-We can at any time run
+To run the test, we type the following command:Ke can at any time run
 
 !bc sys
 Terminal> py.test -s -v ${prog['poisson_func']}.py
 !ec
-and the pytest tool will run all functions `test_*()` in the file and report
-how the tests go.
+This will run all functions `test_*()` (currently onle the
+`test_solver` function) found in the file and report the results.
 
-We shall make it a habit in this book to encapsulate numerical test
+We shall make it a habit in the following test to encapsulate numerical test
 problems in unit tests as done above, and we strongly encourage the
 reader to create similar unit tests whenever a FEniCS solver is
-implemented. We dare to assert that this is the only serious way
-do reliable computational science with FEniCS.
+implemented.
+
+#We dare to assert that this is the only serious way
+#do reliable computational science with FEniCS.
 
 !bnotice Tip: Print messages in test functions
 The `assert` statement runs silently when the test passes so users may
@@ -159,26 +170,42 @@ become uncertain if all the statements in a test function are really
 executed. A psychological help is to print out something before `assert`
 (as we do in the example above) such that it is clear that the
 test really takes place.
-(Note that `py.test` needs the `-s` option to show printout
-from the test functions.)
+Note that `py.test` needs the `-s` option to show printout
+from the test functions.
 !enotice
 
-===== Writing out the discrete solution =====
+===== Examining the degrees of freedom =====
 label{ch:poisson0:verify1}
+
+[AL: Important section, but maybe it fits better somewhere else since
+it does not specifically deal with code structuring.]
 
 We have seen how to grab the degrees of freedom array from a
 finite element function `u`:
 
 !bc pycod
-u_array = u.vector().array()
+dofs = u.vector().array()
 !ec
-The elements in `u_array` correspond to function values of `u` at nodes
-in the mesh.  Now, a fundamental question is: What are the
-coordinates of node `i` whose value is `u_array[i]`? To answer this
+
+For a finite function from a standard continuous piecewise linear
+function space ($\mathsf{P}_1$ Lagrange elements), these values will
+be the same as the values we get by the following statement:
+
+!bc pycod
+vertex_values = u.compute_vertex_values(mesh)
+!ec
+Both `dofs` and `vertex_values` will be `numpy` arrays and they will
+be of the same length and contain the same values, but with possibly
+different ordering. The array `vertex_values` will have the same
+ordering as the vertices of the mesh, while `dofs` will be ordered in
+a way that (nearly) minimizes the bandwith of the system matrix and
+thus improves the efficiency of linear solvers.
+
+A fundamental question is: What are the
+coordinates of vertex `i` whose value is `dofs[i]`? To answer this
 question, we need to understand how to get our hands on the
 coordinates, and in particular, the numbering of degrees of freedom
-and the numbering of vertices in the mesh. We start with P1 (1st order
-Lagrange) elements where all the nodes are vertices in the mesh.
+and the numbering of vertices in the mesh.
 
 The function `mesh.coordinates()` returns the coordinates of the
 vertices as a `numpy` array with shape $(M,d$), $M$ being the number
@@ -188,8 +215,8 @@ of vertices in the mesh and $d$ being the number of space dimensions:
 >>> from fenics import *
 >>>
 >>> mesh = UnitSquareMesh(2, 2)
->>> coor = mesh.coordinates()
->>> coor
+>>> coordinates = mesh.coordinates()
+>>> coordinates
 array([[ 0. ,  0. ],
        [ 0.5,  0. ],
        [ 1. ,  0. ],
@@ -200,26 +227,28 @@ array([[ 0. ,  0. ],
        [ 0.5,  1. ],
        [ 1. ,  1. ]])
 !ec
-We see from this output that vertices are first numbered along $y=0$
+We see from this output that for this particular mesh, the vertices
+are first numbered along $y=0$
 with increasing $x$ coordinate, then along $y=0.5$, and so on.
 
-Next we compute a function `u` on this mesh, e.g., the $u=x+y$:
+Next we compute a function `u` on this mesh. Let's take $u=x+y$:
 
 !bc pyshell
 >>> V = FunctionSpace(mesh, 'P', 1)
->>> u = interpolate(Expression('x[0]+x[1]'), V)
+>>> u = interpolate(Expression('x[0] + x[1]'), V)
 >>> plot(u, interactive=True)
->>> u_array = u.vector().array()
->>> u_array
+>>> dofs = u.vector().array()
+>>> dofs
 array([ 1. ,  0.5,  1.5,  0. ,  1. ,  2. ,  0.5,  1.5,  1. ])
 !ec
-We observe that `u_array[0]` is *not* the value of $x+y$ at vertex number 0,
+We observe that `dofs[0]` is *not* the value of $x+y$ at vertex number 0,
 since this vertex has coordinates $x=y=0$. The numbering of the
 degrees of freedom $U_1,\ldots,U_{N}$ is obviously not the same as the
 numbering of the vertices.
 
-In the plot of `u`, type `w` to turn on wireframe instead of fully colored
-surface, `m` to show the mesh, and then `v` to show the
+In the plot window, we may take a closer look at the function `u` and
+the vertex numbering. We type `w` to turn on wireframe instead of
+a fully  colored surface, `m` to show the mesh, and then `v` to show the
 numbering of the vertices.
 
 <linebreak>
@@ -233,56 +262,108 @@ FIGURE: [fig/vertex_numbering, width=500 frac=0.8]
 idx{compute vertex values}
 idx{vertex values}
 
-Already in Section ref{ch:poisson0:impl:dissect} we explained that
-the vertex values of a `Function` object can be extracted
-`u.compute_vertex_values()`, which returns an array where element `i`
-is the value of `u` at vertex `i`:
+Let's instead examine the values we get by calling
+`u.compute_vertex_values()`:
 
 !bc pyshell
->>> u_at_vertices = u.compute_vertex_values()
->>> for i, x in enumerate(coor):
-...     print('vertex %d: u_at_vertices[%d]=%g\tu(%s)=%g' %
-...           (i, i, u_at_vertices[i], x, u(x)))
-vertex 0: u_at_vertices[0]=0	u([ 0.  0.])=8.46545e-16
-vertex 1: u_at_vertices[1]=0.5	u([ 0.5  0. ])=0.5
-vertex 2: u_at_vertices[2]=1	u([ 1.  0.])=1
-vertex 3: u_at_vertices[3]=0.5	u([ 0.   0.5])=0.5
-vertex 4: u_at_vertices[4]=1	u([ 0.5  0.5])=1
-vertex 5: u_at_vertices[5]=1.5	u([ 1.   0.5])=1.5
-vertex 6: u_at_vertices[6]=1	u([ 0.  1.])=1
-vertex 7: u_at_vertices[7]=1.5	u([ 0.5  1. ])=1.5
-vertex 8: u_at_vertices[8]=2	u([ 1.  1.])=2
+>>> vertex_values = u.compute_vertex_values()
+>>> for i, x in enumerate(coordinates):
+...     print('vertex %d: vertex_values[%d] = %g\tu(%s) = %g' %
+...           (i, i, vertex_values[i], x, u(x)))
+vertex 0: vertex_values[0] = 0  	u([ 0.  0.]) = 8.46545e-16
+vertex 1: vertex_values[1] = 0.5	u([ 0.5  0. ]) = 0.5
+vertex 2: vertex_values[2] = 1          u([ 1.  0.]) = 1
+vertex 3: vertex_values[3] = 0.5	u([ 0.   0.5]) = 0.5
+vertex 4: vertex_values[4] = 1          u([ 0.5  0.5]) = 1
+vertex 5: vertex_values[5] = 1.5	u([ 1.   0.5]) = 1.5
+vertex 6: vertex_values[6] = 1          u([ 0.  1.]) = 1
+vertex 7: vertex_values[7] = 1.5	u([ 0.5  1. ]) = 1.5
+vertex 8: vertex_values[8] = 2          u([ 1.  1.]) = 2
 !ec
 
 idx{vertex to dof map}
 idx{dof to vertex map}
 
-Alternatively, we can ask for the mapping from vertex numbering to degrees
-of freedom numbering in the space $V$:
+To degrees of freedom to vertices, we can ask FEniCS to give
+us the from vertex numbering to degrees of freedom numbering for a
+certain function space $V$:
 
 !bc
 v2d = vertex_to_dof_map(V)
 !ec
-Now, `u_array[v2d[i]]` will give us the value of the
+Now, `dofs[v2d[i]]` will give us the value of the
 degree of freedom in `u` corresponding
-to vertex `i` (`v2d[i]`). In particular, `u_array[v2d]` is an array
-with all the elements in the same (vertex numbered) order as `coor`.
+to vertex `i` (`v2d[i]`). In particular, `dofs[v2d]` is an array
+with all the elements in the same (vertex numbered) order as `coordinates`.
 The inverse map, from degrees of freedom
 number to vertex number is given by `dof_to_vertex_map(V)`, so
-`coor[dof_to_vertex_map(V)]` results in an array of all the
+`coordinates[dof_to_vertex_map(V)]` results in an array of all the
 coordinates in the same order as the degrees of freedom.
 
 For Lagrange elements of degree larger than 1, there are degrees of
-freedom (nodes) that do not correspond to vertices.
-[hpl: Anders, is the following true?] There is no simple way of getting the
-coordinates associated with the non-vertex degrees of freedom, so
-if we want to write out the values of a finite element solution,
-the following code snippet does the task at the vertices, and this
-will work for all kinds of Lagrange elements.
+freedom (nodes) that do not correspond to vertices. For these
+elements, we may still ask FEniCS to compute the vertex values by
+calling `u.compute_vertex_values(mesh)`, and we can get the degrees of
+freedom by calling `u.vector().array()`. However, to get the
+coordinates associated with all degrees of freedom, we need to perform
+s[i], x, u(x)))
+vertex 0: vertex_values[0] = 0  	u([ 0.  0.]) = 8.46545e-16
+vertex 1: vertex_values[1] = 0.5	u([ 0.5  0. ]) = 0.5
+vertex 2: vertex_values[2] = 1          u([ 1.  0.]) = 1
+vertex 3: vertex_values[3] = 0.5	u([ 0.   0.5]) = 0.5
+vertex 4: vertex_values[4] = 1          u([ 0.5  0.5]) = 1
+vertex 5: vertex_values[5] = 1.5	u([ 1.   0.5]) = 1.5
+vertex 6: vertex_values[6] = 1          u([ 0.  1.]) = 1
+vertex 7: vertex_values[7] = 1.5	u([ 0.5  1. ]) = 1.5
+vertex 8: vertex_values[8] = 2          u([ 1.  1.]) = 2
+!ec
 
-@@@CODE src/poisson_iter.py fromto: def compare_exact@def normalize
-As expected, the error is either identically zero or about $10^{-15}$ or
-$10^{-16}$.
+idx{vertex to dof map}
+idx{dof to vertex map}
+
+To degrees of freedom to vertices, we can ask FEniCS to give
+us the from vertex numbering to degrees of freedom numbering for a
+certain function space $V$:
+
+!bc
+v2d = vertex_to_dof_map(V)
+!ec
+Now, `dofs[v2d[i]]` will give us the value of the
+degree of freedom in `u` corresponding
+to vertex `i` (`v2d[i]`). In particular, `dofs[v2d]` is an array
+with all the elements in the same (vertex numbered) order as `coordinates`.
+The inverse map, from degrees of freedom
+number to vertex number is given by `dof_to_vertex_map(V)`, so
+`coordinates[dof_to_vertex_map(V)]` results in an array of all the
+coordinates in the same order as the degrees of freedom.
+
+For Lagrange elements of degree larger than 1, there are degrees of
+freedom (nodes) that do not correspond to vertices. For these
+elements, we may still ask FEniCS to compute the vertex values by
+calling `u.compute_vertex_values(mesh)`, and we can get the degrees of
+freedom by calling `u.vector().array()`. To get the coordinates
+associated with all degrees of freedom, we need to iterate over the
+elements of the mesh and ask FEniCS to return the coordinates and dofs
+associated with each cell. This information is stored in the
+`FiniteElement` and `DofMap` object of a `FunctionSpace`. The
+following code illustrates how to iterate over all elements of a mesh and
+print the degrees of freedom and coordinates associated with the
+element.
+
+!bc pycod
+element = V.element()
+dofmap = V.dofmap()
+for cell in cells(mesh):
+    print(element.tabulate_dof_coordinates(cell))
+    print(dofmap.cell_dofs(cell.index()))
+!ec
+
+[AL: Removed code example here since it looked like a difficult way to
+do what we have already done before in `test_solver`.]
+
+#@@@CODE src/poisson_iter.py fromto: def compare_exact@def normalize
+#As expected, the error is either identically zero or about $10^{-15}$ or
+#$10^{-16}$.
 
 !bwarning Cheap vs expensive function evaluation
 Given a `Function` object `u`, we can evaluate its values in various
@@ -292,7 +373,7 @@ ways:
  o `u.vector().array()[i]` for degree of freedom number `i`
  o `u.compute_vertex_values()[i]` at vertex number `i`
 
-The first method, though very flexible, is in general very expensive
+The first method, though very flexible, is in general expensive
 while the other two are very efficient (but limited to certain points).
 !ewarning
 
@@ -302,49 +383,51 @@ of the domain and compare it with the exact solution:
 
 !bc pycod
 center = (0.5, 0.5)
-error = u_b(center) - u(center)
-print('numerical error at %s: %g' % (center, error)
+error = u_D(center) - u(center)
+print('Error at %s: %g' % (center, error))
 !ec
-Trying a $2(3\times 3)$ mesh, the output from the
+Trying on a $2\times(3\times 3)$ mesh, the output from the
 previous snippet becomes
 
 !bc dat
-numerical error at (0.5, 0.5): -0.0833333
+Error at (0.5, 0.5): -0.0833333
 !ec
 The discrepancy is due to the fact that the center point is not a node
 in this particular mesh, but a point in the interior of a cell,
 and `u` varies linearly over the cell while
-`u_b` is a quadratic function. When the center point is a node, as in
-a $2(t\times 2)$ or $2(4\times 4)$ mesh, the error is of the order
+`u_D` is a quadratic function. When the center point is a node, as in
+a $2\times(t\times 2)$ or $2\times(4\times 4)$ mesh, the error is of the order
 $10^{-15}$.
 
 We have seen how to extract the nodal values in a `numpy` array.
 If desired, we can adjust the nodal values too. Say we want to
-normalize the solution such that $\max_j U_j = 1$. Then we
+normalize the solution such that $\max_j |U_j| = 1$. Then we
 must divide all $U_j$ values
-by $\max_j U_j$. The following function performs the task:
+by $\max_j |U_j|$. The following function performs the task:
+
+[AL: Why is it called `poisson_iter.py`? Don't understand the logic
+behind the name...]
 
 @@@CODE src/poisson_iter.py fromto: def normalize@def test_normalize
-That is, we manipulate `u_array` as desired, and then we insert this
+That is, we manipulate `dofs` as desired, and then we insert this
 array into `u`'s `Vector` object.  The `/=` operator implies an
 in-place modification of the object on the left-hand side: all
-elements of the `u_array` are divided by the value `max_u`.
-Alternatively, one could write `u_array = u_array/max_u`, which
+elements of the array `dofs` are divided by the value `u_max`.
+Alternatively, one could write `dofs = dofs / u_max`, which
 implies creating a new array on the right-hand side and assigning this
-array to the name `u_array`.
+array to the name `dofs`.
 
 !bwarning Be careful when manipulating degrees of freedom
 A call like `u.vector().array()` returns a *copy* of the data in
 `u.vector()`. One must therefore never perform assignments like
 `u.vector.array()[:] = ...`, but instead extract the `numpy` array
 (i.e., a copy), manipulate it, and insert it back with `u.vector()[:]
-= ` or `u.set_local(...)`.
+= ` or use `u.set_local(...)`.
 !ewarning
 
 idx{`${prog["poisson_iter"]}.py`}
 
 All the code in this subsection can be found in the file `${prog["poisson_iter"]}.py`.
-
 
 ===== Parameterizing the number of space dimensions =====
 label{ch:poisson0:nD}
@@ -357,27 +440,27 @@ introductory programs `${prog["poisson"]}.py` or
 `${prog["poisson_func"]}.py` and change the
 mesh construction from `UnitSquareMesh(6, 4)` to `UnitCubeMesh(6, 4,
 5)`. Now the domain is the unit cube partitioned into $6\times 4\times
-5$|$6x4x5$ boxes, and each box is divided into six tetrahedra-shaped
-finite elements for computations.  Run the program and observe that we
+5$|$6x4x5$ boxes, and each box is divided into six tetrahedron-shaped
+finite elements for computations. Run the program and observe that we
 can solve a 3D problem without any other modifications (!). The
 visualization allows you to rotate the cube and observe the function
 values as colors on the boundary.
 
+[AL: Use consistent mesh resolution, perhaps 16 for all examples. Now
+the resolution looks very random between examples.]
 
-=== Generating a hypercube ===
-
-The syntax for generating a unit interval, square, or box is different,
-so we need to encapsulate this part of the code. Given a list or
-tuple with the divisions into cells in the various spatial direction,
-the following function returns the mesh in a $d$-dimensional problem:
+If we want to parametrize the creation of unit interval, unit square,
+or unit cube over dimension, we can do so by encapsulating this part
+of the code in a function. Given a list or tuple with the divisions
+into cells in the various spatial coordinates, the following function
+returns the mesh for a $d$-dimensional cube.
 
 !bc pycod
-def unit_hypercube(divisions, degree):
+def unit_hypercube(divisions):
     mesh_classes = [UnitIntervalMesh, UnitSquareMesh, UnitCubeMesh]
     d = len(divisions)
     mesh = mesh_classes[d-1](*divisions)
-    V = FunctionSpace(mesh, 'P', degree)
-    return V, mesh
+    return mesh
 !ec
 The construction `mesh_class[d-1]` will pick the right name of the
 object used to define the domain and generate the mesh.
@@ -398,8 +481,7 @@ mesh = UnitSquareMesh(divisions[0], divisions[1])
 Replacing the `Nx` and `Ny` parameters by `divisions` and calling
 `unit_hypercube` to create the mesh are the two modifications that
 we need in any of the previously shown `solver` functions to turn
-them into solvers for $d$-dimensional problems!
-
+them into solvers for $d$-dimensional problems.
 
 % if EXV:
 ===== Exercise: Solve a Poisson problem =====
@@ -1288,7 +1370,7 @@ The degrees of freedom of the `flux_u` vector field can also be
 reached by
 
 !bc pycod
-flux_u_array = flux_u.vector().array()
+flux_dofs = flux_u.vector().array()
 !ec
 but this is a flat `numpy` array where the degrees of freedom for the
 $x$ component of the flux is stored in the first part, then the

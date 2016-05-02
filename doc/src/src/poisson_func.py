@@ -7,10 +7,11 @@ from fenics import *
 
 def solver(f, u_b, Nx, Ny, degree=1):
     """
-    Solve -Laplace(u)=f on [0,1]x[0,1] with 2*Nx*Ny Lagrange
-    elements of specified degree and u=u_b (Expresssion) on
+    Solve -Laplace(u) = f on [0,1] x [0,1] with 2*Nx*Ny Lagrange
+    elements of specified degree and u=u_D (Expresssion) on
     the boundary.
     """
+
     # Create mesh and define function space
     mesh = UnitSquareMesh(Nx, Ny)
     V = FunctionSpace(mesh, 'P', degree)
@@ -33,38 +34,49 @@ def solver(f, u_b, Nx, Ny, degree=1):
     return u
 
 def test_solver():
-    """Reproduce u=1+x^2+2y^2 to "machine precision"."""
-    tol = 1E-11  # This problem's precision
+    """Reproduce u = 1 + x^2 + 2y^2 to "machine precision"."""
+
+    # Set up parameters for testing
+    tol = 1E-11
     u_b = Expression('1 + x[0]*x[0] + 2*x[1]*x[1]')
     f = Constant(-6.0)
+
+    # Iterate over mesh sizes and degrees
     for Nx, Ny in [(3,3), (3,5), (5,3), (20,20)]:
         for degree in 1, 2, 3:
-            print('solving on 2(%dx%d) mesh with P%d elements'
+            print('Solving on a 2 x (%d x %d) mesh with P%d elements.'
                   % (Nx, Ny, degree))
+
+            # Compute solution
             u = solver(f, u_b, Nx, Ny, degree)
-            # Make a finite element function of the exact u_b
-            V = u.function_space()
-            u_b_Function = interpolate(u_b, V)  # exact solution
-            # Check that dof arrays are equal
-            u_b_array = u_b_Function.vector().array()  # dof values
-            max_error = (u_b_array - u.vector().array()).max()
-            msg = 'max error: %g for 2(%dx%d) mesh and degree=%d' %\
-                  (max_error, Nx, Ny, degree)
+
+            # Compute maximum error at vertices
+            vertex_values_u_D = u_D.compute_vertex_values(mesh)
+            vertex_values_u  = u.compute_vertex_values(mesh)
+            import numpy as np
+            error_max = np.max(np.abs(vertex_values_u_D - vertex_values_u))
+
+            # Check maximum error
+            msg = 'error_max = %g' % error_max
             assert max_error < tol, msg
 
 def application_test():
-    """Plot the solution in the test problem."""
-    u_b = Expression('1 + x[0]*x[0] + 2*x[1]*x[1]')
+    """Compute and post-process solution"""
+
+    # Set up problem parameters and call solver
+    u_D = Expression('1 + x[0]*x[0] + 2*x[1]*x[1]')
     f = Constant(-6.0)
     u = solver(f, u_b, 6, 4, 1)
-    # Dump solution to file in VTK format
-    u.rename('u', 'u')  # name 'u' is used in plot
-    vtkfile = File("poisson.pvd")
-    vtkfile << u
-    # Plot solution and mesh
+
+    # Plot solution
+    u.rename('u', 'u')
     plot(u)
+    plot(mesh)
+
+    # Save solution to file in VTK format
+    vtkfile = File('poisson.pvd')
+    vtkfile << u
 
 if __name__ == '__main__':
     application_test()
-    # Hold plot
     interactive()
