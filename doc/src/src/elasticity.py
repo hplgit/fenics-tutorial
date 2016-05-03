@@ -11,12 +11,12 @@ from fenics import *
 
 # Scaled variables
 L = 1; W = 0.2
-lambda_ = 1
+mu = 1
 rho = 1
 delta = W/L
-gamma = 0.25*delta**2
-beta = 0.8
-mu = beta
+gamma = 0.4*delta**2
+beta = 1.25
+lambda_ = beta
 g = gamma
 
 # Create mesh and define function space
@@ -59,10 +59,10 @@ von_Mises = sqrt(3./2*inner(s, s))
 
 V = FunctionSpace(mesh, 'P', 1)
 von_Mises = project(von_Mises, V)
-plot(von_Mises, title='Stress intensity', mode='displacement')
+plot(von_Mises, title='Stress intensity')
 u_magnitude = sqrt(dot(u,u))
 u_magnitude = project(u_magnitude, V)
-plot(u_magnitude, 'Displacement magnitude', mode='displacement')
+plot(u_magnitude, 'Displacement magnitude')
 print('min/max u:', u_magnitude.vector().array().min(),
       u_magnitude.vector().array().max())
 
