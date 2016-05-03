@@ -327,10 +327,13 @@ the result, so for simplicity we just compute on the unit square.  The
 pressure can then be set to $p=0$ at the outlet $x=1$, giving
 $p(x)=8(1-x)$ and $u_x=4y(1-y)$.
 
-The boundary conditions can be taken as $p=1$ on $x=0$, $p=0$ on
+The boundary conditions can be set as $p=1$ on $x=0$, $p=0$ on
 $x=1$ and $u=0$ on the walls $y=0,1$. This defines the pressure
 drop and should result in unit maximum velocity at the inlet and outlet
 and a parabolic velocity profile without further specifications.
+Note that it is only meaningful to solve the Navier-Stokes equations in
+2D or 3D geometries, although the underlying mathematical problem
+collapses to two 1D problems, one for $u_x$ and one for $p$.
 
 The scaled model is not so easy to simulate using a standard Navier-Stokes
 solver with dimensions. However, one can argue that the convection term
@@ -531,11 +534,12 @@ instead of `dt` for the `Constant` since we also want to use the
 variable `dt` as a Python float as part of the time-stepping.
 
 [hpl: Some pure fluid mechanics guys will think of Poiseulle as 1D, so
-they get confused why you need to launch 2D/3D when it's about
-$u''=4$... Renamed file to `navier_stokes_channel.py`.]
+they get confused why you need to launch 2D/3D code when it's about
+$u''=4$ and can be done in Matlab...
+Renamed file to `navier_stokes_channel.py`.]
 
-The complete code for simulating 2D channel flow
-with FEniCS looks as follows:
+The complete code for simulating 2D channel flow with FEniCS looks as
+follows:
 
 @@@CODE src/navier_stokes_channel.py fromto: from fenics import@
 
@@ -553,17 +557,75 @@ $10^{-9}$ at final time $T = 10$.
 
 FIGURE:[fig/navier_stokes_poiseuille, width=600 frac=0.8] Plot of the velocity profile at the final time for the Navier-Stokes Poiseuille flow example. label{ftut1:fig:navier_stokes_poisseuille}
 
+% if EXV:
+===== Exercise: Simulate channel flow in a 3D geometry =====
+
+FEniCS solvers typically have the number of space dimensions
+parameterized, so a 1D, 2D, and 3D code all look the same.
+We shall demonstrate what this means by extending the 2D solver
+`navier_stokes_channel.py` to a simulator where the domain is a box
+(the unit cube in the scaled model).
+
+!bsubex
+Set up boundary conditions for $\u$ at all points on the boundary.
+Set up boundary conditions for $p$ at all points on the boundary as
+this is required by our Poisson equation for $p$ (but not in the
+original mathematical model -- there, knowing $p$ at one point throughout
+time is sufficient).
+
+!bsol
+At the inlet $x=0$ we have the velocity completely described: $(u_x,0,0)$.
+At the channel walls, $y=0$ and $y=1$, we also have the velocity
+completely described: $u=(0,0,0)$ because of no-slip.
+At the outlet x=1 we do not specify anything. This means that the
+boundary integrals in Step 1 vanish and that $p=0$ and
+$\partial\u/\partial n = 0$, with $n$ as the $x$ direction,
+implying ``no change'' with $x$, which is reasonable (since we know
+that $\partial/\partial x=0$ because of incompressibility).
+For the pressure we set $p=8$ at $x=0$ and $p=0$ at $x=1$ to
+represent a scaled pressure gradient equal to 8 (which leads to
+a unit maximum velocity). At $y=0$ and $y=1$ we do not specify anything,
+which implies $\partial p/\partial y=0$. This is a condition much
+discussed in the literature, but it works perfectly in channel flow
+with straight walls.
+
+The two remaining boundaries, $z=0$ and $z=1$, requires attention.
+For the pressure, ``nothing happens'' in the $z$ direction so
+$\partial p/\partial z=\partial p/\partial n=0$ is the condition.
+This is automatically implemented by the finite element method.
+For the velocity we also have a ``nothing happens'' criterion in the
+3rd direction, and we can in addition use the assumption of $u_z=0$,
+if needed.
+The derivative criterion means $\partial\u/\partial z=\partial\u/\partial n=0$
+in the boundary integrals. There is also an integral involving $pn_z$
+in a component PDE with $u_z$ in all terms.
+!esol
+!esubex
+
+!bsubex
+Modify the `navier_stokes_channel.py` file so it computes 3D channel flow.
+
+!bsol
+We must switch the domain from `UnitSquareMesh` to `UnitCubeMesh`.
+We must also switch all 3-vectors to 2-vectors, such as
+replacing going from `(0,0)` to `(0,0,0)` in `bcu_noslip`. Similarly,
+`f` and `u_e` must extend their 2-vectors to 3-vectors.
+
+@@@CODE exer/navier_stokes_box.py envir=pypro-h
+!esol
+!esubex
+% endif
 
 ===== Flow past a cylinder =====
 
-We now turn our attention to a more challenging physical example: flow past a
-circular cylinder. The geometry and parameters are taken from problem
-DFG 2D-2 in the "FEATFLOW/1995-DFG benchmark suite":
+We now turn our attention to a more challenging physical example: flow
+past a circular cylinder. The geometry and parameters are taken from
+problem DFG 2D-2 in the "FEATFLOW/1995-DFG benchmark suite":
 "http://www.featflow.de/en/benchmarks/cfdbenchmarking/flow/dfg_benchmark2_re100.html"
 and is illustrated in Figure
 ref{ftut1:navier_stokes_cylinder:geometry}. The kinematic viscosity is
-given by $\nu = 0.001 = \mu/\rho$ and the inflow velocity
-profile is specified as
+given by $\nu = 0.001 = \mu/\rho$ and the inflow velocity profile is
+specified as
 
 !bt
 \[

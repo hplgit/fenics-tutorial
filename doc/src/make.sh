@@ -22,7 +22,6 @@ function system {
   fi
 }
 
-rm -f *.dolog        # error messages are *appended* to .dolog
 rm -rf tmp_*.do.txt  # don't spellcheck old versions
 system doconce spellcheck -d .dict4spell.txt *.do.txt
 #doconce spellcheck -d .dict4spell.txt *.do.txt
