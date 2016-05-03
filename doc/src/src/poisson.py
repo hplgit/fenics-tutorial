@@ -3,7 +3,7 @@ FEniCS tutorial demo program: Poisson equation with Dirichlet conditions.
 Test problem is chosen to give an exact solution at all nodes of the mesh.
 
   -Laplace(u) = f   in the unit square
-            u = u_b  on the boundary
+            u = u_D  on the boundary
 
   u = 1 + x^2 + 2y^2 = u_b
   f = -6
@@ -17,12 +17,12 @@ mesh = UnitSquareMesh(8, 8)
 V = FunctionSpace(mesh, 'P', 1)
 
 # Define boundary condition
-u_b = Expression('1 + x[0]*x[0] + 2*x[1]*x[1]', degree=2)
+u_D = Expression('1 + x[0]*x[0] + 2*x[1]*x[1]', degree=2)
 
 def boundary(x, on_boundary):
     return on_boundary
 
-bc = DirichletBC(V, u_b, boundary)
+bc = DirichletBC(V, u_D, boundary)
 
 # Define variational problem
 u = TrialFunction(V)
@@ -45,17 +45,17 @@ vtkfile = File('poisson.pvd')
 vtkfile << u
 
 # Compute error in L2 norm
-error_L2norm = errornorm(u_b, u, 'L2')
+error_L2 = errornorm(u_D, u, 'L2')
 
 # Compute maximum error at vertices
-vertex_values_u_b = u_b.compute_vertex_values(mesh)
+vertex_values_u_D = u_D.compute_vertex_values(mesh)
 vertex_values_u  = u.compute_vertex_values(mesh)
 import numpy as np
-error_vertices = np.max(np.abs(vertex_values_u_b - vertex_values_u))
+error_max = np.max(np.abs(vertex_values_u_D - vertex_values_u))
 
 # Print errors
-print('error_L2norm   =', error_L2norm)
-print('error_vertices =', error_vertices)
+print('error_L2  =', error_L2)
+print('error_max =', error_max)
 
 # Hold plot
 interactive()
