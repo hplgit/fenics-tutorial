@@ -44,7 +44,7 @@
 
     
     <link rel="top" title="The FEniCS Tutorial" href="index.html" />
-    <link rel="next" title="Common features in PDE solvers" href="._ftut1006.html" />
+    <link rel="next" title="Common extensions in PDE solvers" href="._ftut1006.html" />
     <link rel="prev" title="A Gallery of finite element solvers" href="._ftut1004.html" />
 
 <!--[if lte IE 6]>
@@ -138,21 +138,1109 @@
 <span id="ch-subdomains"></span><h1>Mesh generation, subdomains and boundary conditions<a class="headerlink" href="#mesh-generation-subdomains-and-boundary-conditions" title="Permalink to this headline">¶</a></h1>
 <blockquote>
 <div>In this chapter, we focus on a fundamental step in the solution of
-many PDE problems: the generation of a mesh, and the specification of subdomains and boundary conditions. Our starting point is the convection-diffusion equation, which extends the Poisson equation
-(the diffusion equation) from the previous chapter to take into
-account the effects of convection.</div></blockquote>
-<div class="section" id="physical-problem-formulation">
-<h2>Physical problem formulation<a class="headerlink" href="#physical-problem-formulation" title="Permalink to this headline">¶</a></h2>
-<p>We will simulate the conduction of heat in an insulated pipe via both
-diffusion and convection (transport). The inner diameter of the pipe
-is <span class="math">\(4\,\mathrm{cm}\)</span>, its thickness is 4mm, the thickness of the
-surrounding insulation is <span class="math">\(10\,\mathrm{mm}\)</span>, and its length is
+many PDE problems: the generation of a mesh, and the specification of subdomains and boundary conditions. Our starting point is the 2D Poisson equation where
+we introduce the basic concepts, before applying them in a more
+challenging 3D convection-diffusion problem.</div></blockquote>
+<div class="section" id="multiple-domains-and-boundaries">
+<h2>Multiple domains and boundaries<a class="headerlink" href="#multiple-domains-and-boundaries" title="Permalink to this headline">¶</a></h2>
+<p>[<strong>hpl 28</strong>: Need a little intro.]</p>
+<div class="section" id="combining-dirichlet-and-neumann-conditions">
+<span id="ch-poisson0-dn"></span><h3>Combining Dirichlet and Neumann conditions<a class="headerlink" href="#combining-dirichlet-and-neumann-conditions" title="Permalink to this headline">¶</a></h3>
+<p>Let us make a slight extension of our two-dimensional Poisson problem
+with Dirichlet conditions on the entire boundary and add a Neumann boundary
+condition. The domain is still the unit square, but now we set the
+Dirichlet condition <span class="math">\(u=u_{\mathrm{b}}\)</span> at the left and right sides, <span class="math">\(x=0\)</span> and
+<span class="math">\(x=1\)</span>, while the Neumann condition</p>
+<div class="math">
+\[-{\partial u\over\partial n}=g\]</div>
+<p>is applied to the remaining
+sides <span class="math">\(y=0\)</span> and <span class="math">\(y=1\)</span>.
+The Neumann condition is also known as a <em>natural boundary condition</em>
+(in contrast to an essential boundary condition).</p>
+<div class="section" id="pde-problem-5">
+<span id="index-0"></span><h4>PDE problem<a class="headerlink" href="#pde-problem-5" title="Permalink to this headline">¶</a></h4>
+<p>Let <span class="math">\(\Gamma_D\)</span> and <span class="math">\(\Gamma_N\)</span> denote the parts of <span class="math">\(\partial\Omega\)</span>
+where the Dirichlet and Neumann conditions apply, respectively.  The
+complete boundary-value problem can be written as</p>
+<div class="math" id="eq-auto10">
+\[\tag{52}
+- \nabla^2 u = f \mbox{ in } \Omega,\]</div>
+<div class="math" id="eq-auto11">
+\[\tag{53}
+u = u_{\mathrm{b}} \mbox{ on } \Gamma_D,\]</div>
+<div class="math" id="eq-auto12">
+\[\tag{54}
+- {\partial u\over\partial n} = g \mbox{ on } \Gamma_N  {\thinspace .}\]</div>
+<p>Again we choose <span class="math">\(u=1+x^2 + 2y^2\)</span> as the exact solution and adjust <span class="math">\(f\)</span>, <span class="math">\(g\)</span>, and
+<span class="math">\(u_{\mathrm{b}}\)</span> accordingly:</p>
+<div class="math">
+\[\begin{split}f &amp;= -6,\\
+g &amp;= \left\lbrace\begin{array}{ll}
+-4, &amp; y=1\\
+0,  &amp; y=0
+\end{array}\right.\\
+u_{\mathrm{b}} &amp;= 1 + x^2 + 2y^2{\thinspace .}\end{split}\]</div>
+<p>For ease of programming we may introduce a <span class="math">\(g\)</span> function defined over the whole
+of <span class="math">\(\Omega\)</span> such that <span class="math">\(g\)</span> takes on the right values at <span class="math">\(y=0\)</span> and
+<span class="math">\(y=1\)</span>. One possible extension is</p>
+<div class="math">
+\[g(x,y) = -4y{\thinspace .}\]</div>
+</div>
+<div class="section" id="variational-formulation-5">
+<h4>Variational formulation<a class="headerlink" href="#variational-formulation-5" title="Permalink to this headline">¶</a></h4>
+<p>The first task is to derive the variational problem. This time we cannot
+omit the boundary term arising from the integration by parts, because
+<span class="math">\(v\)</span> is only zero on <span class="math">\(\Gamma_D\)</span>. We have</p>
+<div class="math">
+\[ -\int_\Omega (\nabla^2 u)v {\, \mathrm{d}x}
+= \int_\Omega\nabla u\cdot\nabla v {\, \mathrm{d}x} - \int_{\partial\Omega}{\partial u\over
+\partial n}v {\, \mathrm{d}s},\]</div>
+<p>and since <span class="math">\(v=0\)</span> on <span class="math">\(\Gamma_D\)</span>,</p>
+<div class="math">
+\[- \int_{\partial\Omega}{\partial u\over
+\partial n}v {\, \mathrm{d}s}
+=
+- \int_{\Gamma_N}{\partial u\over
+\partial n}v {\, \mathrm{d}s}
+= \int_{\Gamma_N}gv {\, \mathrm{d}s},\]</div>
+<p>by applying the boundary condition on <span class="math">\(\Gamma_N\)</span>.
+The resulting weak form reads</p>
+<div class="math" id="eq-ch-poisson0-2d-dn-weak">
+\[\tag{55}
+\int_{\Omega} \nabla u \cdot \nabla v {\, \mathrm{d}x} +
+    \int_{\Gamma_N} gv {\, \mathrm{d}s}
+    = \int_{\Omega} fv {\, \mathrm{d}x}{\thinspace .}\]</div>
+<p>Expressing this equation
+in the standard notation <span class="math">\(a(u,v)=L(v)\)</span> is straightforward with</p>
+<div class="math" id="eq-ftut-poisson2-vard-a">
+\[\tag{56}
+a(u, v) = \int_{\Omega} \nabla u \cdot \nabla v {\, \mathrm{d}x},\]</div>
+<div class="math" id="eq-ftut-poisson2-vard-l">
+\[\tag{57}
+L(v) = \int_{\Omega} fv {\, \mathrm{d}x} -
+    \int_{\Gamma_N} gv {\, \mathrm{d}s}{\thinspace .}\]</div>
+</div>
+<div class="section" id="fenics-implementation-7">
+<h4>FEniCS implementation<a class="headerlink" href="#fenics-implementation-7" title="Permalink to this headline">¶</a></h4>
+<p>How does the Neumann condition impact the implementation?
+Let us go back to the very simplest file,
+<code class="docutils literal"><span class="pre">ft01_poisson.py</span></code>, from
+the section <span class="xref std std-ref">ch:poisson0:impl:code</span>,
+we realize that the statements remain almost the same.
+Only two adjustments are necessary:</p>
+<blockquote>
+<div><ul class="simple">
+<li>The function describing the boundary where Dirichlet conditions
+apply must be modified.</li>
+<li>The new boundary term must be added to the expression in <code class="docutils literal"><span class="pre">L</span></code>.</li>
+</ul>
+</div></blockquote>
+<p>The first adjustment can be coded as</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="k">def</span> <span class="nf">Dirichlet_boundary</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">on_boundary</span><span class="p">):</span>
+    <span class="k">if</span> <span class="n">on_boundary</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">x</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="mi">0</span> <span class="ow">or</span> <span class="n">x</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">True</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">False</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">return</span> <span class="bp">False</span>
+</pre></div>
+</div>
+<p>A more compact implementation reads</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="k">def</span> <span class="nf">Dirichlet_boundary</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">on_boundary</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">on_boundary</span> <span class="ow">and</span> <span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="mi">0</span> <span class="ow">or</span> <span class="n">x</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="mi">1</span><span class="p">)</span>
+</pre></div>
+</div>
+<div class="admonition-never-use-for-comparing-real-numbers admonition">
+<p class="first admonition-title">Never use <code class="docutils literal"><span class="pre">==</span></code> for comparing real numbers</p>
+<p>A list like <code class="docutils literal"><span class="pre">x[0]</span> <span class="pre">==</span> <span class="pre">1</span></code> should never be used if <code class="docutils literal"><span class="pre">x[0]</span></code> is a real number,
+because rounding errors in <code class="docutils literal"><span class="pre">x[0]</span></code> may make the test fail even when it is
+mathematically correct. Consider</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="mf">0.1</span> <span class="o">+</span> <span class="mf">0.2</span> <span class="o">==</span> <span class="mf">0.3</span>
+<span class="go">False</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="mf">0.1</span> <span class="o">+</span> <span class="mf">0.2</span>
+<span class="go">0.30000000000000004</span>
+</pre></div>
+</div>
+<p>Comparison of real numbers need to use tolerances! The values of the
+tolerances depend on the size of the numbers involved in arithmetic
+operations:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="nb">abs</span><span class="p">(</span><span class="mf">0.1</span><span class="o">+</span><span class="mf">0.2</span> <span class="o">-</span> <span class="mf">0.3</span><span class="p">)</span>
+<span class="go">5.551115123125783e-17</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">abs</span><span class="p">(</span><span class="mf">1.1</span><span class="o">+</span><span class="mf">1.2</span> <span class="o">-</span> <span class="mf">2.3</span><span class="p">)</span>
+<span class="go">0.0</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">abs</span><span class="p">(</span><span class="mf">10.1</span><span class="o">+</span><span class="mf">10.2</span> <span class="o">-</span> <span class="mf">20.3</span><span class="p">)</span>
+<span class="go">3.552713678800501e-15</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">abs</span><span class="p">(</span><span class="mf">100.1</span><span class="o">+</span><span class="mf">100.2</span> <span class="o">-</span> <span class="mf">200.3</span><span class="p">)</span>
+<span class="go">0.0</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">abs</span><span class="p">(</span><span class="mf">1000.1</span><span class="o">+</span><span class="mf">1000.2</span> <span class="o">-</span> <span class="mf">2000.3</span><span class="p">)</span>
+<span class="go">2.2737367544323206e-13</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">abs</span><span class="p">(</span><span class="mf">10000.1</span><span class="o">+</span><span class="mf">10000.2</span> <span class="o">-</span> <span class="mf">20000.3</span><span class="p">)</span>
+<span class="go">3.637978807091713e-12</span>
+</pre></div>
+</div>
+<p>For numbers around unity, tolerances as low as <span class="math">\(3\cdot 10^{-16}\)</span> can be used
+(in fact, this tolerance is known as the constant <code class="docutils literal"><span class="pre">DOLFIN_EPS</span></code> in FEniCS),
+otherwise an appropriate tolerance must be found.</p>
+<p>Testing for <code class="docutils literal"><span class="pre">x[0]</span> <span class="pre">==</span> <span class="pre">1</span></code> should therefore be implemented as</p>
+<div class="last highlight-python"><div class="highlight"><pre><span class="n">tol</span> <span class="o">=</span> <span class="mf">1E-14</span>
+<span class="k">if</span> <span class="nb">abs</span><span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span> <span class="o">&lt;</span> <span class="n">tol</span><span class="p">:</span>
+    <span class="o">...</span>
+</pre></div>
+</div>
+</div>
+<p id="index-1">Here is a new boundary function using tolerances in the test:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="k">def</span> <span class="nf">Dirichlet_boundary</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">on_boundary</span><span class="p">):</span>
+    <span class="n">tol</span> <span class="o">=</span> <span class="mf">1E-14</span>   <span class="c"># tolerance for coordinate comparisons</span>
+    <span class="k">return</span> <span class="n">on_boundary</span> <span class="ow">and</span> \
+           <span class="p">(</span><span class="nb">abs</span><span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span> <span class="o">&lt;</span> <span class="n">tol</span> <span class="ow">or</span> <span class="nb">abs</span><span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span> <span class="o">&lt;</span> <span class="n">tol</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>This function can be written a bit more elegantly using the <code class="docutils literal"><span class="pre">near</span></code>
+function in FEniCS:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="k">def</span> <span class="nf">Dirichlet_boundary</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">on_boundary</span><span class="p">):</span>
+    <span class="n">tol</span> <span class="o">=</span> <span class="mf">1E-14</span>   <span class="c"># tolerance for coordinate comparisons</span>
+    <span class="k">return</span> <span class="n">on_boundary</span> <span class="ow">and</span> \
+           <span class="p">(</span><span class="n">near</span><span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="mi">0</span><span class="p">,</span> <span class="n">tol</span><span class="p">)</span> <span class="ow">or</span> <span class="n">near</span><span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="mi">1</span><span class="p">,</span> <span class="n">tol</span><span class="p">))</span>
+</pre></div>
+</div>
+<p>The second adjustment of our program concerns the definition of <code class="docutils literal"><span class="pre">L</span></code>,
+where we have to add a boundary integral and a definition of the <span class="math">\(g\)</span>
+function to be integrated:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">g</span> <span class="o">=</span> <span class="n">Expression</span><span class="p">(</span><span class="s">&#39;-4*x[1]&#39;</span><span class="p">)</span>
+<span class="n">L</span> <span class="o">=</span> <span class="n">f</span><span class="o">*</span><span class="n">v</span><span class="o">*</span><span class="n">dx</span> <span class="o">-</span> <span class="n">g</span><span class="o">*</span><span class="n">v</span><span class="o">*</span><span class="n">ds</span>
+</pre></div>
+</div>
+<p>The <code class="docutils literal"><span class="pre">ds</span></code> variable implies a boundary integral, while <code class="docutils literal"><span class="pre">dx</span></code>
+implies an integral over the domain <span class="math">\(\Omega\)</span>.
+No more modifications are necessary.</p>
+</div>
+</div>
+<div class="section" id="multiple-dirichlet-conditions">
+<span id="ch-poisson0-multiple-dirichlet"></span><h3>Multiple Dirichlet conditions<a class="headerlink" href="#multiple-dirichlet-conditions" title="Permalink to this headline">¶</a></h3>
+<p>The PDE problem from the previous section applies a function <span class="math">\(u_{\mathrm{b}}(x,y)\)</span>
+for setting Dirichlet conditions at two parts of the boundary.
+Having a single function to set multiple Dirichlet conditions is
+seldom possible. The more general case is to have <span class="math">\(m\)</span> functions for
+setting Dirichlet conditions on <span class="math">\(m\)</span> parts of the boundary.
+The purpose of this section is to explain how such multiple conditions
+are treated in FEniCS programs.</p>
+<p>Let us return to the case from the section <a class="reference internal" href="._ftut1009.html#ch-poisson0-dn"><span class="std std-ref">Combining Dirichlet and Neumann conditions</span></a> and define
+two separate functions for the two Dirichlet conditions:</p>
+<div class="math">
+\[\begin{split}- \nabla^2 u &amp;= -6 \mbox{ in } \Omega, \\
+u &amp;= u_L \mbox{ on } \Gamma_{D,0}, \\
+u &amp;= u_R \mbox{ on } \Gamma_{D,1}, \\
+- {\partial u\over\partial n} &amp;= g \mbox{ on } \Gamma_N {\thinspace .}\end{split}\]</div>
+<p>Here, <span class="math">\(\Gamma_{D,0}\)</span> is the boundary <span class="math">\(x=0\)</span>, while <span class="math">\(\Gamma_{D,1}\)</span> corresponds
+to the boundary <span class="math">\(x=1\)</span>.  We have that <span class="math">\(u_L = 1 + 2y^2\)</span>, <span class="math">\(u_R = 2 +
+2y^2\)</span>, and <span class="math">\(g=-4y\)</span>.</p>
+<p>For the left boundary <span class="math">\(\Gamma_0\)</span> we define the
+usual triple of a function for the boundary value, a function for
+defining the boundary of interest, and a <code class="docutils literal"><span class="pre">DirichletBC</span></code> object:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">u_L</span> <span class="o">=</span> <span class="n">Expression</span><span class="p">(</span><span class="s">&#39;1 + 2*x[1]*x[1]&#39;</span><span class="p">)</span>
+
+<span class="k">def</span> <span class="nf">left_boundary</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">on_boundary</span><span class="p">):</span>
+    <span class="n">tol</span> <span class="o">=</span> <span class="mf">1E-14</span>   <span class="c"># tolerance for coordinate comparisons</span>
+    <span class="k">return</span> <span class="n">on_boundary</span> <span class="ow">and</span> <span class="nb">abs</span><span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span> <span class="o">&lt;</span> <span class="n">tol</span>
+
+<span class="n">Gamma_0</span> <span class="o">=</span> <span class="n">DirichletBC</span><span class="p">(</span><span class="n">V</span><span class="p">,</span> <span class="n">u_L</span><span class="p">,</span> <span class="n">left_boundary</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>For the boundary <span class="math">\(x=1\)</span> we write a similar code snippet:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">u_R</span> <span class="o">=</span> <span class="n">Expression</span><span class="p">(</span><span class="s">&#39;2 + 2*x[1]*x[1]&#39;</span><span class="p">)</span>
+
+<span class="k">def</span> <span class="nf">right_boundary</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">on_boundary</span><span class="p">):</span>
+    <span class="n">tol</span> <span class="o">=</span> <span class="mf">1E-14</span>   <span class="c"># tolerance for coordinate comparisons</span>
+    <span class="k">return</span> <span class="n">on_boundary</span> <span class="ow">and</span> <span class="nb">abs</span><span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span> <span class="o">&lt;</span> <span class="n">tol</span>
+
+<span class="n">Gamma_1</span> <span class="o">=</span> <span class="n">DirichletBC</span><span class="p">(</span><span class="n">V</span><span class="p">,</span> <span class="n">u_R</span><span class="p">,</span> <span class="n">right_boundary</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>The various essential conditions are then collected in a list
+and used in the solution process:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">bcs</span> <span class="o">=</span> <span class="p">[</span><span class="n">Gamma_0</span><span class="p">,</span> <span class="n">Gamma_1</span><span class="p">]</span>
+<span class="o">...</span>
+<span class="n">solve</span><span class="p">(</span><span class="n">a</span> <span class="o">==</span> <span class="n">L</span><span class="p">,</span> <span class="n">u</span><span class="p">,</span> <span class="n">bcs</span><span class="p">)</span>
+<span class="c"># or</span>
+<span class="n">problem</span> <span class="o">=</span> <span class="n">LinearVariationalProblem</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">L</span><span class="p">,</span> <span class="n">u</span><span class="p">,</span> <span class="n">bcs</span><span class="p">)</span>
+<span class="n">solver</span>  <span class="o">=</span> <span class="n">LinearVariationalSolver</span><span class="p">(</span><span class="n">problem</span><span class="p">)</span>
+<span class="n">solver</span><span class="o">.</span><span class="n">solve</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>In other problems, where the <span class="math">\(u\)</span> values are constant at a part of the
+boundary, we may use a simple <code class="docutils literal"><span class="pre">Constant</span></code> object instead of an
+<code class="docutils literal"><span class="pre">Expression</span></code> object.</p>
+</div>
+<div class="section" id="working-with-subdomains">
+<span id="ftut-possion-2d-2mat-impl"></span><h3>Working with subdomains<a class="headerlink" href="#working-with-subdomains" title="Permalink to this headline">¶</a></h3>
+<span class="target" id="index-2"></span><p id="index-3">Solving PDEs in domains made up of different materials is a frequently
+encountered task. In FEniCS, these kind of problems are handled by
+defining subdomains inside the domain. The subdomains may represent
+the various materials. We can thereafter define material properties
+through functions, known in FEniCS as <em>mesh functions</em>, that are
+piecewise constant in each subdomain.  A simple example with two
+materials (subdomains) in 2D will demonstrate the basic steps in the
+process.</p>
+<div class="figure" id="id3">
+<span id="ftut-possion-2d-2mat-fig1"></span><a class="reference internal image-reference" href="_images/layered_medium_2.png"><img alt="_images/layered_medium_2.png" src="_images/layered_medium_2.png" style="width: 400px;" /></a>
+<p class="caption"><span class="caption-text"><em>Medium with discontinuous material properties</em></span></p>
+</div>
+<p>Suppose we want to solve</p>
+<div class="math" id="eq-ch-poisson0-2d-2mat-varcoeff2">
+\[\tag{58}
+\nabla\cdot \left\lbrack k(x,y)\nabla u(x,y)\right\rbrack = 0,\]</div>
+<p>in a domain <span class="math">\(\Omega\)</span> consisting of two subdomains where <span class="math">\(k\)</span> takes on
+a different value in each subdomain.
+For simplicity, yet without loss of generality, we choose for the current
+implementation
+the domain <span class="math">\(\Omega = [0,1]\times [0,1]\)</span> and divide it into two equal
+subdomains,
+as depicted in Figure <a class="reference internal" href="._ftut1009.html#ftut-possion-2d-2mat-fig1"><span class="std std-ref">Medium with discontinuous material properties</span></a>,</p>
+<div class="math">
+\[\Omega_0 = [0, 1]\times [0,1/2],\quad
+\Omega_1 = [0, 1]\times (1/2,1]{\thinspace .}\]</div>
+<p>We define <span class="math">\(k(x,y)=k_0\)</span> in <span class="math">\(\Omega_0\)</span> and <span class="math">\(k(x,y)=k_1\)</span> in <span class="math">\(\Omega_1\)</span>,
+where <span class="math">\(k_0&gt;0\)</span> and <span class="math">\(k_1&gt;0\)</span> are given constants.</p>
+<p>Physically, the present problem may correspond to heat conduction, where
+the heat conduction in <span class="math">\(\Omega_1\)</span> is more efficient than
+in <span class="math">\(\Omega_0\)</span>. An alternative interpretation is flow in porous media
+with two geological layers, where the layers&#8217; ability to transport
+the fluid differ.</p>
+<div class="section" id="expression-objects-with-if-test">
+<h4>Expression objects with if test<a class="headerlink" href="#expression-objects-with-if-test" title="Permalink to this headline">¶</a></h4>
+<p>The simplest way of implementing a variable <span class="math">\(k\)</span> is to define an
+<code class="docutils literal"><span class="pre">Expression</span></code> object where we return the appropriate <span class="math">\(k\)</span> value
+depending on the position in space.  Since we need some testing on the
+coordinates, the most straightforward approach is to define a subclass
+of <code class="docutils literal"><span class="pre">Expression</span></code>, where we can use a full Python method instead of just
+a C++ string formula for specifying a function.  The method that
+defines the function is called <code class="docutils literal"><span class="pre">eval</span></code>:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="k">class</span> <span class="nc">K</span><span class="p">(</span><span class="n">Expression</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">set_k_values</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">k0</span><span class="p">,</span> <span class="n">k1</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">k0</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">k1</span> <span class="o">=</span> <span class="n">k0</span><span class="p">,</span> <span class="n">k1</span>
+
+    <span class="k">def</span> <span class="nf">eval</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;x: spatial point, value[0]: function value.&quot;&quot;&quot;</span>
+    <span class="c"># Fill in-place value[0] for scalar function,</span>
+    <span class="c"># value[:] for vector function (no return)</span>
+
+    <span class="n">tol</span> <span class="o">=</span> <span class="mf">1E-14</span>  <span class="c"># Tolerance for coordinate comparisons</span>
+        <span class="k">if</span> <span class="n">x</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">&lt;=</span> <span class="mf">0.5</span><span class="o">+</span><span class="n">tol</span><span class="p">:</span>
+        <span class="n">value</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">k0</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">value</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">k1</span>
+
+<span class="c"># Initialize</span>
+<span class="n">k</span> <span class="o">=</span> <span class="n">K</span><span class="p">()</span>
+<span class="n">k</span><span class="o">.</span><span class="n">set_k_values</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mf">0.01</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>The <code class="docutils literal"><span class="pre">eval</span></code> method gives great flexibility in defining functions, but a
+downside is that C++ calls up <code class="docutils literal"><span class="pre">eval</span></code> in Python for each point <code class="docutils literal"><span class="pre">x</span></code>,
+which is a slow process, and the number of calls is proportional to
+the number of numerical integration points in the mesh (about the
+number of degrees of freedom).  Function expressions in terms of
+strings are compiled to efficient C++ functions, being called from
+C++, so we should try to express functions as string expressions if
+possible. (The <code class="docutils literal"><span class="pre">eval</span></code> method can also be defined through C++ code, but
+this is much more complicated and not covered here.)  The idea is to
+use inline if tests in C++:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">tol</span> <span class="o">=</span> <span class="mf">1E-14</span>
+<span class="n">k0</span> <span class="o">=</span> <span class="mf">1.0</span>
+<span class="n">k1</span> <span class="o">=</span> <span class="mf">0.01</span>
+<span class="n">k</span> <span class="o">=</span> <span class="n">Expression</span><span class="p">(</span><span class="s">&#39;x[1] &lt;= 0.5+tol? k0 : k1&#39;</span><span class="p">,</span>
+               <span class="n">tol</span><span class="o">=</span><span class="n">tol</span><span class="p">,</span> <span class="n">k0</span><span class="o">=</span><span class="n">k0</span><span class="p">,</span> <span class="n">k1</span><span class="o">=</span><span class="n">k1</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>The method with if tests on the location is feasible when the
+subdomains have very simple shapes. A completely general method,
+utilizing <em>mesh functions</em>, is described next.</p>
+</div>
+<div class="section" id="mesh-functions">
+<span id="index-4"></span><h4>Mesh functions<a class="headerlink" href="#mesh-functions" title="Permalink to this headline">¶</a></h4>
+<p>We now address how to specify the subdomains <span class="math">\(\Omega_0\)</span> and <span class="math">\(\Omega_1\)</span>
+so that the method also works for subdomains of any shape. For this
+purpose we need to use subclasses of class <code class="docutils literal"><span class="pre">SubDomain</span></code>, not only plain
+functions as we have used so far for specifying boundaries. Consider
+the boundary function</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="k">def</span> <span class="nf">boundary</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">on_boundary</span><span class="p">):</span>
+    <span class="n">tol</span> <span class="o">=</span> <span class="mf">1E-14</span>
+    <span class="k">return</span> <span class="n">on_boundary</span> <span class="ow">and</span> <span class="nb">abs</span><span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span> <span class="o">&lt;</span> <span class="n">tol</span>
+</pre></div>
+</div>
+<p>for defining the boundary <span class="math">\(x=0\)</span>. Instead of using such a stand-alone
+function, we can create an instance (or object)
+of a subclass of <code class="docutils literal"><span class="pre">SubDomain</span></code>,
+which implements the <code class="docutils literal"><span class="pre">inside</span></code> method as an alternative to the
+<code class="docutils literal"><span class="pre">boundary</span></code> function:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="k">class</span> <span class="nc">Boundary</span><span class="p">(</span><span class="n">SubDomain</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">inside</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">on_boundary</span><span class="p">):</span>
+        <span class="n">tol</span> <span class="o">=</span> <span class="mf">1E-14</span>
+        <span class="k">return</span> <span class="n">on_boundary</span> <span class="ow">and</span> <span class="nb">abs</span><span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span> <span class="o">&lt;</span> <span class="n">tol</span>
+
+<span class="n">boundary</span> <span class="o">=</span> <span class="n">Boundary</span><span class="p">()</span>
+<span class="n">bc</span> <span class="o">=</span> <span class="n">DirichletBC</span><span class="p">(</span><span class="n">V</span><span class="p">,</span> <span class="n">Constant</span><span class="p">(</span><span class="mi">0</span><span class="p">),</span> <span class="n">boundary</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>A word about computer science terminology may be used here: The term
+<em>instance</em> means a Python object of a particular type (such as
+<code class="docutils literal"><span class="pre">SubDomain</span></code>, <code class="docutils literal"><span class="pre">Function</span></code>, <code class="docutils literal"><span class="pre">FunctionSpace</span></code>, etc.).  Many use <em>instance</em>
+and <em>object</em> as interchangeable terms. In other computer programming
+languages one may also use the term <em>variable</em> for the same thing.  We
+mostly use the well-known term <em>object</em> in this text.</p>
+<p>A subclass of <code class="docutils literal"><span class="pre">SubDomain</span></code> with an <code class="docutils literal"><span class="pre">inside</span></code> method offers functionality
+for marking parts of the domain or the boundary. Now we need to define
+one class for the subdomain <span class="math">\(\Omega_0\)</span> where <span class="math">\(y\leq 1/2\)</span> and another
+for the subdomain <span class="math">\(\Omega_1\)</span> where <span class="math">\(y\geq 1/2\)</span>:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">tol</span> <span class="o">=</span> <span class="mf">1E-14</span>  <span class="c"># Tolerance for coordinate comparisons</span>
+
+<span class="k">class</span> <span class="nc">Omega0</span><span class="p">(</span><span class="n">SubDomain</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">inside</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">on_boundary</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">x</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">&lt;=</span> <span class="mf">0.5</span><span class="o">+</span><span class="n">tol</span>
+
+<span class="k">class</span> <span class="nc">Omega1</span><span class="p">(</span><span class="n">SubDomain</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">inside</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">on_boundary</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">x</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">&gt;=</span> <span class="mf">0.5</span><span class="o">-</span><span class="n">tol</span>
+</pre></div>
+</div>
+<p>Notice the use of <code class="docutils literal"><span class="pre">&lt;=</span></code> and <code class="docutils literal"><span class="pre">&gt;=</span></code> in both tests. For a cell to belong
+to, e.g., <span class="math">\(\Omega_1\)</span>, the <code class="docutils literal"><span class="pre">inside</span></code> method must return <code class="docutils literal"><span class="pre">True</span></code> for all
+the vertices <code class="docutils literal"><span class="pre">x</span></code> of the cell. So to make the cells at the internal
+boundary <span class="math">\(y=1/2\)</span> belong to <span class="math">\(\Omega_1\)</span>, we need the test <code class="docutils literal"><span class="pre">x[1]</span> <span class="pre">&gt;=</span>
+<span class="pre">0.5</span></code>. However, because of potential rounding errors in the coordinates
+<code class="docutils literal"><span class="pre">x[1]</span></code>, we use a tolerance in the comparisons: <code class="docutils literal"><span class="pre">x[1]</span> <span class="pre">&gt;=</span> <span class="pre">0.5-tol</span></code>.</p>
+<p>The next task is to use a <em>mesh function</em> to mark all cells in
+<span class="math">\(\Omega_0\)</span> with the subdomain number 0 and all cells in <span class="math">\(\Omega_1\)</span>
+with the subdomain number 1.  Our convention is to number subdomains
+as <span class="math">\(0,1,2,\ldots\)</span>.</p>
+<p>A <code class="docutils literal"><span class="pre">MeshFunction</span></code> object is a discrete function that can be evaluated
+at a set of so-called <em>mesh entities</em>. Examples of mesh entities are
+cells, facets, and vertices. A <code class="docutils literal"><span class="pre">MeshFunction</span></code> over cells is suitable
+to represent subdomains (materials), while a <code class="docutils literal"><span class="pre">MeshFunction</span></code> over
+facets is used to represent pieces of external or internal boundaries.
+Mesh functions over vertices can be used to describe continuous
+fields.  The specialized classes <code class="docutils literal"><span class="pre">CellFunction</span></code> and <code class="docutils literal"><span class="pre">FacetFunction</span></code>
+are used to construct mesh functions of cells and facets,
+respectively.</p>
+<p>Since we need to define subdomains of <span class="math">\(\Omega\)</span> in the present example,
+we make use of a <code class="docutils literal"><span class="pre">CellFunction</span></code>. The constructor
+is fed with two arguments: 1) the type of value: <code class="docutils literal"><span class="pre">'int'</span></code> for integers,
+<code class="docutils literal"><span class="pre">'uint'</span></code> for positive (unsigned) integers, <code class="docutils literal"><span class="pre">'double'</span></code> for real
+numbers, and <code class="docutils literal"><span class="pre">'bool'</span></code> for logical values; 2) a <code class="docutils literal"><span class="pre">Mesh</span></code> object.
+Alternatively, the constructor can take just a filename and initialize
+the <code class="docutils literal"><span class="pre">CellFunction</span></code> from data in a file.</p>
+<p>We start with creating a <code class="docutils literal"><span class="pre">CellFunction</span></code> whose values are non-negative
+integers (<code class="docutils literal"><span class="pre">'uint'</span></code>) for numbering the subdomains.
+The appropriate code for two subdomains then reads</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">materials</span> <span class="o">=</span> <span class="n">CellFunction</span><span class="p">(</span><span class="s">&#39;size_t&#39;</span><span class="p">,</span> <span class="n">mesh</span><span class="p">)</span>
+<span class="c"># Mark subdomains with numbers 0 and 1</span>
+<span class="n">subdomain0</span> <span class="o">=</span> <span class="n">Omega0</span><span class="p">()</span>
+<span class="n">subdomain0</span><span class="o">.</span><span class="n">mark</span><span class="p">(</span><span class="n">materials</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+<span class="n">subdomain1</span> <span class="o">=</span> <span class="n">Omega1</span><span class="p">()</span>
+<span class="n">subdomain1</span><span class="o">.</span><span class="n">mark</span><span class="p">(</span><span class="n">materials</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+
+<span class="c"># Alternative</span>
+<span class="n">materials</span><span class="o">.</span><span class="n">set_all</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+<span class="n">subdomain1</span><span class="o">.</span><span class="n">mark</span><span class="p">(</span><span class="n">materials</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Calling <code class="docutils literal"><span class="pre">materials.array()</span></code> returns a <code class="docutils literal"><span class="pre">numpy</span></code> array of the
+subdomain values. That is, <code class="docutils literal"><span class="pre">materials.array()[i]</span></code> is
+the subdomain value of cell number <code class="docutils literal"><span class="pre">i</span></code>. This array is used to
+look up the subdomain or material number of a specific element.</p>
+<p>We need a function <code class="docutils literal"><span class="pre">k</span></code> that is constant in each subdomain <span class="math">\(\Omega_0\)</span>
+and <span class="math">\(\Omega_1\)</span>. Since we want <code class="docutils literal"><span class="pre">k</span></code> to be a finite element function, it
+is natural to choose a space of functions that is constant over each
+element.  The family of discontinuous Galerkin methods, in FEniCS
+denoted by <code class="docutils literal"><span class="pre">'DG'</span></code>, is suitable for this purpose. Since we want
+functions that are piecewise constant, the value of the degree
+parameter is zero:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">V0</span> <span class="o">=</span> <span class="n">FunctionSpace</span><span class="p">(</span><span class="n">mesh</span><span class="p">,</span> <span class="s">&#39;DG&#39;</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+<span class="n">k</span>  <span class="o">=</span> <span class="n">Function</span><span class="p">(</span><span class="n">V0</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>To fill <code class="docutils literal"><span class="pre">k</span></code> with the right values in each element, we loop over
+all cells (i.e., indices in <code class="docutils literal"><span class="pre">materials.array()</span></code>),
+extract the corresponding subdomain number of a cell,
+and assign the corresponding <span class="math">\(k\)</span> value to the <code class="docutils literal"><span class="pre">k.vector()</span></code> array:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">k_values</span> <span class="o">=</span> <span class="p">[</span><span class="mf">1.5</span><span class="p">,</span> <span class="mi">50</span><span class="p">]</span>  <span class="c"># values of k in the two subdomains</span>
+<span class="k">for</span> <span class="n">cell_no</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">materials</span><span class="o">.</span><span class="n">array</span><span class="p">())):</span>
+    <span class="n">material_no</span> <span class="o">=</span> <span class="n">materials</span><span class="o">.</span><span class="n">array</span><span class="p">()[</span><span class="n">cell_no</span><span class="p">]</span>
+    <span class="n">k</span><span class="o">.</span><span class="n">vector</span><span class="p">()[</span><span class="n">cell_no</span><span class="p">]</span> <span class="o">=</span> <span class="n">k_values</span><span class="p">[</span><span class="n">material_no</span><span class="p">]</span>
+</pre></div>
+</div>
+<p>Long loops in Python are known to be slow, so for large meshes
+it is preferable to avoid such loops and instead use <em>vectorized code</em>.
+Normally this implies that the loop must be replaced by
+calls to functions from the <code class="docutils literal"><span class="pre">numpy</span></code> library that operate on complete
+arrays (in efficient C code). The functionality we want in the present
+case is to compute an array of the same size as
+<code class="docutils literal"><span class="pre">materials.array()</span></code>, but where the value <code class="docutils literal"><span class="pre">i</span></code> of an entry
+in <code class="docutils literal"><span class="pre">materials.array()</span></code> is replaced by <code class="docutils literal"><span class="pre">k_values[i]</span></code>.
+Such an operation is carried out by the <code class="docutils literal"><span class="pre">numpy</span></code> function <code class="docutils literal"><span class="pre">choose</span></code>:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">help</span> <span class="o">=</span> <span class="n">numpy</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">materials</span><span class="o">.</span><span class="n">array</span><span class="p">(),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">numpy</span><span class="o">.</span><span class="n">int32</span><span class="p">)</span>
+<span class="n">k</span><span class="o">.</span><span class="n">vector</span><span class="p">()[:]</span> <span class="o">=</span> <span class="n">numpy</span><span class="o">.</span><span class="n">choose</span><span class="p">(</span><span class="n">help</span><span class="p">,</span> <span class="n">k_values</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>The <code class="docutils literal"><span class="pre">help</span></code> array is required since <code class="docutils literal"><span class="pre">choose</span></code> cannot work with
+<code class="docutils literal"><span class="pre">materials.array()</span></code> because this array has elements of
+type <code class="docutils literal"><span class="pre">uint32</span></code>. We must therefore transform this array to an array
+<code class="docutils literal"><span class="pre">help</span></code> with standard <code class="docutils literal"><span class="pre">int32</span></code> integers.</p>
+<p>The next section exemplifies a complete solver with a piecewise
+constant coefficient, like <span class="math">\(k\)</span>, defined through <code class="docutils literal"><span class="pre">SubDomain</span></code> objects,
+combined with different types of boundary conditions.</p>
+</div>
+<div class="section" id="c-strings-for-subdomain-definitions">
+<span id="index-5"></span><h4>C++ strings for subdomain definitions<a class="headerlink" href="#c-strings-for-subdomain-definitions" title="Permalink to this headline">¶</a></h4>
+<p>The <code class="docutils literal"><span class="pre">SubDomain</span></code> class in Python is convenient, but leads to lots of
+function calls from C++ to Python, which are slow. In large problems,
+the subdomains should be defined through C++ code. This is easy to achieve
+using the <code class="docutils literal"><span class="pre">CompiledSubDomain</span></code> object. Consider the definition of
+classes <code class="docutils literal"><span class="pre">Omega0</span></code> and <code class="docutils literal"><span class="pre">Omega1</span></code> above in Python.
+The key strings that define these subdomain can be expressed in
+C++ syntax and fed to <code class="docutils literal"><span class="pre">CompiledSubDomain</span></code> as follows:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">tol</span> <span class="o">=</span> <span class="mf">1E-14</span>  <span class="c"># Tolerance for coordinate comparisons</span>
+
+<span class="n">subdomain0</span> <span class="o">=</span> <span class="n">CompiledSubDomain</span><span class="p">(</span>
+                <span class="s">&#39;x[1] &lt;= boundary+tol&#39;</span><span class="p">,</span> <span class="n">tol</span><span class="o">=</span><span class="mf">1E-14</span><span class="p">,</span> <span class="n">boundary</span><span class="o">=</span><span class="mf">0.5</span><span class="p">)</span>
+<span class="n">subdomain1</span> <span class="o">=</span> <span class="n">CompiledSubDomain</span><span class="p">(</span>
+                <span class="s">&#39;x[1] &gt;= boundary-tol&#39;</span><span class="p">,</span> <span class="n">tol</span><span class="o">=</span><span class="mf">1E-14</span><span class="p">,</span> <span class="n">boundary</span><span class="o">=</span><span class="mf">0.5</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>As seen, one can have parameters in the strings and specify their
+values by keyword arguments.
+The resulting objects, <code class="docutils literal"><span class="pre">subdomain0</span></code> and <code class="docutils literal"><span class="pre">subdomain1</span></code>, can be used
+as ordinary <code class="docutils literal"><span class="pre">SubDomain</span></code> objects.</p>
+<p>Compiled subdomain strings can be applied for specifying boundaries as
+well, e.g.,</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">y_R</span> <span class="o">=</span> <span class="n">CompiledSubDomain</span><span class="p">(</span><span class="s">&#39;on_boundary &amp;&amp; near(x[1], R, eps=tol)&#39;</span><span class="p">,</span>
+                        <span class="n">tol</span><span class="o">=</span><span class="mf">1E-14</span><span class="p">,</span> <span class="n">R</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>   <span class="c"># y=2</span>
+</pre></div>
+</div>
+<p>It is possible to feed the C++ string (without parameters) directly as
+the third argument to <code class="docutils literal"><span class="pre">DirichletBC</span></code> without explicitly constructing a
+<code class="docutils literal"><span class="pre">CompiledSubDomain</span></code> object:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">bc1</span> <span class="o">=</span> <span class="n">DirichletBC</span><span class="p">(</span><span class="n">V</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="s">&#39;on_boundary &amp;&amp; near(x[1], 2, 1E-14)&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<span class="target" id="index-6"></span></div>
+</div>
+<div class="section" id="exercise-2-efficiency-of-python-vs-c-expressions">
+<span id="ch-poisson0-exer-eff-expression"></span><h3>Exercise 2: Efficiency of Python vs C++ expressions<a class="headerlink" href="#exercise-2-efficiency-of-python-vs-c-expressions" title="Permalink to this headline">¶</a></h3>
+<p>Consider a cube mesh with <span class="math">\(N\)</span> cells in each spatial direction.
+We want to define a <code class="docutils literal"><span class="pre">Function</span></code> on this mesh where the
+values are given by the mathematical function <span class="math">\(f(x,y,z)=a\sin(bxyz)\)</span>,
+where <span class="math">\(a\)</span> and <span class="math">\(b\)</span> are two parameters. Write a <code class="docutils literal"><span class="pre">class</span> <span class="pre">SineXYZ</span></code>:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="k">class</span> <span class="nc">SineXYZ</span><span class="p">(</span><span class="n">Expression</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">a</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">b</span> <span class="o">=</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span>
+
+    <span class="k">def</span> <span class="nf">eval</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
+        <span class="n">value</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">a</span><span class="o">*</span><span class="n">sin</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">b</span><span class="o">*</span><span class="n">x</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">*</span><span class="n">x</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">*</span><span class="n">x</span><span class="p">[</span><span class="mi">2</span><span class="p">])</span>
+</pre></div>
+</div>
+<p>Create an alternative <code class="docutils literal"><span class="pre">Expression</span></code> based on giving the formula for <span class="math">\(f(x,y,z)\)</span>
+as a C++ code string. Compare the computational efficiency of the
+two implementations (e.g., using <code class="docutils literal"><span class="pre">time.clock()</span></code> to measure the CPU time).</p>
+<p>The <code class="docutils literal"><span class="pre">sin</span></code> function used in class <code class="docutils literal"><span class="pre">SineXYZ.eval</span></code> can mean many things.
+This is an advanced FEniCS function if imported from <code class="docutils literal"><span class="pre">fenics</span></code>.
+Much more efficient versions for sin of numbers are found in <code class="docutils literal"><span class="pre">math.sin</span></code>
+and <code class="docutils literal"><span class="pre">numpy.sin</span></code>. Compare the use <code class="docutils literal"><span class="pre">sin</span></code> from <code class="docutils literal"><span class="pre">fenics</span></code>, <code class="docutils literal"><span class="pre">math</span></code>, <code class="docutils literal"><span class="pre">numpy</span></code>, and
+<code class="docutils literal"><span class="pre">sympy</span></code> (note that <code class="docutils literal"><span class="pre">sin</span></code> from <code class="docutils literal"><span class="pre">sympy</span></code> is very slow).</p>
+<p><strong>Solution.</strong>
+Here is an appropriate program:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="kn">from</span> <span class="nn">__future__</span> <span class="kn">import</span> <span class="n">print_function</span>
+<span class="kn">from</span> <span class="nn">fenics</span> <span class="kn">import</span> <span class="o">*</span>
+<span class="kn">import</span> <span class="nn">time</span>
+
+<span class="k">def</span> <span class="nf">make_sine_Function</span><span class="p">(</span><span class="n">N</span><span class="p">,</span> <span class="n">method</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Fill a Function with sin(x*y*z) values.&quot;&quot;&quot;</span>
+    <span class="n">mesh</span> <span class="o">=</span> <span class="n">UnitCubeMesh</span><span class="p">(</span><span class="n">N</span><span class="p">,</span> <span class="n">N</span><span class="p">,</span> <span class="n">N</span><span class="p">)</span>
+    <span class="n">V</span> <span class="o">=</span> <span class="n">FunctionSpace</span><span class="p">(</span><span class="n">mesh</span><span class="p">,</span> <span class="s">&#39;Lagrange&#39;</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">method</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s">&#39;Python&#39;</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">method</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="s">&#39;fenics.sin&#39;</span><span class="p">):</span>
+            <span class="c"># Need sin as local variable in this function</span>
+            <span class="kn">from</span> <span class="nn">fenics</span> <span class="kn">import</span> <span class="n">sin</span>
+        <span class="k">elif</span> <span class="n">method</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="s">&#39;math.sin&#39;</span><span class="p">):</span>
+            <span class="kn">from</span> <span class="nn">math</span> <span class="kn">import</span> <span class="n">sin</span>
+        <span class="k">elif</span> <span class="n">method</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="s">&#39;numpy.sin&#39;</span><span class="p">):</span>
+            <span class="kn">from</span> <span class="nn">numpy</span> <span class="kn">import</span> <span class="n">sin</span>
+        <span class="k">elif</span> <span class="n">method</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="s">&#39;sympy.sin&#39;</span><span class="p">):</span>
+            <span class="kn">from</span> <span class="nn">sympy</span> <span class="kn">import</span> <span class="n">sin</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">(</span><span class="s">&#39;method=</span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">method</span><span class="p">)</span>
+        <span class="k">print</span><span class="p">(</span><span class="s">&#39;sin:&#39;</span><span class="p">,</span> <span class="n">sin</span><span class="p">,</span> <span class="nb">type</span><span class="p">(</span><span class="n">sin</span><span class="p">))</span>
+
+        <span class="k">class</span> <span class="nc">SineXYZ</span><span class="p">(</span><span class="n">Expression</span><span class="p">):</span>
+            <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">):</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">a</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">b</span> <span class="o">=</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span>
+
+            <span class="k">def</span> <span class="nf">eval</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
+                <span class="n">value</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">a</span><span class="o">*</span><span class="n">sin</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">b</span><span class="o">*</span><span class="n">x</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">*</span><span class="n">x</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">*</span><span class="n">x</span><span class="p">[</span><span class="mi">2</span><span class="p">])</span>
+
+        <span class="n">expr</span> <span class="o">=</span> <span class="n">SineXYZ</span><span class="p">(</span><span class="n">a</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">b</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
+
+    <span class="k">elif</span> <span class="n">method</span> <span class="o">==</span> <span class="s">&#39;C++&#39;</span><span class="p">:</span>
+        <span class="n">expr</span> <span class="o">=</span> <span class="n">Expression</span><span class="p">(</span><span class="s">&#39;a*sin(b*x[0]*x[1]*x[2])&#39;</span><span class="p">,</span> <span class="n">a</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">b</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
+
+    <span class="n">t0</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">clock</span><span class="p">()</span>
+    <span class="n">u</span> <span class="o">=</span> <span class="n">interpolate</span><span class="p">(</span><span class="n">expr</span><span class="p">,</span> <span class="n">V</span><span class="p">)</span>
+    <span class="n">t1</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">clock</span><span class="p">()</span>
+    <span class="k">return</span> <span class="n">u</span><span class="p">,</span> <span class="n">t1</span><span class="o">-</span><span class="n">t0</span>
+
+<span class="k">def</span> <span class="nf">main</span><span class="p">(</span><span class="n">N</span><span class="p">):</span>
+    <span class="n">u</span><span class="p">,</span> <span class="n">cpu_py_fenics</span>  <span class="o">=</span> <span class="n">make_sine_Function</span><span class="p">(</span><span class="n">N</span><span class="p">,</span> <span class="s">&#39;Python-fenics.sin&#39;</span><span class="p">)</span>
+    <span class="n">u</span><span class="p">,</span> <span class="n">cpu_py_math</span>    <span class="o">=</span> <span class="n">make_sine_Function</span><span class="p">(</span><span class="n">N</span><span class="p">,</span> <span class="s">&#39;Python-math.sin&#39;</span><span class="p">)</span>
+    <span class="n">u</span><span class="p">,</span> <span class="n">cpu_py_numpy</span>   <span class="o">=</span> <span class="n">make_sine_Function</span><span class="p">(</span><span class="n">N</span><span class="p">,</span> <span class="s">&#39;Python-numpy.sin&#39;</span><span class="p">)</span>
+    <span class="n">u</span><span class="p">,</span> <span class="n">cpu_py_sympy</span>   <span class="o">=</span> <span class="n">make_sine_Function</span><span class="p">(</span><span class="n">N</span><span class="p">,</span> <span class="s">&#39;Python-sympy.sin&#39;</span><span class="p">)</span>
+    <span class="n">u</span><span class="p">,</span> <span class="n">cpu_cpp</span> <span class="o">=</span> <span class="n">make_sine_Function</span><span class="p">(</span><span class="n">N</span><span class="p">,</span> <span class="s">&#39;C++&#39;</span><span class="p">)</span>
+    <span class="k">print</span><span class="p">(</span><span class="s">&quot;&quot;&quot;DOFs: </span><span class="si">%d</span><span class="s"></span>
+<span class="s">Python:</span>
+<span class="s">fenics.sin: </span><span class="si">%.2f</span><span class="s"></span>
+<span class="s">math.sin:   </span><span class="si">%.2f</span><span class="s"></span>
+<span class="s">numpy.sin:  </span><span class="si">%.2f</span><span class="s"></span>
+<span class="s">sympy.sin:  </span><span class="si">%.2f</span><span class="s"></span>
+<span class="s">C++:        </span><span class="si">%.2f</span><span class="s"></span>
+<span class="s">Speed-up:   math: </span><span class="si">%.2f</span><span class="s">  sympy: </span><span class="si">%.2f</span><span class="s">&quot;&quot;&quot;</span> <span class="o">%</span>
+          <span class="p">(</span><span class="n">u</span><span class="o">.</span><span class="n">function_space</span><span class="p">()</span><span class="o">.</span><span class="n">dim</span><span class="p">(),</span>
+           <span class="n">cpu_py_fenics</span><span class="p">,</span> <span class="n">cpu_py_math</span><span class="p">,</span>
+           <span class="n">cpu_py_numpy</span><span class="p">,</span> <span class="n">cpu_py_sympy</span><span class="p">,</span>
+           <span class="n">cpu_cpp</span><span class="p">,</span>
+           <span class="n">cpu_py_math</span><span class="o">/</span><span class="nb">float</span><span class="p">(</span><span class="n">cpu_cpp</span><span class="p">),</span>
+           <span class="n">cpu_py_sympy</span><span class="o">/</span><span class="nb">float</span><span class="p">(</span><span class="n">cpu_cpp</span><span class="p">)))</span>
+
+<span class="k">def</span> <span class="nf">profile</span><span class="p">():</span>
+    <span class="kn">import</span> <span class="nn">cProfile</span>
+    <span class="n">prof</span> <span class="o">=</span> <span class="n">cProfile</span><span class="o">.</span><span class="n">Profile</span><span class="p">()</span>
+    <span class="n">prof</span><span class="o">.</span><span class="n">runcall</span><span class="p">(</span><span class="n">main</span><span class="p">)</span>
+    <span class="n">prof</span><span class="o">.</span><span class="n">dump_stats</span><span class="p">(</span><span class="s">&quot;tmp.profile&quot;</span><span class="p">)</span>
+    <span class="c"># http://docs.python.org/2/library/profile.html</span>
+
+<span class="n">main</span><span class="p">(</span><span class="mi">20</span><span class="p">)</span>
+<span class="c">#profile()</span>
+</pre></div>
+</div>
+<p>Running the program shows that <code class="docutils literal"><span class="pre">sin</span></code> from <code class="docutils literal"><span class="pre">math</span></code> is the most efficient choice,
+but a string C++ runs 40 times faster. Note that <code class="docutils literal"><span class="pre">fenics.sin</span></code>, which is a
+sine function in the UFL language that can work with symbolic expressions
+in finite element forms, is (naturally) less efficient than the <code class="docutils literal"><span class="pre">sin</span></code>
+functions for numbers in <code class="docutils literal"><span class="pre">math</span></code> and <code class="docutils literal"><span class="pre">numpy</span></code>.</p>
+<p>Filename: <code class="docutils literal"><span class="pre">Expression_efficiency</span></code>.</p>
+</div>
+<div class="section" id="multiple-neumann-robin-and-dirichlet-conditions">
+<span id="ch-poisson0-multi-bc"></span><h3>Multiple Neumann, Robin, and Dirichlet conditions<a class="headerlink" href="#multiple-neumann-robin-and-dirichlet-conditions" title="Permalink to this headline">¶</a></h3>
+<span class="target" id="index-7"></span><span class="target" id="index-8"></span><span class="target" id="index-9"></span><p id="index-10">Consider the model problem from the section <a class="reference internal" href="._ftut1009.html#ch-poisson0-multiple-dirichlet"><span class="std std-ref">Multiple Dirichlet conditions</span></a> where we had both Dirichlet and
+Neumann conditions.  The term <code class="docutils literal"><span class="pre">v*g*ds</span></code> in the expression for <code class="docutils literal"><span class="pre">L</span></code>
+implies a boundary integral over the complete boundary, or in FEniCS
+terms, an integral over all exterior facets.  However, the
+contributions from the parts of the boundary where we have Dirichlet
+conditions are erased when the linear system is modified by the
+Dirichlet conditions.  We would like, from an efficiency point of
+view, to integrate <code class="docutils literal"><span class="pre">v*g*ds</span></code> only over the parts of the boundary where
+we actually have Neumann conditions.  And more importantly, in other
+problems one may have different Neumann conditions or other conditions
+like the Robin type condition.  With the mesh function concept we can
+mark different parts of the boundary and integrate over specific
+parts.  The same concept can also be used to treat multiple Dirichlet
+conditions.  The forthcoming text illustrates how this is done.</p>
+<div class="section" id="three-types-of-boundary-conditions">
+<h4>Three types of boundary conditions<a class="headerlink" href="#three-types-of-boundary-conditions" title="Permalink to this headline">¶</a></h4>
+<p>We extend our repertoire of boundary conditions to three types:
+Dirichlet, Neumann, and Robin.  Dirichlet conditions apply to some
+parts <span class="math">\(\Gamma_{D,0}\)</span>, <span class="math">\(\Gamma_{D,1}\)</span>, <span class="math">\(...\)</span>, of the boundary:</p>
+<div class="math">
+\[u_{0,0}\hbox{ on }\Gamma_{D,0},\quad
+u_{0,1}\hbox{ on }\Gamma_{D,1}, \ldots\]</div>
+<p>where <span class="math">\(u_{0,i}\)</span> are prescribed functions, <span class="math">\(i=0,1,\ldots\)</span>
+On other parts, <span class="math">\(\Gamma_{N,0}\)</span>, <span class="math">\(\Gamma_{N,1}\)</span>, and so on, we have
+Neumann conditions</p>
+<div class="math">
+\[-p{\partial u\over\partial n} = g_{0}\hbox{ on }\Gamma_{N,0},\quad
+-p{\partial u\over\partial n} = g_{1}\hbox{ on }\Gamma_{N,1},\quad \ldots\]</div>
+<p>Finally, we have <em>Robin conditions</em></p>
+<div class="math" id="eq-ch-poisson0-multi-bc-robin">
+\[\tag{59}
+-p{\partial u\over\partial n} = r(u-s),\]</div>
+<p>where <span class="math">\(r\)</span> and <span class="math">\(s\)</span> are specified functions.  The Robin condition is
+most often used to model heat transfer to the surroundings and arise
+naturally from Newton&#8217;s cooling law. In that case, <span class="math">\(r\)</span> is a heat
+transfer coefficient, and <span class="math">\(s\)</span> is the temperature of the
+surroundings. Both can be space and time-dependent.
+The Robin conditions apply
+at some parts <span class="math">\(\Gamma_{R,0}\)</span>, <span class="math">\(\Gamma_{R,1}\)</span>, and so forth:</p>
+<div class="math">
+\[-p{\partial u\over\partial n} = r_0(u-s_0)\hbox{ on }\Gamma_{R,0},\quad
+-p{\partial u\over\partial n} = r_1(u-s_1)\hbox{ on }\Gamma_{R,1},\quad \ldots\]</div>
+</div>
+<div class="section" id="a-general-model-problem">
+<span id="index-11"></span><h4>A general model problem<a class="headerlink" href="#a-general-model-problem" title="Permalink to this headline">¶</a></h4>
+<p>With the notation above,
+the model problem to be solved with multiple Dirichlet, Neumann, and
+Robin conditions can formally be defined as</p>
+<div class="math" id="eq-ch-poisson0-2d-dn3">
+\[\tag{60}
+-\nabla\cdot(p\nabla u) = -f, \mbox{ in } \Omega,\]</div>
+<div class="math" id="eq-ch-poisson0-2d-dn3-bcd">
+\[\tag{61}
+u = u_{0,i} \mbox{ on } \Gamma_{D,i},\quad i=0,1,\ldots\]</div>
+<div class="math" id="eq-ch-poisson0-2d-dn3-bcn">
+\[\tag{62}
+-p{\partial u\over\partial n} = g_i \mbox{ on } \Gamma_{N,i},\quad
+    i=0,1,\ldots\]</div>
+<div class="math" id="eq-ch-poisson0-2d-dn3-bcr">
+\[\tag{63}
+-p{\partial u\over\partial n} = r_i(u-s_i) \mbox{ on } \Gamma_{R,i},\quad
+    i=0,1,\ldots\]</div>
+</div>
+<div class="section" id="variational-formulation-6">
+<h4>Variational formulation<a class="headerlink" href="#variational-formulation-6" title="Permalink to this headline">¶</a></h4>
+<p>Integration by parts of <span class="math">\(-\int_\Omega v\nabla\cdot(p\nabla u) {\, \mathrm{d}x}\)</span> becomes
+as usual</p>
+<div class="math">
+\[ -\int_\Omega v\nabla\cdot(p\nabla u) {\, \mathrm{d}x}
+= \int_\Omega p\nabla u\cdot \nabla v {\, \mathrm{d}x} -
+\int_{\partial\Omega}p\frac{\partial u}{\partial n}v {\, \mathrm{d}s}{\thinspace .}\]</div>
+<p>The boundary integral does not apply to the parts of
+the boundary where we have Dirichlet conditions (<span class="math">\(\Gamma_{D,i}\)</span>).
+Moreover, on the remaining parts, we must split the boundary integral
+into the parts where we have Neumann and Robin conditions such that we
+insert the right conditions as integrands.
+Specifically, we have</p>
+<div class="math">
+\[\begin{split}-\int_{\partial\Omega}p\frac{\partial u}{\partial n}v {\, \mathrm{d}s}
+&amp;=
+-\sum_i\int_{\Gamma_{N,i}}p\frac{\partial u}{\partial n} {\, \mathrm{d}s}
+-\sum_i\int_{\Gamma_{R,i}}p\frac{\partial u}{\partial n} {\, \mathrm{d}s}\\
+&amp;=
+\sum_i\int_{\Gamma_{N,i}}g_i {\, \mathrm{d}s} +
+\sum_i\int_{\Gamma_{R,i}}r_i(u-s_i) {\, \mathrm{d}s}{\thinspace .}\end{split}\]</div>
+<p>The variational formulation then becomes</p>
+<div class="math" id="eq-ch-poisson0-multi-bc-varform">
+\[\tag{64}
+F = \int_{\Omega} p\nabla u\cdot \nabla v {\, \mathrm{d}x} +
+    \sum_i\int_{\Gamma_{N,i}} g_iv {\, \mathrm{d}s} +
+    \sum_i\int_{\Gamma_{R,i}}r_i(u-s_i)v {\, \mathrm{d}s}
+    - \int_{\Omega} fv {\, \mathrm{d}x} =0{\thinspace .}\]</div>
+<p>We have been used to writing
+this variational formulation in the standard notation
+<span class="math">\(a(u,v)=L(v)\)</span>, which requires that we identify all integrals with
+<em>both</em> <span class="math">\(u\)</span> and <span class="math">\(v\)</span>, and collect these in <span class="math">\(a(u,v)\)</span>, while the remaining
+integrals with <span class="math">\(v\)</span> and not <span class="math">\(u\)</span> go into <span class="math">\(L(v)\)</span>.  The integral from the
+Robin condition must of this reason be split in two parts:</p>
+<div class="math">
+\[\int_{\Gamma_{R,i}}r_i(u-s_i)v {\, \mathrm{d}s}
+= \int_{\Gamma_{R,i}} r_iuv {\, \mathrm{d}s} - \int_{\Gamma_{R,i}}r_is_iv {\, \mathrm{d}s}{\thinspace .}\]</div>
+<p>We then have</p>
+<div class="math" id="eq-ch-poisson0-2d-dn3-var-a">
+\[\tag{65}
+a(u, v) = \int_{\Omega} p\nabla u\cdot \nabla v {\, \mathrm{d}x}
+    + \sum_i\int_{\Gamma_{R,i}}r_iuv {\, \mathrm{d}s},\]</div>
+<div class="math" id="eq-ch-poisson0-2d-dn3-var-l">
+\[\tag{66}
+L(v) = \int_{\Omega} fv {\, \mathrm{d}x} -
+    \sum_i\int_{\Gamma_{N,i}} g_i v {\, \mathrm{d}s} + \sum_i\int_{\Gamma_{R,i}}r_is_iv {\, \mathrm{d}s}{\thinspace .}\]</div>
+</div>
+</div>
+<div class="section" id="fenics-implementation-of-boundary-conditions">
+<h3>FEniCS implementation of boundary conditions<a class="headerlink" href="#fenics-implementation-of-boundary-conditions" title="Permalink to this headline">¶</a></h3>
+<p>Looking at our previous <code class="docutils literal"><span class="pre">solver</span></code> functions for solving the 2D Poisson equation,
+the following new aspects must be taken care of:</p>
+<blockquote>
+<div><ol class="arabic simple">
+<li>definition of a mesh function over the boundary,</li>
+<li>marking each side as a subdomain, using the mesh function,</li>
+<li>splitting a boundary integral into parts.</li>
+</ol>
+</div></blockquote>
+<p>A general approach to the first task is to mark each of the desired
+boundaries with markers 0, 1, 2, and so forth. Here we aim at
+the four sides of the unit square, marked with
+0 (<span class="math">\(x=0\)</span>), 1 (<span class="math">\(x=1\)</span>), 2 (<span class="math">\(y=0\)</span>), and 3 (<span class="math">\(y=1\)</span>).
+The marking of boundaries makes use of a mesh function object, but contrary to
+the section <a class="reference internal" href="._ftut1009.html#ftut-possion-2d-2mat-impl"><span class="std std-ref">Working with subdomains</span></a>, this is not a function over
+cells, but a function over cell facets. We apply the <code class="docutils literal"><span class="pre">FacetFunction</span></code>
+for this purpose:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">boundary_parts</span> <span class="o">=</span> <span class="n">FacetFunction</span><span class="p">(</span><span class="s">&#39;size_t&#39;</span><span class="p">,</span> <span class="n">mesh</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>As in the section <a class="reference internal" href="._ftut1009.html#ftut-possion-2d-2mat-impl"><span class="std std-ref">Working with subdomains</span></a> we use a subclass of
+<code class="docutils literal"><span class="pre">SubDomain</span></code> to identify the various parts of the mesh
+function. Problems with domains of more complicated geometries may set
+the mesh function for marking boundaries as part of the mesh
+generation.  In our case, the <span class="math">\(x=0\)</span> boundary can be marked by</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="k">class</span> <span class="nc">BoundaryX0</span><span class="p">(</span><span class="n">SubDomain</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">inside</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">on_boundary</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">on_boundary</span> <span class="ow">and</span> <span class="nb">abs</span><span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span> <span class="o">&lt;</span> <span class="n">tol</span>
+
+<span class="n">bx0</span> <span class="o">=</span> <span class="n">BoundaryX0</span><span class="p">()</span>
+<span class="n">bx0</span><span class="o">.</span><span class="n">mark</span><span class="p">(</span><span class="n">boundary_parts</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Similarly, we make the classes <code class="docutils literal"><span class="pre">BoundaryX1</span></code> for the <span class="math">\(x=1\)</span> boundary,
+<code class="docutils literal"><span class="pre">BoundaryY0</span></code> for the <span class="math">\(y=0\)</span> boundary, and <code class="docutils literal"><span class="pre">BoundaryY1</span></code> for the <span class="math">\(y=1\)</span>
+boundary, and mark these as subdomains 1, 2, and 3, respectively.</p>
+<p>For generality of the implementation, we let the user specify
+what kind of boundary condition that applies to each of the four
+boundaries. We set up a Python dictionary for this purpose, with
+the key as subdomain number and the value as a dictionary specifying
+the kind of condition as key and a function as its value.
+For example,</p>
+<div class="highlight-text"><div class="highlight"><pre>boundary_conditions = {
+  0: {&#39;Dirichlet&#39;: u_b},
+  1: {&#39;Robin&#39;: (r, s)},
+  2: {&#39;Neumann: g}},
+  3: {&#39;Neumann&#39;, 0}}
+</pre></div>
+</div>
+<p>specifies</p>
+<blockquote>
+<div><ul class="simple">
+<li>a Dirichlet condition, with values implemented by an <code class="docutils literal"><span class="pre">Expression</span></code>
+or <code class="docutils literal"><span class="pre">Constant</span></code> object
+<code class="docutils literal"><span class="pre">u_b</span></code>, on subdomain 0, i.e., the <span class="math">\(x=1\)</span> boundary;</li>
+<li>a Robin condition <a class="reference internal" href="._ftut1009.html#eq-ch-poisson0-multi-bc-robin"><span class="std std-ref">(59)</span></a>
+on subdomain 1, <span class="math">\(x=1\)</span>, with <code class="docutils literal"><span class="pre">Expression</span></code> or <code class="docutils literal"><span class="pre">Constant</span></code> objects
+<code class="docutils literal"><span class="pre">r</span></code> and <code class="docutils literal"><span class="pre">s</span></code> specifying <span class="math">\(r\)</span> and <span class="math">\(s\)</span>;</li>
+<li>a Neumann condition <span class="math">\(\partial u/\partial n=g\)</span> on subdomain 2, <span class="math">\(y=0\)</span>,
+where an <code class="docutils literal"><span class="pre">Expression</span></code> or <code class="docutils literal"><span class="pre">Constant</span></code> object <code class="docutils literal"><span class="pre">g</span></code> implements the value <span class="math">\(g\)</span>;</li>
+<li>a homogeneous Neumann condition <span class="math">\(\partial u/\partial n=0\)</span> on
+subdomain 3, <span class="math">\(y=1\)</span>.</li>
+</ul>
+</div></blockquote>
+<p>As explained in the section <a class="reference internal" href="._ftut1009.html#ch-poisson0-multiple-dirichlet"><span class="std std-ref">Multiple Dirichlet conditions</span></a>,
+multiple Dirichlet conditions must be collected in a list of
+<code class="docutils literal"><span class="pre">DirichletBC</span></code> objects. Based on the <code class="docutils literal"><span class="pre">boundary_conditions</span></code> data
+structure above, we can construct this list by the following snippet:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">bcs</span> <span class="o">=</span> <span class="p">[]</span>  <span class="c"># List of Dirichlet conditions</span>
+<span class="k">for</span> <span class="n">n</span> <span class="ow">in</span> <span class="n">boundary_conditions</span><span class="p">:</span>
+    <span class="k">if</span> <span class="s">&#39;Dirichlet&#39;</span> <span class="ow">in</span> <span class="n">boundary_conditions</span><span class="p">[</span><span class="n">n</span><span class="p">]:</span>
+        <span class="n">bcs</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+            <span class="n">DirichletBC</span><span class="p">(</span><span class="n">V</span><span class="p">,</span> <span class="n">boundary_conditions</span><span class="p">[</span><span class="n">n</span><span class="p">][</span><span class="s">&#39;Dirichlet&#39;</span><span class="p">],</span>
+                        <span class="n">boundary_parts</span><span class="p">,</span> <span class="n">n</span><span class="p">))</span>
+</pre></div>
+</div>
+<p>The new aspect of the variational problem is the two distinct
+boundary integrals over <span class="math">\(\Gamma_{N,i}\)</span> and <span class="math">\(\Gamma_{R,i}\)</span>.
+Having a mesh function over exterior cell facets (our
+<code class="docutils literal"><span class="pre">boundary_parts</span></code> object), where subdomains (boundary parts) are
+numbered as <span class="math">\(0,1,2,\ldots\)</span>, the special symbol <code class="docutils literal"><span class="pre">ds(0)</span></code>
+implies integration over subdomain (part) 0, <code class="docutils literal"><span class="pre">ds(1)</span></code> denotes
+integration over subdomain (part) 1, and so on.
+The idea of multiple <code class="docutils literal"><span class="pre">ds</span></code>-type objects generalizes to volume
+integrals too: <code class="docutils literal"><span class="pre">dx(0)</span></code>, <code class="docutils literal"><span class="pre">dx(1)</span></code>, etc., are used to
+integrate over subdomain 0, 1, etc.,  inside <span class="math">\(\Omega\)</span>.</p>
+<p>Before we have <code class="docutils literal"><span class="pre">ds(n)</span></code> for integers <code class="docutils literal"><span class="pre">n</span></code> defined, we must do</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">ds</span> <span class="o">=</span> <span class="n">Measure</span><span class="p">(</span><span class="s">&#39;ds&#39;</span><span class="p">,</span> <span class="n">domain</span><span class="o">=</span><span class="n">mesh</span><span class="p">,</span> <span class="n">subdomain_data</span><span class="o">=</span><span class="n">boundaries_parts</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Similarly, if we want integration of different parts of the domain,
+we redefine <code class="docutils literal"><span class="pre">dx</span></code> as</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">dx</span> <span class="o">=</span> <span class="n">Measure</span><span class="p">(</span><span class="s">&#39;dx&#39;</span><span class="p">,</span> <span class="n">domain</span><span class="o">=</span><span class="n">mesh</span><span class="p">,</span> <span class="n">subdomain_data</span><span class="o">=</span><span class="n">domains</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>where <code class="docutils literal"><span class="pre">domains</span></code> is a <code class="docutils literal"><span class="pre">CellFunction</span></code> defining subdomains in <span class="math">\(\Omega\)</span>.</p>
+<p>Suppose we have a Robin condition with values <code class="docutils literal"><span class="pre">r</span></code> and <code class="docutils literal"><span class="pre">s</span></code> on subdomain
+<code class="docutils literal"><span class="pre">R</span></code>, a Neumann condition with value <code class="docutils literal"><span class="pre">g</span></code> on subdomain <code class="docutils literal"><span class="pre">N</span></code>, the
+variational form can be written</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">a</span> <span class="o">=</span> <span class="n">dot</span><span class="p">(</span><span class="n">grad</span><span class="p">(</span><span class="n">u</span><span class="p">),</span> <span class="n">grad</span><span class="p">(</span><span class="n">v</span><span class="p">))</span><span class="o">*</span><span class="n">dx</span> <span class="o">+</span> <span class="n">r</span><span class="o">*</span><span class="n">u</span><span class="o">*</span><span class="n">v</span><span class="o">*</span><span class="n">ds</span><span class="p">(</span><span class="n">R</span><span class="p">)</span>
+<span class="n">L</span> <span class="o">=</span> <span class="n">f</span><span class="o">*</span><span class="n">v</span><span class="o">*</span><span class="n">dx</span> <span class="o">-</span> <span class="n">g</span><span class="o">*</span><span class="n">v</span><span class="o">*</span><span class="n">ds</span><span class="p">(</span><span class="n">N</span><span class="p">)</span> <span class="o">+</span> <span class="n">r</span><span class="o">*</span><span class="n">s</span><span class="o">*</span><span class="n">v</span><span class="o">*</span><span class="n">ds</span><span class="p">(</span><span class="n">R</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>In our case things get a bit more complicated since the
+information about integrals in Neumann and Robin conditions
+are in the <code class="docutils literal"><span class="pre">boundary_conditions</span></code> data structure. We can collect
+all Neumann conditions by the code</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">u</span> <span class="o">=</span> <span class="n">TrialFunction</span><span class="p">(</span><span class="n">V</span><span class="p">)</span>
+<span class="n">v</span> <span class="o">=</span> <span class="n">TestFunction</span><span class="p">(</span><span class="n">V</span><span class="p">)</span>
+<span class="n">Neumann_integrals</span> <span class="o">=</span> <span class="p">[]</span>
+<span class="k">for</span> <span class="n">n</span> <span class="ow">in</span> <span class="n">boundary_conditions</span><span class="p">:</span>
+    <span class="k">if</span> <span class="s">&#39;Neumann&#39;</span> <span class="ow">in</span> <span class="n">boundary_conditions</span><span class="p">[</span><span class="n">n</span><span class="p">]:</span>
+        <span class="k">if</span> <span class="n">boundary_conditions</span><span class="p">[</span><span class="n">n</span><span class="p">][</span><span class="s">&#39;Neumann&#39;</span><span class="p">]</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="n">g</span> <span class="o">=</span> <span class="n">boundary_conditions</span><span class="p">[</span><span class="n">n</span><span class="p">][</span><span class="s">&#39;Neumann&#39;</span><span class="p">]</span>
+            <span class="n">Neumann_integrals</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">g</span><span class="o">*</span><span class="n">v</span><span class="o">*</span><span class="n">ds</span><span class="p">(</span><span class="n">n</span><span class="p">))</span>
+</pre></div>
+</div>
+<p>Applying <code class="docutils literal"><span class="pre">sum(Nemann_integrals)</span></code> will apply the <code class="docutils literal"><span class="pre">+</span></code> operator to
+the variational forms in the <code class="docutils literal"><span class="pre">Numeann_integrals</span></code> list and result
+in the integrals we need for the right-hand side <code class="docutils literal"><span class="pre">L</span></code> of the
+variational form.</p>
+<p>The integrals in the Robin condition can similarly be collected
+in lists:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">Robin_a_integrals</span> <span class="o">=</span> <span class="p">[]</span>
+<span class="n">Robin_L_integrals</span> <span class="o">=</span> <span class="p">[]</span>
+<span class="k">for</span> <span class="n">n</span> <span class="ow">in</span> <span class="n">boundary_conditions</span><span class="p">:</span>
+    <span class="k">if</span> <span class="s">&#39;Robin&#39;</span> <span class="ow">in</span> <span class="n">boundary_conditions</span><span class="p">[</span><span class="n">n</span><span class="p">]:</span>
+        <span class="n">r</span><span class="p">,</span> <span class="n">s</span> <span class="o">=</span> <span class="n">boundary_conditions</span><span class="p">[</span><span class="n">n</span><span class="p">][</span><span class="s">&#39;Robin&#39;</span><span class="p">]</span>
+        <span class="n">Robin_a_integrals</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">r</span><span class="o">*</span><span class="n">u</span><span class="o">*</span><span class="n">v</span><span class="o">*</span><span class="n">ds</span><span class="p">(</span><span class="n">n</span><span class="p">))</span>
+        <span class="n">Robin_L_integrals</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">r</span><span class="o">*</span><span class="n">s</span><span class="o">*</span><span class="n">v</span><span class="o">*</span><span class="n">ds</span><span class="p">(</span><span class="n">n</span><span class="p">))</span>
+</pre></div>
+</div>
+<p>We are now in a position to define the <code class="docutils literal"><span class="pre">a</span></code> and <code class="docutils literal"><span class="pre">L</span></code> expressions
+in the variational formulation:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">a</span> <span class="o">=</span> <span class="n">dot</span><span class="p">(</span><span class="n">p</span><span class="o">*</span><span class="n">grad</span><span class="p">(</span><span class="n">u</span><span class="p">),</span> <span class="n">grad</span><span class="p">(</span><span class="n">v</span><span class="p">))</span><span class="o">*</span><span class="n">dx</span> <span class="o">+</span> \
+    <span class="nb">sum</span><span class="p">(</span><span class="n">Robin_a_integrals</span><span class="p">)</span>
+<span class="n">L</span> <span class="o">=</span> <span class="n">f</span><span class="o">*</span><span class="n">v</span><span class="o">*</span><span class="n">dx</span> <span class="o">-</span> <span class="nb">sum</span><span class="p">(</span><span class="n">Neumann_integrals</span><span class="p">)</span> <span class="o">+</span> <span class="nb">sum</span><span class="p">(</span><span class="n">Robin_L_integrals</span><span class="p">)</span>
+</pre></div>
+</div>
+<span class="target" id="index-12"></span><div class="section" id="simplified-handling-of-the-variational-formulation">
+<span id="index-13"></span><h4>Simplified handling of the variational formulation<a class="headerlink" href="#simplified-handling-of-the-variational-formulation" title="Permalink to this headline">¶</a></h4>
+<p>We carefully ordered the terms in the variational formulation above
+into the <span class="math">\(a\)</span> and <span class="math">\(L\)</span> parts. This requires a splitting of the Robin
+condition and makes the <code class="docutils literal"><span class="pre">a</span></code> and <code class="docutils literal"><span class="pre">L</span></code> expressions less readable (still we
+think understanding this splitting is key for any finite element programmer!).
+Fortunately, UFL allows us to specify the complete variational form
+<a class="reference internal" href="._ftut1009.html#eq-ch-poisson0-multi-bc-varform"><span class="std std-ref">(64)</span></a> as one expression and offer tools to
+extract what goes into the bilinear form <span class="math">\(a(u,v)\)</span> and the linear form
+<span class="math">\(L(v)\)</span>:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">F</span> <span class="o">=</span> <span class="n">dot</span><span class="p">(</span><span class="n">p</span><span class="o">*</span><span class="n">grad</span><span class="p">(</span><span class="n">u</span><span class="p">),</span> <span class="n">grad</span><span class="p">(</span><span class="n">v</span><span class="p">))</span><span class="o">*</span><span class="n">dx</span> <span class="o">+</span> \
+    <span class="nb">sum</span><span class="p">(</span><span class="n">Robin_integrals</span><span class="p">)</span> <span class="o">-</span> <span class="n">f</span><span class="o">*</span><span class="n">v</span><span class="o">*</span><span class="n">dx</span> <span class="o">+</span> <span class="nb">sum</span><span class="p">(</span><span class="n">Neumann_integrals</span><span class="p">)</span>
+<span class="n">a</span><span class="p">,</span> <span class="n">L</span> <span class="o">=</span> <span class="n">lhs</span><span class="p">(</span><span class="n">F</span><span class="p">),</span> <span class="n">rhs</span><span class="p">(</span><span class="n">F</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>This time we can more naturally define the integrals from the
+Robin condition as <code class="docutils literal"><span class="pre">r*(u-s)*v*ds(n)</span></code>:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">Robin_integrals</span> <span class="o">=</span> <span class="p">[]</span>
+<span class="k">for</span> <span class="n">n</span> <span class="ow">in</span> <span class="n">boundary_conditions</span><span class="p">:</span>
+    <span class="k">if</span> <span class="s">&#39;Robin&#39;</span> <span class="ow">in</span> <span class="n">boundary_conditions</span><span class="p">[</span><span class="n">n</span><span class="p">]:</span>
+        <span class="n">r</span><span class="p">,</span> <span class="n">s</span> <span class="o">=</span> <span class="n">boundary_conditions</span><span class="p">[</span><span class="n">n</span><span class="p">][</span><span class="s">&#39;Robin&#39;</span><span class="p">]</span>
+        <span class="n">Robin_integrals</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">r</span><span class="o">*</span><span class="p">(</span><span class="n">u</span><span class="o">-</span><span class="n">s</span><span class="p">)</span><span class="o">*</span><span class="n">v</span><span class="o">*</span><span class="n">ds</span><span class="p">(</span><span class="n">n</span><span class="p">))</span>
+</pre></div>
+</div>
+<p>The complete code is in the <code class="docutils literal"><span class="pre">solver_bc</span></code> function in the
+<code class="docutils literal"><span class="pre">ft08_poisson_vc.py</span></code> file.</p>
+</div>
+<div class="section" id="test-problem-4">
+<h4>Test problem<a class="headerlink" href="#test-problem-4" title="Permalink to this headline">¶</a></h4>
+<p>Let us continue to use <span class="math">\({u_{\small\mbox{e}}}=1+x^2+2y^2\)</span> as the exact solution, and
+set <span class="math">\(p=1\)</span> and <span class="math">\(f=-6\)</span> in the PDE.  Our domain is the unit square, and
+we assign Dirichlet conditions at <span class="math">\(x=0\)</span> and <span class="math">\(x=1\)</span>, a Neumann condition
+at <span class="math">\(y=1\)</span>, and a Robin condition at <span class="math">\(y=0\)</span>. With the given <span class="math">\({u_{\small\mbox{e}}}\)</span>, we
+realize that the Neumann condition is <span class="math">\(-4y\)</span> (which means <span class="math">\(-4\)</span> at
+<span class="math">\(y=1\)</span>), while the Robin
+condition can be selected in many ways. Since <span class="math">\(\partial u/\partial
+n=-\partial u/\partial y=0\)</span> at <span class="math">\(y=0\)</span>, we can select <span class="math">\(s=u\)</span> and have <span class="math">\(r\)</span>
+arbitrary in the Robin condition.</p>
+<p>The boundary parts are <span class="math">\(\Gamma_{D,0}\)</span>: <span class="math">\(x=0\)</span>, <span class="math">\(\Gamma_{D,1}\)</span>: <span class="math">\(x=1\)</span>,
+<span class="math">\(\Gamma_{R,0}\)</span>: <span class="math">\(y=0\)</span>, and <span class="math">\(\Gamma_{N,0}\)</span>: <span class="math">\(y=1\)</span>.</p>
+<p>When implementing this test problem (and especially other test
+problems with more complicated expressions), it is advantageous to use
+symbolic computing. Below we define the exact solution as a <code class="docutils literal"><span class="pre">sympy</span></code>
+expression and derive other functions from their mathematical
+definitions.  Then we turn these expressions into C/C++ code, which
+can be fed into <code class="docutils literal"><span class="pre">Expression</span></code> objects.</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="k">def</span> <span class="nf">application_bc_test</span><span class="p">():</span>
+    <span class="c"># Define manufactured solution in sympy and derive f, g, etc.</span>
+    <span class="kn">import</span> <span class="nn">sympy</span> <span class="kn">as</span> <span class="nn">sym</span>
+    <span class="n">x</span><span class="p">,</span> <span class="n">y</span> <span class="o">=</span> <span class="n">sym</span><span class="o">.</span><span class="n">symbols</span><span class="p">(</span><span class="s">&#39;x[0] x[1]&#39;</span><span class="p">)</span>  <span class="c"># UFL needs x[0] for x etc.</span>
+    <span class="n">u</span> <span class="o">=</span> <span class="mi">1</span> <span class="o">+</span> <span class="n">x</span><span class="o">**</span><span class="mi">2</span> <span class="o">+</span> <span class="mi">2</span><span class="o">*</span><span class="n">y</span><span class="o">**</span><span class="mi">2</span>
+    <span class="n">f</span> <span class="o">=</span> <span class="o">-</span><span class="n">sym</span><span class="o">.</span><span class="n">diff</span><span class="p">(</span><span class="n">u</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span> <span class="o">-</span> <span class="n">sym</span><span class="o">.</span><span class="n">diff</span><span class="p">(</span><span class="n">u</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>  <span class="c"># -Laplace(u)</span>
+    <span class="n">f</span> <span class="o">=</span> <span class="n">sym</span><span class="o">.</span><span class="n">simplify</span><span class="p">(</span><span class="n">f</span><span class="p">)</span>
+    <span class="n">u_00</span> <span class="o">=</span> <span class="n">u</span><span class="o">.</span><span class="n">subs</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>  <span class="c"># x=0 boundary</span>
+    <span class="n">u_01</span> <span class="o">=</span> <span class="n">u</span><span class="o">.</span><span class="n">subs</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>  <span class="c"># x=1 boundary</span>
+    <span class="n">g</span> <span class="o">=</span> <span class="o">-</span><span class="n">sym</span><span class="o">.</span><span class="n">diff</span><span class="p">(</span><span class="n">u</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span><span class="o">.</span><span class="n">subs</span><span class="p">(</span><span class="n">y</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>  <span class="c"># x=1 boundary, du/dn=-du/dy</span>
+    <span class="n">r</span> <span class="o">=</span> <span class="mi">1000</span> <span class="c"># any function can go here</span>
+    <span class="n">s</span> <span class="o">=</span> <span class="n">u</span>
+
+    <span class="c"># Turn to C/C++ code for UFL expressions</span>
+    <span class="n">f</span> <span class="o">=</span> <span class="n">sym</span><span class="o">.</span><span class="n">printing</span><span class="o">.</span><span class="n">ccode</span><span class="p">(</span><span class="n">f</span><span class="p">)</span>
+    <span class="n">u_00</span> <span class="o">=</span> <span class="n">sym</span><span class="o">.</span><span class="n">printing</span><span class="o">.</span><span class="n">ccode</span><span class="p">(</span><span class="n">u_00</span><span class="p">)</span>
+    <span class="n">u_01</span> <span class="o">=</span> <span class="n">sym</span><span class="o">.</span><span class="n">printing</span><span class="o">.</span><span class="n">ccode</span><span class="p">(</span><span class="n">u_01</span><span class="p">)</span>
+    <span class="n">g</span> <span class="o">=</span> <span class="n">sym</span><span class="o">.</span><span class="n">printing</span><span class="o">.</span><span class="n">ccode</span><span class="p">(</span><span class="n">g</span><span class="p">)</span>
+    <span class="n">r</span> <span class="o">=</span> <span class="n">sym</span><span class="o">.</span><span class="n">printing</span><span class="o">.</span><span class="n">ccode</span><span class="p">(</span><span class="n">r</span><span class="p">)</span>
+    <span class="n">s</span> <span class="o">=</span> <span class="n">sym</span><span class="o">.</span><span class="n">printing</span><span class="o">.</span><span class="n">ccode</span><span class="p">(</span><span class="n">s</span><span class="p">)</span>
+    <span class="k">print</span><span class="p">(</span><span class="s">&#39;Test problem (C/C++):</span><span class="se">\n</span><span class="s">u = </span><span class="si">%s</span><span class="se">\n</span><span class="s">f = </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">u</span><span class="p">,</span> <span class="n">f</span><span class="p">))</span>
+    <span class="k">print</span><span class="p">(</span><span class="s">&#39;u_00: </span><span class="si">%s</span><span class="se">\n</span><span class="s">u_01: </span><span class="si">%s</span><span class="se">\n</span><span class="s">g = </span><span class="si">%s</span><span class="se">\n</span><span class="s">r = </span><span class="si">%s</span><span class="se">\n</span><span class="s">s = </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span>
+          <span class="p">(</span><span class="n">u_00</span><span class="p">,</span> <span class="n">u_01</span><span class="p">,</span> <span class="n">g</span><span class="p">,</span> <span class="n">r</span><span class="p">,</span> <span class="n">s</span><span class="p">))</span>
+
+    <span class="c"># Turn into FEniCS objects</span>
+    <span class="n">u_00</span> <span class="o">=</span> <span class="n">Expression</span><span class="p">(</span><span class="n">u_00</span><span class="p">)</span>
+    <span class="n">u_01</span> <span class="o">=</span> <span class="n">Expression</span><span class="p">(</span><span class="n">u_01</span><span class="p">)</span>
+    <span class="n">f</span> <span class="o">=</span> <span class="n">Expression</span><span class="p">(</span><span class="n">f</span><span class="p">)</span>
+    <span class="n">g</span> <span class="o">=</span> <span class="n">Expression</span><span class="p">(</span><span class="n">g</span><span class="p">)</span>
+    <span class="n">r</span> <span class="o">=</span> <span class="n">Expression</span><span class="p">(</span><span class="n">r</span><span class="p">)</span>
+    <span class="n">s</span> <span class="o">=</span> <span class="n">Expression</span><span class="p">(</span><span class="n">s</span><span class="p">)</span>
+    <span class="n">u_exact</span> <span class="o">=</span> <span class="n">Expression</span><span class="p">(</span><span class="n">sym</span><span class="o">.</span><span class="n">printing</span><span class="o">.</span><span class="n">ccode</span><span class="p">(</span><span class="n">u</span><span class="p">))</span>
+
+    <span class="n">boundary_conditions</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="mi">0</span><span class="p">:</span> <span class="p">{</span><span class="s">&#39;Dirichlet&#39;</span><span class="p">:</span> <span class="n">u_00</span><span class="p">},</span>   <span class="c"># x=0</span>
+        <span class="mi">1</span><span class="p">:</span> <span class="p">{</span><span class="s">&#39;Dirichlet&#39;</span><span class="p">:</span> <span class="n">u_01</span><span class="p">},</span>   <span class="c"># x=1</span>
+        <span class="mi">2</span><span class="p">:</span> <span class="p">{</span><span class="s">&#39;Robin&#39;</span><span class="p">:</span> <span class="p">(</span><span class="n">r</span><span class="p">,</span> <span class="n">s</span><span class="p">)},</span>     <span class="c"># y=0</span>
+        <span class="mi">3</span><span class="p">:</span> <span class="p">{</span><span class="s">&#39;Neumann&#39;</span><span class="p">:</span> <span class="n">g</span><span class="p">}}</span>        <span class="c"># y=1</span>
+
+    <span class="n">p</span> <span class="o">=</span> <span class="n">Constant</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+    <span class="n">Nx</span> <span class="o">=</span> <span class="n">Ny</span> <span class="o">=</span> <span class="mi">2</span>
+    <span class="n">u</span><span class="p">,</span> <span class="n">p</span> <span class="o">=</span> <span class="n">solver_bc</span><span class="p">(</span>
+        <span class="n">p</span><span class="p">,</span> <span class="n">f</span><span class="p">,</span> <span class="n">boundary_conditions</span><span class="p">,</span> <span class="n">Nx</span><span class="p">,</span> <span class="n">Ny</span><span class="p">,</span> <span class="n">degree</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+        <span class="n">linear_solver</span><span class="o">=</span><span class="s">&#39;direct&#39;</span><span class="p">,</span>
+        <span class="n">debug</span><span class="o">=</span><span class="mi">2</span><span class="o">*</span><span class="n">Nx</span><span class="o">*</span><span class="n">Ny</span> <span class="o">&lt;</span> <span class="mi">50</span><span class="p">,</span>  <span class="c"># for small problems only</span>
+        <span class="p">)</span>
+</pre></div>
+</div>
+<p>This simple test problem is turned into a real unit test for different
+function spaces in the function <code class="docutils literal"><span class="pre">test_solver_bc</span></code>.</p>
+</div>
+<div class="section" id="debugging-the-setting-of-boundary-conditions">
+<h4>Debugging the setting of boundary conditions<a class="headerlink" href="#debugging-the-setting-of-boundary-conditions" title="Permalink to this headline">¶</a></h4>
+<p>It is easy to make mistakes when implementing a problem with many
+different types of boundary conditions, as in the present case. Some
+helpful debugging output is to run through all vertex coordinates and
+check if the <code class="docutils literal"><span class="pre">SubDomain.inside</span></code> method marks the vertex as on the
+boundary. Another useful printout is to list which degrees of freedom
+that are subject to Dirichlet conditions, and for first-order Lagrange
+elements, add the corresponding vertex coordinate to the output.</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="k">if</span> <span class="n">debug</span><span class="p">:</span>
+    <span class="c"># Print the vertices that are on the boundaries</span>
+    <span class="n">coor</span> <span class="o">=</span> <span class="n">mesh</span><span class="o">.</span><span class="n">coordinates</span><span class="p">()</span>
+    <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">coor</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">bx0</span><span class="o">.</span><span class="n">inside</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="bp">True</span><span class="p">):</span> <span class="k">print</span><span class="p">(</span><span class="s">&#39;</span><span class="si">%s</span><span class="s"> is on x=0&#39;</span> <span class="o">%</span> <span class="n">x</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">bx1</span><span class="o">.</span><span class="n">inside</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="bp">True</span><span class="p">):</span> <span class="k">print</span><span class="p">(</span><span class="s">&#39;</span><span class="si">%s</span><span class="s"> is on x=1&#39;</span> <span class="o">%</span> <span class="n">x</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">by0</span><span class="o">.</span><span class="n">inside</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="bp">True</span><span class="p">):</span> <span class="k">print</span><span class="p">(</span><span class="s">&#39;</span><span class="si">%s</span><span class="s"> is on y=0&#39;</span> <span class="o">%</span> <span class="n">x</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">by1</span><span class="o">.</span><span class="n">inside</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="bp">True</span><span class="p">):</span> <span class="k">print</span><span class="p">(</span><span class="s">&#39;</span><span class="si">%s</span><span class="s"> is on y=1&#39;</span> <span class="o">%</span> <span class="n">x</span><span class="p">)</span>
+    <span class="c"># Print the Dirichlet conditions</span>
+    <span class="k">print</span><span class="p">(</span><span class="s">&#39;No of Dirichlet conditions:&#39;</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">bcs</span><span class="p">))</span>
+    <span class="n">d2v</span> <span class="o">=</span> <span class="n">dof_to_vertex_map</span><span class="p">(</span><span class="n">V</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">bc</span> <span class="ow">in</span> <span class="n">bcs</span><span class="p">:</span>
+        <span class="n">bc_dict</span> <span class="o">=</span> <span class="n">bc</span><span class="o">.</span><span class="n">get_boundary_values</span><span class="p">()</span>
+        <span class="k">for</span> <span class="n">dof</span> <span class="ow">in</span> <span class="n">bc_dict</span><span class="p">:</span>
+            <span class="k">print</span><span class="p">(</span><span class="s">&#39;dof </span><span class="si">%2d</span><span class="s">: u=</span><span class="si">%g</span><span class="s">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">dof</span><span class="p">,</span> <span class="n">bc_dict</span><span class="p">[</span><span class="n">dof</span><span class="p">]))</span>
+            <span class="k">if</span> <span class="n">V</span><span class="o">.</span><span class="n">ufl_element</span><span class="p">()</span><span class="o">.</span><span class="n">degree</span><span class="p">()</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+                <span class="k">print</span><span class="p">(</span><span class="s">&#39;   at point </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span>
+                      <span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="nb">tuple</span><span class="p">(</span><span class="n">coor</span><span class="p">[</span><span class="n">d2v</span><span class="p">[</span><span class="n">dof</span><span class="p">]]</span><span class="o">.</span><span class="n">tolist</span><span class="p">()))))</span>
+</pre></div>
+</div>
+<p>In addition, it is helpful to print the exact and the numerical solution
+at all the vertices as shown in the section <a class="reference internal" href="._ftut1009.html#ch-poisson0-verify1"><span class="std std-ref">Writing out the discrete solution</span></a>.</p>
+</div>
+</div>
+<div class="section" id="fenics-implementation-of-multiple-subdomains">
+<h3>FEniCS implementation of multiple subdomains<a class="headerlink" href="#fenics-implementation-of-multiple-subdomains" title="Permalink to this headline">¶</a></h3>
+<p>The section <a class="reference internal" href="._ftut1009.html#ftut-possion-2d-2mat-impl"><span class="std std-ref">Working with subdomains</span></a> explains how to deal with
+multiple subdomains of <span class="math">\(\Omega\)</span> and a piecewise constant coefficient
+function <span class="math">\(p\)</span> that takes on different constant values in the different
+subdomains. We can easily add this type of <span class="math">\(p\)</span> coefficient to the
+<code class="docutils literal"><span class="pre">solver_bc</span></code> function. The signature of the function is</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="k">def</span> <span class="nf">solver_bc</span><span class="p">(</span>
+    <span class="n">p</span><span class="p">,</span> <span class="n">f</span><span class="p">,</span>                   <span class="c"># Coefficients in the PDE</span>
+    <span class="n">boundary_conditions</span><span class="p">,</span>    <span class="c"># Dict of boundary conditions</span>
+    <span class="n">Nx</span><span class="p">,</span> <span class="n">Ny</span><span class="p">,</span>                 <span class="c"># Cell division of the domain</span>
+    <span class="n">degree</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>               <span class="c"># Polynomial degree</span>
+    <span class="n">subdomains</span><span class="o">=</span><span class="p">[],</span>          <span class="c"># List of SubDomain objects in domain</span>
+    <span class="n">linear_solver</span><span class="o">=</span><span class="s">&#39;Krylov&#39;</span><span class="p">,</span> <span class="c"># Alt: &#39;direct&#39;</span>
+    <span class="n">abs_tol</span><span class="o">=</span><span class="mf">1E-5</span><span class="p">,</span>           <span class="c"># Absolute tolerance in Krylov solver</span>
+    <span class="n">rel_tol</span><span class="o">=</span><span class="mf">1E-3</span><span class="p">,</span>           <span class="c"># Relative tolerance in Krylov solver</span>
+    <span class="n">max_iter</span><span class="o">=</span><span class="mi">1000</span><span class="p">,</span>          <span class="c"># Max no of iterations in Krylov solver</span>
+    <span class="n">log_level</span><span class="o">=</span><span class="n">PROGRESS</span><span class="p">,</span>     <span class="c"># Amount of solver output</span>
+    <span class="n">dump_parameters</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span>  <span class="c"># Write out parameter database?</span>
+    <span class="n">debug</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span>
+    <span class="p">):</span>
+<span class="o">...</span>
+    <span class="k">return</span> <span class="n">u</span><span class="p">,</span> <span class="n">p</span>   <span class="c"># p may be modified</span>
+</pre></div>
+</div>
+<p>If <code class="docutils literal"><span class="pre">subdomain</span></code> is an empty list, we assume there are no subdomains, and
+<span class="math">\(p\)</span> is an <code class="docutils literal"><span class="pre">Expression</span></code> or <code class="docutils literal"><span class="pre">Constant</span></code> object specifying a formula for
+<span class="math">\(p\)</span>. If not, <code class="docutils literal"><span class="pre">subdomain</span></code> is a list of <code class="docutils literal"><span class="pre">SubDomain</span></code> objects, defining
+different parts of the domain. The first element is a dummy object,
+defining &#8220;the rest&#8221; of the domain. The next elements define specific
+geometries in the <code class="docutils literal"><span class="pre">inside</span></code> methods. We start by marking all elements
+with subdomain number 0, this will then be &#8220;the rest&#8221; after marking
+subdomains 1, 2, and so on. The next step is to define <code class="docutils literal"><span class="pre">p</span></code> as a
+piecewise constant function over cells and fill it with values.
+We assume that the user-argument <code class="docutils literal"><span class="pre">p</span></code> is an array (or list) holding
+the values of <span class="math">\(p\)</span> in the different parts corresponding to <code class="docutils literal"><span class="pre">subdomains</span></code>.
+The returned <code class="docutils literal"><span class="pre">p</span></code> is needed for flux computations. If there are no
+subdomains, the returned <code class="docutils literal"><span class="pre">p</span></code> is just the original <code class="docutils literal"><span class="pre">p</span></code> argument.</p>
+<p>The appropriate code for computing <code class="docutils literal"><span class="pre">p</span></code> becomes</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="kn">import</span> <span class="nn">numpy</span> <span class="kn">as</span> <span class="nn">np</span>
+<span class="k">if</span> <span class="n">subdomains</span><span class="p">:</span>
+    <span class="c"># subdomains is list of SubDomain objects,</span>
+    <span class="c"># p is array of corresponding constant values of p</span>
+    <span class="c"># in each subdomain</span>
+    <span class="n">materials</span> <span class="o">=</span> <span class="n">CellFunction</span><span class="p">(</span><span class="s">&#39;size_t&#39;</span><span class="p">,</span> <span class="n">mesh</span><span class="p">)</span>
+    <span class="n">materials</span><span class="o">.</span><span class="n">set_all</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>  <span class="c"># &quot;the rest&quot;</span>
+    <span class="k">for</span> <span class="n">m</span><span class="p">,</span> <span class="n">subdomain</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">subdomains</span><span class="p">[</span><span class="mi">1</span><span class="p">:],</span> <span class="mi">1</span><span class="p">):</span>
+        <span class="n">subdomain</span><span class="o">.</span><span class="n">mark</span><span class="p">(</span><span class="n">materials</span><span class="p">,</span> <span class="n">m</span><span class="p">)</span>
+
+    <span class="n">p_values</span> <span class="o">=</span> <span class="n">p</span>
+    <span class="n">V0</span> <span class="o">=</span> <span class="n">FunctionSpace</span><span class="p">(</span><span class="n">mesh</span><span class="p">,</span> <span class="s">&#39;DG&#39;</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+    <span class="n">p</span>  <span class="o">=</span> <span class="n">Function</span><span class="p">(</span><span class="n">V0</span><span class="p">)</span>
+    <span class="n">help</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">materials</span><span class="o">.</span><span class="n">array</span><span class="p">(),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">int32</span><span class="p">)</span>
+    <span class="n">p</span><span class="o">.</span><span class="n">vector</span><span class="p">()[:]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">choose</span><span class="p">(</span><span class="n">help</span><span class="p">,</span> <span class="n">p_values</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>We define <span class="math">\(p(x,y)=p_0\)</span> in <span class="math">\(\Omega_0\)</span> and <span class="math">\(k(x,y)=p_1\)</span> in <span class="math">\(\Omega_1\)</span>,
+where <span class="math">\(p_0&gt;0\)</span> and <span class="math">\(p_1&gt;0\)</span> are given constants.
+As boundary conditions, we choose <span class="math">\(u=0\)</span> at <span class="math">\(y=0\)</span>, <span class="math">\(u=1\)</span> at <span class="math">\(y=1\)</span>,
+and <span class="math">\(\partial u/\partial n=0\)</span> at <span class="math">\(x=0\)</span> and <span class="math">\(x=1\)</span>.
+One can show that the exact solution is now given by</p>
+<div class="math" id="eq-auto13">
+\[\begin{split}\tag{67}
+u(x, y) = \left\lbrace\begin{array}{ll}
+    {2yp_1\over p_0+p_1}, &amp; y \leq 1/2\\
+    {(2y-1)p_0 + p_1\over p_0+p_1}, &amp; y \geq 1/2
+    \end{array}\right.\end{split}\]</div>
+<p>As long as the element boundaries coincide with the internal boundary
+<span class="math">\(y=1/2\)</span>, this piecewise linear solution should be exactly recovered
+by Lagrange elements of any degree. We can use this property to verify
+the implementation and make a unit test for a series of function
+spaces:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="k">def</span> <span class="nf">test_solvers_bc_2mat</span><span class="p">():</span>
+    <span class="n">tol</span> <span class="o">=</span> <span class="mf">2E-13</span>  <span class="c"># Tolerance for comparisons</span>
+
+    <span class="k">class</span> <span class="nc">Omega0</span><span class="p">(</span><span class="n">SubDomain</span><span class="p">):</span>
+        <span class="k">def</span> <span class="nf">inside</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">on_boundary</span><span class="p">):</span>
+            <span class="k">return</span> <span class="n">x</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">&lt;=</span> <span class="mf">0.5</span><span class="o">+</span><span class="n">tol</span>
+
+    <span class="k">class</span> <span class="nc">Omega1</span><span class="p">(</span><span class="n">SubDomain</span><span class="p">):</span>
+        <span class="k">def</span> <span class="nf">inside</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">on_boundary</span><span class="p">):</span>
+            <span class="k">return</span> <span class="n">x</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">&gt;=</span> <span class="mf">0.5</span><span class="o">-</span><span class="n">tol</span>
+
+    <span class="n">subdomains</span> <span class="o">=</span> <span class="p">[</span><span class="n">Omega0</span><span class="p">(),</span> <span class="n">Omega1</span><span class="p">()]</span>
+    <span class="n">p_values</span> <span class="o">=</span> <span class="p">[</span><span class="mf">2.0</span><span class="p">,</span> <span class="mf">13.0</span><span class="p">]</span>
+    <span class="n">boundary_conditions</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="mi">0</span><span class="p">:</span> <span class="p">{</span><span class="s">&#39;Neumann&#39;</span><span class="p">:</span> <span class="mi">0</span><span class="p">},</span>
+        <span class="mi">1</span><span class="p">:</span> <span class="p">{</span><span class="s">&#39;Neumann&#39;</span><span class="p">:</span> <span class="mi">0</span><span class="p">},</span>
+        <span class="mi">2</span><span class="p">:</span> <span class="p">{</span><span class="s">&#39;Dirichlet&#39;</span><span class="p">:</span> <span class="n">Constant</span><span class="p">(</span><span class="mi">0</span><span class="p">)},</span> <span class="c"># y=0</span>
+        <span class="mi">3</span><span class="p">:</span> <span class="p">{</span><span class="s">&#39;Dirichlet&#39;</span><span class="p">:</span> <span class="n">Constant</span><span class="p">(</span><span class="mi">1</span><span class="p">)},</span> <span class="c"># y=1</span>
+        <span class="p">}</span>
+
+    <span class="n">f</span> <span class="o">=</span> <span class="n">Constant</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+    <span class="n">u_exact</span> <span class="o">=</span> <span class="n">Expression</span><span class="p">(</span>
+        <span class="s">&#39;x[1] &lt;= 0.5? 2*x[1]*p_1/(p_0+p_1) : &#39;</span>
+        <span class="s">&#39;((2*x[1]-1)*p_0 + p_1)/(p_0+p_1)&#39;</span><span class="p">,</span>
+        <span class="n">p_0</span><span class="o">=</span><span class="n">p_values</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">p_1</span><span class="o">=</span><span class="n">p_values</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
+
+    <span class="k">for</span> <span class="n">Nx</span><span class="p">,</span> <span class="n">Ny</span> <span class="ow">in</span> <span class="p">[(</span><span class="mi">2</span><span class="p">,</span><span class="mi">2</span><span class="p">),</span> <span class="p">(</span><span class="mi">2</span><span class="p">,</span><span class="mi">4</span><span class="p">),</span> <span class="p">(</span><span class="mi">8</span><span class="p">,</span><span class="mi">4</span><span class="p">)]:</span>
+        <span class="k">for</span> <span class="n">degree</span> <span class="ow">in</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">:</span>
+            <span class="n">u</span><span class="p">,</span> <span class="n">p</span> <span class="o">=</span> <span class="n">solver_bc</span><span class="p">(</span>
+                <span class="n">p_values</span><span class="p">,</span> <span class="n">f</span><span class="p">,</span> <span class="n">boundary_conditions</span><span class="p">,</span> <span class="n">Nx</span><span class="p">,</span> <span class="n">Ny</span><span class="p">,</span> <span class="n">degree</span><span class="p">,</span>
+                <span class="n">linear_solver</span><span class="o">=</span><span class="s">&#39;direct&#39;</span><span class="p">,</span> <span class="n">subdomains</span><span class="o">=</span><span class="n">subdomains</span><span class="p">,</span>
+                <span class="n">debug</span><span class="o">=</span><span class="bp">False</span><span class="p">)</span>
+
+            <span class="c"># Compute max error in infinity norm</span>
+            <span class="n">u_e</span> <span class="o">=</span> <span class="n">interpolate</span><span class="p">(</span><span class="n">u_exact</span><span class="p">,</span> <span class="n">u</span><span class="o">.</span><span class="n">function_space</span><span class="p">())</span>
+            <span class="kn">import</span> <span class="nn">numpy</span> <span class="kn">as</span> <span class="nn">np</span>
+            <span class="n">max_error</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">u_e</span><span class="o">.</span><span class="n">vector</span><span class="p">()</span><span class="o">.</span><span class="n">array</span><span class="p">()</span> <span class="o">-</span>
+                           <span class="n">u</span><span class="o">.</span><span class="n">vector</span><span class="p">()</span><span class="o">.</span><span class="n">array</span><span class="p">())</span><span class="o">.</span><span class="n">max</span><span class="p">()</span>
+            <span class="k">assert</span> <span class="n">max_error</span> <span class="o">&lt;</span> <span class="n">tol</span><span class="p">,</span> <span class="s">&#39;max error: </span><span class="si">%g</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">max_error</span>
+</pre></div>
+</div>
+</div>
+</div>
+<div class="section" id="heat-loss-in-a-pipe">
+<h2>Heat loss in a pipe<a class="headerlink" href="#heat-loss-in-a-pipe" title="Permalink to this headline">¶</a></h2>
+<p>We will simulate the transport of heat in a non-perfectly insulated
+pipe via both diffusion and convection (transport). The inner diameter
+of the pipe is <span class="math">\(4\,\mathrm{cm}\)</span>, its thickness is 4mm, the thickness
+of the surrounding insulation is <span class="math">\(10\,\mathrm{mm}\)</span>, and its length is
 <span class="math">\(50\,\mathrm{cm}\)</span>. We assume that the temperature of the water at the
 inlet is 42 degrees centigrade and the temperature of the surrounding
 air is 22 degrees centigrade. We also assume that the pipe transmits
 0.1 liters of water per second. A sketch of the pipe is given in
 Figure X.</p>
-<p>[<strong>AL 28</strong>: Add nice 3D graphics here...]</p>
+<p>[<strong>AL 29</strong>: Add nice 3D graphics here...]</p>
 <p>To compute the temperature distribution in the pipe, we need to set
 boundary conditions, both at the inflow and outflow, as well as on the
 boundary of the insulating layer which is exposed to the surrounding
@@ -161,7 +1249,7 @@ degrees, for the water as well as for the pipe and the insulating
 layer. We similarly assume the temperature to be 22 degrees in all
 three layers at the outflow. The boundary of the insulating layer is
 also assumed to have the temperature 22 degrees.</p>
-<p>[<strong>hpl 29</strong>: How to you realize this setup in practice? One big water reservoir at 42 C, and then a long pipe from that reservoir surrounded by free air? Convection is very efficient compared to diffusion, so the pipe has to be very long for the water to lose heat. At the outlet out the pipe, I don&#8217;t think you can assume 22 C in the water; it will flow out with little heat loss - 40 C, e.g. A possible boundary condition for the water is to say &#8220;hardly no change&#8221; in the temperature, i.e., <span class="math">\(\partial u/\partial n=0\)</span>. That will pick up heat loss along the pipe and be an okay approximation.]</p>
+<p>[<strong>hpl 30</strong>: How to you realize this setup in practice? One big water reservoir at 42 C, and then a long pipe from that reservoir surrounded by free air? Convection is very efficient compared to diffusion, so the pipe has to be very long for the water to lose heat. At the outlet out the pipe, I don&#8217;t think you can assume 22 C in the water; it will flow out with little heat loss - 40 C, e.g. A possible boundary condition for the water is to say &#8220;hardly no change&#8221; in the temperature, i.e., <span class="math">\(\partial u/\partial n=0\)</span>. That will pick up heat loss along the pipe and be an okay approximation.]</p>
 <p>To compute the temperature distribution, we also need to know the
 value of the thermal conductivity <span class="math">\(\lambda\)</span> $[mathrm{W}cdotmathrm{m}^{-1}cdotmathrm{K}^{-1}]$ for water, pipe,
 and insulation. From a book of physical tables or from the internet,
@@ -171,7 +1259,7 @@ we find the following values that we will use for our simulation:
 of water, which we set to <span class="math">\(\rho = 1\,\mathrm{kg}/\mathrm{dm}^3\)</span> and <span class="math">\(c
 = 4.184\,\mathrm{kJ} / (\mathrm{kg} \cdot \mathrm{K})\)</span> (one
 <span class="math">\(\mathrm{kcal}\)</span> per <span class="math">\(\mathrm{kg} \cdot \mathrm{K}\)</span>), respectively.
-[<strong>hpl 30</strong>: You also need <span class="math">\(c\varrho\)</span> for steel and the other material. The idea with scaling is that you don&#8217;t need to find 3 parameters per material, all you have to do is to find the fractions. Of course, if you now you have steel and styrofoam, then that fraction requires you to look up the values.]</p>
+[<strong>hpl 31</strong>: You also need <span class="math">\(c\varrho\)</span> for steel and the other material. The idea with scaling is that you don&#8217;t need to find 3 parameters per material, all you have to do is to find the fractions. Of course, if you now you have steel and styrofoam, then that fraction requires you to look up the values.]</p>
 <p>Finally, we need to know the velocity field for the water flowing
 through the pipe. We know the total flow rate of water (0.1 liters per
 second). If the flow is laminar (Poiseuille flow), we know that the
@@ -191,11 +1279,11 @@ find <span class="math">\(C = 0.6\,\mathrm{dm}^3 / (\pi a^4)\)</span>.</p>
 </div>
 <div class="section" id="mathematical-problem-formulation-2">
 <h2>Mathematical problem formulation<a class="headerlink" href="#mathematical-problem-formulation-2" title="Permalink to this headline">¶</a></h2>
-<p>[<strong>hpl 31</strong>: I think you should start with the incompressible version. I don&#8217;t remember the compressible version of the heat equation - it has more terms than you include here (e.g., pressure work <span class="math">\(p\nabla\cdot u\)</span>). In the incompressible case, which we deal with anyway, <span class="math">\(c\varrho\)</span> is outside of the derivative even with <span class="math">\(c\varrho\)</span> vary. Remember that they vary here between all the materials. I would also drop the <span class="math">\(f\)</span> term as the scaling with and without <span class="math">\(f\)</span> will often be different.]</p>
+<p>[<strong>hpl 32</strong>: I think you should start with the incompressible version. I don&#8217;t remember the compressible version of the heat equation - it has more terms than you include here (e.g., pressure work <span class="math">\(p\nabla\cdot u\)</span>). In the incompressible case, which we deal with anyway, <span class="math">\(c\varrho\)</span> is outside of the derivative even with <span class="math">\(c\varrho\)</span> vary. Remember that they vary here between all the materials. I would also drop the <span class="math">\(f\)</span> term as the scaling with and without <span class="math">\(f\)</span> will often be different.]</p>
 <p>We will model the conduction of heat in the pipe using the standard
 convection-diffusion equation:</p>
 <div class="math" id="eq-ftut-convdiff">
-\[\tag{52}
+\[\tag{68}
 -\nabla \cdot (\lambda\nabla u) + \nabla \cdot (c\rho\beta u) = f.\]</div>
 <p>Here, <span class="math">\(u\)</span> denotes the temperature, <span class="math">\(\lambda\)</span> is the thermal
 conductivity, <span class="math">\(c\)</span> is the specific heat, <span class="math">\(\rho\)</span> is the density, <span class="math">\(\beta\)</span>
@@ -204,7 +1292,7 @@ does not have a source term, we will set <span class="math">\(f = 0\)</span>.</p
 <p>The convection-diffusion equation is often stated in the following slightly modified form:</p>
 <div class="math">
 \[-\nabla \cdot (\lambda\nabla u) + c\rho\beta \cdot \nabla u = f.\]</div>
-<p>This formulation is equivalent to <a class="reference internal" href="._ftut1007.html#eq-ftut-convdiff"><span class="std std-ref">(52)</span></a> if the velocity
+<p>This formulation is equivalent to <a class="reference internal" href="._ftut1007.html#eq-ftut-convdiff"><span class="std std-ref">(68)</span></a> if the velocity
 field <span class="math">\(\beta\)</span> is divergence free; that is, if <span class="math">\(\nabla \cdot \beta = 0\)</span>:
 <span class="math">\(\nabla \cdot (\beta u) = (\nabla \cdot \beta) u + \beta \cdot \nabla
 u = \beta \cdot \nabla u\)</span>.</p>
@@ -224,7 +1312,7 @@ following dimensionless quantities:</p>
 \bar u = \frac{u}{U},\
 \bar\beta = \frac{\beta}{LT^{-1}},
 \bar f = \frac{f}{PL^{-3}}.\]</div>
-<p>[<strong>hpl 32</strong>: You will scale <span class="math">\(\beta\)</span> by some characteristic velocity <span class="math">\(V\)</span> and avoid introducing any time here as the problem is stationary. You need to scale <span class="math">\(\varrho\)</span>, <span class="math">\(c\)</span>, and <span class="math">\(\lambda\)</span> too as they vary in space. These are piecewise constant functions, so you can scale with the value in one of the materials.]</p>
+<p>[<strong>hpl 33</strong>: You will scale <span class="math">\(\beta\)</span> by some characteristic velocity <span class="math">\(V\)</span> and avoid introducing any time here as the problem is stationary. You need to scale <span class="math">\(\varrho\)</span>, <span class="math">\(c\)</span>, and <span class="math">\(\lambda\)</span> too as they vary in space. These are piecewise constant functions, so you can scale with the value in one of the materials.]</p>
 <p>The dimensionless coordinates <span class="math">\(\bar x\)</span>, <span class="math">\(\bar y\)</span> and <span class="math">\(\bar z\)</span>
 also lead to dimensionless derivatives:
 :math:<a href="#id1"><span class="problematic" id="id2">`</span></a>barnabla =
@@ -233,7 +1321,7 @@ also lead to dimensionless derivatives:
 <div>partial / partial bar y,
 partial / partial bar z)
 = L nabla`.</div></blockquote>
-<p>Inserting <span class="math">\(u = U\bar u\)</span>, <span class="math">\(\beta = L^{-1}T\bar\beta\)</span>, and <span class="math">\(f = L^{-3}P\bar f\)</span> into the convection-diffusion equation <a class="reference internal" href="._ftut1007.html#eq-ftut-convdiff"><span class="std std-ref">(52)</span></a> and using <span class="math">\(\nabla = L^{-1}\bar\nabla\)</span>, we obtain</p>
+<p>Inserting <span class="math">\(u = U\bar u\)</span>, <span class="math">\(\beta = L^{-1}T\bar\beta\)</span>, and <span class="math">\(f = L^{-3}P\bar f\)</span> into the convection-diffusion equation <a class="reference internal" href="._ftut1007.html#eq-ftut-convdiff"><span class="std std-ref">(68)</span></a> and using <span class="math">\(\nabla = L^{-1}\bar\nabla\)</span>, we obtain</p>
 <div class="math">
 \[-L^{-1}\bar\nabla \cdot
 (\lambda L^{-1}\bar\nabla(U\bar u))
@@ -249,7 +1337,7 @@ partial / partial bar z)
 <div class="math">
 \[\bar\lambda = LUP^{-1}\lambda, \quad
 \bar c = L^3UT^{-1}P^{-1}c\rho.\]</div>
-<p>[<strong>hpl 33</strong>: You will typically get some Peclet number here as the only dimensionless parameter, and then you will have scaled <span class="math">\(\varrho\)</span>, <span class="math">\(c\)</span>, and <span class="math">\(\lambda\)</span> with fractions of material parameters in different materials. I can do this :-)]</p>
+<p>[<strong>hpl 34</strong>: You will typically get some Peclet number here as the only dimensionless parameter, and then you will have scaled <span class="math">\(\varrho\)</span>, <span class="math">\(c\)</span>, and <span class="math">\(\lambda\)</span> with fractions of material parameters in different materials. I can do this :-)]</p>
 <p>Let&#8217;s double-check that these are indeed dimensionless quantities. We have</p>
 <div class="math">
 \[\begin{split}[\bar\lambda]
@@ -275,7 +1363,7 @@ partial / partial bar z)
 +barnabla cdot left(cbarbeta bar uright) = bar f.</div></blockquote>
 <p>]
 The reference quantities <span class="math">\(L\)</span>, <span class="math">\(T\)</span>, <span class="math">\(U\)</span> and <span class="math">\(P\)</span> may be chosen arbitrarily.
-[<strong>hpl 34</strong>: Normally, these are implied by the problem setting and the desire to have all variables of unit size. <span class="math">\(L\)</span> can be the length of the pipe or the diameter (I would choose the diameter). <span class="math">\(U\)</span> is given from the boundary conditions (here 42 C is natural), <span class="math">\(V\)</span> is given by <span class="math">\(Q\)</span>.]
+[<strong>hpl 35</strong>: Normally, these are implied by the problem setting and the desire to have all variables of unit size. <span class="math">\(L\)</span> can be the length of the pipe or the diameter (I would choose the diameter). <span class="math">\(U\)</span> is given from the boundary conditions (here 42 C is natural), <span class="math">\(V\)</span> is given by <span class="math">\(Q\)</span>.]
 If working with very large or very small quantities, one may want to choose for example <span class="math">\(L\)</span> to obtain a domain of unit size. However, for our problem this is not necessary. We will therefore make the most straightforward choice which is to use standard SI units. We thus take
 <span class="math">\(L = 1\,\mathrm{m}\)</span>,
 <span class="math">\(T = 1\,\mathrm{s}\)</span>,
@@ -283,10 +1371,10 @@ If working with very large or very small quantities, one may want to choose for 
 <span class="math">\(P = 1\,\mathrm{W}\)</span>. The scaled variables and parameters <span class="math">\(\bar u\)</span>, <span class="math">\(\bar\beta\)</span>, <span class="math">\(\bar \lambda\)</span> and so on may then be easily computed by expressing everything in standard SI units and then simply dropping the units.</p>
 <p>In the following we will simply write <span class="math">\(u\)</span> in place of <span class="math">\(\bar{u}\)</span> but remember that the <span class="math">\(u\)</span> we compute is actually <span class="math">\(\bar u\)</span> and the actual temperature will be <span class="math">\(u\,\mathrm{K}\)</span>:</p>
 <div class="math" id="eq-ftut-convdiff-scaled">
-\[\tag{53}
+\[\tag{69}
 -\nabla \cdot (\lambda \nabla  u)
       +\nabla \cdot \left(c\beta u\right) = f.\]</div>
-<p>[<strong>hpl 35</strong>: I would use the incompressible version of the heat equation everywhere; then we know it is correct.]
+<p>[<strong>hpl 36</strong>: I would use the incompressible version of the heat equation everywhere; then we know it is correct.]
 Furthermore, since only derivatives of <span class="math">\(u\)</span> appear in the equation, adding a constant offset to <span class="math">\(u\)</span> does not change the equation. We may therefore work in Kelvin (<span class="math">\(\mathrm{K}\)</span>) as well as in degrees centigrade without needing to rescale the equation.</p>
 </div>
 <div class="section" id="finite-element-variational-formulation-2">
@@ -296,7 +1384,7 @@ equation is obtained in the same way as for the Poisson equation in
 the previous chapter, by multiplying the equation with a test function
 <span class="math">\(v\)</span>, integrating over the domain <span class="math">\(\Omega\)</span>, and integrating terms with
 second-derivatives by parts. For the (scaled) convection-diffusion
-equation <a class="reference internal" href="._ftut1007.html#eq-ftut-convdiff-scaled"><span class="std std-ref">(53)</span></a>, we have one such term, namely
+equation <a class="reference internal" href="._ftut1007.html#eq-ftut-convdiff-scaled"><span class="std std-ref">(69)</span></a>, we have one such term, namely
 <span class="math">\(-\nabla \cdot (\lambda u)\)</span>. For this term, integration by parts gives</p>
 <div class="math">
 \[-\int_{\Omega} (\nabla \cdot (\lambda \nabla u)) \, v {\, \mathrm{d}x}
@@ -323,6 +1411,7 @@ equation <a class="reference internal" href="._ftut1007.html#eq-ftut-convdiff-sc
 </div>
 <div class="section" id="the-complete-program-2">
 <h2>The complete program<a class="headerlink" href="#the-complete-program-2" title="Permalink to this headline">¶</a></h2>
+<p>Here is the code:</p>
 <div class="highlight-python"><div class="highlight"><pre><span class="kn">from</span> <span class="nn">fenics</span> <span class="kn">import</span> <span class="o">*</span>
 <span class="kn">from</span> <span class="nn">mshr</span> <span class="kn">import</span> <span class="o">*</span>
 
