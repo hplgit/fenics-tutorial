@@ -1,6 +1,7 @@
 #========= Python programming and PDE solver design =========
 #========= Making more flexible PDE solvers =========
-========= Common extensions in PDE solvers =========
+#========= Common extensions in PDE solvers =========
+========= Extensions: Improving the Poisson solver =========
 label{ch:poisson}
 
 [hpl: I don't like this title, but have no other good alternative...]
@@ -8,7 +9,7 @@ label{ch:poisson}
 
 [hpl: Additional experiment.]
 
-[AL: Even more experimentation...]
+[AL: See new title suggestion, matches title of Chapter 2.]
 
 !bquote
 This chapter goes through common improvements of the codes presented
@@ -315,10 +316,6 @@ for cell in cells(mesh):
     print(dofmap.cell_dofs(cell.index()))
 !ec
 
-[AL: Removed code example here since it looked like a difficult way to
-do what we have already done before in `test_solver`.]
-[hpl: OK!]
-
 #@@@CODE src/poisson_iter.py fromto: def compare_exact@def normalize
 #As expected, the error is either identically zero or about $10^{-15}$ or
 #$10^{-16}$.
@@ -353,7 +350,7 @@ Error at (0.5, 0.5): -0.0833333
 The discrepancy is due to the fact that the center point is not a node
 in this particular mesh, but a point in the interior of a cell, and
 `u` varies linearly over the cell while `u_D` is a quadratic
-function. When the center point is a node, as in a $2\times(t\times
+function. When the center point is a node, as in a $2\times(2\times
 2)$ or $2\times(4\times 4)$ mesh, the error is of the order
 $10^{-15}$.
 
@@ -392,45 +389,50 @@ All the code in this subsection can be found in the file
 label{ch:poisson0:nD}
 idx{dimension-independent code}
 
-FEniCS makes it is easy to write a unified simulation code that can
-operate in 1D, 2D, and 3D. We will conveniently make use of this
-feature in forthcoming examples.  As an appetizer, go back to the
-introductory programs `${prog["poisson"]}.py` or
-`${prog["poisson_func"]}.py` and change the mesh construction from
-`UnitSquareMesh(6, 4)` to `UnitCubeMesh(6, 4, 5)`. Now the domain is
-the unit cube partitioned into $6\times 4\times 5$|$6x4x5$ boxes, and
-each box is divided into six tetrahedron-shaped finite elements for
-computations. Run the program and observe that we can solve a 3D
-problem without any other modifications (!). The visualization allows
-you to rotate the cube and observe the function values as colors on
-the boundary.
-
 [AL: Use consistent mesh resolution, perhaps 16 for all examples. Now
 the resolution looks very random between examples.]
 [hpl: True, but the randomness stems from the fact that 2 is enough for
 most examples, so anything works. I agree that 16 is a better number
 to display (and copy), and if we choose the extreme 2, there is an explanation
 in the text for that choice.]
+[AL: I'm changing everything to 16 from now on for consistency. With
+today's computers, 16 is a reasonably small problem and a nice
+number. Needs to be revisited throughout the book! If we use 16, it is
+clear that 16 is a nice ''round'' number but 6, 4, 5 may look like
+something special - why make the mesh anisotropic?]
+
+FEniCS makes it is easy to write a unified simulation code that can
+operate in 1D, 2D, and 3D. We will conveniently make use of this
+feature in forthcoming examples.  As an appetizer, go back to the
+introductory programs `${prog["poisson"]}.py` or
+`${prog["poisson_func"]}.py` and change the mesh construction from
+`UnitSquareMesh(16, 16)` to `UnitCubeMesh(16, 16, 16)`. Now the domain is
+the unit cube partitioned into $16\times 16\times16$|$16x16x16$ boxes, and
+each box is divided into six tetrahedron-shaped finite elements for
+computations. Run the program and observe that we can solve a 3D
+problem without any other modifications (!). The visualization allows
+you to rotate the cube and observe the function values as colors on
+the boundary.
 
 If we want to parameterize the creation of unit interval, unit square,
 or unit cube over dimension, we can do so by encapsulating this part
 of the code in a function. Given a list or tuple with the divisions
 into cells in the various spatial coordinates, the following function
-returns the mesh for a $d$-dimensional cube.
+returns the mesh for a $d$-dimensional cube:
 
 !bc pycod
-def unit_hypercube(divisions):
+def UnitHyperCube(divisions):
     mesh_classes = [UnitIntervalMesh, UnitSquareMesh, UnitCubeMesh]
     d = len(divisions)
     mesh = mesh_classes[d-1](*divisions)
     return mesh
 !ec
 The construction `mesh_class[d-1]` will pick the right name of the
-object used to define the domain and generate the mesh.
-Moreover, the argument `*divisions`
-sends all the component of the list `divisions` as separate
-arguments. For example, in a 2D problem where `divisions` has
-two elements, the statement
+object used to define the domain and generate the mesh.  Moreover, the
+argument `*divisions` sends all the components of the list `divisions`
+as separate arguments to the constructor of the mesh construction
+class picked out by `mesh_class[d-1]`. For example, in a 2D problem
+where `divisions` has two elements, the statement
 
 !bc pycod
 mesh = mesh_classes[d-1](*divisions)
@@ -441,10 +443,17 @@ is equivalent to
 mesh = UnitSquareMesh(divisions[0], divisions[1])
 !ec
 
-Replacing the `Nx` and `Ny` parameters by `divisions` and calling
-`unit_hypercube` to create the mesh are the two modifications that
-we need in any of the previously shown `solver` functions to turn
-them into solvers for $d$-dimensional problems.
+Replacing the `Nx` and `Ny` parameters by `divisions` and calling the
+function `UnitHyperCube` to create the mesh are the two modifications
+that we need in any of the previously shown `solver` functions to turn
+them into solvers for $d$-dimensional problems. Note that
+`UnitHyperCube` is a *function* and not a *class* but we have named it
+with *CamelCase* to make it look like a class so that our programs
+look similar to using the standard FEniCS mesh classes:
+
+!bc pycod
+mesh = UnitHyperCube(divisions)
+!ec
 
 % if EXV:
 ===== Exercise: Solve a Poisson problem =====
@@ -613,29 +622,29 @@ type of element.
 
 Sparse LU decomposition (Gaussian elimination) is used by default to
 solve linear systems of equations in FEniCS programs.  This is a very
-robust and recommended method for a few thousand unknowns in the
-equation system, and may hence be the method of choice in many 2D and
-smaller 3D problems. However, sparse LU decomposition becomes slow and
-memory demanding in large problems.  This fact forces the use of
-iterative methods, which are faster and require much less memory.
-The forthcoming text tells you how to
-take advantage of state-of-the-art iterative solution methods in FEniCS.
+robust and simple method. It is the recommended method for systems
+with up to a few thousand unknowns and may hence be the method of
+choice in many 2D and smaller 3D problems. However, sparse LU
+decomposition becomes slow and one quickly runs out of memory for
+larger problems. For large problems, we instead need to use *iteratie
+methods* which are faster and require much less memory. We will now
+look at how to take advantage of state-of-the-art iterative solution
+methods in FEniCS.
 
 ===== Controlling the solution process =====
 label{ch:poisson0:solve:prm}
 
-
-=== Setting linear solver parameters ===
+=== Choosing a linear solver and preconditioner ===
 
 Preconditioned Krylov solvers is a type of popular iterative methods
 that are easily accessible in FEniCS programs. The Poisson equation
-results in a symmetric, positive definite coefficient matrix, for
-which the optimal Krylov solver is the Conjugate Gradient (CG)
-method. However, the CG method requires boundary conditions to be
-implemented in a symmetric way. This is not the case by default, so
-then a Krylov solver for non-symmetric system, such as GMRES, is a
-better choice.  Incomplete LU factorization (ILU) is a popular and
-robust all-round preconditioner, so let us try the GMRES-ILU pair:
+results in a symmetric, positive definite system matrix, for which the
+optimal Krylov solver is the Conjugate Gradient (CG) method. However,
+the CG method requires boundary conditions to be implemented in a
+symmetric way. This is not the case by default, so then a Krylov
+solver for non-symmetric system, such as GMRES, is a better choice.
+Incomplete LU factorization (ILU) is a popular and robust all-round
+preconditioner, so let us try the GMRES-ILU pair:
 
 !bc pycod
 solve(a == L, u, bc)
@@ -650,50 +659,46 @@ Section ref{ftut:app:solver:prec} lists the most popular choices of
 Krylov solvers and preconditioners available in FEniCS.
 
 idx{linear algebra backend}
-idx{PETSc} idx{Trilinos} idx{MTL4} idx{uBLAS}
+idx{PETSc} idx{Eigen}
 
-=== Linear algebra backend ===
+=== Choosing a linear algebra backend ===
 
 The actual GMRES and ILU implementations that are brought into action
-depends on the choice of linear algebra package. FEniCS interfaces
+depend on the choice of linear algebra package. FEniCS interfaces
 several linear algebra packages, called *linear algebra backends* in
-FEniCS terminology.  PETSc is the default choice if FEniCS is compiled
-with PETSc, otherwise uBLAS.  Epetra (Trilinos), Eigen, MTL4 are other
-supported backends. Which backend to apply can be controlled by
-setting
+FEniCS terminology. PETSc is the default choice if FEniCS is compiled
+with PETSc. If PETSc is not available, then FEniCS falls back to using
+the Eigen backend.
 
 !bc pycod
 parameters['linear_algebra_backend'] = backendname
 !ec
-where `backendname` is a string, either `'Eigen'`, `'PETSc'`, `'uBLAS'`,
-`'Epetra'`, or `'MTL4'`.  All these backends offer high-quality
-implementations of both iterative and direct solvers for linear systems
-of equations.
+where `backendname` is a string. To see which linear algebra backends
+are available, you can call the FEniCS function
+`list_linear_algebra_backends()`.
 
-idx{UMFPACK}
-
-A common platform for FEniCS users is Ubuntu Linux.  The FEniCS
-distribution for Ubuntu contains PETSc, making this package the
-default linear algebra backend.  The default solver is sparse LU
-decomposition (`'lu'`), and the actual software that is called is then
-the sparse LU solver from UMFPACK (which PETSc has an interface
-to). The available linear algebra backends in a FEniCS installation is
-listed by
-
-!bc pycod
-list_linear_algebra_backends()
-!ec
+[AL: Note that currently only PETSc and Eigen are available and Epetra
+is on its way back in.]
 
 idx{`parameters` database}
 idx{`info` function}
 
-=== The `parameters` database ===
+=== Setting solver parameters ===
 
 We will normally like to control the tolerance in the stopping
 criterion and the maximum number of iterations when running an
-iterative method.  Such parameters can be set by accessing the *global
-parameter database*, which is called `parameters` and which behaves as
-a nested dictionary. Write
+iterative method. Such parameters can be controlled at both a *global*
+and *local* level. We will start by looking at how to set global
+parameters. For more advanced programs, one may want to use a number
+of different linear solvers and set set different tolerances and other
+parameters. Then it becomes important to control the parameters at a
+*local* level. We will return to this issue in Section
+ref{ch:poisson0:solver:problem}.
+
+Changing a parameter in the global FEniCS parameter database affects
+all linear solvers (created *after* the parameter has been set).
+The global FEniCS parameter database is simply called `parameters` and
+it behaves as a nested dictionary. Write
 
 !bc pycod
 info(parameters, verbose=True)
@@ -705,7 +710,7 @@ According to this output, the relevant parameter set is
 named `'krylov_solver'`, and the parameters are set like this:
 
 !bc pycod
-prm = parameters['krylov_solver']  # short form
+prm = parameters['krylov_solver'] # short form
 prm['absolute_tolerance'] = 1E-10
 prm['relative_tolerance'] = 1E-6
 prm['maximum_iterations'] = 1000
@@ -715,38 +720,41 @@ the residual, which must be smaller than the absolute tolerance
 parameter *or* smaller than the relative tolerance parameter times
 the initial residual.
 
-To get a printout of the number of actual iterations to reach the
-stopping criterion, we can insert
+[AL: Commented out section on monitor convergence here since it does
+not seem to work when calling the high-level solve function. But it
+does work when using a solver directly, so let's move it there.]
 
-!bc pycod
-set_log_level(PROGRESS)
-# or
-set_log_level(DEBUG)
-!ec
-A message with the equation system size, solver type, and number of
-iterations arises from specifying the argument `PROGRESS`, while
-`DEBUG` results in more information, including CPU time spent in
-the various parts of the matrix assembly and solve process.
+#To get a printout of the number of actual iterations to reach the
+#topping criterion, we can insert
+#
+#!bc pycod
+#set_log_level(PROGRESS)
+## or
+#set_log_level(DEBUG)
+#!ec
+#A message with the equation system size, solver type, and number of
+#iterations arises from specifying the argument `PROGRESS`, while
+#`DEBUG` results in more information, including CPU time spent in
+#the various parts of the matrix assembly and solve process.
 
 We remark that default values for the global parameter database can be
 defined in an XML file. To generate such a file from the current set
 of parameters in a program, run
 
 !bc pycod
-File('fenics_parameters.xml') << parameters
+File('dolfin_parameters.xml') << parameters
 !ec
-If a `fenics_parameters.xml` file is found in the directory where a
+If a `dolfin_parameters.xml` file is found in the directory where a
 FEniCS program is run, this file is read and used to initialize the
 `parameters` object. Otherwise, the file
-`.config/fenics/fenics_parameters.xml` in the user's home directory is
+`.config/fenics/dolfin_parameters.xml` in the user's home directory is
 read, if it exists.  Another alternative is to load the XML (with any
 name) manually in the program:
 
 !bc pycod
-File('fenics_parameters.xml') >> parameters
+File('dolfin_parameters.xml') >> parameters
 !ec
 The XML file can also be in gzip'ed form with the extension `.xml.gz`.
-
 
 idx{`${prog["poisson_iter"]}.py`}
 
@@ -758,20 +766,20 @@ such that it also offers the GMRES+ILU
 preconditioned Krylov solver:
 
 !bc pycod
-def solver(
-    f, u_b, Nx, Ny, degree=1,
-    linear_solver='Krylov', # Alt: 'direct'
-    abs_tol=1E-5,           # Absolute tolerance in Krylov solver
-    rel_tol=1E-3,           # Relative tolerance in Krylov solver
-    max_iter=1000,          # Max no of iterations in Krylov solver
-    log_level=PROGRESS,     # Amount of solver output
-    dump_parameters=False,  # Write out parameter database?
-    ):
+def solver(f, u_b, Nx, Ny,
+           degree=1,               # Polynomial degree of function space
+           linear_solver='Krylov', # Linear solver method (alt: 'direct')
+           abs_tol=1E-5,           # Absolute tolerance in Krylov solver
+           rel_tol=1E-3,           # Relative tolerance in Krylov solver
+           max_iter=1000,          # Max iterations in Krylov solver
+           log_level=PROGRESS,     # Amount of solver output
+           print_parameters=False, # Print solver parameters to screen?
+          ):
     ...
     # Set up variational problem: a, L, declare u, etc.
 
     if linear_solver == 'Krylov':
-        prm = parameters['krylov_solver'] # short form
+        prm = parameters['krylov_solver']
         prm['absolute_tolerance'] = abs_tol
         prm['relative_tolerance'] = rel_tol
         prm['maximum_iterations'] = max_iter
@@ -793,78 +801,65 @@ it has all the functionality of the previous `solver` function,
 but can also solve the linear system with
 iterative methods and report the progress of such solvers.
 
-=== Remark regarding unit tests ===
+=== A remark regarding unit tests ===
 
 Regarding verification of the new `solver` function in terms of unit
-tests, it turns out that unit testing in a problem where the
-approximation error vanishes is gets more complicated when we use
+tests, it turns out that unit testing for a problem where the
+approximation error vanishes gets more complicated when we use
 iterative methods. The problem is to keep the error due to iterative
 solution smaller than the tolerance used in the verification
-tests. First of all this means that the tolerances used in the Krylov
+tests. First of all, this means that the tolerances used in the Krylov
 solvers must be smaller than the tolerance used in the `assert` test,
 but this is no guarantee to keep the linear solver error this small.
 For linear elements and small meshes, a tolerance of $10^{-11}$ works
 well in the case of Krylov solvers too (using a tolerance $10^{-12}$
-in those solvers. However, as soon as we switch to P2 elements, it is
-hard to force the linear solver error below $10^{-6}$. Consequently,
-tolerances in tests depend on the numerical methods. The interested
-reader is referred to the `test_solver` function in
-`${prog["poisson_iter"]}.py` for details: this test function tests the
-numerical solution for direct and iterative linear solvers, for
-different meshes, and different degrees of the polynomials in the
-finite element basis functions.
+in those solvers). However, as soon as we switch to $\mathsf{P}_2$
+elements, it is hard to force the linear solver error below
+$10^{-6}$. Consequently, tolerances in tests depend on the numerical
+method being used. The interested reader is referred to the
+`test_solver` function in `${prog["poisson_iter"]}.py` for details:
+this function tests the numerical solution for direct and iterative
+linear solvers, for different meshes, and different degrees of the
+polynomials in the finite element basis functions.
 
-
-===== Linear solvers and preconditioners =====
+===== List of linear solver methods and preconditioners =====
 label{ftut:app:solver:prec}
 
-The following solution methods for linear
-systems can be accessed in FEniCS programs:
+Which linear solvers and preconditioners that are available
+in FEniCS depends on how FEniCS has been configured and which
+linear algebra backend is currently active. The following table
+shows an example of which linear solvers that can be available
+through FEniCS when the PETSc backend is active:
 
-|----------------------------------------------------------------|
-| Name            | Method                                       |
-|--l------------------l------------------------------------------|
-| `'lu'`          | sparse LU factorization (Gaussian elim.)     |
-| `'cholesky'`    | sparse Cholesky factorization                |
-| `'cg'`          | Conjugate gradient method                    |
-| `'gmres'`       | Generalized minimal residual method          |
-| `'bicgstab'`    | Biconjugate gradient stabilized method       |
-| `'minres'`      | Minimal residual method                      |
-| `'tfqmr'`       | Transpose-free quasi-minimal residual method |
-| `'richardson'`  | Richardson method                            |
-|----------------------------------------------------------------|
+|-----------------------------------------------------------------|
+| Name            | Method                                        |
+|--l------------------l-------------------------------------------|
+|`'bicgstab'`     |  Biconjugate gradient stabilized method       |
+|`'cg'`           |  Conjugate gradient method                    |
+|`'gmres'`        |  Generalized minimal residual method          |
+|`'minres'`       |  Minimal residual method                      |
+|`'petsc'`        |  PETSc built in LU solver                     |
+|`'richardson'`   |  Richardson method                            |
+|`'superlu_dist'` |  Parallel SuperLU                             |
+|`'tfqmr'`        |  Transpose-free quasi-minimal residual method |
+|`'umfpack'`      |  UMFPACK                                      |
+|-----------------------------------------------------------------|
 
-Possible choices of preconditioners include
+The set of available preconditioners also depends on configuration and
+linear algebra backend. The following table shows an example of which
+preconditioners may be available:
 
 |-------------------------------------------------------------------|
 | Name                 | Method                                     |
 |--l-----------------------l----------------------------------------|
-| `'none'`             | No preconditioner                          |
-| `'ilu'`              | Incomplete LU factorization                |
-| `'icc'`              | Incomplete Cholesky factorization          |
-| `'jacobi'`           | Jacobi iteration                           |
-| `'bjacobi'`          | Block Jacobi iteration                     |
-| `'sor'`              | Successive over-relaxation                 |
-| `'amg'`              | Algebraic multigrid (BoomerAMG or ML)      |
-| `'additive_schwarz'` | Additive Schwarz                           |
-| `'hypre_amg'`        | Hypre algebraic multigrid (BoomerAMG)      |
-| `'hypre_euclid'`     | Hypre parallel incomplete LU factorization |
-| `'hypre_parasails'`  | Hypre parallel sparse approximate inverse  |
-| `'ml_amg'`           | ML algebraic multigrid                     |
+|`'icc'`               | Incomplete Cholesky factorization          |
+|`'ilu'`               | Incomplete LU factorization                |
+|`'petsc_amg'`         | PETSc algebraic multigrid                  |
+|`'sor'`               | Successive over-relaxation                 |
 |-------------------------------------------------------------------|
 
-Many of the choices listed above
-are only offered by a specific backend, so setting the backend
-appropriately is necessary for being able to choose a desired
-linear solver or preconditioner. You can also use constructions like
-
-!bc pycod
-prec = 'amg' if has_krylov_solver_preconditioner('amg') \
-       else 'default'
-!ec
-
 An up-to-date list of the available solvers and preconditioners
-in FEniCS can be produced by
+for your FEniCS installation can be produced by
 
 !bc pycod
 list_linear_solver_methods()
@@ -878,11 +873,22 @@ idx{LinearVariationalSolver}
 
 idx{`${prog["poisson_iter"]}.py`}
 
-The `solve(a == L, u, bc)` call is just a compact syntax alternative to a
-slightly more comprehensive specification of the variational equation
-and the solution of the associated linear system.  This alternative
-syntax is used in a lot of FEniCS applications and will also be
-used later in this tutorial, so we show it already now:
+The FEniCS interface allows different ways to access the core
+functionality, ranging from very high-level to low-level access. So
+far, we have mostly used the high-level call `solve(a == L, u, bc)` to
+solve a variational problem `a == L` with a certain boundary condition
+`bc`. However, sometimes you may need more fine-grained control over
+the solution process. In particular, the call to `solve` will create
+certain objects that are thrown away after the solution has been
+computed, and it may be practical or efficient to *reuse* those
+objects.
+
+In this section, we will look an alternative interface to solving
+linear variational problems in FEniCS, which may be preferrable in
+many situations compared to the high-level `solve` function interface.
+This interface uses the two classes `LinearVariationalProblem` and
+`LinearVariationalSolver`. Using this interface, the equivalent of
+`solve(a == L, u, bc)` looks as follows:
 
 !bc pycod
 u = Function(V)
@@ -891,10 +897,10 @@ solver  = LinearVariationalSolver(problem)
 solver.solve()
 !ec
 
-Many objects have an attribute `parameters` corresponding to
+Many FEniCS objects have an attribute `parameters` corresponding to
 a parameter set in the global `parameters` database,
 but local to the object. Here, `solver.parameters` play that
-role. Setting the CG method with ILU preconditioning as solution
+role. Setting the CG method with ILU preconditioning as the solution
 method and specifying solver-specific parameters can be done
 like this:
 
@@ -908,22 +914,33 @@ prm['maximum_iterations'] = 1000
 !ec
 Settings in the global `parameters` database are
 propagated to parameter sets in individual objects, with the
-possibility of being overwritten as done above.
+possibility of being overwritten as above. Note that global parameter
+values can only affect local parameter values if set before the time
+of creation of the local object. Thus, changing the value of the
+tolerance in the global parameter database will not affect the
+parameters for already created solvers.
 
 The linear variational problem and solver objects as outlined above
 are incorporated in an alternative solver function, named
 `solver_objects`, in
-`${prog["poisson_iter"]}.py`. Otherwise, this function is parallel to the
+`${prog["poisson_iter"]}.py`. Otherwise, this function is similar to the
 previously shown `solver` function.
 
-===== Creating the linear system explicitly =====
+===== Explicit assembly and solve =====
 label{ch:poisson0:linalg}
 
-[hpl: This is already explained for Navier--Stokes now!]
+As we saw already in Section ref{ftut1:NS}, linear variational
+problems can be assembled explicitly in FEniCS into matrices and
+vectors using the `assemble` function. This allows even more
+fine-grained control of the solution process compared to using the
+high-level `solve` function or using the class
+`LinearVariationalSolver`. We will now look more closely into how to
+use the `assemble` function and how to combine this with low-level
+calls for solving the assembled linear systems.
 
-Given $a(u,v)=L(v)$, the discrete solution $u$ is computed by
-inserting $u=\sum_{j=1}^N U_j \phi_j$ into $a(u,v)$ and demanding
-$a(u,v)=L(v)$ to be fulfilled for $N$ test functions
+Given a variational problem $a(u,v)=L(v)$, the discrete solution $u$
+is computed by inserting $u=\sum_{j=1}^N U_j \phi_j$ into $a(u,v)$ and
+demanding $a(u,v)=L(v)$ to be fulfilled for $N$ test functions
 $\hat\phi_1,\ldots,\hat\phi_N$. This implies
 
 !bt
@@ -938,7 +955,7 @@ which is nothing but a linear system,
   AU = b,
 \end{equation*}
 !et
-where the entries in $A$ and $b$ are given by
+where the entries of $A$ and $b$ are given by
 
 !bt
 \begin{align*}
@@ -951,12 +968,12 @@ idx{`assemble`}
 idx{linear systems (in FEniCS)}
 idx{assembly of linear systems}
 
-The examples so far have specified the left- and right-hand side of
+The examples so far have specified the left- and right-hand sides of
 the variational formulation and then asked FEniCS to assemble the
-linear system and solve it.  An alternative is to explicitly call
-functions for assembling the coefficient matrix $A$ and the right-side
-vector $b$, and then solve the linear system $AU=b$ with respect to
-the $U$ vector.  Instead of `solve(a == L, u, b)` we now write
+linear system and solve it. An alternative is to explicitly call
+functions for assembling the coefficient matrix $A$ and the right-hand
+side vector $b$, and then solve the linear system $AU=b$ for
+the vector $U$. Instead of `solve(a == L, U, b)` we now write
 
 !bc pycod
 A = assemble(a)
@@ -966,21 +983,24 @@ u = Function(V)
 U = u.vector()
 solve(A, U, b)
 !ec
-The variables `a` and `L` are as before. That is, `a` refers to the
-bilinear form involving a `TrialFunction` object (e.g., `u`)
-and a `TestFunction` object (`v`), and `L` involves a
-`TestFunction` object (`v`). From `a` and `L`,
-the `assemble` function can
-compute $A$ and $b$.
+The variables `a` and `L` are the same as before; that is, `a` refers
+to the bilinear form involving a `TrialFunction` object `u`
+and a `TestFunction` object `v`, and `L` involves the same `TestFunction`
+object `v`. From `a` and `L`, the `assemble` function can compute
+$A$ and $b$.
 
-The matrix $A$ and vector $b$ are first assembled without incorporating
-essential (Dirichlet) boundary conditions. Thereafter, the
-call `bc.apply(A, b)` performs the necessary modifications of
-the linear system such that `u` is guaranteed to equal the prescribed
-boundary values.
-When we have multiple Dirichlet conditions stored in a list `bcs`,
-as explained in Section ref{ch:poisson0:multiple:Dirichlet}, we must apply
-each condition in `bcs` to the system:
+Creating the linear system explicitly in a program can have some
+advantages in more advanced problem settings. For example, $A$ may
+be constant throughout a time-dependent simulation, so we can avoid
+recalculating $A$ at every time level and save a significant amount
+of simulation time.
+
+The matrix $A$ and vector $b$ are first assembled without
+incorporating essential (Dirichlet) boundary conditions. Thereafter,
+the call `bc.apply(A, b)` performs the necessary modifications of the
+linear system such that `u` is guaranteed to equal the prescribed
+boundary values. When we have multiple Dirichlet conditions stored in
+a list `bcs`, we must apply each condition in `bcs` to the system:
 
 !bc pycod
 # bcs is a list of DirichletBC objects
@@ -990,45 +1010,146 @@ for bc in bcs:
 
 idx{`assemble_system`}
 
-There is an alternative function `assemble_system`, which can
-assemble the system and take boundary conditions into account in one call:
+Alternatively, we can use the function `assemble_system`, which takes
+the boundary conditions into account during the assembly of the matrix
+and vector:
 
 !bc pycod
 A, b = assemble_system(a, L, bcs)
 !ec
-The `assemble_system` function incorporates the boundary conditions
-in the element matrices and vectors, prior to assembly.
-The conditions are also incorporated in a symmetric way to preserve
-eventual symmetry of the coefficient matrix.
+The `assemble_system` function is preferrable to the combination of
+`assemble` and `bc.apply` when the linear system is symmetric, since
+`assembly_system` will incorporate the boundary conditions in a
+symmetric way. Even if the matrix `A` that comes out of the call to
+`assemble` for a symmetric bilinear form `a`, the call to `bc.apply`
+will break the symmetry.
+
 #That is, for each degree of freedom
 #that is known, the corresponding row and column is zero'ed out and 1
 #is placed on the main diagonal, and the right-hand side `b` is
 #modified by subtracting the column in `A` times the value of the
 #degree of, and then the corresponding entry in `b` is replaced by the
 #known value of the degree of freedom.
-With `bc.apply(A, b)` the
-matrix `A` is modified in an nonsymmetric way.
+#With `bc.apply(A, b)` the
+#matrix `A` is modified in an nonsymmetric way.
 #: The row is zero'ed out
 #and 1 is placed on the main diagonal, and the degree of freedom value
 #is inserted in `b`.
 
-Note that the solution `u` is, as before, a `Function` object.
-The degrees of freedom, $U=A^{-1}b$, are filled
-into `u`'s `Vector` object (`u.vector()`)
-by the `solve` function.
+Once the linear system has been assembled, we need to compute the
+solution $U=A^{-1}b$ and store the solution $U$ in the vector
+`U = u.vector()`. In the same way as linear variational problems can be
+programmed using different interfaces in FEniCS---the high-level
+`solve` function, the class `LinearVariationalSolve`, and the
+low-level `assemble` function---linear systems can also be programmed
+using different interfaces in FEniCS. The high-level interface to
+solving a linear system in FEniCS also named `solve`:
 
-The object `A` is of type `Matrix`, while `b` and
-`u.vector()` are of type `Vector`. We may convert the
-matrix and vector data to `numpy` arrays by calling the
-`array()` method as shown before. If you wonder how essential
-boundary conditions are incorporated in the linear system, you can
-print out `A` and `b` before and after the
-`bc.apply(A, b)` call:
+!bc pycod
+solve(A, U, b)
+!ec
+
+By default, `solve(A, U, b)` uses sparse LU decomposition to compute
+the solution. Specification of an iterative solver and preconditioner
+can be made through two optional arguments:
+
+!bc pycod
+solve(A, U, b, 'cg', 'ilu')
+!ec
+Appropriate names of solvers and preconditioners are found in
+Section ref{ftut:app:solver:prec}.
+
+idx{KrylovSolver}
+
+This high-level interface is useful for many applications, but
+sometimes more fine-grained control is needed. One can then create one
+or more `KrylovSolver` objects that are then used to solve linear
+systems. Each different solver object can have its own set of
+parameters and selection of iterative method and preconditioner. Here
+is an example:
+
+!bc pycod
+solver = KrylovSolver('cg', 'ilu')
+prm = solver.parameters
+prm['absolute_tolerance'] = 1E-7
+prm['relative_tolerance'] = 1E-4
+prm['maximum_iterations'] = 1000
+u = Function(V)
+U = u.vector()
+solver.solve(A, U, b)
+!ec
+The function `solver_linalg` in the program file
+`${prog["poisson_vc"]}.py` implements a solver function where the user
+can choose between different types of assembly. The function
+`application_linalg` runs a test problem on a sequence of meshes and
+solves the problem with symmetric and non-symmetric modification of
+the system matrix. One can monitor the number of Krylov method
+iterations and realize that with a symmetric coefficient matrix, the
+Conjugate Gradient method requires slightly fewer iterations than
+GMRES in the non-symmetric case. Taking into account that the
+Conjugate Gradient method has less work per iteration, there is some
+efficiency to be gained by using `assemble_system` for this problem.
+
+[AL: Why is it called `poisson_vc`?]
+
+[hpl: Running `application_linalg`, the results are strange: Why does
+the `solve(a==L,...)` method need many more iterations than `solve(A,
+U, b, ...)` when we use the same Krylov parameter settings? Something
+wrong with the settings?]
+
+[AL: I don't know. I found a possibly related problem in that
+`monitor_convergence = True` had no effect when calling `solve` but it
+worked when setting it on a solver object. Will need to revisit and
+test run all codes later with latest FEniCS.]
+
+idx{random start vector (linear systems)}
+
+The choice of start vector for the iterations in a linear solver is
+often important. By default, the values of `u` and thus the vector `U
+= u.vector()` will be initialized to zero. If instead wanted to
+initialize `U` with random numbers in the interval $[-100,100]$ this
+can be done as follows:
+
+!bc pycod
+n = u.vector().array().size
+U = u.vector()
+U[:] = numpy.random.uniform(-100, 100, n)
+solver.parameters['nonzero_initial_guess'] = True
+solver.solve(A, U, b)
+!ec
+Note that we must both turn off the default behavior of setting the start
+vector (``initial guess'') to zero, and also set the values of the
+vector `U` to nonzero values.
+
+Using a nonzero initial guess can be particularly important for
+time-dependent problems or when solving a linear system as part of a
+nonlinear iteration, since then the previous solution vector `U` will
+often be a good initial guess for the solution in the next time step
+or iteration.
+
+# In other problems, we may divide the variational
+# problem and linear system into different terms, say $A=M + {\dt} K$,
+# where $M$ is a matrix arising from a term like $\partial u/\partial t$,
+# $K$ is a term corresponding to a Laplace operator, and $\dt$ is
+# a time discretization parameter. When $\dt$ is changed in time,
+# we can efficiently recompute $A = M + {\dt} K$ without
+# reassembling the constant matrices $M$ and $K$. This strategy may
+# speed up simulations significantly.
+
+===== Examining matrix and vector values =====
+
+When calling `A = assemble(a)` and `b = assemble(L)`, the object `A`
+will be of type `Matrix`, while `b` and `u.vector()` are of type
+`Vector`. To examine the values, we may convert the matrix and vector
+data to `numpy` arrays by calling the `array()` method as shown
+before. For example, if you wonder how essential boundary conditions are
+incorporated into linear systems, you can print out `A` and `b`
+before and after the `bc.apply(A, b)` call:
 
 !bc pycod
 A = assemble(a)
 b = assemble(L)
-if mesh.num_cells() < 16:  # print for small meshes only
+if mesh.num_cells() < 16: # print for small meshes only
     print(A.array())
     print(b.array())
 bc.apply(A, b)
@@ -1037,8 +1158,7 @@ if mesh.num_cells() < 16:
     print(b.array())
 !ec
 
-
-With access to the elements in `A` through a `numpy` array we can easily
+With access to the elements in `A` through a `numpy` array, we can easily
 perform computations on this matrix, such as computing the eigenvalues
 (using the `eig` function in `numpy.linalg`). We can alternatively dump
 `A.array()` and `b.array()` to file in MATLAB format and invoke
@@ -1055,103 +1175,42 @@ the array variables `A` and `b` available for computations.
 idx{SLEPc}
 
 Matrix processing in Python or MATLAB/Octave is only feasible for
-small PDE problems since the `numpy` arrays or matrices in MATLAB
-file format are dense matrices. FEniCS also has an interface to the
-eigensolver package SLEPc, which is a preferred tool for computing the
-eigenvalues of large, sparse matrices of the type encountered in PDE
-problems (see `demo/la/eigenvalue` in the FEniCS source code tree
-for a demo).
+small PDE problems since the `numpy` arrays or matrices in MATLAB file
+format are dense matrices. FEniCS also has an interface to the
+eigensolver package SLEPc, which is the preferred tool for computing
+the eigenvalues of large, sparse matrices of the type encountered in
+PDE problems (see `demo/documented/eigenvalue` in the FEniCS source
+code tree for a demo).
 
-By default, `solve(A, U, b)` applies sparse LU decomposition
-as solver. Specification of an iterative solver and preconditioner
-is done through two optional arguments:
+[AL: Aha, so vc means variable coefficient. Seems to be a mismatch
+between presenting the example here below and using referring to the
+example above.]
 
-!bc pycod
-solve(A, U, b, 'cg', 'ilu')
-!ec
-Appropriate names of solvers and preconditioners are found in
-Section ref{ftut:app:solver:prec}.
+[AL: I changed the title here and put everything under the common
+theme 'post-processing' since flux computation and structured grids
+are also related to postprocessing (more than to variable coefficient
+Poisson).]
 
-idx{KrylovSolver}
-
-To control tolerances in the stopping criterion and the maximum
-number of iterations, one can explicitly form a `KrylovSolver` object
-and set items in its `parameters` attribute
-(see also Section ref{ch:poisson0:solver:problem}):
-
-!bc pycod
-solver = KrylovSolver('cg', 'ilu')
-prm = solver.parameters
-prm['absolute_tolerance'] = 1E-7
-prm['relative_tolerance'] = 1E-4
-prm['maximum_iterations'] = 1000
-u = Function(V)
-U = u.vector()
-set_log_level(DEBUG)
-solver.solve(A, U, b)
-!ec
-The function `solver_linalg` in the
-program file `${prog["poisson_vc"]}.py` implements a solver function where
-the user can choose between different types of assembly: the variational
-(`solve(a == L, u, bc)`), assembling the matrix and right-hand side separately, and assembling the system such that the coefficient matrix preserves
-symmetry.
-The function `application_linalg` runs a test problem on sequence of
-meshes and solves the problem with symmetric and non-symmetric modification
-of the coefficient matrix. One can monitor the number of Krylov
-method iteration and realize that with a symmetric coefficient matrix,
-the Conjugate Gradient method requires slightly fewer iterations than
-GMRES in the non-symmetric case. Taking into account that the Conjugate
-Gradient method has less work per iteration, there is some efficiency to
-be gained by using `assemble_system`.
-
-[hpl: Running `application_linalg`, the results are strange: Why does
-the `solve(a==L,...)` method need many more iterations than `solve(A,
-U, b, ...)` when we use the same Krylov parameter settings? Something
-wrong with the settings?]
-
-idx{random start vector (linear systems)}
-
-The choice of start vector for the iterations in a linear solver is often
-important. With the `solver.solve(A, U, b)` call the default start vector
-is the zero vector. A start vector
-with random numbers in the interval $[-100,100]$ can be computed as
-
-!bc pycod
-n = u.vector().array().size
-U = u.vector()
-U[:] = numpy.random.uniform(-100, 100, n)
-solver.parameters['nonzero_initial_guess'] = True
-solver.solve(A, U, b)
-!ec
-Note that we must turn off the default behavior of setting the start
-vector (``initial guess'') to zero, and then the provided value of `U`
-is used as start vector.
-
-Creating the linear system explicitly in a program can have some
-advantages in more advanced problem settings. For example, $A$ may
-be constant throughout a time-dependent simulation, so we can avoid
-recalculating $A$ at every time level and save a significant amount
-of simulation time.
-
-
-# In other problems, we may divide the variational
-# problem and linear system into different terms, say $A=M + {\dt} K$,
-# where $M$ is a matrix arising from a term like $\partial u/\partial t$,
-# $K$ is a term corresponding to a Laplace operator, and $\dt$ is
-# a time discretization parameter. When $\dt$ is changed in time,
-# we can efficiently recompute $A = M + {\dt} K$ without
-# reassembling the constant matrices $M$ and $K$. This strategy may
-# speed up simulations significantly.
-
-
-
-======= A variable-coefficient Poisson problem =======
+======= Postprocessing computations =======
 label{ftut:possion:2D:varcoeff}
 idx{Poisson's equation with variable coefficient}
+idx{Postprocessing}
 idx{`${prog["poisson_vc"]}.py`}
 
-Suppose we have a variable coefficient $p(x,y)$ in the Laplace operator,
-as in the boundary-value problem
+As the final theme in this chapter, we will look at how to perform
+*postprocessing computations*; that is, how to compute various derived
+quantities from the computed solution of a PDE. The solution $u$
+itself may be of interest for visualizing general featurers of the
+solution, but sometimes one is interested in computing the solution of
+a PDE to compute a specific quantity that derives from the solution,
+such as, e.g., the flux, a point-value, or some average of the
+solution.
+
+===== A variable-coefficient Poisson problem =====
+
+As a test problem, we will extend the Poisson problem from Chapter
+ref{ch:fundamentals} with a variable coefficient $p(x,y)$ in the
+Laplace operator:
 
 !bt
 \begin{equation} label{ch:poisson0:2D:varcoeff}
@@ -1163,28 +1222,22 @@ p(x,y)\nabla u(x,y)\right\rbrack &= f(x,y) \quad \mbox{in } \Omega,
   \end{split}
 \end{equation}
 !et
-We shall quickly demonstrate that this simple extension of our model
-problem only requires an equally simple extension of the FEniCS program.
-
-=== Test problem ===
-
 Let us continue to use our favorite solution $u(x,y)=1+x^2+2y^2$ and
 then prescribe $p(x,y)=x+y$. It follows that
 $\ub(x,y) = 1 + x^2 + 2y^2$ and $f(x,y)=-8x-10y$.
 
-===== Modifications of the PDE solver =====
+We shall quickly demonstrate that this simple extension of our model
+problem only requires an equally simple extension of the FEniCS
+program. The following simple changes must be made to the previously
+shown codes:
 
-What are the modifications we need to do in the previously shown codes
-to incorporate the variable coefficient $p$?
-from Section ref{ch:poisson0:verify1}?
-
-  * `solver` must take `p` as argument,
-  * `f` in our test problem
+  * the `solver` function must take `p` as argument,
+  * the right-hand side `f`
     must be an `Expression` since it is no longer a constant,
   * a new `Expression p` must be defined for the variable coefficient,
-  * the formula for $a(u,v)$ in the variational problem is slightly changed.
+  * the formula for $a(u,v)$ in the variational problem must be updated.
 
-First we address the modified variational problem. Multiplying
+We first address the modified variational problem. Multiplying
 the PDE by a test function $v$ and
 integrating by parts now results
 in
@@ -1199,7 +1252,8 @@ in
 The function spaces for $u$ and $v$ are the same as in
 the problem with $p=1$, implying that the boundary integral
 vanishes since $v=0$ on $\partial\Omega$ where we have Dirichlet conditions.
-The weak form $a(u,v)=L(v)$ then has
+The variational forms $a$ and $L$ in the variational problem
+$a(u,v)=L(v)$ then become
 
 !bt
 \begin{equation}
@@ -1207,7 +1261,7 @@ a(u,v) = \int_\Omega p\nabla u\cdot\nabla v \dx,\quad
 L(v) = \int_\Omega fv \dx\tp
 \end{equation}
 !et
-In the code for solving $-\nabla^2u=f$ we must replace
+In the code for solving $-\nabla^2u=f$ we must thus replace
 
 !bc pycod
 a = dot(grad(u), grad(v))*dx
@@ -1225,62 +1279,57 @@ p = Expression('x[0] + x[1]')
 f = Expression('-8*x[0] - 10*x[1]')
 !ec
 No additional modifications are necessary. The file
-`${prog["poisson_vc"]}.py` (variable-coefficient Poisson problem in 2D)
+`${prog["poisson_vc"]}.py`
 is a copy of `${prog["poisson_iter"]}.py` with the mentioned changes
 incorporated. Observe that $p=1$ recovers the original problem in
 `${prog["poisson_iter"]}.py`.
 
 You can run it and confirm
-that it recovers the exact $u$ at the nodes.
-
+that it recovers the exact solution $u$ at the nodes.
 
 ===== Flux computations =====
 label{ch:poisson0:gradu}
 
 idx{projection}
 
-The flux $-p\nabla u$ is often of interest to compute. The formula is simple:
-since
-$u = \sum_{j=1}^N U_j \phi_j$, we have that
+It is often of interest to compute the flux $Q = -p\nabla u$ is often of interest to compute. Since
+$u = \sum_{j=1}^N U_j \phi_j$, it follows that
 
 !bt
 \begin{equation*}
--p\nabla u = -p\sum_{j=1}^N U_j \nabla \phi_j\tp
+Q = -p\sum_{j=1}^N U_j \nabla \phi_j\tp
 \end{equation*}
 !et
 
-Given the solution variable `u` in the program, its gradient is
-obtained by `grad(u)` or `grad(u)`.  However, the gradient of a
-piecewise continuous finite element scalar field is a discontinuous
-vector field since the $\phi_j$ has discontinuous derivatives at the
-boundaries of the cells. For example, using Lagrange elements of
-degree 1, $u$ is linear over each cell, and the numerical $\nabla u$
-becomes a piecewise constant vector field. On the contrary, the exact
-gradient is continuous.  For visualization and data analysis purposes
-we often want the computed gradient to be a continuous vector
-field. Typically, we want each component of $\nabla u$ to be
-represented in the same way as $u$ itself. To this end, we can project
-the components of $\nabla u$ onto the same function space as we used
-for $u$.  This means that we solve $w = \nabla u$ approximately by a
-finite element method, using the same elements for the components of
-$w$ as we used for $u$. This process is known as *projection*.
+However, the gradient of a piecewise continuous finite element scalar
+field is a discontinuous vector field since the basis functions
+$\{\phi_j\}$ have discontinuous derivatives at the boundaries of the
+cells. For example, using Lagrange elements of degree 1, $u$ is linear
+over each cell, and the gradient becomes a piecewise
+constant vector field. On the contrary, the exact gradient is
+continuous. For visualization and data analysis purposes, we often
+want the computed gradient to be a continuous vector field. Typically,
+we want each component of $\nabla u$ to be represented in the same way
+as $u$ itself. To this end, we can project the components of $\nabla
+u$ onto the same function space as we used for $u$. This means that
+we solve $w = \nabla u$ approximately by a finite element method,
+using the same elements for the components of $w$ as we used for
+$u$. This process is known as *projection*.
 
 idx{`project`} idx{projection}
 
-Not surprisingly, projection is a so common operation in finite
-element programs that FEniCS has a function for doing the task:
-`project(q, W)`, which returns the projection of some `Function` or
-`Expression` object named `q` onto the `FunctionSpace` (if `q` is
-scalar) or `VectorFunctionSpace` (if `q` is vector-valued) named `W`.
-Specifically, in our case where `u` is computed and we want to project
-the vector-valued $\nabla u$ and $-p\nabla u$
-onto the `VectorFunctionSpace` where each
-component has the same `Function` space as `u`:
+Projection is a common operation in finite element analysis and FEniCS
+has a function for easily performing the projection:
+`project(expression, W)`, which returns the projection of some
+expression into the space `W`. In our case, the flux $Q = -p\nabla u$
+is vector-valued and we need to pick `W` as the vector-valued function
+space of the same degree as the space `V` where `u` resides:
 
 !bc pycod
 V = u.function_space()
-degree = u.ufl_element().degree()
-W = VectorFunctionSpace(V.mesh(), 'P', degree)
+mesh = V.mesh()
+degree = V.ufl_element().degree()
+W = VectorFunctionSpace(mesh(), 'P', degree)
 
 grad_u = project(grad(u), W)
 flux_u = project(-p*grad(u), W)
@@ -1306,7 +1355,7 @@ anything else:
 !bc pycod
 plot(flux, title='flux field')
 
-flux_x, flux_y = flux.split(deepcopy=True)  # extract components
+flux_x, flux_y = flux.split(deepcopy=True) # extract components
 plot(flux_x, title='x-component of flux (-p*grad(u))')
 plot(flux_y, title='y-component of flux (-p*grad(u))')
 !ec
@@ -1321,94 +1370,87 @@ idx{nodal values array}
 idx{degrees of freedom array (vector field)}
 
 For data analysis of the nodal values of the flux field we can
-grab the underlying `numpy` arrays (demands a `deepcopy=True`
+grab the underlying `numpy` arrays (which demands a `deepcopy=True`
 in the split of `flux`):
 
+[AL: Suggest we use `_dofs` instead of `_array` everywhere. Have made
+similar changes in previous chapters before.]
+
 !bc pycod
-flux_x_array = flux_x.vector().array()
-flux_y_array = flux_y.vector().array()
+flux_x_dofs = flux_x.vector().dofs()
+flux_y_dofs = flux_y.vector().dofs()
 !ec
 The degrees of freedom of the `flux_u` vector field can also be
 reached by
 
 !bc pycod
-flux_u_array = flux_u.vector().array()
+flux_u_dofs = flux_u.vector().array()
 !ec
-but this is a flat `numpy` array where the degrees of freedom for the
-$x$ component of the flux is stored in the first part, then the
-degrees of freedom of the $y$ component, and so on. This is less convenient
-to work with.
+However, this is a flat `numpy` array containing the degrees of
+freedom for both the $x$ and $y$ components of the flux and the
+ordering of the components may be mixed up by FEniCS in order to
+improve computational efficiency.
 
-The function `application_test_flux` in the
-program `${prog["poisson_vc"]}.py` demonstrates the computations described
+The function `application_test_flux` in the program
+`${prog["poisson_vc"]}.py` demonstrates the computations described
 above.
 
 [hpl: Not sure if we should use paper space on the box below. Could be
 in extended material only.]
 
-!bnotice Detour: Manual projection.
+[AL: There was some repetition so I have made it shorter.]
+
+!bnotice Manual projection.
 Although you will always use `project` to project a finite element
-function, it can be constructive this point in the tutorial to formulate the
+function, it can be instructive to look at how to to formulate the
 projection mathematically and implement its steps manually in FEniCS.
 
-Looking at the component $\partial u/\partial x$ of the gradient, we
-project the (discrete) derivative $\sum_jU_j{\partial \phi_j/\partial
-x}$ onto a function space with basis $\phi_1,\phi_2,\ldots$ such that
-the derivative in this space is expressed by the standard sum
-$\sum_j\bar U_j \phi_j$, for suitable (new) coefficients $\bar U_j$.
-
-The variational problem for $w$ reads: find  $w\in \Vg$ such that
+Let's say we have an expression $g = g(u)$ that we want to project
+into some space $W$. The mathematical formulation of the ($L^2$)
+projection $w = P_W g$ into $W$ is the variational problem
 
 !bt
 \begin{equation}
-a(w, v) = L(v)\quad\forall v\in \hat{\Vg},
+  \int_{\Omega} w v \dx = \int_{\Omega} g v \dx
 \end{equation}
 !et
-where
-
+for all test functions $v$. In other words we have a
+standard variational problem $a(w, v) = L(v)$ where now
 !bt
 \begin{align}
-a(w, v) &= \int_\Omega w\cdot v \dx,\\
-L(v) &= \int_\Omega \nabla u\cdot v \dx\tp
+a(w, v) &= \int_\Omega w v \dx,\\
+L(v) &= \int_\Omega g v \dx\tp
 \end{align}
 !et
-The function spaces $\Vg$ and $\hat{\Vg}$ (with the superscript g
-denoting ``gradient'') are vector versions of the function space for
-$u$, with boundary conditions removed (if $V$ is the space we used for
-$u$, with no restrictions on boundary values, $\Vg = \hat{\Vg} =
-[V]^d$, where $d$ is the number of space dimensions).  For example, if
-we used piecewise linear functions on the mesh to approximate $u$, the
-variational problem for $w$ corresponds to approximating each
-component field of $w$ by piecewise linear functions.
+Note that when the functions in $W$ are vector-valued, as is the case
+when we project the gradient $g(u) = \nabla u$, we must replace the
+products above by $w\cdot v$ and $g\cdot v$.
 
-The variational problem for the vector field
-$w$, called `grad_u` in the code, is easy to solve in FEniCS:
-
+The variational problem is easy to define in FEniCS.
 !bc pycod
-V_g = VectorFunctionSpace(mesh, 'P', 1)
-w = TrialFunction(V_g)
-v = TestFunction(V_g)
+w = TrialFunction(W)
+v = TestFunction(W)
 
-a = dot(w, v)*dx
-L = dot(grad(u), v)*dx
-grad_u = Function(V_g)
-solve(a == L, grad_u)
-
-plot(grad_u, title='grad(u)')
+a = w*v*dx # or dot(w, v)*dx when w is vector-valued
+L = g*v*dx # or dot(g, v)*dx when g is vector-valued
+w = Function(W)
+solve(a == L, w)
 !ec
 The boundary condition argument to `solve` is dropped since there are
 no essential boundary conditions in this problem.
-The new thing is basically that we work with a `VectorFunctionSpace`,
-since the unknown is now a vector field, instead of the
-`FunctionSpace` object for scalar fields.
 !enotice
-
 
 ===== Taking advantage of structured mesh data =====
 label{ftut:structviz}
 idx{structured mesh}
 idx{visualization, structured mesh}
 idx{`scitools`}
+
+[AL: I haven't read this section yet. Is it necessary to include? If
+we need to save pages, this is the section I would drop. Since we can
+easily visualize unstructured mesh data, this looks to me like a
+complicated way to perform something we can already do by calling
+`plot` or saving to Paraview. It also relies on a non-standard utility (`BoxField`).]
 
 When finite element computations are done on a structured rectangular
 mesh, maybe with uniform partitioning, VTK-based tools for completely
@@ -1709,12 +1751,6 @@ hitting exactly then nodes when sampling a function along a line
 through the grid might be non-trivial.
 # #endif
 
-!split
-======= Postprocessing computations =======
-
-[hpl: Need a little intro.]
-
-
 ===== Computing functionals =====
 label{ch:poisson0:functionals}
 idx{functionals}
@@ -1724,7 +1760,7 @@ functionals of $u$, for example,
 
 !bt
 \begin{equation}
-{1\over2}||\nabla u||^2 \equiv {1\over2}\int_\Omega \nabla u\cdot \nabla u \dx,
+{1\over2}||\nabla u||^2 = {1\over2}\int_\Omega \nabla u\cdot \nabla u \dx,
 label{ch:poisson0:functionals:energy}
 \end{equation}
 !et
@@ -1738,9 +1774,10 @@ label{ch:poisson0:functionals:error}
 \end{equation}
 !et
 where $\uex$ is the exact solution. The error is of particular
-interest when studying convergence properties.  Sometimes the interest
-concerns the flux out of a part $\Gamma$ of the boundary
-$\partial\Omega$,
+interest when studying convergence properties of finite element
+methods. Other times, we may instead be interested in computing
+the flux out of a part
+$\Gamma$ of the boundary $\partial\Omega$,
 
 !bt
 \begin{equation}
@@ -1750,8 +1787,10 @@ label{ch:poisson0:functionals:flux}
 !et
 where $\normalvec$ is an outward unit normal at $\Gamma$ and $p$ is a
 coefficient (see the problem in Section ref{ftut:possion:2D:varcoeff}
-for a specific example).  All these functionals are easy to compute
-with FEniCS, and this section describes how it can be done.
+for a specific example).
+
+All these functionals are easy to compute with FEniCS, as we shall see
+in the examples below.
 
 idx{energy functional}
 
@@ -1765,10 +1804,11 @@ language in the same manner as we describe weak forms:
 energy = 0.5*dot(grad(u), grad(u))*dx
 E = assemble(energy)
 !ec
-The `assemble` call performs the integration.  It is possible to
-restrict the integration to subdomains, or parts of the boundary, by
-using a mesh function to mark the subdomains as explained in Section
-ref{ch:poisson0:multi:bc}.
+The functional `energy` is evaluated by calling the `assemble`
+function that we have previously used to assemble matrices and
+vectors. FEniCS will recognize that the form has ''rank 0'' (since it
+contains no trial and test functions) and return the result as a
+scalar value.
 
 # #ifdef EXTRA
 The function `energy` in `${prog["poisson_membrane"]}.py` carries out the computation of
@@ -1801,7 +1841,8 @@ idx{error functional}
 
 === Error functional ===
 
-Computation of (ref{ch:poisson0:functionals:error}) is typically done
+Computating the functional (ref{ch:poisson0:functionals:error}) can be
+done as follows:
 by
 
 !bc pycod
@@ -1810,32 +1851,31 @@ E = sqrt(abs(assemble(error)))
 !ec
 The exact solution $\uex$ is here in a `Function` or `Expression`
 object `u_exact`, while `u` is the finite element approximation.
-(Sometimes, for very small error values, the result of
+Sometimes, for very small error values, the result of
 `assemble(error)` can be a (very small) negative number, so we have
 used `abs` in the expression for `E` above to ensure a positive value
-for the `sqrt` function.)
+for the `sqrt` function.
 
-As will be explained and demonstrate in Section
+As will be explained and demonstrated in Section
 ref{ch:poisson0:convrates}, the integration of `(u - u_exact)**2*dx`
 can result in too optimistic convergence rates unless one is careful
 how `u_exact` is transferred onto a mesh. The general recommendation
 for reliable error computation is to use the `errornorm` function (see
-`pydoc fenics.errornorm` and Section ref{ch:poisson0:convrates} for
+`help(errornorm)` and Section ref{ch:poisson0:convrates} for
 more information):
 
 !bc pycod
 E = errornorm(u_exact, u)
 !ec
 
-
 idx{flux functional}
 
-=== Flux Functionals ===
+=== Flux Functional ===
 
 To compute flux integrals like $F = -\int_\Gamma p\nabla
-u\cdot\normalvec \ds$ we need to define the $\normalvec$ vector,
+u\cdot\normalvec \ds$, we need to define the $\normalvec$ vector,
 referred to as *facet normal* in FEniCS. If the surface domain
-$\Gamma$ in the flux integral is the complete boundary we can perform
+$\Gamma$ in the flux integral is the complete boundary, we can perform
 the flux computation by
 
 !bc pycod
@@ -1849,15 +1889,19 @@ expression when `u` is a scalar function, we have chosen to write
 underlying equation to a vector Laplace/Poisson PDE. With `grad(u)` we
 must in that case write `dot(n, grad(u))`.
 
+[AL: Figure out which one is `grad` and which one is `nabla_grad`
+above... :-)]
+
 It is possible to restrict the integration to a part of the boundary
 using a mesh function to mark the relevant part, as explained in
 Section ref{ch:poisson0:multi:bc}. Assuming that the part corresponds
 to subdomain number `i`, the relevant syntax for the variational
 formulation of the flux is `-p*dot(grad(u), n)*ds(i)`.
 
-
 ===== Computing convergence rates =====
 label{ch:poisson0:convrates}
+
+[AL: I am here.]
 
 [hpl: Newer FEniCS examples have `dx(degree)`. Should explain
 that syntax. Also `Expression(string, degree)`.]

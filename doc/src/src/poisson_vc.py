@@ -2,6 +2,8 @@
 from __future__ import print_function
 from fenics import *
 
+# FIXME: Update after corresponding edits in book
+
 def solver(
     p, f, u_b, Nx, Ny, degree=1,
     linear_solver='Krylov', # Alt: 'direct'
@@ -194,12 +196,12 @@ def test_normalize_solution():
     assert abs(expected - computed) < 1E-15
 
 def flux(u, p):
-    """Return p*grad(u) projected onto same space as u."""
+    """Return -p*grad(u) projected into same space as u."""
     V = u.function_space()
     mesh = V.mesh()
-    degree = u.ufl_element().degree()
-    V_g = VectorFunctionSpace(mesh, 'P', degree)
-    flux_u = project(-p*grad(u), V_g)
+    degree = V.ufl_element().degree()
+    W = VectorFunctionSpace(mesh, 'P', degree)
+    flux_u = project(-p*grad(u), W)
     flux_u.rename('flux(u)', 'continuous flux field')
     return flux_u
 
