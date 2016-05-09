@@ -271,7 +271,8 @@ class UniformBoxGrid(object):
     def __str__(self):
         """Pretty print, using the syntax of init_fromstring."""
         domain = 'x'.join(['[%g,%g]' % (min_, max_) \
-                           for min_, max_ in zip(self.min_coor, self.max_coor)])
+                           for min_, max_ in
+                           zip(self.min_coor, self.max_coor)])
         indices = 'x'.join(['[0:%d]' % div for div in self.division])
         return 'domain=%s  indices=%s' % (domain, indices)
 
@@ -1080,7 +1081,10 @@ def update_from_fenics_array(fenics_array, box_field):
     try:
         nodal_values = _rank12rankd_mesh(nodal_values, box_field.grid.shape)
     except ValueError as e:
-        raise ValueError('DOLFIN function has vector of size %s while the provided mesh demands %s' % (nodal_values.size, grid.shape))
+        raise ValueError(
+            'DOLFIN function has vector of size %s while '
+            'the provided mesh demands %s' %
+            (nodal_values.size, grid.shape))
     box_field.set_values(nodal_values)
     return box_field
 
@@ -1102,7 +1106,7 @@ def _str_equal(a, b):
                 r.append(']')
         return ''.join(r)
 
-def _test1():
+def test_2Dmesh():
     g1 = UniformBoxGrid(min=0, max=1, division=4)
     expected = """\
 g=domain=[0,1]  indices=[0:4]
@@ -1152,6 +1156,7 @@ iterator over "interior_edges" is not implemented
     success = not msg
     assert success, msg
 
+    # Demonstrate functionality with structured mesh class
     spec = '[0,1]x[-1,2] with indices [0:3]x[0:2]'
     g2 = UniformBoxGrid.init_fromstring(spec)
     _test(g2, [(0.2,0.2), (1,2)])
@@ -1186,7 +1191,7 @@ def _test3():
     a = g.vectorized_eval(lambda x,y: zeros(g.shape)+2)
     print a
 
-def _testbox(g):
+def _test_field(g):
     print 'grid: %s' % g
 
     # function: 1 + x + y + z
@@ -1267,4 +1272,4 @@ def _test4():
     _testbox(g3)
 
 if __name__ == '__main__':
-    _test1()
+    test_2Dmesh()
