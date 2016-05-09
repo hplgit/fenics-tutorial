@@ -1,5 +1,6 @@
 #!/bin/bash
-# Usage: make.sh latex|sphinx
+# Usage: make.sh 1|2
+# for making volume 1 or 2
 
 if [ $# -gt 0 ]; then
     name=ftut$1
@@ -66,6 +67,7 @@ compile --device=screen EXV=True
 cp $name.pdf fenics-tutorial${bookno}-4screen.pdf
 
 # Make sphinx
+rm -f *._ftut*.rst
 preprocess -DFORMAT=html newcommands.p.tex > newcommands.tex
 dir=sphinx-rootdir
 system doconce format sphinx $name --encoding=utf-8 EXV=$EXV --allow_refs_to_external_docs

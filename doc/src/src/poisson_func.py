@@ -1,11 +1,11 @@
 """
 Solve -Laplace(u) = f on the unit square
-with u = u_b on the boundary.
+with u = u_D on the boundary.
 """
 from __future__ import print_function
 from fenics import *
 
-def solver(f, u_b, Nx, Ny, degree=1):
+def solver(f, u_D, Nx, Ny, degree=1):
     """
     Solve -Laplace(u) = f on [0,1] x [0,1] with 2*Nx*Ny Lagrange
     elements of specified degree and u=u_D (Expresssion) on
@@ -19,7 +19,7 @@ def solver(f, u_b, Nx, Ny, degree=1):
     def boundary(x, on_boundary):
         return on_boundary
 
-    bc = DirichletBC(V, u_b, boundary)
+    bc = DirichletBC(V, u_D, boundary)
 
     # Define variational problem
     u = TrialFunction(V)
@@ -38,7 +38,7 @@ def test_solver():
 
     # Set up parameters for testing
     tol = 1E-11
-    u_b = Expression('1 + x[0]*x[0] + 2*x[1]*x[1]')
+    u_D = Expression('1 + x[0]*x[0] + 2*x[1]*x[1]')
     f = Constant(-6.0)
 
     # Iterate over mesh sizes and degrees
@@ -48,7 +48,7 @@ def test_solver():
                   % (Nx, Ny, degree))
 
             # Compute solution
-            u = solver(f, u_b, Nx, Ny, degree)
+            u = solver(f, u_D, Nx, Ny, degree)
 
             # Compute maximum error at vertices
             vertex_values_u_D = u_D.compute_vertex_values(mesh)
@@ -66,7 +66,7 @@ def application_test():
     # Set up problem parameters and call solver
     u_D = Expression('1 + x[0]*x[0] + 2*x[1]*x[1]')
     f = Constant(-6.0)
-    u = solver(f, u_b, 6, 4, 1)
+    u = solver(f, u_D, 6, 4, 1)
 
     # Plot solution
     u.rename('u', 'u')
