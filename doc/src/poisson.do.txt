@@ -1906,93 +1906,116 @@ label{ch:poisson0:convrates}
 [hpl: Newer FEniCS examples have `dx(degree)`. Should explain
 that syntax. Also `Expression(string, degree)`.]
 
-To illustrate error computations and convergence of finite element
-solutions, we have included a function `convergence_rate` in the
-`${prog["poisson_vc"]}.py` program. This is a tool that is very handy
+A central question for any numerial method is its *convergence rate*:
+how fast does the error approach zero when the resolution is
+increased? For finite element methods, this typically corresponds to
+proving, theoretically or empirically, that the error $e = \uex - u$
+is bounded by the mesh size $h$ to some power $r$; that is, $\|e\|
+\leq C h^r$ for some constant $C$. The number $r$ is called the
+*convergence rate* of the method. Note that different norms, like the
+$L^2$-norm $\|e\|$ or $H^1_0$-norm $\|\nabla e\|$ typically have
+different convergence rates.
+
+To illustrate how to compute errors and convergence rates in FEnicS,
+we have included the function `convergence_rate` in
+`${prog["poisson_vc"]}.py`. This is a tool that is very handy
 when verifying finite element codes and will therefore be explained in
 detail here.
 
+=== Computing error norms ===
 
-The $L^2$ norm of the error in a finite element approximation $u$,
+The $L^2$-norm of the error in a finite element approximation $u$,
 $\uex$ being the exact solution, is given by
-
-=== Various ways of computing the error ===
 
 !bt
 \[ E = \left(\int_\Omega (u_e-u)^2 \dx\right)^{1/2},\]
 !et
-and implemented in FEniCS by
+and can be implemented in FEniCS by
 
 !bc pycod
 error = (u - u_e)**2*dx
 E = sqrt(abs(assemble(error)))
 !ec
-Sometimes, for very small error values, the result of
-`assemble(error)` can be a (very small) negative number, so we have
-used `abs` in the expression for `E` above to ensure a positive value
-for the `sqrt` function.
+As above, we have used `abs` in the expression for `E` above to ensure
+a positive value for the `sqrt` function.
 
-We remark that `u_e` will, in the expression above, be interpolated
-onto the function space `V` before `assemble` can perform the
-integration over the domain. This implies that the exact solution used
-in the integral will vary linearly over the cells, and not as a sine
-function, if `V` corresponds to linear Lagrange elements.  This
-situation may yield a smaller error `u - u_e` than what is actually
-true.  More accurate representation of the exact solution is easily
-achieved by interpolating the formula onto a space defined by
-higher-order elements, say of third degree:
+It is important to understand how FEniCS computes the error from the
+above code, since we may otherwise run into subtle issues when using
+the value for computin convergence rates. The first subtle issue is
+that if `u_e` is not already finite element function (an object create
+using `Function(V)`), which is the case if `u_e` is defined as an
+`Expression`, FEniCS must interpolate `u_e` into some local finite
+element space on each element of the mesh. The degree used for the
+interpolation is determined by the mandatory keyword argument to the
+`Expression` class, for example:
 
 !bc pycod
-Ve = FunctionSpace(mesh, 'P', degree=3)
-u_e_Ve = interpolate(u_e, Ve)
-error = (u - u_e_Ve)**2*dx
-E = sqrt(assemble(error))
+u_e = Expression('sin(x[0])', degree=1)
 !ec
-To achieve complete mathematical control of which function space the
-computations are carried out in, we can explicitly interpolate `u` to
-the same space:
+This means that the error computed will not be equal to the actual
+error $\|\uex - u\|$ but rather the difference between the finite
+element solution $u$ and the piecewise linear interpolant of
+$\uex$. This may yield a too optimistic (too small) value for the
+error. A better value may be achieved by interpolating the exact
+solution into a higher-order function space, which can be done by
+simply increasing the degree:
 
 !bc pycod
-u_Ve = interpolate(u, Ve)
-error = (u_Ve - u_e_Ve)**2*dx
+u_e = Expression('sin(x[0])', degree=3)
 !ec
 
-The square in the expression for `error` will be expanded and lead to
-a lot of terms that almost cancel when the error is small, with the
-potential of introducing significant rounding errors.  The function
-`errornorm` is available for avoiding this effect by first
-interpolating `u` and `u_exact` to a space with higher-order elements,
-then subtracting the degrees of freedom, and then performing the
-integration of the error field. The usage is simple:
+The second subtle issue is that when FEniCS evaluates the expression
+`(u_ex - u)**2`, this will be expanded into `u_ex**2 + u**2 -
+2*u_ex*u`. If the error is small (and the solution itself is of
+moderate size), this calculation will correspond to the subtraction of
+two positive numbers (`u_ex**2 + u**2` $\sim 1$ and `2*u_ex*u` $\sim
+1$) yielding a small number. Such a computation is very prone to
+round-off errors, which may again lead to an unreliable value for the
+error. To make this situation worse, FEniCS may expand this
+computation into a large number of terms, in particular for higher
+order elements, making the computation very unstable.
+
+To help with these issues, FEniCS provides the built-in function
+`errornorm` which computes the error norm in a more intelligent
+way. First, both `u_ex` and `u` are interpolated into a higher-order
+function space. Then, the degrees of freedom of `u_ex` and `u` are
+subtracted to produce a new function in the higher-order function
+space. Finally, FEniCS integrates the square of the difference
+function to get the value of the error norm. Using the `errornorm`
+function is simple:
 
 !bc pycod
-E = errornorm(u_exact, u, normtype='L2', degree=3)
+E = errornorm(u_e, u, normtype='L2')
 !ec
-It is illustrative to look at the short implementation of `errornorm`:
+It is illustrative to look at a short implementation of `errornorm`:
 
 !bc pycod
-def errornorm(u_exact, u, Ve):
-    u_Ve = interpolate(u, Ve)
-    u_e_Ve = interpolate(u_exact, Ve)
-    e_Ve = Function(Ve)
-    # Subtract degrees of freedom for the error field
-    e_Ve.vector()[:] = u_e_Ve.vector().array() - \
-                       u_Ve.vector().array()
-    error = e_Ve**2*dx
-    return sqrt(assemble(error))
+def errornorm(u_exact, u):
+    V = u.function_space()
+    mesh = V.mesh()
+    degree = V.ufl_element().degree()
+    W = FunctionSpace(mesh, 'P', degree + 3)
+    u_W = interpolate(u, W)
+    u_e_W = interpolate(u_e, W)
+    e_W = Function(W)
+    e_W.vector()[:] = u_e_W.vector().array() - \
+                      u_W.vector().array()
+    error = e_W**2*dx
+    return sqrt(abs(assemble(error)))
 !ec
-The `errornorm` procedure turns out to be identical to computing
-the expression `(u_e - u)**2*dx` directly in
-the present test case.
 
 Sometimes it is of interest to compute the error of the
-gradient field: $||\nabla (u-\uex)||$
-(often referred to as the $H^1$ seminorm of the error).
-Given the error field `e_Ve` above, we simply write
+gradient field: $||\nabla (u-\uex)||$,
+often referred to as the $H^1_0$ or $H^1$ seminorm of the error.
+This can either be expressed as above, replacing the expression for
+`error` by `error = dot(grad(e_W), grad(e_W))*dx`, or by calling
+`errornorm` in FEniCS:
 
 !bc pycod
-H1seminorm = sqrt(assemble(dot(grad(e_Ve), grad(e_Ve))*dx))
+E = errornorm(u_e, u, norm_type='H10')
 !ec
+Type `help(errornorm)` in Python for more information about available
+norm types.
 
 All the various types of error computations here are placed in a
 function `compute_errors` in `${prog["poisson_vc"]}.py`:
@@ -2001,18 +2024,20 @@ function `compute_errors` in `${prog["poisson_vc"]}.py`:
 see comments in the code below, and made the version below. We should
 check out these problems again and adjust `fenics.errornorm` if
 necessary.]
+[AL: Have not yet checked code, will rerun all code and update
+notation if necessary when I'm through with all text.]
 
 @@@CODE src/poisson_vc.py fromto: def compute_errors@def convergence_rate
 
-=== Computing convergence rates empirically ===
+=== Computing convergence rates ===
 
 Calling the `solver` function for finer and finer meshes enables us to
 study the convergence rate. Define the element size $h=1/n$, where $n$
 is the number of cell divisions in $x$ and $y$ direction (`n=Nx=Ny` in
 the code). We perform experiments with $h_0>h_1>h_2\cdots$ and compute
-the corresponding errors $E_0, E_1, E_3$ and so forth.  Assuming
+the corresponding errors $E_0, E_1, E_2$ and so forth. Assuming
 $E_i=Ch_i^r$ for unknown constants $C$ and $r$, we can compare two
-consecutive experiments, $E_i=Ch_i^r$ and $E_{i-1}=Ch_{i-1}^r$, and
+consecutive experiments, $E_{i-1}=Ch_{i-1}^r$ and $E_i=Ch_i^r$, and
 solve for $r$:
 
 !bt
@@ -2020,8 +2045,9 @@ solve for $r$:
 r = {\ln(E_i/E_{i-1})\over\ln (h_i/h_{i-1})}\tp
 \end{equation*}
 !et
-The $r$ values should approach the expected convergence
-rate `degree+1` as $i$ increases.
+The $r$ values should approach the expected convergence rate
+(typically the polynomial degree + 1 for the $L^2$-error) as $i$
+increases.
 
 The procedure above can easily be turned into Python code. Here
 we run through a different types of elements (P1, P2, P3, and P4),
@@ -2032,16 +2058,17 @@ each experiment report the six error types as returned by `compute_errors`:
 
 === Test problem ===
 
-Section ref{ch:poisson0:gradu} specifies a more complicated solution,
+To demonstrate the computation of convergence rates, we will pick an
+exact solution $\uex$ given by
 
 !bt
 \begin{equation*}
-u(x,y) = \sin(\omega\pi x)\sin(\omega\pi y)
+\uex(x,y) = \sin(\omega\pi x)\sin(\omega\pi y)
 \end{equation*}
 !et
 on the unit square. This choice implies $f(x,y)=2\omega^2\pi^2 u(x,y)$.
 With $\omega$ restricted to an integer
-it follows that $\ub=0$.
+it follows that the boundary value is given by $\ub=0$.
 
 We need to define the appropriate boundary conditions, the exact
 solution, and the $f$ function in the code:
@@ -2050,7 +2077,7 @@ solution, and the $f$ function in the code:
 def boundary(x, on_boundary):
     return on_boundary
 
-bc = DirichletBC(V, Constant(0.0), boundary)
+bc = DirichletBC(V, Constant(0), boundary)
 
 omega = 1.0
 u_e = Expression('sin(omega*pi*x[0])*sin(omega*pi*x[1])',
@@ -2078,15 +2105,20 @@ difference of the degrees of freedom, we have
 | P4      | 3.75    | 4.99    | 5.0     | 5.0     |         |
 |-----------------------------------------------------------|
 
-The computations with P4 elements on a $2(128\times 128)$ mesh with a
-direct solver (UMFPACK) on a small laptop broke down.
-Otherwise we achieve expected results: the error goes like
-$h^{d+1}$ for elements of degree $d$. Also $L^2$ norms based
-on the `errornorm` gives the expected $h^{d+1}$ rate for
-$u$ and $h^d$ for $\nabla u$.
+[AL: Don't understand this table. What does each cell in the table
+correspond to? I understand the elements, but what does for example $n
+= 32$ mean? The rate needs two different meshes. Is the $n = 32$
+column the difference with $n = 64$ or $n = 16$?]
 
-However, using `(u - u_exact)**2` for the error computation, which implies
-interpolating `u_exact` onto the same space as `u`, results in $h^4$
+The computations with $\mathsf{P}_4$ elements on a $2\times(128\times
+128)$ mesh with a direct solver (UMFPACK) on a small laptop broke down
+so these results have been left out of the table.  Otherwise we
+achieve expected results: the error goes like $h^{d+1}$ for elements
+of degree $d$. Also $L^2$ norms based on the `errornorm` gives the
+expected $h^{d+1}$ rate for $u$ and $h^d$ for $\nabla u$.
+
+However, using `(u_e - u)**2` for the error computation, with the same
+degree for the interpolation of `u_e` as for `u`, results in $h^4$
 convergence for P2 elements.
 
 |---c---------c---------c---------c---------c---------c-----|
@@ -2109,7 +2141,6 @@ avoid computing a too optimistic convergence rate.
 # P2: 3.01, 3.03, 3.01, 3.0, 3.02
 # P3: 2.7, 4.02, 4.0, 2.63, 0.17
 # P4: 1.54, 5.11, 0.91, 0.15, -0.01
-
 
 Checking convergence rates is the next best method for verifying PDE codes
 (the best being a numerical solution without approximation errors
