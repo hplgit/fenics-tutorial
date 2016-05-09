@@ -107,6 +107,7 @@ vtkfile_p = File('ns/pressure.pvd')
 # Create time series for saving solution for later computation
 timeseries_u = TimeSeries(mpi_comm_world(), 'ns/velocity')
 timeseries_p = TimeSeries(mpi_comm_world(), 'ns/pressure')
+timeseries_m = TimeSeries(mpi_comm_world(), 'ns/mesh')
 
 # Create progress bar
 progress = Progress('Time-stepping')
@@ -144,6 +145,7 @@ for n in xrange(num_steps):
     # Save solution to file (HDF5)
     timeseries_u.store(u1.vector(), t)
     timeseries_p.store(p1.vector(), t)
+    timeseries_m.store(mesh, t)
 
     # Update previous solution
     u0.assign(u1)
