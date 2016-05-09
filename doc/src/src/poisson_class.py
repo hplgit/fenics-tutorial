@@ -212,7 +212,7 @@ class TestProblemExact(PoissonProblem):
     def __init__(self, Nx, Ny):
         """Initialize mesh, boundary parts, and p."""
         self.mesh = UnitSquareMesh(Nx, Ny)
-        self.u_b = Expression('1 + x[0]*x[0] + 2*x[1]*x[1]')
+        self.u_D = Expression('1 + x[0]*x[0] + 2*x[1]*x[1]')
 
     def mesh_degree(self):
         return self.mesh, 1
@@ -221,7 +221,7 @@ class TestProblemExact(PoissonProblem):
         return Constant(-6.0)
 
     def Dirichlet_conditions(self):
-        return self.u_b
+        return self.u_D
 
 
 def test_PoissonSolver():
@@ -229,7 +229,7 @@ def test_PoissonSolver():
     problem = TestProblemExact(Nx=2, Ny=2)
     problem.solve(linear_solver='direct')
     u = problem.solution()
-    u_e = interpolate(problem.u_b, u.function_space())
+    u_e = interpolate(problem.u_D, u.function_space())
     max_error = np.abs(u_e.vector().array() -
                        u.vector().array()).max()
     tol = 1E-14
