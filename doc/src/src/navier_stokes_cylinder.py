@@ -102,6 +102,9 @@ vtkfile_p = File('ns/pressure.pvd')
 
 # FIXME: mpi_comm_world should not be needed here, fix in FEniCS!
 
+# FIXME: Change output directory to 'navier_stokes_cylinder'
+# FIXME: Also update in reaction_system.py
+
 # Create time series for saving solution for later
 timeseries_u = TimeSeries(mpi_comm_world(), 'ns/velocity')
 timeseries_p = TimeSeries(mpi_comm_world(), 'ns/pressure')
