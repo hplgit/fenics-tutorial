@@ -305,8 +305,7 @@ def compute_errors(u, u_exact):
 
     return errors
 
-def convergence_rate(u_exact, f, u_D, p, degrees,
-                     n=[2**(k+3) for k in range(5)]):
+def convergence_rate(u_exact, f, u_D, p, degrees):
     """
     Compute convergence rates for various error norms for a
     sequence of meshes with Nx=Ny=b and P1, P2, ...,
@@ -358,8 +357,7 @@ def convergence_rate_sin():
     u_D = Constant(0)
     p = Constant(1)
     # Note: P4 for n>=128 seems to break down
-    rates = convergence_rates(u_exact, f, u_D, p, degrees=4,
-                              n=[2**(k+3) for k in range(5)])
+    rates = convergence_rates(u_exact, f, u_D, p, degrees=4)
     # Print rates
     print('\n\n')
     for error_type in error_types:
