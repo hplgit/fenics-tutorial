@@ -22,7 +22,7 @@ theta = 0.5        # implicitness parameter for time-stepping
 # FIXME: mpi_comm_world should not be needed here, fix in FEniCS!
 
 # Read mesh from file
-mesh = Mesh()
+mesh = Mesh('channel.xml.gz')
 timeseries_m = TimeSeries(mpi_comm_world(), 'ns/mesh')
 timeseries_m.retreive(mesh, 0)
 

@@ -96,15 +96,18 @@ A3 = assemble(a3)
 [bc.apply(A1) for bc in bcu]
 [bc.apply(A2) for bc in bcp]
 
-# Create VTK files for saving solution for later visualization
+# Create VTK files for visualization output
 vtkfile_u = File('ns/velocity.pvd')
 vtkfile_p = File('ns/pressure.pvd')
 
 # FIXME: mpi_comm_world should not be needed here, fix in FEniCS!
 
-# Create time series for saving solution for later computation
+# Create time series for saving solution for later
 timeseries_u = TimeSeries(mpi_comm_world(), 'ns/velocity')
 timeseries_p = TimeSeries(mpi_comm_world(), 'ns/pressure')
+
+# Save mesh to file for later
+File('cylinder.xml.gz') << mesh
 
 # Create progress bar
 progress = Progress('Time-stepping')
