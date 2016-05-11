@@ -4,9 +4,9 @@ describing the concentration of three species A, B, C undergoing a simple
 first-order reaction A + B --> C with first-order decay of C. The velocity
 is given by the flow field w from the Navier-Stokes demo navier_stokes.py.
 
-  u_1' + w . nabla(u_1) - div(eps*grad(u_1)) = -K*u_1*u_2
-  u_2' + w . nabla(u_2) - div(eps*grad(u_2)) = -K*u_1*u_2
-  u_3' + w . nabla(u_3) - div(eps*grad(u_3)) = +K*u_1*u_2 - K*u_3
+  u_1' + w . nabla(u_1) - div(eps*grad(u_1)) = f_1 + -K*u_1*u_2
+  u_2' + w . nabla(u_2) - div(eps*grad(u_2)) = f_2 - K*u_1*u_2
+  u_3' + w . nabla(u_3) - div(eps*grad(u_3)) = f_3 +K*u_1*u_2 - K*u_3
 
 """
 
@@ -44,9 +44,9 @@ u_1, u_2, u_3 = split(u)
 u_p1, u_p2, u_p3 = split(u_p)
 
 # Define source terms
-f_1 = Expression('pow(x[0]-0.1, 2) + pow(x[1]-0.1, 2) < 0.05*0.05 ? 0.1 : 0',
+f_1 = Expression('pow(x[0]-0.1,2)+pow(x[1]-0.1,2)<0.05*0.05 ? 0.1 : 0',
                  degree=1)
-f_2 = Expression('pow(x[0]-0.1, 2) + pow(x[1]-0.3, 2) < 0.05*0.05 ? 0.1 : 0',
+f_2 = Expression('pow(x[0]-0.1,2)+pow(x[1]-0.3,2)<0.05*0.05 ? 0.1 : 0',
                  degree=1)
 f_3 = Constant(0)
 
@@ -60,9 +60,9 @@ eps = Constant(eps)
 
 # Define variational problem
 F = ((u_1 - u_p1) / k)*v_1*dx + dot(w, grad(U_1))*v_1*dx \
-  + eps*dot(grad(U_1), grad(v_1))*dx + K*U_1*U_2*v_1*dx \
+  + eps*dot(grad(U_1), grad(v_1))*dx + K*U_1*U_2*v_1*dx  \
   + ((u_2 - u_p2) / k)*v_2*dx + dot(w, grad(U_2))*v_2*dx \
-  + eps*dot(grad(U_2), grad(v_2))*dx + K*U_1*U_2*v_2*dx \
+  + eps*dot(grad(U_2), grad(v_2))*dx + K*U_1*U_2*v_2*dx  \
   + ((u_3 - u_p3) / k)*v_3*dx + dot(w, grad(U_3))*v_3*dx \
   + eps*dot(grad(U_3), grad(v_3))*dx - K*U_1*U_2*v_3*dx + K*U_3*v_3*dx \
   - f_1*v_1*dx - f_2*v_2*dx - f_3*v_3*dx
@@ -95,7 +95,7 @@ for n in xrange(num_steps):
     solve(F == 0, u)
 
     # Plot solution
-    _u_1, _u_2, _u_3 = u.split(deepcopy=True)
+    _u_1, _u_2, _u_3 = u.split()
     plot(_u_1, title='u_1', key='u_1')
     plot(_u_2, title='u_2', key='u_2')
     plot(_u_3, title='u_3', key='u_3')
