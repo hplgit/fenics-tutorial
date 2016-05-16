@@ -555,89 +555,82 @@ def solver_bc(
             return on_boundary and abs(x[1] - 1) < tol
 
     # Mark boundaries
-    boundary_parts = FacetFunction('size_t', mesh)
-    boundary_parts.set_all(9999)
+    boundary_markers = FacetFunction('size_t', mesh)
+    boundary_markers.set_all(9999)
     bx0 = BoundaryX0()
     bx1 = BoundaryX1()
     by0 = BoundaryY0()
     by1 = BoundaryY1()
-    bx0.mark(boundary_parts, 0)
-    bx1.mark(boundary_parts, 1)
-    by0.mark(boundary_parts, 2)
-    by1.mark(boundary_parts, 3)
-    # boundary_parts.array() is a numpy array
+    bx0.mark(boundary_markers, 0)
+    bx1.mark(boundary_markers, 1)
+    by0.mark(boundary_markers, 2)
+    by1.mark(boundary_markers, 3)
 
-    ds = Measure('ds', domain=mesh, subdomain_data=boundary_parts)
+    # Redefine boundary integration measure
+    ds = Measure('ds', domain=mesh, subdomain_data=boundary_markers)
 
-    # boundary_conditions is a dict of dicts:
-    # {0: {'Dirichlet': u_D},
-    #  1: {'Robin': (r, s)},
-    #  2: {'Neumann: g}},
-    #  3: {'Neumann', 0}}
-
-    bcs = []  # List of Dirichlet conditions
+    # Collect Dirichlet conditions
+    bcs = []
     for n in boundary_conditions:
         if 'Dirichlet' in boundary_conditions[n]:
-            bcs.append(
-                DirichletBC(V, boundary_conditions[n]['Dirichlet'],
-                            boundary_parts, n))
+            bc = DirichletBC(V, boundary_conditions[n]['Dirichlet'],
+                             boundary_markers, n))
+            bcs.append(bc)
 
     if debug:
-        # Print the vertices that are on the boundaries
-        coor = mesh.coordinates()
-        for x in coor:
-            if bx0.inside(x, True): print('%s is on x=0' % x)
-            if bx1.inside(x, True): print('%s is on x=1' % x)
-            if by0.inside(x, True): print('%s is on y=0' % x)
-            if by1.inside(x, True): print('%s is on y=1' % x)
 
+        # Print all vertices that belong to the boundary parts
+        for x in mesh.coordinates():
+            if bx0.inside(x, True): print('%s is on x = 0' % x)
+            if bx1.inside(x, True): print('%s is on x = 1' % x)
+            if by0.inside(x, True): print('%s is on y = 0' % x)
+            if by1.inside(x, True): print('%s is on y = 1' % x)
 
         # Print the Dirichlet conditions
-        print('No of Dirichlet conditions:', len(bcs))
-        d2v = dof_to_vertex_map(V)
-        for bc in bcs:
-            bc_dict = bc.get_boundary_values()
-            for dof in bc_dict:
-                print('dof %2d: u=%g' % (dof, bc_dict[dof]))
-                if V.ufl_element().degree() == 1:
-                    print('   at point %s' %
-                          (str(tuple(coor[d2v[dof]].tolist()))))
+        print('Number of Dirichlet conditions:', len(bcs))
+        for n, bc in enumerate(bcs):
+            print('Dirichlet condition %d' % n)
+            boundary_values = bc.get_boundary_values()
+            for dof in boundary_values:
+                print('  dof %2d: u=%g' % (dof, boundary_values[dof]))
 
-    # Collect Neumann integrals
+    # Note: Removed some code here that only worked for P1 elements
+
+    # Define trial and test functions
     u = TrialFunction(V)
     v = TestFunction(V)
 
-    Neumann_integrals = []
+    # Collect Neumann integrals
+    integrals_N = []
     for n in boundary_conditions:
         if 'Neumann' in boundary_conditions[n]:
             if boundary_conditions[n]['Neumann'] != 0:
                 g = boundary_conditions[n]['Neumann']
-                Neumann_integrals.append(g*v*ds(n))
+                integrals_N.append(g*v*ds(n))
 
     # Collect Robin integrals
-    Robin_a_integrals = []
-    Robin_L_integrals = []
+    integrals_R_a = []
+    integrals_R_L = []
     for n in boundary_conditions:
         if 'Robin' in boundary_conditions[n]:
             r, s = boundary_conditions[n]['Robin']
-            Robin_a_integrals.append(r*u*v*ds(n))
-            Robin_L_integrals.append(r*s*v*ds(n))
+            integrals_R_a.append(r*u*v*ds(n))
+            integrals_R_L.append(r*s*v*ds(n))
 
     # Simpler Robin integrals
-    Robin_integrals = []
+    integrals_R = []
     for n in boundary_conditions:
         if 'Robin' in boundary_conditions[n]:
             r, s = boundary_conditions[n]['Robin']
-            Robin_integrals.append(r*(u-s)*v*ds(n))
+            integrals_R.append(r*(u-s)*v*ds(n))
 
     # Define variational problem, solver_bc
-    a = dot(p*grad(u), grad(v))*dx + \
-        sum(Robin_a_integrals)
-    L = f*v*dx - sum(Neumann_integrals) + sum(Robin_L_integrals)
+    a = p*dot(grad(u), grad(v))*dx + sum(integrals_R_a)
+    L = f*v*dx - sum(integrals_N) + sum(integrals_R_L)
 
     # Simpler variational formulation
-    F = dot(p*grad(u), grad(v))*dx + \
-        sum(Robin_integrals) - f*v*dx + sum(Neumann_integrals)
+    F = p*dot(grad(u), grad(v))*dx + \
+        sum(integrals_R) - f*v*dx + sum(integrals_N)
     a, L = lhs(F), rhs(F)
 
     # Compute solution
@@ -661,54 +654,47 @@ def solver_bc(
     return u, p  # Note: p may be modified (Function on V0)
 
 def application_bc_test():
+
     # Define manufactured solution in sympy and derive f, g, etc.
     import sympy as sym
-    x, y = sym.symbols('x[0] x[1]')  # UFL needs x[0] for x etc.
-    u = 1 + x**2 + 2*y**2
+    x, y = sym.symbols('x[0] x[1]')             # needed by UFL
+    u = 1 + x**2 + 2*y**2                       # exact solution
+    u_e = u                                     # exact solution
+    u_00 = u.subs(x, 0)                         # restrict to x = 0
+    u_01 = u.subs(x, 1)                         # restrict to x = 1
     f = -sym.diff(u, x, 2) - sym.diff(u, y, 2)  # -Laplace(u)
-    f = sym.simplify(f)
-    u_00 = u.subs(x, 0)  # x=0 boundary
-    u_01 = u.subs(x, 1)  # x=1 boundary
-    g = -sym.diff(u, y).subs(y, 1)  # x=1 boundary, du/dn=-du/dy
-    r = 1000 # any function can go here
-    s = u
+    f = sym.simplify(f)                         # simplify f
+    g = -sym.diff(u, y).subs(y, 1)              # compute g = -du/dn
+    r = 1000                                    # Robin data, arbitrary
+    s = u                                       # Robin data, u = s
 
-    # Turn to C/C++ code for UFL expressions
-    f = sym.printing.ccode(f)
-    u_00 = sym.printing.ccode(u_00)
-    u_01 = sym.printing.ccode(u_01)
-    g = sym.printing.ccode(g)
-    r = sym.printing.ccode(r)
-    s = sym.printing.ccode(s)
-    print('Test problem (C/C++):\nu = %s\nf = %s' % (u, f))
-    print('u_00: %s\nu_01: %s\ng = %s\nr = %s\ns = %s' %
-          (u_00, u_01, g, r, s))
+    # Collect variables
+    variables = [u_e, u_00, u_01, f, g, r, s]
 
-    # Turn into FEniCS objects
-    u_00 = Expression(u_00)
-    u_01 = Expression(u_01)
-    f = Expression(f)
-    g = Expression(g)
-    r = Expression(r)
-    s = Expression(s)
-    u_exact = Expression(sym.printing.ccode(u))
+    # Turn into C/C++ code strings
+    variables = [sym.printing.ccode(var) for var in variables]
 
-    boundary_conditions = {
-        0: {'Dirichlet': u_00},   # x=0
-        1: {'Dirichlet': u_01},   # x=1
-        2: {'Robin': (r, s)},     # y=0
-        3: {'Neumann': g}}        # y=1
+    # Turn into FEniCS Expression
+    variables = [Expression(var, degree=2) for var in variables]
 
+    # Extract variables
+    [u_e, u_00, u_01, f, g, r, s] = variables
+
+    # Define boundary conditions
+    boundary_conditions = {0: {'Dirichlet': u_00},   # x=0
+                           1: {'Dirichlet': u_01},   # x=1
+                           2: {'Robin':     (r, s)}, # y=0
+                           3: {'Neumann':   g}}      # y=1
+
+    # Compute solution
     p = Constant(1)
     Nx = Ny = 2
-    u, p = solver_bc(
-        p, f, boundary_conditions, Nx, Ny, degree=1,
-        linear_solver='direct',
-        debug=2*Nx*Ny < 50,  # for small problems only
-        )
+    u, p = solver_bc(p, f, boundary_conditions, Nx, Ny, degree=1,
+                     linear_solver='direct',
+                     debug=2*Nx*Ny < 50)
 
     # Compute max error in infinity norm
-    u_e = interpolate(u_exact, u.function_space())
+    u_e = interpolate(u_e, u.function_space())
     import numpy as np
     max_error = np.abs(u_e.vector().array() -
                        u.vector().array()).max()
@@ -759,14 +745,13 @@ def test_solvers_bc():
     s = Expression(s)
     u_exact = Expression(sym.printing.ccode(u))
 
-    boundary_conditions = {
-        0: {'Dirichlet': u_00},
-        1: {'Dirichlet': u_01},
-        2: {'Robin': (r, s)},
-        3: {'Neumann': g}}
+    # Define boundary conditions
+    boundary_conditions = {0: {'Dirichlet': u_00},
+                           1: {'Dirichlet': u_01},
+                           2: {'Robin':     (r, s)},
+                           3: {'Neumann':   g}}
 
     p = Constant(1)
-
     for Nx, Ny in [(3,3), (3,5), (5,3), (20,20)]:
         for degree in 1, 2, 3:
             for linear_solver in ['direct']:

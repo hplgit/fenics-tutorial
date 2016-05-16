@@ -5,7 +5,7 @@ if [ $# -gt 0 ]; then
     name=ftut${1}
     bookno=$1
 else
-    name=ftut1
+    name=tmp
     bookno=1
 fi
 
