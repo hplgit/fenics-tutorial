@@ -1,0 +1,253 @@
+======= Heat loss in a pipe =======
+
+#===== Physical problem formulation =====
+
+We will simulate the transport of heat in a non-perfectly insulated
+pipe via both diffusion and convection (transport). The inner diameter
+of the pipe is $4\,\mathrm{cm}$, its thickness is 4mm, the thickness
+of the surrounding insulation is $10\,\mathrm{mm}$, and its length is
+$50\,\mathrm{cm}$. We assume that the temperature of the water at the
+inlet is 42 degrees centigrade and the temperature of the surrounding
+air is 22 degrees centigrade. We also assume that the pipe transmits
+0.1 liters of water per second. A sketch of the pipe is given in
+Figure X.
+
+[AL: Add nice 3D graphics here...]
+
+To compute the temperature distribution in the pipe, we need to set
+boundary conditions, both at the inflow and outflow, as well as on the
+boundary of the insulating layer which is exposed to the surrounding
+air. We do this by assuming that the temperature at the inlet is 42
+degrees, for the water as well as for the pipe and the insulating
+layer. We similarly assume the temperature to be 22 degrees in all
+three layers at the outflow. The boundary of the insulating layer is
+also assumed to have the temperature 22 degrees.
+
+[hpl: How to you realize this setup in practice? One big water
+reservoir at 42 C, and then a long pipe from that reservoir surrounded
+by free air? Convection is very efficient compared to diffusion, so
+the pipe has to be very long for the water to lose heat. At the
+outlet out the pipe, I don't think you can assume 22 C in the water; it
+will flow out with little heat loss - 40 C, e.g. A possible boundary
+condition for the water is to say ``hardly no change'' in the temperature,
+i.e., $\partial u/\partial n=0$. That will pick up heat loss along
+the pipe and be an okay approximation.]
+
+To compute the temperature distribution, we also need to know the
+value of the thermal conductivity $\lambda$ $[\WmK]$ for water, pipe,
+and insulation. From a book of physical tables or from the internet,
+we find the following values that we will use for our simulation:
+$\lambda_{\textrm{water}} = 0.6\,\WmK$, $\lambda_{\textrm{pipe}} = 18\,\WmK$ (stainless steel), and $\lambda_{\textrm{insul}} = 0.035\,\WmK$
+(styrofoam). We will also need to know the density and specific heat
+of water, which we set to $\rho = 1\,\mathrm{kg}/\mathrm{dm}^3$ and $c
+= 4.184\,\mathrm{kJ} / (\mathrm{kg} \cdot \mathrm{K})$ (one
+$\mathrm{kcal}$ per $\mathrm{kg} \cdot \mathrm{K}$), respectively.
+[hpl: You also need $c\varrho$ for steel and the other material.
+The idea with scaling is that you don't need to find 3 parameters per
+material, all you have to do is to find the fractions. Of course, if
+you now you have steel and styrofoam, then that fraction requires you
+to look up the values.]
+
+Finally, we need to know the velocity field for the water flowing
+through the pipe. We know the total flow rate of water (0.1 liters per
+second). If the flow is laminar (Poiseuille flow), we know that the
+velocity profile is a quadratic function in the radius with its
+maximum at the center and zero velocity on the boundary. We may thus
+compute the velocity profile from the dimensions of the pipe. In
+particular, we know that the velocity profile takes the form
+!bt
+\[ \beta(x) = (0, 0, C (a - r)^2), \]
+!et
+where $r = \sqrt{x^2 + y^2}$. The flow rate is then
+!bt
+\[ Q = \int_0^a C (a - r)^2 \, 2\pi r \dr
+     = 2 \pi Ca^4 \int_0^1 s (1 - s)^2 \ds
+     = \pi Ca^4 / 6 \]
+!et
+Knowing that $Q = 0.1\,\mathrm{dm}^3 / \mathrm{s}$, we can solve for $C$ and
+find $C = 0.6\,\mathrm{dm}^3 / (\pi a^4)$.
+
+======= Mathematical problem formulation =======
+
+[hpl: I think you should start with the incompressible version. I don't
+remember the compressible version of the heat equation - it has more
+terms than you include here (e.g., pressure work $p\nabla\cdot u$).
+In the incompressible case, which we deal with anyway, $c\varrho$ is
+outside of the derivative even with $c\varrho$ vary. Remember that they
+vary here between all the materials. I would also drop the $f$ term as
+the scaling with and without $f$ will often be different.]
+
+We will model the conduction of heat in the pipe using the standard
+convection-diffusion equation:
+
+!bt
+\begin{equation} label{ftut:convdiff}
+    -\nabla \cdot (\lambda\nabla u) + \nabla \cdot (c\rho\beta u) = f.
+\end{equation}
+!et
+Here, $u$ denotes the temperature, $\lambda$ is the thermal
+conductivity, $c$ is the specific heat, $\rho$ is the density, $\beta$
+is the velocity field, and $f$ is the source term. Since our problem
+does not have a source term, we will set $f = 0$.
+
+The convection-diffusion equation is often stated in the following slightly modified form:
+!bt
+\[
+    -\nabla \cdot (\lambda\nabla u) + c\rho\beta \cdot \nabla u = f.
+\]
+!et
+This formulation is equivalent to (ref{ftut:convdiff}) if the velocity
+field $\beta$ is divergence free; that is, if $\nabla \cdot \beta = 0$:
+$\nabla \cdot (\beta u) = (\nabla \cdot \beta) u + \beta \cdot \nabla
+u = \beta \cdot \nabla u$.
+
+======= Scaling the equation =======
+
+Before we can solve the PDE, we must first introduce dimensionless
+quantities since, strictly speaking, our program can not work with
+units, only with numbers. We let $L$ be a reference length, let $T$ be
+a reference time length, let $U$ be a reference temperature, and let
+$P$ be a reference power (energy per unit time). We then introduce the
+following dimensionless quantities:
+
+!bt
+\[
+\bar x = \frac{x}{L},\
+\bar y = \frac{y}{L},\
+\bar z = \frac{z}{L},\
+\bar u = \frac{u}{U},\
+\bar\beta = \frac{\beta}{LT^{-1}},
+\bar f = \frac{f}{PL^{-3}}.
+\]
+!et
+[hpl: You will scale $\beta$ by some characteristic velocity $V$ and
+avoid introducing any time here as the problem is stationary.
+You need to scale $\varrho$, $c$, and $\lambda$ too as they vary
+in space. These are piecewise constant functions, so you can scale with
+the value in one of the materials.]
+
+The dimensionless coordinates $\bar x$, $\bar y$ and $\bar z$
+also lead to dimensionless derivatives:
+$\bar\nabla =
+(\partial / \partial \bar x,
+ \partial / \partial \bar y,
+ \partial / \partial \bar z)
+ = L \nabla$.
+Inserting $u = U\bar u$, $\beta = L^{-1}T\bar\beta$, and $f = L^{-3}P\bar f$ into the convection-diffusion equation (ref{ftut:convdiff}) and using $\nabla = L^{-1}\bar\nabla$, we obtain
+!bt
+\[
+  -L^{-1}\bar\nabla \cdot
+  (\lambda L^{-1}\bar\nabla(U\bar u))
+  +L^{-1}\bar\nabla \cdot (c\rho LT^{-1}\bar\beta U\bar u)
+  = L^{-3}P \bar f.
+\]
+!et
+Rearranging the factors $L, U, T, P$, we obtain
+!bt
+\[
+  -\bar\nabla \cdot
+  (LUP^{-1}\lambda \bar\nabla \bar u)
+  +\bar\nabla \cdot \left(L^3UT^{-1}P^{-1}c\rho\bar\beta \bar u\right) = \bar f.
+\]
+!et
+Finally, we identify the two dimensionless parameters $\bar\lambda$ and
+$\bar c$ given by
+!bt
+\[
+  \bar\lambda = LUP^{-1}\lambda, \quad
+  \bar c = L^3UT^{-1}P^{-1}c\rho.
+\]
+!et
+[hpl:
+You will typically get some Peclet number here as the only
+dimensionless parameter, and then you will have scaled $\varrho$, $c$, and
+$\lambda$ with fractions of material parameters in different materials.
+I can do this :-)]
+
+Let's double-check that these are indeed dimensionless quantities. We have
+!bt
+\[
+  \begin{split}
+  [\bar\lambda]
+  &= [LUP^{-1}\lambda]
+  = [LUP^{-1}] \cdot [\lambda]
+  = [LUP^{-1}] \cdot [\WmK] \\
+  &= [LUP^{-1}] \cdot [L^{-1}U^{-1}P]
+  = [LUP^{-1} \cdot L^{-1}U^{-1}P] = [1].
+  \end{split}
+\]
+!et
+Similarly, we have
+!bt
+\[
+  \begin{split}
+  [L^3UT^{-1}P^{-1}c\rho]
+  &= [L^3UT^{-1}P^{-1}] \cdot [c] \cdot [\rho] \\
+  &= [L^3UT^{-1}P^{-1}] \cdot
+    [\mathrm{kJ} / (\mathrm{kg} \cdot \mathrm{K})] \cdot
+    [\mathrm{kg} / \mathrm{dm}^3] \\
+  &= [L^3UT^{-1}P^{-1}] \cdot [PTU^{-1} \cdot L^{-3}]
+  = [1].
+  \end{split}
+\]
+!et
+We thus obtain the dimensionless and fully scaled convection-diffusion equation
+\[
+  -\bar\nabla \cdot
+  (\bar\lambda \bar\nabla \bar u)
+  +\bar\nabla \cdot \left(c\bar\beta \bar u\right) = \bar f.
+\]
+The reference quantities $L$, $T$, $U$ and $P$ may be chosen arbitrarily.
+[hpl: Normally, these are implied by the problem setting and the desire
+to have all variables of unit size. $L$ can be the length of the pipe
+or the diameter (I would choose the diameter). $U$ is given from
+the boundary conditions (here 42 C is natural), $V$ is given by $Q$.]
+If working with very large or very small quantities, one may want to choose for example $L$ to obtain a domain of unit size. However, for our problem this is not necessary. We will therefore make the most straightforward choice which is to use standard SI units. We thus take
+$L = 1\,\mathrm{m}$,
+$T = 1\,\mathrm{s}$,
+$U = 1\,\mathrm{K}$, and
+$P = 1\,\mathrm{W}$. The scaled variables and parameters $\bar u$, $\bar\beta$, $\bar \lambda$ and so on may then be easily computed by expressing everything in standard SI units and then simply dropping the units.
+
+In the following we will simply write $u$ in place of $\bar{u}$ but remember that the $u$ we compute is actually $\bar u$ and the actual temperature will be $u\,\mathrm{K}$:
+!bt
+\begin{equation} label{ftut:convdiff,scaled}
+  -\nabla \cdot (\lambda \nabla  u)
+  +\nabla \cdot \left(c\beta u\right) = f.
+\end{equation}
+!et
+[hpl: I would use the incompressible version of the heat equation everywhere; then we know it is correct.]
+Furthermore, since only derivatives of $u$ appear in the equation, adding a constant offset to $u$ does not change the equation. We may therefore work in Kelvin ($\mathrm{K}$) as well as in degrees centigrade without needing to rescale the equation.
+
+======= Finite element variational formulation =======
+
+The finite element variational formulation of the convection diffusion
+equation is obtained in the same way as for the Poisson equation in
+the previous chapter, by multiplying the equation with a test function
+$v$, integrating over the domain $\Omega$, and integrating terms with
+second-derivatives by parts. For the (scaled) convection-diffusion
+equation (ref{ftut:convdiff,scaled}), we have one such term, namely
+$-\nabla \cdot (\lambda u)$. For this term, integration by parts gives
+!bt
+\[
+  -\int_{\Omega} (\nabla \cdot (\lambda \nabla u)) \, v \dx
+  = \int_{\Omega} \lambda \nabla u \cdot \nabla v \dx
+    - \int_{\partial\Omega} \lambda \nabla u \cdot n \, v \ds.
+\]
+!et
+Since we assume Dirichlet boundary conditions on the entire boundary, we take the test function $v$ to be zero on $\partial\Omega$ and thus obtain the following variational problem: find $u \in V$ such that
+!bt
+\[
+  \int_{\Omega} \lambda \nabla u \cdot \nabla v \dx
+  + \int_{\Omega} \nabla \cdot (c\beta u)\,v \dx
+  = \int_{\Omega} fv \dx,
+\]
+!et
+for all test functions $v \in V$.
+
+The variational problem can be stated in FEniCS as follows:
+
+!bc pycod-t
+a = lmdba*dot(grad(u), grad(v))*dx + div(c*beta*u)*v*dx
+L = f*v*dx
+!ec
+Note the intentional misspelling of `lmbda` to avoid a name clash with the built-in Python keyword `lmbda`.
