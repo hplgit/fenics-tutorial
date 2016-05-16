@@ -239,43 +239,6 @@ class ProcessSolution(object):
         info('saving results at time %g, max u: %g' %
              (t, u.vector().array().max()))
 
-def mark_boundaries_in_rectangle(mesh, x0=0, x1=1, y0=0, y1=1):
-    """
-    Return mesh function FacetFunction with each side in a rectangle
-    marked by boundary indicator 0, 1, 2, 3.
-    Side 0 is x=x0, 1 is x=x1, 2 is y=y0, and 3 is y=y1.
-    """
-    tol = 1E-14
-
-    class BoundaryX0(SubDomain):
-        def inside(self, x, on_boundary):
-            return on_boundary and abs(x[0] - x0) < tol
-
-    class BoundaryX1(SubDomain):
-        def inside(self, x, on_boundary):
-            return on_boundary and abs(x[0] - x1) < tol
-
-    class BoundaryY0(SubDomain):
-        def inside(self, x, on_boundary):
-            return on_boundary and abs(x[1] - y0) < tol
-
-    class BoundaryY1(SubDomain):
-        def inside(self, x, on_boundary):
-            return on_boundary and abs(x[1] - y1) < tol
-
-    # Mark boundaries
-    boundary_parts = FacetFunction('uint', mesh)
-    boundary_parts.set_all(9999)
-    bx0 = BoundaryX0()
-    bx1 = BoundaryX1()
-    by0 = BoundaryY0()
-    by1 = BoundaryY1()
-    bx0.mark(boundary_parts, 0)
-    bx1.mark(boundary_parts, 1)
-    by0.mark(boundary_parts, 2)
-    by1.mark(boundary_parts, 3)
-    return boundary_parts
-
 def mark_boundaries_in_hypercube(
     mesh, d=2, x0=0, x1=1, y0=0, y1=1, z0=0, z1=1):
     """
