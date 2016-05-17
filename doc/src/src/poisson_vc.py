@@ -395,7 +395,7 @@ def application_structured_mesh(model_problem=1):
         u_c = sym.printing.ccode(u)
         # '-exp(-16*pow(x - 0.5, 2) - 16*pow(y - 0.5, 2))*'
         # 'sin(3*M_PI*x)*sin(3*M_PI*y)'
-        u_c = u_c.replace('M_PI', 'DOLFIN_PI')
+        u_c = u_c.replace('M_PI', 'pi')  # or 'DOLFIN_PI'
         print('u in C:', u_c)
         u_D = Expression(u_c)
 
@@ -404,7 +404,7 @@ def application_structured_mesh(model_problem=1):
             sym.diff(-p*sym.diff(u, y), y)
         f = sym.simplify(f)
         f_c = sym.printing.ccode(f)
-        f_c = f_c.replace('M_PI', 'DOLFIN_PI')
+        f_c = f_c.replace('M_PI', 'pi')
         f = Expression(f_c)
         flux_u_x_exact = sym.lambdify([x, y], -p*sym.diff(u, x),
                                       modules='numpy')

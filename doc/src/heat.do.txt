@@ -1,82 +1,319 @@
 ========= Developing a more advanced heat equation solver =========
 label{ch:diffusion}
 
-# Pointers backward...what is needed to be recaptured?
+# theta-rule is new?!
 
-This chapter is devoted to solving diffusion problems of the
-form
+This chapter is devoted to some important topics when solving
+time-dependent problems with FEniCS: avoiding unnecessary assembly,
+dealing with time-dependent `Expression` objects, debugging the coding of
+variational forms, saving results to file, and making animations.  We
+illustrate these techniques in a welding problem and go through all
+aspects of the code development, from scaling of the physical problem
+via debugging to constructing unit tests.
+
+The PDE to be addressed is the heat equation
 
 !bt
-\[ \frac{\partial u}{\partial t} = \nabla\cdot(p\nabla u) + f,\]
+\[ \varrho c \frac{\partial u}{\partial t} = \nabla\cdot(p\nabla u) + f,\]
 !et
 with initial condition $u=I$ and various types of Dirichlet, Neumann,
-and Robin conditions.  A very simple FEniCS program for a diffusion
-equation was introduced in ref[Section
-ref{ch:fundamentals:diffusion}][ in cite{ftut1}][in the Section "The
-time-dependent diffusion equation":
-"http://hplgit.github.io/fenics-tutorial/doc/pub/sphinx/._ftut1004.html#the-time-dependent-diffusion-equation"
-in cite{ftut1}], but here we shall discuss algorithmic optimization
-strategies, how to store and animate time-dependent data, and how to
-construct more advanced solvers in terms of classes.
+and Robin conditions. The primary unknown is supposed to represent the
+temperature, and the PDE governs heat transport in a solid
+heterogeneous material.  The physical parameters, which may vary in
+space, are the density of the medium, $\varrho$, the heat capacity,
+$c$, and the heat conduction coefficient, $p$, while $f$ is a heat
+source.
 
-======= Optimization of algorithms and implementations =======
+A very simple FEniCS program for a diffusion equation was introduced
+in ref[Section ref{ch:fundamentals:diffusion}][ in cite{ftut1}][in the
+Section "The time-dependent diffusion equation":
+"http://hplgit.github.io/fenics-tutorial/doc/pub/sphinx/._ftut1004.html#the-time-dependent-diffusion-equation"
+in cite{ftut1}]. You should be familiar with that code prior to
+reading the present chapter as the code to be presented has many more
+advanced features.
+
+======= A flexible and efficient solver =======
 label{ch:diffusion:opt}
+
+===== Numerical method =====
+label{ch:diffusion:opt:num}
+
+Let us use a $\theta$ rule for discretizing the problem in time. Given
+
+!bt
+\[ \frac{\partial u}{\partial t} = \mathcal{G}(u) + f,\]
+!et
+where $\mathcal{G}$ is some differential operator and $f$ some source
+term, the $\theta$ rule reads
+
+!bt
+\begin{equation}
+\frac{u^{n+1} - u^n}{\Delta t} = \theta\mathcal{G}(u^{n+1})
++ (1-\theta)\mathcal{G}(u^n) + \theta f^{n+1} + (1-\theta)f^n,
+label{ch:diffusion:opt:num:thetar1}
+\end{equation}
+!et
+or
+
+!bt
+\begin{equation}
+\frac{u^{n+1} - u^n}{\Delta t} = \mathcal{G}(\theta u^{n+1} +
+(1-\theta)u^n) + f(\theta t_{n+1} + (1-\theta)t_n)\tp
+label{ch:diffusion:opt:num:thetar2}
+\end{equation}
+!et
+Note that $\theta=0$ gives a classical Forward Euler scheme,
+$\theta=1$ gives a Backward Euler scheme, and $\theta=\half$ gives a
+Crank-Nicolson (or midpoint/centered) scheme. The latter is
+theoretically the most accurate, but suffers from non-physical
+oscillations of high-frequency components of the solution, so many
+applications may demand the more stable Backward Euler scheme (or a
+more accurate backward difference formula utilizing a third time
+level).
+
+The corresponding variational formulation for $u^{n+1}$ is derived by
+multiplying the time-discrete PDE (ref{ch:diffusion:opt:PDEtheta}) by
+a test function $v\in\hat V$ and integrating over the spatial domain
+$\Omega$. Terms with second-order derivatives are integrated by parts,
+meaning that $\int_\Omega\mathcal{G}(u)v\dx = -\int_\Omega
+\mathcal{D}(u,v)\dx + \int_\Gamma \mathcal{B}(u,v)\ds$. Using
+(ref{ch:diffusion:opt:num:thetar2}), and introducing $U=\theta u^{n+1}
++ (1-\theta)u^n)$, the variational formulation then becomes
+
+!bt
+\begin{equation}
+F = \int_\Omega \varrho c\frac{u^{n+1} - u^n}{\Delta t}v\dx +
+\int_\Omega \mathcal{D}(U,v) \dx -
+\int_\Omega f(\theta t_{n+1}+(1-\theta)t_n) v\dx
++ \int_\Gamma \mathcal{B}(U,v)\ds
+label{ch:diffusion:opt:num:varform}
+\end{equation}
+!et
+Note that we have inserted a factor $\varrho c$ in the time-derivative term
+since our PDE has this factor. We introduce a general initial condition
+
+!bt
+\[ u(\x, 0) = u_0(\x)\hbox{ in }\Omega\tp\]
+!et
+As boundary conditions, we assume either Dirichlet conditions on the
+entire boundary or a Robin condition
+
+!bt
+\[ -p\frac{\partial u}{\partial n} = r(u-s),\]
+!et
+where $r$ is a heat transfer coefficient and $s$ is the surrounding
+temperature. Note that insulated boundaries are obtained by $r=0$.
+We then have
+
+!bt
+\begin{align*}
+\mathcal{D}(u,v) &= \nabla\cdot(p\nabla u^{n}),\\
+\mathcal{B}(u,v) &= r(u-s)v\tp
+\end{align*}
+!et
+
+Normally, in finite element programs, we would need to break up the
+variational formulation (ref{ch:diffusion:opt:num:varform}) into
+a bilinear and a linear part, but in FEniCS we can just use
+`lhs(F)` and `rhs(F)` for such calculations, which is very convenient from
+a user's point of view.
+
 
 ===== Avoiding assembly of the coefficient matrix =====
 label{ch:diffusion:opt:bassembly}
 
-[hpl: I though this example
+[hpl: I thought this example
 can just be an exercise now that the Navier-Stokes example
-cover the topic. However, the Navier-Stokes example is relatively
-complicated, and many students do not have the background to
-really understand it. Therefore, I don't everybody will grasp
-the `assemble` idea. We probably need to repeat it for Poisson and
-heat. It can also be an idea to study this example and then go back
-to N-S for a better understanding.]
+covers the topic of `assemble`. However, the Navier-Stokes
+example is relatively complicated, and many students do
+not have the background to really understand it, so we cannot it rely
+on all details from all gallery examples to be digested.
+Therefore, I explain in more detail the pre-assemble idea here.]
 
-The time-dependent diffusion equation gives rise to a linear system
-$AU=b$ at each time level, where the coefficient matrix $A$ is constant,
-but $b$ depends on $u$ at the previous time level. To increase the
-computational efficiency, we can therefore assemble $A$ once and
-for all before the time loop. To be able to do this, we need to
+Our time-dependent heat equation gives rise to a linear system
+with coefficient matrix $A$ and right-hand side $b$ at every time
+level. When $\varrho$, $c$, $p$, and $r$ do not depend on time,
+and $\Delta t$ is constant,
+$A$ is constant, and it suffices to assemble the matrix once --
+before the time loop. To be able to do this, we need to
 explicitly create matrices and vectors from variational
 formulations.
 #as demonstrated in Section ref{ch:poisson0:linalg}.
 #in N-S as well
 
+===== Algorithm =====
+label{ch:diffusion:opt:alg}
+
 Let us express the solution procedure in algorithmic form, writing $u$
 for the unknown spatial function at the new time level ($u^n$) and
 $u_1$ for the spatial solution at one earlier time level ($u^{n-1}$):
 
- * define Dirichlet boundary condition ($\ub$, Dirichlet boundary, etc.)
- * let $u_1$ interpolate $I$ or be the projection of $I$
- * define $a$ and $L$
- * assemble matrix $A$ from $a$
- * set some stopping time $T$
+ * mark boundary segments for prescribing boundary conditions
+ * let initial condition $u^n$ interpolate $I$ or be the projection of $I$
+ * define $F$
+ * ask FEniCS to recognize $a(u,v)$ and $L(v)$
+ * assemble matrix $A$ from $a(u,v)$ if $A$ is time independent
+ * assign some stopping time $T$
  * $t={\dt}$
  * while $t\leq T$
+   * update time-dependent objects with new time
+   * assemble matrix $A$ from $a(u,v)$ if $A$ is time dependent
    * assemble vector $b$ from $L$
    * apply essential boundary conditions
-   * solve $AU=b$ for $U$ and store in $u$
+   * solve linear system
    * $t\leftarrow t + {\dt}$
-   * $u_1 \leftarrow u$ (be ready for next step)
+   * $u^n \leftarrow u$ (be ready for next step)
 
-The code features the following changes from the `${prog["heat"]}.py`
-program. We may define $a$ and $L$ from $F$ as before, or do it explicitly:
+The code features a lot of changes from the `${prog["heat"]}.py`
+program. We shall go through each part of the above algorithm.
 
-!bc pycod
-a = u*v*dx + dt*dot(grad(u), grad(v))*dx
-L = (u_1 + dt*f)*v*dx
-!ec
-Prior to the time loop we assemble the coefficient matrix $A$ once and
-for all:
+===== The solver function =====
+label{ch:diffusion:opt:solver}
 
-idx{`assemble`}
+Instead of a flat program, we wrap the solver in a function:
 
 !bc pycod
-A = assemble(a)   # assemble only once, before the time stepping
+def solver(
+    rho, c, p, f, r, s, u0, T, L,       # physical parameters
+    dt, divisions, degree=1, theta=1,   # numerical parameters
+    user_action=None,                   # callback function
+    u0_project=False,                   # project/interpolate u0
+    BC='Dirichlet',                     # interpretation of r
+    A_is_const=False,                   # is A time independent?
+    debug=False):
 !ec
-At each time level we can do a similar `b = assemble(L)`. With this
+We assume that the domain is an interval, rectangle, or box, with
+dimensions given by the list `L` and where `divisions` specifies
+the number of cells in each spatial direction.
+
+=== Boundary condition conventions ===
+
+A convention is introduced for the boundary conditions:
+if `BC == 'Dirichlet'`, the variable `r` is a list with Dirichlet
+values (`Constant` or `Expression` objects) for each side of the
+domain. Side 0 means $x=0$, 1 is $x=1$, 2 is $y=0$, 3 is $y=1$,
+4 is $z=0$, and 5 is $z=1$. If `BC == 'Robin'`, `r[i]` holds
+the heat transfer coefficient for boundary side `i`.
+(The variable `s`, related to the Robin condition, has no meaning
+if `BC == 'Dirichlet'`).
+
+idx{assert}
+
+=== Check of input data ===
+
+It is wise to start the function with checking the values of some
+of the input parameters. Python's `assert` function is ideal for
+quick writing of tests, at the cost of cryptic error messages for
+less experienced programmers.
+
+!bc pycod
+assert len(divisions) == len(L)
+d = len(L)  # no of space dimensions
+assert len(r) == 2*d
+for obj in p, f, s:
+    assert isinstance(obj, (Expression, Constant))
+if user_action is not None: assert callable(user_action)
+!ec
+
+=== Creating the mesh ===
+
+This solver is supposed to work on any domain, but for now we
+restrict the geometry to a hypercube (an alternative is to send
+a ready-made mesh as argument to `solver` -- then we could handle
+arbitrary domains).
+
+!bc pycod
+if d == 1:
+    mesh = IntervalMesh(divisions[0], 0, L[0])
+elif d == 2:
+    mesh = RectangleMesh(Point(0,0), Point(*L), *divisions)
+elif d == 3:
+    mesh = BoxMesh(Point(0,0), Point(*L), *divisions)
+V = FunctionSpace(mesh, 'P', degree)
+!ec
+Note that `*L` for a list or tuple variable `L` in a function call
+is the same as sending
+`L[0], L[1], ..., L[len(L)-1]`.
+
+===== Marking the boundary =====
+label{ch:diffusion:opt:markboundary}
+
+We need to mark each side of our hypercube domain since we can have
+Robin or Dirichlet conditions that differ on different sides.
+We could write something straightforward as
+
+@@@CODE src/heat_func.py fromto: def mark_boundaries_in_rectangle@def mark_boundaries_in_hypercube
+Unfortunately, this is quite tedious and repetitive code, and the
+code has to be repeated for a 1D interval
+and a 3D box-shaped domain. It is possible to
+write more general, compact code valid both for an interval, rectangle, or
+box:
+
+@@@CODE src/heat_func.py fromto: def mark_boundaries_in_hypercube@def solver\(
+
+The use of this function in the solver function goes as follows:
+
+!bc pycod
+boundary_parts = mark_boundaries_in_hypercube(mesh, d)
+ds =  Measure('ds', domain=mesh, subdomain_data=boundary_parts)
+
+bcs = []
+if BC == 'Dirichlet':
+    for i in range(2*d):
+        bcs.append(DirichletBC(V, r[i], boundary_parts, i))
+!ec
+Note that we either have Dirichlet values at all boundaries or we
+have Robin conditions.
+
+===== Implementation of variational formulation =====
+
+We start with implementing the initial condition:
+
+!bc pycod
+u_n = project(u0, V) if u0_project else interpolate(u0, V)
+u_n.rename('u', 'initial condition')
+if user_action is not None:
+    user_action(0, u_n, 0)
+!ec
+
+In the variational form, we make use of some convenient constructions
+like `U` as the $\theta$ weighted averaged of $u$ in time and separate
+Python functions for various terms in the formulation:
+
+!bc pycod
+u = TrialFunction(V)
+v = TestFunction(V)
+
+def D(u):
+    return p*dot(grad(u), grad(v))*dx
+
+def B(u, i):
+    return r[i]*(u-s)*v*ds(i)
+
+# Must set the t attribute in f, s, and r[i] to
+# theta*t + (1-theta)*(t-dt) before evaluating the forms
+U = theta*u + (1-theta)*u_n
+F_M = rho*c*(u-u_n)/dt*v*dx
+F_K = D(U)
+F_f = -f*v*dx
+F = F_M + F_K + F_f
+if BC == 'Robin':
+    F_R = sum(B(U, i) for i in range(2*d))
+    F += F_R
+a, L = lhs(F), rhs(F)
+!ec
+We have with purpose split the expression for `F` into separate terms for
+easier debugging later, as this allows us to assemble terms independently
+and compare with hand calculations.
+
+It remains to assemble the coefficient matrix:
+
+!bc pycod
+if A_is_const:
+    A = assemble(a)
+!ec
+
+At each time level we must do a similar `b = assemble(L)`. However, with this
 construction, a new vector for `b` is allocated in memory in every
 pass of the time loop.  It would be much more memory friendly to reuse
 the storage of the `b` we already have.  This is easily accomplished
@@ -88,24 +325,228 @@ b = assemble(L, tensor=b)
 That is, we send in our previous `b`, which is then filled with new values
 and returned from `assemble`. Now there will be only a single
 memory allocation of the right-hand side vector. Before the time loop
-we set `b = None` such that `b` is defined in the first call to
-`assemble`.
+we must set `b = None` such that `b` is defined as a variable
+in the first call to `assemble` inside the time loop.
 
-The necessary changes inside the time loop go as follows:
+===== The time loop =====
+
+The complete time loop goes as follows:
 
 !bc pycod
-while t <= T:
-    b = assemble(L, tensor=b)
-    u_b.t = t
-    bc.apply(A, b)
-    solve(A, u.vector(), b)
-!ec
-The update `u_b.t = t` is of key importance as `bc.apply(A, b)` will
-look up the `u_b` object to find the proper values in the Dirichlet condition,
-and `u_b` changes with time in our test problem!
+u = Function(V)   # the unknown at a new time level
+u.rename('u', 'solution')
+cpu_assemble = 0  # CPU time for assembling
+timestep = 1
+t = dt
 
-The complete program is found in the file
-"`${prog['heat2']}.py`": "${src_url}/${prog['heat2']}.py".
+while t <= T:
+    # Evaluate f, s, r[i] for right t value
+    t_m = theta*t + (1-theta)*(t-dt)
+    if hasattr(f, 't'): f.t = t_m
+    if hasattr(s, 't'): s.t = t_m
+    for i in range(len(r)):
+        if BC == 'Robin':
+            if hasattr(r[i], 't'): r[i].t = t_m
+        elif BC == 'Dirichlet':
+            if hasattr(r[i], 't'): r[i].t = t
+        else:
+            raise ValueError('BC=%s' % BC)
+    t0 = time.clock()  # measure CPU time of assemble part
+    if not A_is_const:
+        A = assemble(a)
+    b = assemble(L, tensor=b)
+    cpu_assemble += time.clock() - t0
+
+    [bc.apply(A, b) for bc in bcs]
+    solve(A, u.vector(), b)
+
+    if user_action is not None:
+        user_action(t, u, timestep)
+    t += dt
+    timestep += 1
+    u_n.assign(u)
+!ec
+
+The first part of the loop where we update `Expression` objects is
+key to get right and one of the most error-prone tasks for FEniCS
+programmers. The variational forms can work with time-dependent
+`Expression` objects and evaluate the time when we require an
+`assemble` operation. Hence, at each time level, every `Expression`
+object that enters the variational formulations that are subject to
+`assemble` calls must have its right time value. In addition,
+`Expression` objects related to Dirichlet values must contain the
+same time value as that of the unknown to be computed.
+In the present case, `f`, `s`, and `r[i]` enter the variational
+formulation at the weighted time $t_m = \theta t_{n+1} + (1-\theta)t_{n+1}$,
+so this time value must be assigned to the `t` attribute in these
+objects. However, it may happen that one or more of the objects
+are `Constant` objects, or `Expression` objects without a time value,
+so a straight assignment `f.t = t_m` may fail. Therefore, we
+use `hasattr` to check that the object has a `t` attribute before
+updating the value.
+
+The update of `r[i].t` depends on whether `r` is used for Dirichlet or
+Robin conditions. In the latter case, the $r$ quantity is to be
+evaluated at the weighted time, `r[i].t = t_m`, while for a Dirichlet
+condition, `r[i].t` must reflect the same time level as the unknown we
+compute for, i.e., $t_{n+1}$, or `t` in the time loop.
+
+The rest of the statements in the time loop should be quite familiar.
+Note that `[bc.apply(A, b) for bc in bcs]` is a quick way of writing
+a for loop in one line (using a list comprehension, but the resulting
+list is never used for anything, just the calls `bc.apply(A, b)` are
+important for incorporating the Dirichlet conditions at each boundary
+segment).
+
+The complete `solver` function is found in the file
+"`${prog['heat_func']}.py`": "${src_url}/${prog['heat_func']}.py".
+
+===== Verification =====
+
+The first implementation of a solver the complexity above is
+likely to suffer from programming errors or mathematical
+misunderstandings.  We must therefore set up tests so that we know
+that the implementation works. As usual, we favor manufactured
+solutions that can be exactly reproduced by the numerical method. With
+variable coefficients and a lot of input data to adjust, the choice of
+manufactured solution must be flexible. We therefore feed some
+symbolic expression for $u(\x,t)$ into a function `verify` and let
+this function compute the consistent source term and the coefficients
+`r[i]` in the Robin/Dirichlet conditions. Then `solver` is called with
+a callback function that asserts the error to be within machine
+precision for this problem, if the manufactured solution is without
+approximation errors.
+
+We use SymPy to do the mathematics and then we use the code generation
+utility in SymPy to translate the symbolic expressions to C++
+code needed in FEniCS `Expression` objects.
+
+@@@CODE src/heat_func.py fromto: def verify@test_solver\(
+
+===== Debugging of FEniCS programs =====
+
+When the first author implemented the present `solver` function, the
+solution looked nice in visualizations, but the verification tests
+where the solutions should be reproduced to machine precision, were
+not fulfilled, but the numerical solutions converged. These
+observations pointed to bugs in the code, but the author could not
+spot them from pure reading. How can such a FEniCS code systematically
+debugged?  The safest way involves the following steps:
+
+ * Reduce the problem to one spatial dimension.
+ * Work with P1 elements.
+ * Work with the smallest sensible mesh, e.g., two cells.
+ * Compute by hand the contribution to the coefficient matrix and
+   right-hand side from each term in the PDEs.
+ * Assemble each term in the PDEs individually in FEniCS (easy!)
+   for comparison with hand calculations. Be aware of the `vertex_to_dof`
+   mapping in FEniCS.
+ * Write out all the Dirichlet conditions and check that they are correct.
+ * Finally assert that the linear system computed by hand and by FEniCS
+   are identical.
+
+This procedure requires, of course, that one masters the basic algorithms
+in the finite element method and can perform these by hand or by a
+separate program. The details in the present PDE application are documented
+next.
+
+We start with reducing the problem to 1D. There are four types of terms
+in our PDE: the mass matrix term $\int\frac{1}{\Delta t}u^{n+1}v$,
+the stiffness matrix term $\int p\nabla u\cdot\nabla v$, the source term
+$\int fv$, and the Robin condition term $\int_\Gamma r(u-s)v$.
+
+!bt
+\[
+\frac{h}{6\Delta t}
+\left(\begin{array}{rr}
+2 & 1\\
+1 & 2
+\end{array}\right)
+\]
+!et
+
+!bt
+\[
+\frac{h}{6\Delta t}
+\left(\begin{array}{rrr}
+2 & 1 & 0\\
+1 & 4 & 1\\
+0 & 1 & 2
+\end{array}\right)
+\]
+!et
+
+!bt
+\[
+\frac{1}{h}
+\left(\begin{array}{rr}
+1 & -1\\
+-1 & 1
+\end{array}\right)
+\]
+!et
+
+!bt
+\[
+\frac{1}{h}
+\left(\begin{array}{rrr}
+1 & -1 & 0\\
+-1 & 2 & -1\\
+0 & -1 & 1
+\end{array}\right)
+\]
+!et
+
+The Robin condition in 1D reduces to $\int_\Gamma r(u-s)v\ds$, which
+gives a contribution $[ruv]^1_0$ to the coefficient matrix
+and a contribution $[rsv]^1_0$ to the right-hand side vector.
+We have $[ruv]^1_0=r(1)u(1)v(1)-r(0)u(0)v(0)$. The first term gives
+a contribution to the dof that corresponds to $x=1$ only, since
+$\hat\phi_i(1)\phi_j(1)\neq 0$ iff $i$ and $j$ is the dof at $x=1$.
+We typically get the global matrix
+
+!bt
+\[
+r(1,t)
+\left(\begin{array}{rrr}
+ 1 & 0 & 0\\
+ 0 & 0 & 0\\
+ 0 & 0 & 0
+\end{array}\right)
+\]
+!et
+if doc 0 corresponds to $x=1$ (as in this FEniCS numbering).
+The term $r(0)u(0)v(0)$ gives a similar contribution
+
+!bt
+\[
+r(0,t)
+\left(\begin{array}{rrr}
+ 0 & 0 & 0\\
+ 0 & 0 & 0\\
+ 0 & 0 & 1
+\end{array}\right)
+\]
+!et
+to the global matrix.
+The corresponding contributions to the right-hand side vector are
+
+!bt
+\[
+r(1,t)s
+\left(\begin{array}{r}
+ 1\\
+ 0\\
+ 0
+\end{array}\right),\qquad
+r(0,t)s
+\left(\begin{array}{r}
+ 0\\
+ 0\\
+ 1
+\end{array}\right)
+\]
+!et
 
 
 ===== Avoiding all assembly =====
@@ -130,18 +571,19 @@ of a finite element code in time-dependent problems.
 
 === Deriving recursive linear systems ===
 
-To see how repeated assembly can be avoided, we look at the $L(v)$
-form,
+To see how repeated assembly can be avoided, we look at the
+``right-hand side part'' of the variational form (i.e., the linear form
+$L(v)$) when (for simplicity) $\theta=1$:
 
 !bt
-\[ \int_\Omega \left(u^{n-1} + {\dt}  f^n\right)v \dx, \]
+\[ L(v) = \int_\Omega \left(\frac{1}{\dt}u^{n} + f^{n+1}\right)v \dx\tp \]
 !et
-which in general varies with time through $u^{n-1}$, $f^n$, and
+This expression varies in general with time through $u^{n}$, $f^{n+1}$, and
 possibly also with $\dt$ if the time step is adjusted during the
 simulation.  The technique for avoiding repeated assembly consists in
 expanding the finite element functions in sums over the basis
 functions $\phi_i$ to identify matrix-vector products that build up
-the complete system. We have $u^{n-1}=\sum_{j=1}^NU^{n-1}_j\phi_j$,
+the complete system. We have $u^{n}=\sum_{j=1}^NU^{n}_j\phi_j$,
 and we can expand $f^n$ as
 $f^{n}=\sum_{j=1}^NF^{n}_j\phi_j$. Inserting these expressions in
 $L(v)$ and using $v=\hat\phi_i$ result in
@@ -151,10 +593,10 @@ why the hat.]
 
 !bt
 \begin{align*}
-\int_\Omega \left(u^{n-1} + {\dt}f^n\right)v \dx &=
-\int_\Omega \left(\sum_{j=1}^N U^{n-1}_j\phi_j + {\dt}\sum_{j=1}^N F^{n}_j\phi_j\right)\hat\phi_i \dx,\\
-&=\sum_{j=1}^N\left(\int_\Omega \hat\phi_i\phi_j \dx\right)U^{n-1}_j
- + {\dt}\sum_{j=1}^N\left(\int_\Omega \hat\phi_i\phi_j \dx\right)F^{n}_j\tp
+\int_\Omega \left(\frac{1}{\dt}u^{n} + f^{n+1}\right)v \dx &=
+\int_\Omega \left(\frac{1}{\dt}\sum_{j=1}^N U^{n}_j\phi_j + \sum_{j=1}^N F^{n+1}_j\phi_j\right)\hat\phi_i \dx,\\
+&=\sum_{j=1}^N\frac{1}{\dt}\left(\int_\Omega \hat\phi_i\phi_j \dx\right)U^{n}_j
+ + \sum_{j=1}^N\left(\int_\Omega \hat\phi_i\phi_j \dx\right)F^{n+1}_j\tp
 \end{align*}
 !et
 Introducing $M_{ij} = \int_\Omega \hat\phi_i\phi_j \dx$, we see that
@@ -162,44 +604,49 @@ the last expression can be written
 
 !bt
 \begin{equation*}
-\sum_{j=1}^NM_{ij}U^{n-1}_j + {\dt} \sum_{j=1}^NM_{ij}F^{n}_j,
+\sum_{j=1}^N \frac{1}{\dt}M_{ij}U^{n}_j + \sum_{j=1}^NM_{ij}F^{n+1}_j,
 \end{equation*}
 !et
 which is nothing but two matrix-vector products,
 
 !bt
 \begin{equation*}
-MU^{n-1} + {\dt} MF^n,
+\frac{1}{\dt}MU^{n} + MF^{n+1},
 \end{equation*}
 !et
 if $M$ is the matrix with entries $M_{ij}$,
 
 !bt
 \begin{equation*}
-U^{n-1}=(U^{n-1}_1,\ldots,U^{n-1}_N)^T,
+U^{n}=(U^{n}_1,\ldots,U^{n}_N)^T,
 \end{equation*}
 !et
 and
 
 !bt
 \begin{equation*}
-F^n=(F^{n}_1,\ldots,F^{n}_N)^T\tp
+F^{n+1}=(F^{n+1}_1,\ldots,F^{n+1}_N)^T\tp
 \end{equation*}
 !et
 
-We have immediate access to $U^{n-1}$ in the program since that is the
-vector in the `u_1` function. The $F^n$ vector can easily be computed
+We have immediate access to $U^{n}$ in the program since that is the
+vector in the `u_n` function. The $F^{n+1}$ vector can easily be computed
 by interpolating the prescribed $f$ function (at each time level if
-$f$ varies with time). Given $M$, $U^{n-1}$, and $F^n$, the right-hand
+$f$ varies with time). Given $M$, $U^{n}$, and $F^{n+1}$, the right-hand
 side $b$ can be calculated as
 
 !bt
 \begin{equation*}
-b = MU^{n-1} + {\dt} MF^n \tp
+b = \frac{1}{\dt}MU^{n} + MF^n \tp
 \end{equation*}
 !et
-That is, no assembly is necessary to compute $b$.
+That is, no assembly is necessary to compute $b$!
 
+It now remains to extend the results to the full $\theta$ rule and
+to the boundary terms arising from the Robin conditions.
+.......
+
+Any point with splitting $A$? It is to be assembled once...
 The coefficient matrix $A$ can also be split into two terms.  We
 insert $v=\hat\phi_i$ and $u^n = \sum_{j=1}^N U^n_j\phi_j$ in the
 bilinear expression to get
@@ -833,19 +1280,18 @@ concept so one needs experience with Python class programming.
 ======= Refactoring a heat equation solver =======
 label{ch:diffusion:refactor}
 
-The flat program for the diffusion solver in
-`${prog["heat"]}.py` and `${prog["heat2"]}.py`
-was refactored in `${prog["heat_func"]}.py` in terms of a
-`solver` function with the general code for solving the PDE problem, a
-callback function for processing the solution at each time step, and
-an application function defining the callback function and calling the
-solver to solve a specific problem. However, for time-dependent
-problems a solver function that gets all its input through a set of
-arguments is less flexible than a solver class, which can demand its
-input both through arguments and through functions (in subclasses)
-provided by the user. The following text requires you to be familiar
-with class programming in Python (tailored learning material is
-Chapter 7, 9, and Appendix E in cite{Langtangen2009a}).
+The flat program for the diffusion solver in `${prog["heat"]}.py` and
+`${prog["heat2"]}.py` was refactored in `${prog["heat_func"]}.py` in
+terms of a `solver` function with the general code for solving the PDE
+problem, a callback function for processing the solution at each time
+step, and an application function defining the callback function and
+calling the solver to solve a specific problem. However, for
+time-dependent problems a solver function that gets all its input
+through a set of arguments is less flexible than a solver class, which
+can demand its input both through arguments and through functions (in
+subclasses) provided by the user. The following text requires you to
+be familiar with class programming in Python (tailored learning
+material is Chapter 7, 9, and Appendix E in cite{Langtangen2009a}).
 
 When we work with a PDE project, we often want to explore a range of
 similar problems where the PDE model basically stays the same, but
@@ -1271,17 +1717,9 @@ through the medium ($y=0.5$). This gives an animation of
 the temperature profile, but results in somewhat lengthy code.
 
 To mark the boundaries, so we can set $u=1$ at $x=0$, we can make a
-function like
-
-@@@CODE src/heat_class.py fromto: def mark_boundaries_in_rectangle@def mark_boundaries_in_hypercube
-Unfortunately, this is quite tedious and repetitive code, and the
-code has to repeated for a 3D box-shaped domain. It is possible to
-write more general, compact code valid both for an interval, rectangle, or
-box:
-
-@@@CODE src/heat_class.py fromto: def mark_boundaries_in_hypercube@class Problem1
-
-Now we are in a position to show the complete problem class:
+function like `mark_boundaries_in_hypercube` as shown in
+Section ref{ch:diffusion:opt:markboundary}.
+Eventually, we are in a position to show the complete problem class:
 
 @@@CODE src/heat_class.py fromto: class Problem1@# Classical matplotlib
 Notice our definition of the time step: because the growth of the
