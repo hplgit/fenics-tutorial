@@ -1043,16 +1043,235 @@ the boundaries and subdomains must be defined as part of the mesh
 generation process. We will now look at how to use the FEniCS mesh
 generation tool `mshr` to generate meshes and define subdomains.
 
-[AL: This section is work in progress.]
-
 ===== PDE problem =====
+
+We will again solve the Poisson equation, but this time for a
+different application. Consider an iron cylinder with copper wires
+wound around the cylinder as in Figure
+ref{ftut1:fig:magnetostatics:geometry}. Through the copper wires a
+static current $J = 1\,\mathrm{A}$ is flowing and we want to compute
+the magnetic field $B$ in the iron cylinder, the copper wires, and the
+surrounding vacuum.
+
+FIGURE:[fig/magnetostatics_geometry, width=600 frac=0.7] Cross-section of an iron cylinder with copper wires wound around the cylinder, here with $n = 8$ windings. label{ftut1:fig:magnetostatics:geometry}
+
+First, we simplify the problem to a 2D problem. We can do this by
+assuming that the cylinder extends far along the $z$-axis and as a
+consequence the field is virtually independent of the
+$z$-coordinate. Next, we consider Maxwell's equation to derive a
+Poisson equation for the magnetic field (or rather its potential):
+
+!bt
+\begin{align}
+  \nabla\cdot  D &= \varrho, \\
+  \nabla\cdot  B &= 0, \\
+  \nabla\times E &= -\frac{\partial B}{\partial t}, \\
+  \nabla\times H &= \frac{\partial D}{\partial t} + J.
+\end{align}
+!et
+Here, $D$ is the displacement field, $B$ is the magnetic
+field, $E$ is the electric field, and $H$ is the magnetizing field. In
+addition to Maxwell's equations, we also need a constitutive relation
+between $B$ and $H$,
+
+!bt
+\begin{equation}
+  B = \mu H,
+\end{equation}
+!et
+which holds for an isotropic linear magnetic medium. Here, $\mu$ is the
+magnetic permeability of the material. Now, since $B$ is solenoidal
+(divergence free) according to Maxwell's equations, we know that $B$
+must be the curl of some vector field $A$. This field is called the
+magnetic vector potential. Since $\partial D/\partial t = 0$, it
+follows that
+
+!bt
+\begin{equation}
+  J = \nabla \times H
+    = \nabla \times (\mu^{-1} B)
+    = \nabla \times (\mu^{-1} \nabla \times A)
+    = -\nabla \cdot (\mu^{-1} \nabla A).
+\end{equation}
+!et
+In the last step, we have expanded the second derivatives and used the
+gauge freedom of $A$ to simplify the equations to a simple
+vector-valued Poisson problem for the magnetic vector potential; if $B
+= \nabla \times A$, then $B = \nabla \times (A + \nabla \psi)$ for any
+scalar field $\psi$ (the gauge function). For the current problem, we
+thus need to solve the following 2D Poisson problem for the
+$z$-component $A_z$ of the magnetic vector potential:
+
+!bt
+\begin{align}
+  - \nabla \cdot (\mu^{-1} \nabla A_z) &= J_z \quad \text{in } \Real^2, \\
+  \lim_{|(x, y)| \rightarrow \infty} A_z &= 0.
+\end{align}
+!et
+Since we cannot solve this problem on an infinite domain, we will
+truncate the domain using a large disk and set $A_z = 0$ on the
+boundary. The current $J_z$ is set to $+1\,\mathrm{A}$ in the interior
+set of circles (copper wire cross-sections) and to $-1\,\mathrm{A}$ in
+the exterior set of circles in Figure ref{ftut1:fig:magnetostatics:geometry}.
+
+Once the magnetic vector potential has been computed, we can
+computed the magnetic field $B = B(x, y)$ by
+
+!bt
+\begin{align}
+  B(x, y) =
+  \left(\frac{\partial A_z}{\partial y},
+       -\frac{\partial A_z}{\partial x}\right).
+\end{align}
+!et
 
 ===== Variational formulation =====
 
+The variational problem is derived as before by multiplying with a test
+function $v$ and integrating by parts. Since the boundary integral
+vanishes due to the Dirichlet condition, we obtain
+
+!bt
+\begin{equation}
+  \int_{\Omega} \mu^{-1} \nabla A_z \cdot \nabla v \dx
+  = \int_{\Omega} J_z v \dx,
+\end{equation}
+!et
+or, in other words, $a(A_z, v) = L(v)$ with
+
+!bt
+\begin{align}
+  a(A_z, v) &= \int_{\Omega} \mu^{-1} \nabla A_z \cdot \nabla v \dx, \\
+  L(v) &= \int_{\Omega} J_z v \dx.
+\end{align}
+!et
+
 ===== FEniCS implementation =====
 
+The first step is to generate a mesh for the geometry described in
+Figure ref{ftut1:fig:magnetostatics:geometry}. We let $a$ and $b$ the
+the inner and outer radii of the iron cylinder and let $c_1$ and $c_2$
+be the radii of the two concentric distributions of copper wire
+cross-sections. Furthermore, we let $r$ be the radius of a copper
+wire, $R$ be the radius of our domain, and $n$ be the number of
+windings (giving a total of $2n$ copper-wire cross-sections). This
+geometry can be described easily using `mshr` and a little bit of
+Python programming:
+
+!bc pycod
+# Define geometry for background
+domain = Circle(Point(0, 0), R)
+
+# Define geometry for iron cylinder
+cylinder = Circle(Point(0, 0), b) - Circle(Point(0, 0), a)
+
+# Define geometry for wires (N = North (up), S = South (down))
+angles_N = [i*2*pi/n for i in range(n)]
+angles_S = [(i + 0.5)*2*pi/n for i in range(n)]
+wires_N = [Circle(Point(c_1*cos(v), c_1*sin(v)), r) for v in angles_N]
+wires_S = [Circle(Point(c_2*cos(v), c_2*sin(v)), r) for v in angles_S]
+!ec
+
+The mesh that we generate will be a mesh of the entire disk with
+radius $R$ but we need the mesh generation to respect the internal
+boundaries defined by the iron cylinder and the copper wires. We also
+want `mshr` to label the subdomains so that we can easily specify
+material parameters ($\mu$) and currents. To do this, we use the
+`mshr` function `set_subdomain` as follows:
+
+!bc pycod
+# Set subdomain for iron cylinder
+domain.set_subdomain(1, cylinder)
+
+# Set subdomains for wires
+for (i, wire) in enumerate(wires_N):
+    domain.set_subdomain(2 + i, wire)
+for (i, wire) in enumerate(wires_S):
+    domain.set_subdomain(2 + n + i, wire)
+!ec
+Once the subdomains have been created, we can generate the mesh:
+
+!bc pycod
+mesh = generate_mesh(domain, 32)
+!ec
+A detail of the mesh is shown in Figure
+ref{ftut1:fig:magnetostatics:mesh}.
+
 FIGURE:[fig/magnetostatics_mesh, width=600 frac=0.9] Plot of the mesh generated for the magnetostatics test problem. The subdomains for the iron cylinder and copper wires are clearly visible label{ftut1:fig:magnetostatics:mesh}
+
+The mesh generated with `mshr` will contain information about the
+subdomains we have defined. To use this information in the definition of
+our variational problem and subdomain-dependent parameters, we will need to
+create a `MeshFunction` that marks the subdomains. This can be easily
+created by a call to the member function `mesh.domains`, which holds
+the subdomain data generated by `mshr`:
+
+!bc pycod
+markers = MeshFunction('size_t', mesh, 2, mesh.domains())
+!ec
+This line creates a `MeshFunction` with unsigned integer values (the
+subdomain numbers) with dimension 2, which is the cell dimension for
+this 2D problem.
+
+We can now use the markers as we have done before to redefine the
+integration measure `dx`:
+
+!bc pycod
+dx = Measure('dx', domain=mesh, subdomain_data=markers)
+!ec
+Integrals over subdomains can then be expressed by `dx(0)`, `dx(1)`,
+and so on. We use this to define the current $J_z = \pm 1\,\mathrm{A}$
+in the coppper wires:
+
+!bc pycod
+J_N = Constant(1.0)
+J_S = Constant(-1.0)
+A_z = TrialFunction(V)
+v = TestFunction(V)
+a = (1 / mu)*dot(grad(A_z), grad(v))*dx
+L_N = sum(J_N*v*dx(i) for i in range(2, 2 + n))
+L_S = sum(J_S*v*dx(i) for i in range(2 + n, 2 + 2*n))
+L = L_N + L_S
+!ec
+
+The permeability is defined as an `Expression` that depends on the
+subdomain number:
+!bc
+class Permeability(Expression):
+    def __init__(self, mesh, **kwargs):
+        self.markers = markers
+    def eval_cell(self, values, x, ufc_cell):
+        if markers[ufc_cell.index] == 0:
+            values[0] = 4*pi*1e-7 # vacuum
+        elif markers[ufc_cell.index] == 1:
+            values[0] = 1e-5      # iron (should really be 2.5e-1)
+        else:
+            values[0] = -6.4e-6   # copper
+
+mu = Permeability(mesh, degree=1)
+!ec
+As seen in this code snippet, we have used a somewhat less extreme
+value for the magnetic permeability of iron. This is to make the
+solution a little more interesting. It would otherwise be completely
+dominated by the field in the iron cylinder.
+
+Finally, when $A_z$ has been computed, we can compute the magnetic
+field:
+
+!bc pycod
+W = VectorFunctionSpace(mesh, 'P', 1)
+B = project(as_vector((A_z.dx(1), -A_z.dx(0))), W)
+!ec
+We use `as_vector` to interpret the tuple
+`(A_z.dx(1), -A_z.dx(0))` as a vector. The resulting plots of the
+magnetic vector potential and magnetic field are shown in Figures
+ref{ftut1:fig:magnetostatics:potential} and
+ref{ftut1:fig:magnetostatics:field}.
 
 FIGURE:[fig/magnetostatics_potential, width=600 frac=0.9] Plot of the $z$-component $A_z$ of the magnetic vector potential. label{ftut1:fig:magnetostatics:potential}
 
 FIGURE:[fig/magnetostatics_field, width=600 frac=0.9] Plot of the magnetic field $B$ in the $xy$-plane. label{ftut1:fig:magnetostatics:field}
+
+The complete code for computing the magnetic field follows below.
+
+@@@CODE src/magnetostatics.py fromto: from fenics import@
