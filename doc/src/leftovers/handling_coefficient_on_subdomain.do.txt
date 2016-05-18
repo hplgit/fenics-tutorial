@@ -1,0 +1,88 @@
+======= FEniCS implementation of multiple subdomains =======
+
+Section ref{ftut:possion:2D:2mat:impl} explains how to deal with
+multiple subdomains of $\Omega$ and a piecewise constant coefficient
+function $p$ that takes on different constant values in the different
+subdomains. We can easily add this type of $p$ coefficient to the
+`solver_bc` function. The signature of the function is
+
+!bc pycod
+def solver_bc(
+    p, f,                   # Coefficients in the PDE
+    boundary_conditions,    # Dict of boundary conditions
+    Nx, Ny,                 # Cell division of the domain
+    degree=1,               # Polynomial degree
+    subdomains=[],          # List of SubDomain objects in domain
+    linear_solver='Krylov', # Alt: 'direct'
+    abs_tol=1E-5,           # Absolute tolerance in Krylov solver
+    rel_tol=1E-3,           # Relative tolerance in Krylov solver
+    max_iter=1000,          # Max no of iterations in Krylov solver
+    log_level=PROGRESS,     # Amount of solver output
+    dump_parameters=False,  # Write out parameter database?
+    debug=False,
+    ):
+...
+    return u, p   # p may be modified
+!ec
+If `subdomain` is an empty list, we assume there are no subdomains, and
+$p$ is an `Expression` or `Constant` object specifying a formula for
+$p$. If not, `subdomain` is a list of `SubDomain` objects, defining
+different parts of the domain. The first element is a dummy object,
+defining ``the rest'' of the domain. The next elements define specific
+geometries in the `inside` methods. We start by marking all elements
+with subdomain number 0, this will then be ``the rest'' after marking
+subdomains 1, 2, and so on. The next step is to define `p` as a
+piecewise constant function over cells and fill it with values.
+We assume that the user-argument `p` is an array (or list) holding
+the values of $p$ in the different parts corresponding to `subdomains`.
+The returned `p` is needed for flux computations. If there are no
+subdomains, the returned `p` is just the original `p` argument.
+
+The appropriate code for computing `p` becomes
+
+!bc pycod
+import numpy as np
+if subdomains:
+    # subdomains is list of SubDomain objects,
+    # p is array of corresponding constant values of p
+    # in each subdomain
+    materials = CellFunction('size_t', mesh)
+    materials.set_all(0)  # "the rest"
+    for m, subdomain in enumerate(subdomains[1:], 1):
+        subdomain.mark(materials, m)
+
+    p_values = p
+    V0 = FunctionSpace(mesh, 'DG', 0)
+    p  = Function(V0)
+    help = np.asarray(materials.array(), dtype=np.int32)
+    p.vector()[:] = np.choose(help, p_values)
+!ec
+
+We define $p(x,y)=p_0$ in $\Omega_0$ and $k(x,y)=p_1$ in $\Omega_1$,
+where $p_0>0$ and $p_1>0$ are given constants.
+As boundary conditions, we choose $u=0$ at $y=0$, $u=1$ at $y=1$,
+and $\partial u/\partial n=0$ at $x=0$ and $x=1$.
+One can show that the exact solution is now given by
+
+!bt
+\begin{equation}
+u(x, y) = \left\lbrace\begin{array}{ll}
+{2yp_1\over p_0+p_1}, & y \leq 1/2\\
+{(2y-1)p_0 + p_1\over p_0+p_1}, & y \geq 1/2
+\end{array}\right.
+\end{equation}
+!et
+As long as the element boundaries coincide with the internal boundary
+$y=1/2$, this piecewise linear solution should be exactly recovered
+by Lagrange elements of any degree. We can use this property to verify
+the implementation and make a unit test for a series of function
+spaces:
+
+@@@CODE src/poisson_vc.py fromto: def test_solvers_bc_2mat@application_flow_around_circle
+
+##=== Application: Porous media flow around a circular obstacle ===
+
+##Should be done properly by Rectangle and Circle in mshr
+##@@@CODE src/poisson_vc.py fromto: def application_flow_around_circle@if __name
+
+##Don't show this without fancy ParaView plot.

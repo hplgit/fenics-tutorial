@@ -1,28 +1,31 @@
 !split
-========= Mesh generation, subdomains and boundary conditions =========
+========= Subdomains and boundary conditions =========
 label{ch:subdomains}
 
 !bquote
-In this chapter, we focus on a fundamental step in the solution of
-many PDE problems: the generation of a mesh, and the specification of subdomains and boundary conditions. Our starting point is the 2D Poisson equation where
-we introduce the basic concepts, before applying them in a more
-challenging 3D convection-diffusion problem.
+So far, we have only looked briefly at how to specify boundary
+conditions. In this chapter, we look more closely at how to specify
+boundary conditions on specific parts (subdomains) of the boundary and
+how to combine multiple boundary conditions. We will also look at how to
+generate meshes with subdomains and how to define coefficients and
+variational problems that look different in different subdomains.
 !equote
 
 !split
-======= Multiple domains and boundaries =======
+========= Multiple domains and boundaries =========
 
 [hpl: Need a little intro.]
 
 
-===== Combining Dirichlet and Neumann conditions =====
+======= Combining Dirichlet and Neumann conditions =======
 label{ch:poisson0:DN}
 
-Let us make a slight extension of our two-dimensional Poisson problem
-with Dirichlet conditions on the entire boundary and add a Neumann boundary
-condition. The domain is still the unit square, but now we set the
-Dirichlet condition $u=\ub$ at the left and right sides, $x=0$ and
-$x=1$, while the Neumann condition
+Let's return to our Poisson solver from Chapter ref{ch:fundamentals}
+and see how to extend the mathematics and the implementation to handle
+a Dirichlet condition in combination with a Neumann condition. The
+domain is still the unit square, but now we set the Dirichlet
+condition $u=\ub$ at the left and right sides, $x=0$ and $x=1$, while
+the Neumann condition
 
 !bt
 \begin{equation*}
@@ -31,23 +34,27 @@ $x=1$, while the Neumann condition
 !et
 is applied to the remaining
 sides $y=0$ and $y=1$.
-The Neumann condition is also known as a *natural boundary condition*
-(in contrast to an essential boundary condition).
+
+#The Neumann condition is also known as a *natural boundary condition*
+#(in contrast to an essential boundary condition).
 
 idx{Neumann boundary conditions}
 
 ===== PDE problem =====
 
-Let $\Gamma_D$ and $\Gamma_N$ denote the parts of $\partial\Omega$
+Let $\GD$ and $\GN$ denote the parts of the boundary $\partial\Omega$
 where the Dirichlet and Neumann conditions apply, respectively.  The
 complete boundary-value problem can be written as
 
+[AL: Fixed alignment of in, on etc here. Needs to be done in other
+places too, using `{alignat}{2}`.]
+
 !bt
-\begin{align}
-    - \nabla^2 u &= f \mbox{ in } \Omega,  \\
-    u &= \ub \mbox{ on } \Gamma_D,       \\
-    - {\partial u\over\partial n} &= g \mbox{ on } \Gamma_N  \tp
-\end{align}
+\begin{alignat}{2}
+    - \nabla^2 u &= f \quad&&\mbox{in } \Omega,  \\
+    u &= \ub &&\mbox{on } \GD,       \\
+    - {\partial u\over\partial n} &= g &&\mbox{on } \GN  \tp
+\end{alignat}
 !et
 Again we choose $u=1+x^2 + 2y^2$ as the exact solution and adjust $f$, $g$, and
 $\ub$ accordingly:
@@ -56,8 +63,8 @@ $\ub$ accordingly:
 \begin{align*}
 f &= -6,\\
 g &= \left\lbrace\begin{array}{ll}
--4, & y=1\\
-0,  & y=0
+0, & y=0\\
+4, & y=1
 \end{array}\right.\\
 \ub &= 1 + x^2 + 2y^2\tp
 \end{align*}
@@ -68,7 +75,7 @@ $y=1$. One possible extension is
 
 !bt
 \begin{equation*}
-g(x,y) = -4y\tp
+g(x,y) = 4y\tp
 \end{equation*}
 !et
 
@@ -76,7 +83,7 @@ g(x,y) = -4y\tp
 
 The first task is to derive the variational problem. This time we cannot
 omit the boundary term arising from the integration by parts, because
-$v$ is only zero on $\Gamma_D$. We have
+$v$ is only zero on $\GD$. We have
 
 !bt
 \begin{equation*}
@@ -85,26 +92,25 @@ $v$ is only zero on $\Gamma_D$. We have
 \partial n}v \ds,
 \end{equation*}
 !et
-and since $v=0$ on $\Gamma_D$,
+and since $v=0$ on $\GD$,
 
 !bt
 \begin{equation*}
 - \int_{\partial\Omega}{\partial u\over
 \partial n}v \ds
 =
-- \int_{\Gamma_N}{\partial u\over
+- \int_{\GN}{\partial u\over
 \partial n}v \ds
-= \int_{\Gamma_N}gv \ds,
+= \int_{\GN}gv \ds,
 \end{equation*}
 !et
-by applying the boundary condition on $\Gamma_N$.
+by applying the boundary condition on $\GN$.
 The resulting weak form reads
 
 !bt
 \begin{equation}
-\int_{\Omega} \nabla u \cdot \nabla v \dx +
-\int_{\Gamma_N} gv \ds
-= \int_{\Omega} fv \dx\tp
+\int_{\Omega} \nabla u \cdot \nabla v \dx
+= \int_{\Omega} fv \dx - \int_{\GN} gv \ds\tp
 label{ch:poisson0:2D:DN:weak}
 \end{equation}
 !et
@@ -116,28 +122,27 @@ in the standard notation $a(u,v)=L(v)$ is straightforward with
 a(u, v) &= \int_{\Omega} \nabla u \cdot \nabla v \dx,
 label{ftut:poisson2:vard:a}\\
 L(v) &= \int_{\Omega} fv \dx -
-\int_{\Gamma_N} gv \ds\tp  label{ftut:poisson2:vard:L}
+\int_{\GN} gv \ds\tp  label{ftut:poisson2:vard:L}
 \end{align}
 !et
 
 ===== FEniCS implementation =====
 
-How does the Neumann condition impact the implementation?
-Let us go back to the very simplest file,
-`${prog["poisson"]}.py`, from
-ref[Section ref{ch:poisson0:impl}][ in cite{ftut1}][the
-section "FEniCS implementation": "" in cite{ftut1}],
-we realize that the statements remain almost the same.
-Only two adjustments are necessary:
+How does the Neumann condition impact the implementation?  Let us
+revisit our previous implementation `${prog["poisson"]}.py`, from
+ref[Section ref{ch:poisson0:impl}][ in cite{ftut1}][the section
+"FEniCS implementation": "" in cite{ftut1}] and examine which changes
+we need to make to incorporate the Neumann condition. It runs out that
+only two are necessary.Ö
 
-  * The function describing the boundary where Dirichlet conditions
-    apply must be modified.
-  * The new boundary term must be added to the expression in `L`.
+  * The function `boundary` defining the Dirichlet boundary
+    must be modified.
+  * The new boundary term must be added to the expression for `L`.
 
 The first adjustment can be coded as
 
 !bc pycod
-def Dirichlet_boundary(x, on_boundary):
+def boundary_D(x, on_boundary):
     if on_boundary:
         if x[0] == 0 or x[0] == 1:
             return True
@@ -149,14 +154,14 @@ def Dirichlet_boundary(x, on_boundary):
 A more compact implementation reads
 
 !bc pycod
-def Dirichlet_boundary(x, on_boundary):
+def boundary_D(x, on_boundary):
     return on_boundary and (x[0] == 0 or x[0] == 1)
 !ec
 
 !bwarning Never use `==` for comparing real numbers!
-A list like `x[0] == 1` should never be used if `x[0]` is a real number,
-because rounding errors in `x[0]` may make the test fail even when it is
-mathematically correct. Consider
+A comparison like `x[0] == 1` should never be used if `x[0]` is a real
+number, because rounding errors in `x[0]` may make the test fail even
+when it is mathematically correct. Consider
 
 !bc pycod
 >>> 0.1 + 0.2 == 0.3
@@ -165,9 +170,9 @@ False
 0.30000000000000004
 !ec
 
-Comparison of real numbers need to use tolerances! The values of the
-tolerances depend on the size of the numbers involved in arithmetic
-operations:
+Comparison of real numbers needs to be made with tolerances! The
+values of the tolerances depend on the size of the numbers involved in
+arithmetic operations:
 
 !bc pycod
 >>> abs(0.1+0.2 - 0.3)
@@ -183,11 +188,11 @@ operations:
 >>> abs(10000.1+10000.2 - 20000.3)
 3.637978807091713e-12
 !ec
-For numbers around unity, tolerances as low as $3\cdot 10^{-16}$ can be used
-(in fact, this tolerance is known as the constant `DOLFIN_EPS` in FEniCS),
-otherwise an appropriate tolerance must be found.
+For numbers of unit size, tolerances as low as $3\cdot 10^{-16}$ can be used
+(in fact, this tolerance is known as the constant `DOLFIN_EPS` in FEniCS).
+Otherwise, an appropriate scaled tolerance must be used.
 
-Testing for `x[0] == 1` should therefore be implemented as
+Here is a better way to test fo `x[0] == 1`:
 
 !bc pycod
 tol = 1E-14
@@ -198,91 +203,87 @@ if abs(x[0] - 1) < tol:
 
 idx{`near`}
 
-Here is a new boundary function using tolerances in the test:
+A modified version of the boundary definition using a tolernace
+instead of exact comparison can easily be implemented as follows:
 
 !bc pycod
-def Dirichlet_boundary(x, on_boundary):
-    tol = 1E-14   # tolerance for coordinate comparisons
-    return on_boundary and \
-           (abs(x[0]) < tol or abs(x[0] - 1) < tol)
+def boundary_D(x, on_boundary):
+    tol = 1E-14
+    return on_boundary and (abs(x[0]) < tol or abs(x[0] - 1) < tol)
 !ec
 This function can be written a bit more elegantly using the `near`
 function in FEniCS:
 
 !bc pycod
-def Dirichlet_boundary(x, on_boundary):
-    tol = 1E-14   # tolerance for coordinate comparisons
-    return on_boundary and \
-           (near(x[0], 0, tol) or near(x[1], 1, tol))
+def boundary_D(x, on_boundary):
+    tol = 1E-14
+    return on_boundary and (near(x[0], 0, tol) or near(x[1], 1, tol))
 !ec
 
+[AL: Use 1E-14 or 1e-14? Need to be consistent throughout the book.]
+
 The second adjustment of our program concerns the definition of `L`,
-where we have to add a boundary integral and a definition of the $g$
-function to be integrated:
+which needs to include the Neumann condition:
 
 !bc pycod
-g = Expression('-4*x[1]')
+g = Expression('4*x[1]')
 L = f*v*dx - g*v*ds
 !ec
 The `ds` variable implies a boundary integral, while `dx`
 implies an integral over the domain $\Omega$.
-No more modifications are necessary.
+No other modifications are necessary.
 
-===== Setting multiple Dirichlet conditions =====
+======= Setting multiple Dirichlet conditions =======
 label{ch:poisson0:multiple:Dirichlet}
 
-The PDE problem from the previous section applies a function $\ub(x,y)$
-for setting Dirichlet conditions at two parts of the boundary.
-Having a single function to set multiple Dirichlet conditions is
-seldom possible. The more general case is to have $m$ functions for
-setting Dirichlet conditions on $m$ parts of the boundary.
-The purpose of this section is to explain how such multiple conditions
-are treated in FEniCS programs.
-
-Let us return to the case from Section ref{ch:poisson0:DN} and define
-two separate functions for the two Dirichlet conditions:
+In the previous section, we used a single functions $\ub(x,y)$ for
+setting Dirichlet conditions at two parts of the boundary.  Often it
+is more practical to use multiple functions, one for subdomain of the
+boundary. Let us return to the case from Section ref{ch:poisson0:DN}
+and redefine the problem in terms of two Dirichlet conditions:
 
 !bt
-\begin{align*}
-    - \nabla^2 u &= -6 \mbox{ in } \Omega, \\
-    u &= u_L \mbox{ on } \Gamma_{D,0}, \\
-    u &= u_R \mbox{ on } \Gamma_{D,1}, \\
-    - {\partial u\over\partial n} &= g \mbox{ on } \Gamma_N \tp
-\end{align*}
+\begin{alignat*}{2}
+    - \nabla^2 u &= f \quad&&\mbox{in } \Omega, \\
+    u &= u_{_\mathrm{L}} &&\mbox{on } \GD^{^{\mathrm{L}}}, \\
+    u &= u_{_\mathrm{R}} &&\mbox{on } \GD^{^{\mathrm{R}}}, \\
+    - {\partial u\over\partial n} &= g &&\mbox{on } \GN \tp
+\end{alignat*}
 !et
-Here, $\Gamma_{D,0}$ is the boundary $x=0$, while $\Gamma_{D,1}$ corresponds
-to the boundary $x=1$.  We have that $u_L = 1 + 2y^2$, $u_R = 2 +
-2y^2$, and $g=-4y$.
+Here, $\GD^{^{\mathrm{L}}}$ is the left boundary $x=0$, while
+$\GD^{^{\mathrm{R}}}$ is the right boundary $x=1$. We note that
+$u_{_\mathrm{L}} = 1 + 2y^2$, $u_{_\mathrm{R}} = 2 + 2y^2$, and $g=4y$.
 
-For the left boundary $\Gamma_0$ we define the
-usual triple of a function for the boundary value, a function for
-defining the boundary of interest, and a `DirichletBC` object:
+For the boundary condition on $\GD^{^{\mathrm{L}}}$, we define the
+usual triple of an expression for the boundary value, a function
+defining the location of the boundary, and a `DirichletBC` object:
 
 !bc pycod
 u_L = Expression('1 + 2*x[1]*x[1]')
 
-def left_boundary(x, on_boundary):
-    tol = 1E-14   # tolerance for coordinate comparisons
+def boundary_L(x, on_boundary):
+    tol = 1E-14
     return on_boundary and abs(x[0]) < tol
 
-Gamma_0 = DirichletBC(V, u_L, left_boundary)
+bc_L = DirichletBC(V, u_L, boundary_L)
 !ec
-For the boundary $x=1$ we write a similar code snippet:
+For the boundary condition on $\GD^{^{\mathrm{R}}}$, we write a
+similar code snippet:
 
 !bc pycod
 u_R = Expression('2 + 2*x[1]*x[1]')
 
-def right_boundary(x, on_boundary):
-    tol = 1E-14   # tolerance for coordinate comparisons
+def boundary_R(x, on_boundary):
+    tol = 1E-14
     return on_boundary and abs(x[0] - 1) < tol
 
-Gamma_1 = DirichletBC(V, u_R, right_boundary)
+bc_R = DirichletBC(V, u_R, boundary_R)
 !ec
-The various essential conditions are then collected in a list
-and used in the solution process:
+We collect the two boundary conditions in a list which
+we can pass to the `solve` function to compute the solution:
 
 !bc pycod
-bcs = [Gamma_0, Gamma_1]
+bcs = [bc_L, bc_R]
 ...
 solve(a == L, u, bcs)
 # or
@@ -291,9 +292,8 @@ solver  = LinearVariationalSolver(problem)
 solver.solve()
 !ec
 
-In other problems, where the $u$ values are constant at a part of the
-boundary, we may use a simple `Constant` object instead of an
-`Expression` object.
+Note that for boundary values that do not depend on $x$ or $y$, we
+might replace the `Expression` objects `Constant` objects.
 
 # #ifdef EXTRA
 # We come to this in a minute with internal subdomains...
@@ -326,13 +326,9 @@ idx{multi-material domain}
 
 
 Solving PDEs in domains made up of different materials is a frequently
-encountered task. In FEniCS, these kind of problems are handled by
-defining subdomains inside the domain. The subdomains may represent
-the various materials. We can thereafter define material properties
-through functions, known in FEniCS as *mesh functions*, that are
-piecewise constant in each subdomain.  A simple example with two
-materials (subdomains) in 2D will demonstrate the basic steps in the
-process.
+encountered task. In FEniCS, these kinds of problems are handled by
+defining subdomains inside the domain. A simple example with two
+materials (subdomains) in 2D will demonstrate the idea.
 
 FIGURE: [fig/layered_medium_2, width=400 frac=0.5] Medium with discontinuous material properties. label{ftut:possion:2D:2mat:fig1}
 
@@ -345,11 +341,8 @@ Suppose we want to solve
 !et
 in a domain $\Omega$ consisting of two subdomains where $k$ takes on
 a different value in each subdomain.
-For simplicity, yet without loss of generality, we choose for the current
-implementation
-the domain $\Omega = [0,1]\times [0,1]$ and divide it into two equal
-subdomains,
-as depicted in Figure ref{ftut:possion:2D:2mat:fig1},
+We take $\Omega = [0,1]\times [0,1]$ and divide it into two equal
+subdomains, as depicted in Figure ref{ftut:possion:2D:2mat:fig1},
 
 !bt
 \begin{equation*}
@@ -360,21 +353,21 @@ as depicted in Figure ref{ftut:possion:2D:2mat:fig1},
 We define $k(x,y)=k_0$ in $\Omega_0$ and $k(x,y)=k_1$ in $\Omega_1$,
 where $k_0>0$ and $k_1>0$ are given constants.
 
-Physically, the present problem may correspond to heat conduction, where
-the heat conduction in $\Omega_1$ is more efficient than
-in $\Omega_0$. An alternative interpretation is flow in porous media
-with two geological layers, where the layers' ability to transport
-the fluid differ.
+Physically, this problem may be viewed as a model of heat conduction,
+where the heat conduction in $\Omega_1$ is more efficient than in
+$\Omega_0$. An alternative interpretation is flow in porous media with
+two geological layers, where the layers' ability to transport the
+fluid differ.
 
 ===== Expression objects with if test =====
 
-The simplest way of implementing a variable $k$ is to define an
-`Expression` object where we return the appropriate $k$ value
-depending on the position in space.  Since we need some testing on the
-coordinates, the most straightforward approach is to define a subclass
-of `Expression`, where we can use a full Python method instead of just
-a C++ string formula for specifying a function.  The method that
-defines the function is called `eval`:
+The simplest way of implementing a variable coefficient $k$ is to
+define an `Expression` object where we return the appropriate $k$
+value depending on the position in space.  Since we need some testing
+on the coordinates, the most straightforward approach is to define a
+subclass of `Expression`, where we can use a full Python method
+instead of just a C++ string formula for specifying a function.  The
+method that defines the function is called `eval`:
 
 !bc pycod
 class K(Expression):
@@ -382,12 +375,9 @@ class K(Expression):
         self.k0, self.k1 = k0, k1
 
     def eval(self, value, x):
-        """x: spatial point, value[0]: function value."""
-	# Fill in-place value[0] for scalar function,
-	# value[:] for vector function (no return)
-
-	tol = 1E-14  # Tolerance for coordinate comparisons
-        if x[1] <= 0.5+tol:
+        "Set value[0] to value at point x"
+	tol = 1E-14
+        if x[1] <= 0.5 + tol:
 	    value[0] = self.k0
 	else:
 	    value[0] = self.k1
@@ -397,48 +387,47 @@ k = K()
 k.set_k_values(1, 0.01)
 !ec
 The `eval` method gives great flexibility in defining functions, but a
-downside is that C++ calls up `eval` in Python for each point `x`,
-which is a slow process, and the number of calls is proportional to
-the number of numerical integration points in the mesh (about the
-number of degrees of freedom).  Function expressions in terms of
-strings are compiled to efficient C++ functions, being called from
-C++, so we should try to express functions as string expressions if
-possible. (The `eval` method can also be defined through C++ code, but
-this is much more complicated and not covered here.)  The idea is to
-use inline if tests in C++:
+downside is that C++ calls up `eval` in Python for each node `x`,
+which is a slow process.
+
+An alternative method is to use a C++ string expression as we have
+seen before, which is much more efficient in FEniCS. This can be done
+usin inline if tests in C++:
 
 !bc pycod
 tol = 1E-14
 k0 = 1.0
 k1 = 0.01
-k = Expression('x[1] <= 0.5+tol? k0 : k1',
+k = Expression('x[1] <= 0.5 + tol ? k0 : k1',
                tol=tol, k0=k0, k1=k1)
 !ec
-The method with if tests on the location is feasible when the
-subdomains have very simple shapes. A completely general method,
-utilizing *mesh functions*, is described next.
 
+This method of defining variable coefficients works if the subdomains
+are simple shapes that can be expressed in terms of geometric
+inequalities. However, for more complex subdomains, we will need to
+use a more general technique, as we will see next.
 
 idx{boundary specification (class)}
 
 ===== Mesh functions =====
 
 We now address how to specify the subdomains $\Omega_0$ and $\Omega_1$
-so that the method also works for subdomains of any shape. For this
-purpose we need to use subclasses of class `SubDomain`, not only plain
-functions as we have used so far for specifying boundaries. Consider
-the boundary function
+using a more general technique. This technique involves the use of two
+classes that are essential in FEniCS when working with subdomains:
+`SubDomain` and `MeshFunction`. Consider the following definition of the
+boundary $x = 0$:
 
 !bc pycod
 def boundary(x, on_boundary):
     tol = 1E-14
     return on_boundary and abs(x[0]) < tol
 !ec
-for defining the boundary $x=0$. Instead of using such a stand-alone
-function, we can create an instance (or object)
-of a subclass of `SubDomain`,
-which implements the `inside` method as an alternative to the
-`boundary` function:
+This boundary definition is actually a shortcut to the more general
+FEniCS concept `SubDomain`. A `SubDomain` is a class which defines a
+region in space (a subdomain) in terms of a member function `inside`
+which returns `True` for points that belong to the subdomain and
+`False` for points that don't belong to the subdomain. Here is how to
+specify the boundary $x = 0$ as a `SubDomain`:
 
 !bc pycod
 class Boundary(SubDomain):
@@ -449,55 +438,61 @@ class Boundary(SubDomain):
 boundary = Boundary()
 bc = DirichletBC(V, Constant(0), boundary)
 !ec
-A word about computer science terminology may be used here: The term
-*instance* means a Python object of a particular type (such as
-`SubDomain`, `Function`, `FunctionSpace`, etc.).  Many use *instance*
-and *object* as interchangeable terms. In other computer programming
-languages one may also use the term *variable* for the same thing.  We
-mostly use the well-known term *object* in this text.
+We notice that the `inside` function of the class `Boundary` is
+(almost) identical to the previous boundary definition in terms of the
+`boundary` function. Technically, our class `Boundary` is a
+*subclass* of the FEniCS class `SubDomain`.
 
-A subclass of `SubDomain` with an `inside` method offers functionality
-for marking parts of the domain or the boundary. Now we need to define
-one class for the subdomain $\Omega_0$ where $y\leq 1/2$ and another
-for the subdomain $\Omega_1$ where $y\geq 1/2$:
+#A word about computer science terminology may be in order here: The term
+#*instance* means a Python object of a particular type (such as
+#`SubDomain`, `Function`, `FunctionSpace`, etc.).  Many use *instance*
+#and *object* as interchangeable terms. In other computer programming
+#languages one may also use the term *variable* for the same thing. We
+#mostly use the well-known term *object* in this text.
+
+We will use two `SubDomain` subclasses to define the two subdomains
+$\Omega_0$ and $\Omega_1$:
 
 !bc pycod
-tol = 1E-14  # Tolerance for coordinate comparisons
+tol = 1E-14
 
 class Omega0(SubDomain):
     def inside(self, x, on_boundary):
-        return x[1] <= 0.5+tol
+        return x[1] <= 0.5 + tol
 
 class Omega1(SubDomain):
     def inside(self, x, on_boundary):
-        return x[1] >= 0.5-tol
+        return x[1] >= 0.5 - tol
 !ec
-Notice the use of `<=` and `>=` in both tests. For a cell to belong
-to, e.g., $\Omega_1$, the `inside` method must return `True` for all
-the vertices `x` of the cell. So to make the cells at the internal
-boundary $y=1/2$ belong to $\Omega_1$, we need the test `x[1] >=
-0.5`. However, because of potential rounding errors in the coordinates
-`x[1]`, we use a tolerance in the comparisons: `x[1] >= 0.5-tol`.
+Notice the use of `<=` and `>=` in both tests. FEniCS will call the
+`inside` function for each vertex in a cell to determine whether or
+not the cell belongs to a particular subdomain. For this reason, it is
+important that the test holds for all vertices in cells aligned with
+the boundary. In adition, we use a tolerance to make sure that
+vertices on the internal boundary at $y = 0.5$ will belong to *both*
+subdomains. This is a little counter-intuitive, but is necessary to
+make the cells both above and below the interal boundary belong to
+either $\Omega_0$ or $\Omega_1$.
 
-The next task is to use a *mesh function* to mark all cells in
-$\Omega_0$ with the subdomain number 0 and all cells in $\Omega_1$
-with the subdomain number 1.  Our convention is to number subdomains
-as $0,1,2,\ldots$.
-
-A `MeshFunction` object is a discrete function that can be evaluated
-at a set of so-called *mesh entities*. Examples of mesh entities are
-cells, facets, and vertices. A `MeshFunction` over cells is suitable
-to represent subdomains (materials), while a `MeshFunction` over
-facets is used to represent pieces of external or internal boundaries.
-Mesh functions over vertices can be used to describe continuous
-fields.  The specialized classes `CellFunction` and `FacetFunction`
-are used to construct mesh functions of cells and facets,
-respectively.
+To define the variable coefficient $k$, we will use a powerful tool in
+FEniCS called a `MeshFunction`. A `MeshFunction` is a discrete
+function that can be evaluated at a set of so-called *mesh
+entities*. A mesh entity in FEniCS is either a vertex, an edge, a
+face, or a cell (triangle or tetrahedron). A `MeshFunction` over cells
+is suitable to represent subdomains (materials), while a
+`MeshFunction` over facets (edges or faces) is used to represent
+pieces of external or internal boundaries. A `MeshFunction` over cells
+can also be used to represent boundary markers for mesh refinement. A
+FEniCS `MeshFunction` is parametrized both over its datatype (like
+integers or booleans) and its dimension (0 = vertex, 1 = edge
+etc). Special subclasses `VertexFunction`, `EdgeFunction` etc are
+provided for easy definition of a `MeshFunction` of a particular
+dimension.
 
 Since we need to define subdomains of $\Omega$ in the present example,
 we make use of a `CellFunction`. The constructor
 is fed with two arguments: 1) the type of value: `'int'` for integers,
-`'uint'` for positive (unsigned) integers, `'double'` for real
+`'size_t'` for positive (unsigned) integers, `'double'` for real
 numbers, and `'bool'` for logical values; 2) a `Mesh` object.
 Alternatively, the constructor can take just a filename and initialize
 the `CellFunction` from data in a file.
@@ -508,93 +503,96 @@ in Section ref{ftut:possion:nD:nmat}.
 #  #endif
 
 We start with creating a `CellFunction` whose values are non-negative
-integers (`'uint'`) for numbering the subdomains.
-The appropriate code for two subdomains then reads
+integers (`'size_t'`) for numbering the subdomains:
 
 !bc pycod
 materials = CellFunction('size_t', mesh)
+!ec
+
+Next, we use the two subdomains to *mark* the cells belonging to each
+subdomain:
+!bc
 # Mark subdomains with numbers 0 and 1
 subdomain0 = Omega0()
 subdomain0.mark(materials, 0)
 subdomain1 = Omega1()
 subdomain1.mark(materials, 1)
+!ec
 
-# Alternative
+This will set the values of the mesh function `materials` to $0$ on
+each cell belonging to $\Omega_0$ and $1$ on all cells belonging to
+$\Omega_1$. Alternatively, we can use the following equivalent code to
+mark the cells:
+
+!bc
 materials.set_all(0)
 subdomain1.mark(materials, 1)
 !ec
-
-Calling `materials.array()` returns a `numpy` array of the
-subdomain values. That is, `materials.array()[i]` is
-the subdomain value of cell number `i`. This array is used to
-look up the subdomain or material number of a specific element.
-
-We need a function `k` that is constant in each subdomain $\Omega_0$
-and $\Omega_1$. Since we want `k` to be a finite element function, it
-is natural to choose a space of functions that is constant over each
-element.  The family of discontinuous Galerkin methods, in FEniCS
-denoted by `'DG'`, is suitable for this purpose. Since we want
-functions that are piecewise constant, the value of the degree
-parameter is zero:
+To examine the values of the mesh function and see that we have indeed
+defined our subdomains correctly, we can simply plot the mesh
+function:
 
 !bc pycod
-V0 = FunctionSpace(mesh, 'DG', 0)
-k  = Function(V0)
+plot(materials, interactive=True)
 !ec
-To fill `k` with the right values in each element, we loop over
-all cells (i.e., indices in `materials.array()`),
-extract the corresponding subdomain number of a cell,
-and assign the corresponding $k$ value to the `k.vector()` array:
-
+We may also wish to store the values of the mesh function for later
+use:
 !bc pycod
-k_values = [1.5, 50]  # values of k in the two subdomains
-for cell_no in range(len(materials.array())):
-    material_no = materials.array()[cell_no]
-    k.vector()[cell_no] = k_values[material_no]
+File('materials.xml.gz') << materials
+!ec
+which can later be read back from file as follows:
+!bc pycod
+File('materials.xml.gz') >> materials
 !ec
 
-Long loops in Python are known to be slow, so for large meshes
-it is preferable to avoid such loops and instead use *vectorized code*.
-Normally this implies that the loop must be replaced by
-calls to functions from the `numpy` library that operate on complete
-arrays (in efficient C code). The functionality we want in the present
-case is to compute an array of the same size as
-`materials.array()`, but where the value `i` of an entry
-in `materials.array()` is replaced by `k_values[i]`.
-Such an operation is carried out by the `numpy` function `choose`:
+Now, to use the values of the mesh function `materials` to define the
+variable coefficient $k$, we create a FEniCS `Expression`:
 
 !bc pycod
-help = numpy.asarray(materials.array(), dtype=numpy.int32)
-k.vector()[:] = numpy.choose(help, k_values)
+class K(Expression):
+    def __init__(self, materials, k0, k1, **kwargs):
+        self.materials = materials
+        self.k0 = k0
+        self.k1 = k1
+    def eval_cell(self, values, x, cell):
+        if materials[cell.index] == 0:
+            values[0] = self.k0
+        else:
+            values[0] = self.k1
+
+k = K(materials, k0, k1, degree=0)
 !ec
 The `help` array is required since `choose` cannot work with
 `materials.array()` because this array has elements of
 type `uint32`. We must therefore transform this array to an array
 `help` with standard `int32` integers.
 
-The next section exemplifies a complete solver with a piecewise
-constant coefficient, like $k$, defined through `SubDomain` objects,
-combined with different types of boundary conditions.
+This is similar to the `Expression` subclass we defined above, but we
+make use of the member function `eval_cell` in place of the regular
+`eval` function. This version of the evaluation function has an
+addition `cell` argument which we can use to check on which cell we are
+currently evaluating the function.
 
 idx{`CompiledSubDomain`}
 
 ===== C++ strings for subdomain definitions =====
 
-The `SubDomain` class in Python is convenient, but leads to lots of
-function calls from C++ to Python, which are slow. In large problems,
-the subdomains should be defined through C++ code. This is easy to achieve
-using the `CompiledSubDomain` object. Consider the definition of
-classes `Omega0` and `Omega1` above in Python.
-The key strings that define these subdomain can be expressed in
-C++ syntax and fed to `CompiledSubDomain` as follows:
+The `SubDomain` and `Expression` Python classes are very convenient,
+but their use leads to function calls from C++ to Python for each node
+in the mesh. Since this involves a significant cost, we need to make
+use of C++ code for large problems.
+
+If we have defined `SubDomain` sublass in Python, we may instead use
+the `CompiledSubDomain` tool in FEniCS to speed up our code. Consider
+the definition of the classes `Omega0` and `Omega1` above in Python. The
+key strings that define these subdomain can be expressed in C++ syntax
+and fed to `CompiledSubDomain` as follows:
 
 !bc pycod
 tol = 1E-14  # Tolerance for coordinate comparisons
 
-subdomain0 = CompiledSubDomain(
-                'x[1] <= boundary+tol', tol=1E-14, boundary=0.5)
-subdomain1 = CompiledSubDomain(
-                'x[1] >= boundary-tol', tol=1E-14, boundary=0.5)
+subdomain0 = CompiledSubDomain('x[1] <= 0.5 + tol', tol=1E-14)
+subdomain1 = CompiledSubDomain('x[1] >= 0.5 - tol', tol=1E-14)
 !ec
 As seen, one can have parameters in the strings and specify their
 values by keyword arguments.
@@ -605,22 +603,54 @@ Compiled subdomain strings can be applied for specifying boundaries as
 well, e.g.,
 
 !bc pycod
-y_R = CompiledSubDomain('on_boundary && near(x[1], R, eps=tol)',
-                        tol=1E-14, R=2)   # y=2
+boundary_R = CompiledSubDomain('on_boundary && abs(x[0] - 1) < tol',
+                                tol=1E-14)
 !ec
 
-It is possible to feed the C++ string (without parameters) directly as
-the third argument to `DirichletBC` without explicitly constructing a
-`CompiledSubDomain` object:
+It is also possible to feed the C++ string (without parameters)
+directly as the third argument to `DirichletBC` without explicitly
+constructing a `CompiledSubDomain` object:
 
 !bc pycod
-bc1 = DirichletBC(V, value, 'on_boundary && near(x[1], 2, 1E-14)')
+bc1 = DirichletBC(V, value, 'on_boundary && abs(x[0] - 1) < tol')
 !ec
 
-idx{`near`}
+Python `Expression` classes may also be redefined using C++ for more
+effcient code. Consider again the definition of the class `K` above
+for the variable coefficient $k = k(x)$. This may be redefined using a
+C++ code snippet and the keyword `cppcode` to the regular FEniCS
+`Expression` class:
+
+!bc
+cppcode = """
+class K : public Expression
+{
+public:
+
+  void eval(Array<double>& values,
+            const Array<double>& x,
+            const ufc::cell& cell) const
+  {
+    if ((*materials)[cell.index] == 0)
+      values[0] = k0;
+    else
+      values[0] = k1;
+  }
+
+  std::shared_ptr<MeshFunction<std::size_t> > materials;
+  double k0;
+  double k1;
+
+};
+"""
+k = Expression(cppcode=cppcode, degree=0)
+k.materials = materials
+k.k0 = k0
+k.k1 = k1
+!ec
 
 % if EXV:
-===== Exercise: Efficiency of Python vs C++ expressions =====
+======= Exercise: Efficiency of Python vs C++ expressions =======
 label{ch:poisson0:exer:eff:expression}
 file=Expression_efficiency
 
@@ -666,42 +696,47 @@ idx{Neumann boundary conditions}
 idx{Robin boundary conditions}
 idx{boundary conditions}
 
-Consider the model problem from Section
+Consider again the model problem from Section
 ref{ch:poisson0:multiple:Dirichlet} where we had both Dirichlet and
-Neumann conditions.  The term `v*g*ds` in the expression for `L`
+Neumann conditions. The term `g*v*ds` in the expression for `L`
 implies a boundary integral over the complete boundary, or in FEniCS
-terms, an integral over all exterior facets.  However, the
-contributions from the parts of the boundary where we have Dirichlet
-conditions are erased when the linear system is modified by the
-Dirichlet conditions.  We would like, from an efficiency point of
-view, to integrate `v*g*ds` only over the parts of the boundary where
-we actually have Neumann conditions.  And more importantly, in other
-problems one may have different Neumann conditions or other conditions
-like the Robin type condition.  With the mesh function concept we can
-mark different parts of the boundary and integrate over specific
-parts.  The same concept can also be used to treat multiple Dirichlet
-conditions.  The forthcoming text illustrates how this is done.
+terms, an integral over all *exterior facets*. This means that the
+boundary integral extends also over the part of the boundary $\GD$
+where we have Dirichlet conditions. However, only the integral over
+$\GN$ will contribute since $v = 0$ on $\GD$ (which happens when we
+apply the Dirichlet boundary condition).
+
+From an efficiency point of view, we would ideally like to integrate
+`g*v*ds` only over the part of the boundary where we actually have
+Neumann conditions. More importantly, in other problems one may have
+different Neumann conditions or other conditions like the Robin type
+condition. This can be handled in FEniCS by defining a `MeshFunction`
+that marks different portions of the boundary. The same technique
+can also be used to treat multiple Dirichlet conditions.
 
 ===== Three types of boundary conditions =====
 
 We extend our repertoire of boundary conditions to three types:
-Dirichlet, Neumann, and Robin.  Dirichlet conditions apply to some
-parts $\Gamma_{D,0}$, $\Gamma_{D,1}$, $...$, of the boundary:
+Dirichlet, Neumann, and Robin. Dirichlet conditions apply to some
+parts $\GD^0$, $\GD^1$, $...$, of the boundary:
 
 !bt
-\[ u_{0,0}\hbox{ on }\Gamma_{D,0},\quad
-u_{0,1}\hbox{ on }\Gamma_{D,1}, \ldots\]
+\[ \ub^0\hbox{ on }\GD^0,\quad
+\ub^1\hbox{ on }\GD^1, \quad \ldots\]
 !et
-where $u_{0,i}$ are prescribed functions, $i=0,1,\ldots$
-On other parts, $\Gamma_{N,0}$, $\Gamma_{N,1}$, and so on, we have
-Neumann conditions
+where $\ub^i$ are prescribed functions, $i=0,1,\ldots$
+On other parts, $\GN^0$, $\GN^1$, and so on, we have
+Neumann conditions:
+
+[AL: Inconsistent naming of coefficient: sometimes $k$ and sometimes
+$p$. Suggestion: $\kappa$.]
 
 !bt
-\[ -p{\partial u\over\partial n} = g_{0}\hbox{ on }\Gamma_{N,0},\quad
--p{\partial u\over\partial n} = g_{1}\hbox{ on }\Gamma_{N,1},\quad \ldots
+\[ -p{\partial u\over\partial n} = g_{0}\hbox{ on }\GN^0,\quad
+-p{\partial u\over\partial n} = g_{1}\hbox{ on }\GN^1,\quad \ldots
 \]
 !et
-Finally, we have *Robin conditions*
+Finally, we have *Robin conditions*:
 
 !bt
 \begin{equation*}
@@ -715,31 +750,30 @@ naturally from Newton's cooling law. In that case, $r$ is a heat
 transfer coefficient, and $s$ is the temperature of the
 surroundings. Both can be space and time-dependent.
 The Robin conditions apply
-at some parts $\Gamma_{R,0}$, $\Gamma_{R,1}$, and so forth:
+at some parts $\GR^0$, $\GR^1$, and so forth:
 
 !bt
-\[ -p{\partial u\over\partial n} = r_0(u-s_0)\hbox{ on }\Gamma_{R,0},\quad
--p{\partial u\over\partial n} = r_1(u-s_1)\hbox{ on }\Gamma_{R,1},\quad \ldots
+\[ -p{\partial u\over\partial n} = r_0(u-s_0)\hbox{ on }\GR^0,\quad
+-p{\partial u\over\partial n} = r_1(u-s_1)\hbox{ on }\GR^1,\quad \ldots
 \]
 !et
 
 idx{Robin condition}
 
-===== A general model problem =====
+===== PDE problem =====
 
-With the notation above,
-the model problem to be solved with multiple Dirichlet, Neumann, and
-Robin conditions can formally be defined as
+With the notation above, the model problem to be solved with multiple
+Dirichlet, Neumann, and Robin conditions can be formulated as follows:
 
 !bt
 \begin{align}
 -\nabla\cdot(p\nabla u) &= -f, \mbox{ in } \Omega, label{ch:poisson0:2D:DN3}\\
-u &= u_{0,i} \mbox{ on } \Gamma_{D,i},\quad i=0,1,\ldots
+u &= \ub^i \mbox{ on } \GD^i,\quad i=0,1,\ldots
 label{ch:poisson0:2D:DN3:bcD}\\
--p{\partial u\over\partial n} &= g_i \mbox{ on } \Gamma_{N,i},\quad
+-p{\partial u\over\partial n} &= g_i \mbox{ on } \GN^i,\quad
 i=0,1,\ldots
 label{ch:poisson0:2D:DN3:bcN}\\
--p{\partial u\over\partial n} &= r_i(u-s_i) \mbox{ on } \Gamma_{R,i},\quad
+-p{\partial u\over\partial n} &= r_i(u-s_i) \mbox{ on } \GR^i,\quad
 i=0,1,\ldots
 label{ch:poisson0:2D:DN3:bcR}
 \end{align}
@@ -747,41 +781,39 @@ label{ch:poisson0:2D:DN3:bcR}
 
 ===== Variational formulation =====
 
-Integration by parts of $-\int_\Omega v\nabla\cdot(p\nabla u) \dx$ becomes
-as usual
+As usual, we multiply by a test function $v$ and integrate by parts:
 
 !bt
 \begin{equation*}
- -\int_\Omega v\nabla\cdot(p\nabla u) \dx
+ -\int_\Omega \nabla\cdot(p\nabla u) v \dx
 = \int_\Omega p\nabla u\cdot \nabla v \dx -
 \int_{\partial\Omega}p\frac{\partial u}{\partial n}v \ds\tp
 \end{equation*}
 !et
-The boundary integral does not apply to the parts of
-the boundary where we have Dirichlet conditions ($\Gamma_{D,i}$).
-Moreover, on the remaining parts, we must split the boundary integral
-into the parts where we have Neumann and Robin conditions such that we
-insert the right conditions as integrands.
-Specifically, we have
+On the Dirichlet part of the boundary ($\GD^i$), the boundary integral
+vanishes since $v = 0$. On the remaining part of the boundary, we
+split the boundary integral into contribution from the Neumann part
+($\GN^i$) and Robin part ($\GR^i$). Inserting the boundary conditions,
+we obtain
 
 !bt
 \begin{align*}
 -\int_{\partial\Omega}p\frac{\partial u}{\partial n}v \ds
 &=
--\sum_i\int_{\Gamma_{N,i}}p\frac{\partial u}{\partial n} \ds
--\sum_i\int_{\Gamma_{R,i}}p\frac{\partial u}{\partial n} \ds\\
+-\sum_i\int_{\GN^i}p\frac{\partial u}{\partial n} \ds
+-\sum_i\int_{\GR^i}p\frac{\partial u}{\partial n} \ds\\
 &=
-\sum_i\int_{\Gamma_{N,i}}g_i \ds +
-\sum_i\int_{\Gamma_{R,i}}r_i(u-s_i) \ds\tp
+\sum_i\int_{\GN^i}g_i \ds +
+\sum_i\int_{\GR^i}r_i(u-s_i) \ds\tp
 \end{align*}
 !et
-The variational formulation then becomes
+We thus obtain the following variational problem:
 
 !bt
 \begin{equation}
 F = \int_{\Omega} p\nabla u\cdot \nabla v \dx +
-\sum_i\int_{\Gamma_{N,i}} g_iv \ds +
-\sum_i\int_{\Gamma_{R,i}}r_i(u-s_i)v \ds
+\sum_i\int_{\GN^i} g_iv \ds +
+\sum_i\int_{\GR^i}r_i(u-s_i)v \ds
 - \int_{\Omega} fv \dx =0\tp
 label{ch:poisson0:multi:bc:varform}
 \end{equation}
@@ -791,8 +823,8 @@ We have been used to writing
 this variational formulation in the standard notation
 $a(u,v)=L(v)$, which requires that we identify all integrals with
 *both* $u$ and $v$, and collect these in $a(u,v)$, while the remaining
-integrals with $v$ and not $u$ go into $L(v)$.  The integral from the
-Robin condition must of this reason be split in two parts:
+integrals with $v$ and not $u$ go into $L(v)$. The integrals from the
+Robin condition must for this reason be split in two parts:
 
 !bt
 \begin{equation*}
@@ -805,38 +837,50 @@ We then have
 !bt
 \begin{align}
 a(u, v) &= \int_{\Omega} p\nabla u\cdot \nabla v \dx
-+ \sum_i\int_{\Gamma_{R,i}}r_iuv \ds,
++ \sum_i\int_{\GR^i}r_iuv \ds,
 label{ch:poisson0:2D:DN3:var:a}\\
 L(v) &= \int_{\Omega} fv \dx -
-\sum_i\int_{\Gamma_{N,i}} g_i v \ds + \sum_i\int_{\Gamma_{R,i}}r_is_iv \ds\tp
+\sum_i\int_{\GN^i} g_i v \ds + \sum_i\int_{\GR^i}r_is_iv \ds\tp
 label{ch:poisson0:2D:DN3:var:L}
 \end{align}
 !et
+Alternatively, we may keep the formulation
+(ref{ch:poisson0:multi:bc:varform}) and either solve the variational
+problem as a nonlinear problem (`F == 0`) in FEniCS or use the FEniCS
+functions `lhs` and `rhs` to extract the bilinear and linear parts of
+`F`:
 
+!bc pycod
+a = lhs(F)
+L = rhs(F)
+!ec
+Note that if we choose the solve this linear problem as a nonlinear
+problem, the Newton iteration will converge in a single iteration.
 
 ## /usr/share/fenics/demo/documented/subdomains/python/demo_subdomains.py
 ## contains a good example, followed up in stokes solvers
 
 ===== FEniCS implementation =====
 
-Looking at our previous `solver` functions for solving the 2D Poisson equation,
-the following new aspects must be taken care of:
+Let us examine how to extend our Poisson solver to handle general
+combinations of Dirichlet, Neumann, and Robin boundary conditions.
+Compared to our previous code, we must consider the following
+extensions:
 
-  o definition of a mesh function over the boundary,
-  o marking each side as a subdomain, using the mesh function,
-  o splitting a boundary integral into parts.
+  o defining markers for the different parts of the boundary,
+  o splitting the boundary integral into parts using the markers.
 
 A general approach to the first task is to mark each of the desired
-boundaries with markers 0, 1, 2, and so forth. Here we aim at
-the four sides of the unit square, marked with
-0 ($x=0$), 1 ($x=1$), 2 ($y=0$), and 3 ($y=1$).
-The marking of boundaries makes use of a mesh function object, but contrary to
-Section ref{ftut:possion:2D:2mat:impl}, this is not a function over
-cells, but a function over cell facets. We apply the `FacetFunction`
-for this purpose:
+boundary parts with markers 0, 1, 2, and so forth. Here we aim at the
+four sides of the unit square, marked with 0 ($x=0$), 1 ($x=1$), 2
+($y=0$), and 3 ($y=1$).  The markers will be defined using a
+`MeshFunction`, but contrary to Section
+ref{ftut:possion:2D:2mat:impl}, this is not a function over cells, but
+a function over facets of the mesh. We use a `FacetFunction` for
+this purpose:
 
 !bc pycod
-boundary_parts = FacetFunction('size_t', mesh)
+boundary_markers = FacetFunction('size_t', mesh)
 !ec
 As in Section ref{ftut:possion:2D:2mat:impl} we use a subclass of
 `SubDomain` to identify the various parts of the mesh
@@ -846,11 +890,12 @@ generation.  In our case, the $x=0$ boundary can be marked by
 
 !bc pycod
 class BoundaryX0(SubDomain):
+    tol = 1e-14
     def inside(self, x, on_boundary):
         return on_boundary and abs(x[0]) < tol
 
 bx0 = BoundaryX0()
-bx0.mark(boundary_parts, 0)
+bx0.mark(boundary_markers, 0)
 !ec
 Similarly, we make the classes `BoundaryX1` for the $x=1$ boundary,
 `BoundaryY0` for the $y=0$ boundary, and `BoundaryY1` for the $y=1$
@@ -864,36 +909,29 @@ the kind of condition as key and a function as its value.
 For example,
 
 !bc
-boundary_conditions = {
-  0: {'Dirichlet': u_b},
-  1: {'Robin': (r, s)},
-  2: {'Neumann: g}},
-  3: {'Neumann', 0}}
+boundary_conditions = {0: {'Dirichlet': u_b},
+                       1: {'Robin':     (r, s)},
+                       2: {'Neumann:    g},
+                       3: {'Neumann',   0}}
 !ec
 specifies
 
- * a Dirichlet condition, with values implemented by an `Expression`
-   or `Constant` object
-   `u_b`, on subdomain 0, i.e., the $x=1$ boundary;
- * a Robin condition (ref{ch:poisson0:multi:bc:Robin})
-   on subdomain 1, $x=1$, with `Expression` or `Constant` objects
-   `r` and `s` specifying $r$ and $s$;
- * a Neumann condition $\partial u/\partial n=g$ on subdomain 2, $y=0$,
-   where an `Expression` or `Constant` object `g` implements the value $g$;
- * a homogeneous Neumann condition $\partial u/\partial n=0$ on
-   subdomain 3, $y=1$.
+ * a Dirichlet condition $u = \ub$ for $x = 0$;
+ * a Robin condition $-p\partial_n u = r(u-s)$ for $x = 1$;
+ * a Neumann condition $-p\partial_n u = g$ for $y = 0$;
+ * a Neumann condition $-p\partial_n u = 0$ for $y = 1$.
 
-As explained in Section ref{ch:poisson0:multiple:Dirichlet},
-multiple Dirichlet conditions must be collected in a list of
-`DirichletBC` objects. Based on the `boundary_conditions` data
-structure above, we can construct this list by the following snippet:
+As explained in Section ref{ch:poisson0:multiple:Dirichlet}, multiple
+Dirichlet conditions must be collected in a list of `DirichletBC`
+objects. Based on the `boundary_conditions` data structure above, we
+can construct this list by the following code snippet:
 
 @@@CODE-4 src/poisson_vc.py fromto: bcs = \[@if debug:
 
-The new aspect of the variational problem is the two distinct
-boundary integrals over $\Gamma_{N,i}$ and $\Gamma_{R,i}$.
+A new aspect of the variational problem is the two distinct
+boundary integrals over $\GN^i$ and $\GR^i$.
 Having a mesh function over exterior cell facets (our
-`boundary_parts` object), where subdomains (boundary parts) are
+`boundary_markers` object), where subdomains (boundary parts) are
 numbered as $0,1,2,\ldots$, the special symbol `ds(0)`
 implies integration over subdomain (part) 0, `ds(1)` denotes
 integration over subdomain (part) 1, and so on.
@@ -901,18 +939,19 @@ The idea of multiple `ds`-type objects generalizes to volume
 integrals too: `dx(0)`, `dx(1)`, etc., are used to
 integrate over subdomain 0, 1, etc.,  inside $\Omega$.
 
-Before we have `ds(n)` for integers `n` defined, we must do
+To express integrals over the boundary parts using `ds(n)`, we must
+first redefine the measures `ds` in terms of our boundary markers:
 
 !bc pycod
-ds = Measure('ds', domain=mesh, subdomain_data=boundaries_parts)
+ds = Measure('ds', domain=mesh, subdomain_data=boundary_markers)
 !ec
 Similarly, if we want integration of different parts of the domain,
 we redefine `dx` as
 
 !bc pycod
-dx = Measure('dx', domain=mesh, subdomain_data=domains)
+dx = Measure('dx', domain=mesh, subdomain_data=domain_markers)
 !ec
-where `domains` is a `CellFunction` defining subdomains in $\Omega$.
+where `domain_markers` is a `CellFunction` defining subdomains in $\Omega$.
 
 Suppose we have a Robin condition with values `r` and `s` on subdomain
 `R`, a Neumann condition with value `g` on subdomain `N`, the
@@ -923,10 +962,10 @@ a = dot(grad(u), grad(v))*dx + r*u*v*ds(R)
 L = f*v*dx - g*v*ds(N) + r*s*v*ds(R)
 !ec
 
-In our case things get a bit more complicated since the
+In our case, things get a bit more complicated since the
 information about integrals in Neumann and Robin conditions
 are in the `boundary_conditions` data structure. We can collect
-all Neumann conditions by the code
+all Neumann conditions by the following code snippet:
 
 @@@CODE-4 src/poisson_vc.py from-to: # Collect Neumann@# Collect Robin
 Applying `sum(Nemann_integrals)` will apply the `+` operator to
@@ -947,54 +986,44 @@ in the variational formulation:
 idx{`lhs`}
 idx{`rhs`}
 
-======= Simplified handling of the variational formulation =======
-
-We carefully ordered the terms in the variational formulation above
-into the $a$ and $L$ parts. This requires a splitting of the Robin
-condition and makes the `a` and `L` expressions less readable (still we
-think understanding this splitting is key for any finite element programmer!).
-Fortunately, UFL allows us to specify the complete variational form
-(ref{ch:poisson0:multi:bc:varform}) as one expression and offer tools to
-extract what goes into the bilinear form $a(u,v)$ and the linear form
-$L(v)$:
+Alternatively, we may use the FEniCS functions `lhs` and `rhs` as
+mentioned above to simplify the extraction of terms for the Robin
+integrals:
 
 !bc pycod
-F = dot(p*grad(u), grad(v))*dx + \
-    sum(Robin_integrals) - f*v*dx + sum(Neumann_integrals)
+integrals_R = []
+for n in boundary_conditions:
+    if 'Robin' in boundary_conditions[n]:
+        r, s = boundary_conditions[n]['Robin']
+        integrals_R.append(r*(u-s)*v*ds(n))
+
+F = p*dot(grad(u), grad(v))*dx + \
+    sum(integrals_R) - f*v*dx + sum(integrals_N)
 a, L = lhs(F), rhs(F)
 !ec
 This time we can more naturally define the integrals from the
 Robin condition as `r*(u-s)*v*ds(n)`:
 
-@@@CODE-4 src/poisson_vc.py from-to: # Simpler Robin@# Define variational problem, solver_bc
-
-The complete code is in the `solver_bc` function in the
-`${prog["poisson_vc"]}.py` file.
-[hpl: The code examples here are in a solver function, not a flat program,
-and solver functions are explained in the next chapter... The snippets here
-work well, though. It's just the last section here that really does something
-with `solver_bc`. Can drop this as the topic is repeated later anyway
-(with other types of code). Also, the variable coefficient `p` does not
-need all the attention it gets - it was explained in the next chapter,
-so it would be easier here to just use the normal derivative.]
+The complete code for this example can be found in the function
+`solver_bc` in the program `${prog["poisson_vc"]}.py`.
 
 ===== Test problem =====
 
 Let us continue to use $\uex=1+x^2+2y^2$ as the exact solution, and
-set $p=1$ and $f=-6$ in the PDE.  Our domain is the unit square, and
+set $p=1$ and $f=-6$. Our domain is the unit square, and
 we assign Dirichlet conditions at $x=0$ and $x=1$, a Neumann condition
 at $y=1$, and a Robin condition at $y=0$. With the given $\uex$, we
-realize that the Neumann condition is $-4y$ (which means $-4$ at
+realize that the Neumann condition is $4y$ (which means $4$ at
 $y=1$), while the Robin
 condition can be selected in many ways. Since $\partial u/\partial
-n=-\partial u/\partial y=0$ at $y=0$, we can select $s=u$ and have $r$
-arbitrary in the Robin condition.
+n=-\partial u/\partial y=0$ at $y=0$, we can select $s=u$ and specify
+$r \neq 0$ arbitrarily in the Robin condition.
 
-The boundary parts are $\Gamma_{D,0}$: $x=0$, $\Gamma_{D,1}$: $x=1$,
-$\Gamma_{R,0}$: $y=0$, and $\Gamma_{N,0}$: $y=1$.
+The boundary parts are thus $\GD^0$: $x=0$, $\GD^1$: $x=1$,
+$\GR^0$: $y=0$, and $\GN^0$: $y=1$.
 
-When implementing this test problem (and especially other test
-problems with more complicated expressions), it is advantageous to use
+When implementing this test problem, and especially other test
+problems with more complicated expressions, it is advantageous to use
 symbolic computing. Below we define the exact solution as a `sympy`
 expression and derive other functions from their mathematical
 definitions.  Then we turn these expressions into C/C++ code, which
@@ -1015,104 +1044,250 @@ helpful debugging output is to run through all vertex coordinates and
 check if the `SubDomain.inside` method marks the vertex as on the
 boundary. Another useful printout is to list which degrees of freedom
 that are subject to Dirichlet conditions, and for first-order Lagrange
-elements, add the corresponding vertex coordinate to the output.
+elements, add the corresponding vertex coordinate to the
+output.
 
-@@@CODE-4 src/poisson_vc.py fromto: if debug:@# Collect Neumann
-In addition, it is helpful to print the exact and the numerical solution
-at all the vertices as shown in Section ref{ch:poisson0:verify1}.
+@@@CODE-4 src/poisson_vc.py fromto: if debug:@# Define trial and
 
-======= FEniCS implementation of multiple subdomains =======
+======= Generating meshes with subdomains =======
 
-[hpl: Drop this, because the solver is wrapped in a function, or
-just present the snippets. Read through once more and have in mind
-that there is no `solver_bc` function for the reader, just snippets
-from a flat program.]
+So far, we have worked mostly with simple meshes (the unit square) and
+defined boundaries and subdomains in terms of simple geometric tests
+like $x = 0$ or $y \leq 0.5$. For more complex geometries, it is not
+realistic to specify boundaries and subdomains in this way. Instead,
+the boundaries and subdomains must be defined as part of the mesh
+generation process. We will now look at how to use the FEniCS mesh
+generation tool `mshr` to generate meshes and define subdomains.
 
-Section ref{ftut:possion:2D:2mat:impl} explains how to deal with
-multiple subdomains of $\Omega$ and a piecewise constant coefficient
-function $p$ that takes on different constant values in the different
-subdomains. We can easily add this type of $p$ coefficient to the
-`solver_bc` function. The signature of the function is
+===== PDE problem =====
 
-!bc pycod
-def solver_bc(
-    p, f,                   # Coefficients in the PDE
-    boundary_conditions,    # Dict of boundary conditions
-    Nx, Ny,                 # Cell division of the domain
-    degree=1,               # Polynomial degree
-    subdomains=[],          # List of SubDomain objects in domain
-    linear_solver='Krylov', # Alt: 'direct'
-    abs_tol=1E-5,           # Absolute tolerance in Krylov solver
-    rel_tol=1E-3,           # Relative tolerance in Krylov solver
-    max_iter=1000,          # Max no of iterations in Krylov solver
-    log_level=PROGRESS,     # Amount of solver output
-    dump_parameters=False,  # Write out parameter database?
-    debug=False,
-    ):
-...
-    return u, p   # p may be modified
-!ec
-If `subdomain` is an empty list, we assume there are no subdomains, and
-$p$ is an `Expression` or `Constant` object specifying a formula for
-$p$. If not, `subdomain` is a list of `SubDomain` objects, defining
-different parts of the domain. The first element is a dummy object,
-defining ``the rest'' of the domain. The next elements define specific
-geometries in the `inside` methods. We start by marking all elements
-with subdomain number 0, this will then be ``the rest'' after marking
-subdomains 1, 2, and so on. The next step is to define `p` as a
-piecewise constant function over cells and fill it with values.
-We assume that the user-argument `p` is an array (or list) holding
-the values of $p$ in the different parts corresponding to `subdomains`.
-The returned `p` is needed for flux computations. If there are no
-subdomains, the returned `p` is just the original `p` argument.
+We will again solve the Poisson equation, but this time for a
+different application. Consider an iron cylinder with copper wires
+wound around the cylinder as in Figure
+ref{ftut1:fig:magnetostatics:geometry}. Through the copper wires a
+static current $J = 1\,\mathrm{A}$ is flowing and we want to compute
+the magnetic field $B$ in the iron cylinder, the copper wires, and the
+surrounding vacuum.
 
-The appropriate code for computing `p` becomes
+FIGURE:[fig/magnetostatics_geometry, width=600 frac=0.7] Cross-section of an iron cylinder with copper wires wound around the cylinder, here with $n = 8$ windings. label{ftut1:fig:magnetostatics:geometry}
 
-!bc pycod
-import numpy as np
-if subdomains:
-    # subdomains is list of SubDomain objects,
-    # p is array of corresponding constant values of p
-    # in each subdomain
-    materials = CellFunction('size_t', mesh)
-    materials.set_all(0)  # "the rest"
-    for m, subdomain in enumerate(subdomains[1:], 1):
-        subdomain.mark(materials, m)
+First, we simplify the problem to a 2D problem. We can do this by
+assuming that the cylinder extends far along the $z$-axis and as a
+consequence the field is virtually independent of the
+$z$-coordinate. Next, we consider Maxwell's equation to derive a
+Poisson equation for the magnetic field (or rather its potential):
 
-    p_values = p
-    V0 = FunctionSpace(mesh, 'DG', 0)
-    p  = Function(V0)
-    help = np.asarray(materials.array(), dtype=np.int32)
-    p.vector()[:] = np.choose(help, p_values)
-!ec
-
-We define $p(x,y)=p_0$ in $\Omega_0$ and $k(x,y)=p_1$ in $\Omega_1$,
-where $p_0>0$ and $p_1>0$ are given constants.
-As boundary conditions, we choose $u=0$ at $y=0$, $u=1$ at $y=1$,
-and $\partial u/\partial n=0$ at $x=0$ and $x=1$.
-One can show that the exact solution is now given by
+!bt
+\begin{align}
+  \nabla\cdot  D &= \varrho, \\
+  \nabla\cdot  B &= 0, \\
+  \nabla\times E &= -\frac{\partial B}{\partial t}, \\
+  \nabla\times H &= \frac{\partial D}{\partial t} + J.
+\end{align}
+!et
+Here, $D$ is the displacement field, $B$ is the magnetic
+field, $E$ is the electric field, and $H$ is the magnetizing field. In
+addition to Maxwell's equations, we also need a constitutive relation
+between $B$ and $H$,
 
 !bt
 \begin{equation}
-u(x, y) = \left\lbrace\begin{array}{ll}
-{2yp_1\over p_0+p_1}, & y \leq 1/2\\
-{(2y-1)p_0 + p_1\over p_0+p_1}, & y \geq 1/2
-\end{array}\right.
+  B = \mu H,
 \end{equation}
 !et
-As long as the element boundaries coincide with the internal boundary
-$y=1/2$, this piecewise linear solution should be exactly recovered
-by Lagrange elements of any degree. We can use this property to verify
-the implementation and make a unit test for a series of function
-spaces:
+which holds for an isotropic linear magnetic medium. Here, $\mu$ is the
+magnetic permeability of the material. Now, since $B$ is solenoidal
+(divergence free) according to Maxwell's equations, we know that $B$
+must be the curl of some vector field $A$. This field is called the
+magnetic vector potential. Since $\partial D/\partial t = 0$, it
+follows that
 
-@@@CODE src/poisson_vc.py fromto: def test_solvers_bc_2mat@application_flow_around_circle
+!bt
+\begin{equation}
+  J = \nabla \times H
+    = \nabla \times (\mu^{-1} B)
+    = \nabla \times (\mu^{-1} \nabla \times A)
+    = -\nabla \cdot (\mu^{-1} \nabla A).
+\end{equation}
+!et
+In the last step, we have expanded the second derivatives and used the
+gauge freedom of $A$ to simplify the equations to a simple
+vector-valued Poisson problem for the magnetic vector potential; if $B
+= \nabla \times A$, then $B = \nabla \times (A + \nabla \psi)$ for any
+scalar field $\psi$ (the gauge function). For the current problem, we
+thus need to solve the following 2D Poisson problem for the
+$z$-component $A_z$ of the magnetic vector potential:
 
-##=== Application: Porous media flow around a circular obstacle ===
+!bt
+\begin{align}
+  - \nabla \cdot (\mu^{-1} \nabla A_z) &= J_z \quad \text{in } \Real^2, \\
+  \lim_{|(x, y)| \rightarrow \infty} A_z &= 0.
+\end{align}
+!et
+Since we cannot solve this problem on an infinite domain, we will
+truncate the domain using a large disk and set $A_z = 0$ on the
+boundary. The current $J_z$ is set to $+1\,\mathrm{A}$ in the interior
+set of circles (copper wire cross-sections) and to $-1\,\mathrm{A}$ in
+the exterior set of circles in Figure ref{ftut1:fig:magnetostatics:geometry}.
 
-##Should be done properly by Rectangle and Circle in mshr
-##@@@CODE src/poisson_vc.py fromto: def application_flow_around_circle@if __name
+Once the magnetic vector potential has been computed, we can
+computed the magnetic field $B = B(x, y)$ by
 
-##Don't show this without fancy ParaView plot.
+!bt
+\begin{align}
+  B(x, y) =
+  \left(\frac{\partial A_z}{\partial y},
+       -\frac{\partial A_z}{\partial x}\right).
+\end{align}
+!et
 
-========= Generating meshes with subdomains =========
+===== Variational formulation =====
+
+The variational problem is derived as before by multiplying with a test
+function $v$ and integrating by parts. Since the boundary integral
+vanishes due to the Dirichlet condition, we obtain
+
+!bt
+\begin{equation}
+  \int_{\Omega} \mu^{-1} \nabla A_z \cdot \nabla v \dx
+  = \int_{\Omega} J_z v \dx,
+\end{equation}
+!et
+or, in other words, $a(A_z, v) = L(v)$ with
+
+!bt
+\begin{align}
+  a(A_z, v) &= \int_{\Omega} \mu^{-1} \nabla A_z \cdot \nabla v \dx, \\
+  L(v) &= \int_{\Omega} J_z v \dx.
+\end{align}
+!et
+
+===== FEniCS implementation =====
+
+The first step is to generate a mesh for the geometry described in
+Figure ref{ftut1:fig:magnetostatics:geometry}. We let $a$ and $b$ the
+the inner and outer radii of the iron cylinder and let $c_1$ and $c_2$
+be the radii of the two concentric distributions of copper wire
+cross-sections. Furthermore, we let $r$ be the radius of a copper
+wire, $R$ be the radius of our domain, and $n$ be the number of
+windings (giving a total of $2n$ copper-wire cross-sections). This
+geometry can be described easily using `mshr` and a little bit of
+Python programming:
+
+!bc pycod
+# Define geometry for background
+domain = Circle(Point(0, 0), R)
+
+# Define geometry for iron cylinder
+cylinder = Circle(Point(0, 0), b) - Circle(Point(0, 0), a)
+
+# Define geometry for wires (N = North (up), S = South (down))
+angles_N = [i*2*pi/n for i in range(n)]
+angles_S = [(i + 0.5)*2*pi/n for i in range(n)]
+wires_N = [Circle(Point(c_1*cos(v), c_1*sin(v)), r) for v in angles_N]
+wires_S = [Circle(Point(c_2*cos(v), c_2*sin(v)), r) for v in angles_S]
+!ec
+
+The mesh that we generate will be a mesh of the entire disk with
+radius $R$ but we need the mesh generation to respect the internal
+boundaries defined by the iron cylinder and the copper wires. We also
+want `mshr` to label the subdomains so that we can easily specify
+material parameters ($\mu$) and currents. To do this, we use the
+`mshr` function `set_subdomain` as follows:
+
+!bc pycod
+# Set subdomain for iron cylinder
+domain.set_subdomain(1, cylinder)
+
+# Set subdomains for wires
+for (i, wire) in enumerate(wires_N):
+    domain.set_subdomain(2 + i, wire)
+for (i, wire) in enumerate(wires_S):
+    domain.set_subdomain(2 + n + i, wire)
+!ec
+Once the subdomains have been created, we can generate the mesh:
+
+!bc pycod
+mesh = generate_mesh(domain, 32)
+!ec
+A detail of the mesh is shown in Figure
+ref{ftut1:fig:magnetostatics:mesh}.
+
+FIGURE:[fig/magnetostatics_mesh, width=600 frac=0.9] Plot of the mesh generated for the magnetostatics test problem. The subdomains for the iron cylinder and copper wires are clearly visible label{ftut1:fig:magnetostatics:mesh}
+
+The mesh generated with `mshr` will contain information about the
+subdomains we have defined. To use this information in the definition of
+our variational problem and subdomain-dependent parameters, we will need to
+create a `MeshFunction` that marks the subdomains. This can be easily
+created by a call to the member function `mesh.domains`, which holds
+the subdomain data generated by `mshr`:
+
+!bc pycod
+markers = MeshFunction('size_t', mesh, 2, mesh.domains())
+!ec
+This line creates a `MeshFunction` with unsigned integer values (the
+subdomain numbers) with dimension 2, which is the cell dimension for
+this 2D problem.
+
+We can now use the markers as we have done before to redefine the
+integration measure `dx`:
+
+!bc pycod
+dx = Measure('dx', domain=mesh, subdomain_data=markers)
+!ec
+Integrals over subdomains can then be expressed by `dx(0)`, `dx(1)`,
+and so on. We use this to define the current $J_z = \pm 1\,\mathrm{A}$
+in the coppper wires:
+
+!bc pycod
+J_N = Constant(1.0)
+J_S = Constant(-1.0)
+A_z = TrialFunction(V)
+v = TestFunction(V)
+a = (1 / mu)*dot(grad(A_z), grad(v))*dx
+L_N = sum(J_N*v*dx(i) for i in range(2, 2 + n))
+L_S = sum(J_S*v*dx(i) for i in range(2 + n, 2 + 2*n))
+L = L_N + L_S
+!ec
+
+The permeability is defined as an `Expression` that depends on the
+subdomain number:
+!bc
+class Permeability(Expression):
+    def __init__(self, mesh, **kwargs):
+        self.markers = markers
+    def eval_cell(self, values, x, ufc_cell):
+        if markers[ufc_cell.index] == 0:
+            values[0] = 4*pi*1e-7 # vacuum
+        elif markers[ufc_cell.index] == 1:
+            values[0] = 1e-5      # iron (should really be 2.5e-1)
+        else:
+            values[0] = -6.4e-6   # copper
+
+mu = Permeability(mesh, degree=1)
+!ec
+As seen in this code snippet, we have used a somewhat less extreme
+value for the magnetic permeability of iron. This is to make the
+solution a little more interesting. It would otherwise be completely
+dominated by the field in the iron cylinder.
+
+Finally, when $A_z$ has been computed, we can compute the magnetic
+field:
+
+!bc pycod
+W = VectorFunctionSpace(mesh, 'P', 1)
+B = project(as_vector((A_z.dx(1), -A_z.dx(0))), W)
+!ec
+We use `as_vector` to interpret the tuple
+`(A_z.dx(1), -A_z.dx(0))` as a vector. The resulting plots of the
+magnetic vector potential and magnetic field are shown in Figures
+ref{ftut1:fig:magnetostatics:potential} and
+ref{ftut1:fig:magnetostatics:field}.
+
+FIGURE:[fig/magnetostatics_potential, width=600 frac=0.9] Plot of the $z$-component $A_z$ of the magnetic vector potential. label{ftut1:fig:magnetostatics:potential}
+
+FIGURE:[fig/magnetostatics_field, width=600 frac=0.9] Plot of the magnetic field $B$ in the $xy$-plane. label{ftut1:fig:magnetostatics:field}
+
+The complete code for computing the magnetic field follows below.
+
+@@@CODE src/magnetostatics.py fromto: from fenics import@
