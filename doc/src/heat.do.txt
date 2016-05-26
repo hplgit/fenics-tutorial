@@ -48,7 +48,7 @@ term, the $\theta$ rule reads
 
 !bt
 \begin{equation}
-\frac{u^{n+1} - u^n}{\Delta t} = \theta\mathcal{G}(u^{n+1})
+\frac{u^{n+1} - u^n}{\dt} = \theta\mathcal{G}(u^{n+1})
 + (1-\theta)\mathcal{G}(u^n) + \theta f^{n+1} + (1-\theta)f^n,
 label{ch:diffusion:opt:num:thetar1}
 \end{equation}
@@ -57,7 +57,7 @@ or
 
 !bt
 \begin{equation}
-\frac{u^{n+1} - u^n}{\Delta t} = \mathcal{G}(\theta u^{n+1} +
+\frac{u^{n+1} - u^n}{\dt} = \mathcal{G}(\theta u^{n+1} +
 (1-\theta)u^n) + f(\theta t_{n+1} + (1-\theta)t_n)\tp
 label{ch:diffusion:opt:num:thetar2}
 \end{equation}
@@ -82,7 +82,7 @@ meaning that $\int_\Omega\mathcal{G}(u)v\dx = -\int_\Omega
 
 !bt
 \begin{equation}
-F = \int_\Omega \varrho c\frac{u^{n+1} - u^n}{\Delta t}v\dx +
+F = \int_\Omega \varrho c\frac{u^{n+1} - u^n}{\dt}v\dx +
 \int_\Omega \mathcal{D}(U,v) \dx -
 \int_\Omega f(\theta t_{n+1}+(1-\theta)t_n) v\dx
 + \int_\Gamma \mathcal{B}(U,v)\ds
@@ -103,7 +103,7 @@ entire boundary or a Robin condition
 !et
 where $r$ is a heat transfer coefficient and $s$ is the surrounding
 temperature. Note that insulated boundaries are obtained by $r=0$.
-We then have
+We also have
 
 !bt
 \begin{align*}
@@ -116,7 +116,19 @@ Normally, in finite element programs, we would need to break up the
 variational formulation (ref{ch:diffusion:opt:num:varform}) into
 a bilinear and a linear part, but in FEniCS we can just use
 `lhs(F)` and `rhs(F)` for such calculations, which is very convenient from
-a user's point of view.
+a user's point of view. The final version of the variational
+formulation to be coded reads
+
+!bt
+\begin{equation}
+F = \int_\Omega (\varrho c\frac{u^{n+1} - u^n}{\dt}v +
+ p\nabla U\cdot\nabla v  -
+ f(\theta t_{n+1}+(1-\theta)t_n) v)\dx
++ \int_\Gamma r(U-s)v\ds
+label{ch:diffusion:opt:num:varform2}
+\end{equation}
+!et
+
 
 
 ===== Avoiding assembly of the coefficient matrix =====
@@ -133,7 +145,7 @@ Therefore, I explain in more detail the pre-assemble idea here.]
 Our time-dependent heat equation gives rise to a linear system
 with coefficient matrix $A$ and right-hand side $b$ at every time
 level. When $\varrho$, $c$, $p$, and $r$ do not depend on time,
-and $\Delta t$ is constant,
+and $\dt$ is constant,
 $A$ is constant, and it suffices to assemble the matrix once --
 before the time loop. To be able to do this, we need to
 explicitly create matrices and vectors from variational
@@ -199,7 +211,7 @@ if `BC == 'Dirichlet'`).
 
 idx{assert}
 
-=== Check of input data ===
+=== Checking input data ===
 
 It is wise to start the function with checking the values of some
 of the input parameters. Python's `assert` function is ideal for
@@ -265,7 +277,12 @@ if BC == 'Dirichlet':
 Note that we either have Dirichlet values at all boundaries or we
 have Robin conditions.
 
-===== Implementation of variational formulation =====
+===== Implementation of the variational formulation =====
+
+[hpl: Important messgage: the variational form can be implemented
+in many steps, utilizing Python functions if desired, and this is
+very convenient, especially for debugging later. Not sure how
+this message can be explicitly formulated...]
 
 We start with implementing the initial condition:
 
@@ -425,6 +442,8 @@ code needed in FEniCS `Expression` objects.
 
 ===== Debugging of FEniCS programs =====
 
+[hpl: This section is unfinished.]
+
 When the first author implemented the present `solver` function, the
 solution looked nice in visualizations, but the verification tests
 where the solutions should be reproduced to machine precision, were
@@ -451,13 +470,13 @@ separate program. The details in the present PDE application are documented
 next.
 
 We start with reducing the problem to 1D. There are four types of terms
-in our PDE: the mass matrix term $\int\frac{1}{\Delta t}u^{n+1}v$,
+in our PDE: the mass matrix term $\int\frac{1}{\dt}u^{n+1}v$,
 the stiffness matrix term $\int p\nabla u\cdot\nabla v$, the source term
 $\int fv$, and the Robin condition term $\int_\Gamma r(u-s)v$.
 
 !bt
 \[
-\frac{h}{6\Delta t}
+\frac{h}{6\dt}
 \left(\begin{array}{rr}
 2 & 1\\
 1 & 2
@@ -467,7 +486,7 @@ $\int fv$, and the Robin condition term $\int_\Gamma r(u-s)v$.
 
 !bt
 \[
-\frac{h}{6\Delta t}
+\frac{h}{6\dt}
 \left(\begin{array}{rrr}
 2 & 1 & 0\\
 1 & 4 & 1\\
@@ -573,10 +592,10 @@ of a finite element code in time-dependent problems.
 
 To see how repeated assembly can be avoided, we look at the
 ``right-hand side part'' of the variational form (i.e., the linear form
-$L(v)$) when (for simplicity) $\theta=1$:
+$L(v)$) when, for simplicity, $\theta=1$:
 
 !bt
-\[ L(v) = \int_\Omega \left(\frac{1}{\dt}u^{n} + f^{n+1}\right)v \dx\tp \]
+\[\int_\Omega \left(\frac{1}{\dt}u^{n} + f^{n+1}\right)v \dx\tp \]
 !et
 This expression varies in general with time through $u^{n}$, $f^{n+1}$, and
 possibly also with $\dt$ if the time step is adjusted during the
@@ -589,7 +608,7 @@ $f^{n}=\sum_{j=1}^NF^{n}_j\phi_j$. Inserting these expressions in
 $L(v)$ and using $v=\hat\phi_i$ result in
 
 [hpl: Why $hat\phi_i$? No need for Petrov-Galerkin here... Cannot remember
-why the hat.]
+why the hat. Remove it.]
 
 !bt
 \begin{align*}
@@ -642,18 +661,49 @@ b = \frac{1}{\dt}MU^{n} + MF^n \tp
 !et
 That is, no assembly is necessary to compute $b$!
 
-It now remains to extend the results to the full $\theta$ rule and
-to the boundary terms arising from the Robin conditions.
-.......
+=== Generalization to the full model ===
 
-Any point with splitting $A$? It is to be assembled once...
-The coefficient matrix $A$ can also be split into two terms.  We
+It now remains to extend the results to the full $\theta$ rule and
+to the boundary terms arising from the Robin conditions. Looking
+at (ref{ch:diffusion:opt:num:varform2}), inserting
+
+!bt
+\[ U = \theta\sum_j\phi_jU_j + (1-\theta)\sum_j\phi_jU_j^{n},\]
+!et
+and utilizing that $p\nabla U\cdot\nabla v$ and $r(U-s)v$ are linear in $U$,
+we get a right-hand side contribution
+
+!bt
+\begin{equation}
+b = \frac{1}{\dt}MU^{n} + \theta MF^n - (1-\theta)KU^n - (1-theta)RU^n
+- g,
+\end{equation}
+!et
+where $R$ is the matrix arising from the Robin condition:
+
+!bt
+\[ R_{i,j} = \int_\Gamma r\phi_i\phi_j\ds,\]
+!et
+and $g$ is the associated vector,
+
+!bt
+\[ g_i = \int_\Gamma rs\phi_i\ds\tp\]
+!et
+
+=== Splitting the coefficient matrix ===
+
+If we decide to use a varying time step $\dt$, the $A$ matrix
+will vary with time, but it has a special structure so that it can
+easily and cheaply be computed at each time level.
+To see this, we
 insert $v=\hat\phi_i$ and $u^n = \sum_{j=1}^N U^n_j\phi_j$ in the
-bilinear expression to get
+bilinear expression for the simplified case $\theta=1$ and no Robin
+conditions to get
 
 !bt
 \begin{equation*}
-\sum_{j=1}^N \left(\int_\Omega \hat\phi_i\phi_j \dx\right)U^n_j + {\dt}
+\sum_{j=1}^N \left(\int_\Omega \frac{1}{\dt}
+\hat\phi_i\phi_j \dx\right)U^n_j +
 \sum_{j=1}^N \left(\int_\Omega \nabla\hat\phi_i\cdot\nabla\phi_j \dx\right)U^n_j,
 \end{equation*}
 !et
@@ -661,7 +711,7 @@ which can be written as a sum of matrix-vector products,
 
 !bt
 \begin{equation*}
-MU^n + {\dt} KU^n = (M + {\dt} K)U^n,
+\frac{1}{\dt}MU^n + KU^n = (\frac{1}{\dt}M + {\dt} K)U^n,
 \end{equation*}
 !et
 if we identify the matrix $M$ with entries $M_{ij}$ as above and
@@ -676,32 +726,38 @@ matrix'' is a common nickname for $K$. The associated bilinear forms
 for these matrices, as we need them for the assembly process in a
 FEniCS program, become
 
-!bt
-\begin{align}
-a_K(u,v) &= \int_\Omega\nabla u\cdot\nabla v \dx,
-label{ch:diffusion0:pde1:aK}\\
-a_M(u,v) &= \int_\Omega uv \dx
-label{ch:diffusion0:pde1:aM}\tp
-\end{align}
-!et
+|---------------------------|
+| Mathematics | FEniCS Code |
+|----l-------------l--------|
+| $a_K(u,v) = \int_\Omega\nabla u\cdot\nabla v \dx$ | `a_K = dot(nabla(u), nabla(v))*dx` |
+| $a_M(u,v) = \int_\Omega uv \dx$ | `a_M = u*v*dx` |
+|---------------------------|
 
 The linear system at each time level, written as $AU^n=b$,
 can now be computed by first computing $M$ and $K$, and then forming
 $A=M+{\dt} K$ at $t=0$, while $b$ is computed as
-$b=MU^{n-1} + {\dt}MF^n$ at each time level.
+$b=\frac{1}{\dt}MU^{n-1} + MF^n$ at each time level.
+
+=== Generalization to full model ===
+
+The coefficient matrix associated with the complete variational form
+(ref{ch:diffusion:opt:num:varform2})
+
+[hpl: Not finished.]
 
 === FEniCS implementation ===
 
-The following modifications are needed in the `${prog["heat_func"]}.py`
-program from the previous section in order to implement the new
+The following modifications are needed
+#in the `${prog["heat_func"]}.py` program from the previous section
+in order to implement the new
 strategy of avoiding assembly at each time level:
 
   o Define separate forms $a_M$ and $a_K$
   o Assemble $a_M$ to $M$ and $a_K$ to $K$
-  o Compute $A=M+{\dt}K$
+  o Compute $A=\frac{1}{\dt}M+K$
   o Define $f$ as an `Expression`
   o Interpolate the formula for $f$ to a finite element function $F^n$
-  o Compute $b=MU^{n-1} + {\dt}MF^n$
+  o Compute $b=\frac{1}{\dt}MU^{n-1} + MF^n$
 
 The relevant code segments become
 
@@ -1518,7 +1574,7 @@ Introducing the $\theta$-rule in our PDE results in
 
 !bt
 \begin{equation}
-\varrho c\frac{u^{n+1}-u^n}{\Delta t}
+\varrho c\frac{u^{n+1}-u^n}{\dt}
 = \theta(\nabla\cdot\left( \kappa\nabla u^{n+1}\right) + f(\x,t_{n+1})) +
 (1-\theta)(\nabla\cdot\left( \kappa\nabla u^{n}\right) + f(\x,t_{n}))\tp
 label{ch:diffusion:refactor:math:problem}
@@ -1534,7 +1590,7 @@ $\nabla\cdot\left( \kappa\nabla u\right)$:
 !bt
 \begin{align*}
 \int\limits_\Omega \bigl(
-v\varrho c\frac{u^{n+1}-u^n}{\Delta t}\dx
+v\varrho c\frac{u^{n+1}-u^n}{\dt}\dx
 & + \theta \kappa\nabla u^{n+1}\cdot\nabla v - v\theta f(\x,t_{n+1} \\
 & + (1-\theta) \kappa\nabla u^{n}\cdot\nabla v -
 v(1-\theta)f(\x,t_{n}\bigr)\dx\\
@@ -1550,7 +1606,7 @@ us
 !bt
 \begin{align}
 F(u;v) &= \int\limits_\Omega \bigl(
-v\varrho c\frac{u^{n+1}-u^n}{\Delta t}\dx
+v\varrho c\frac{u^{n+1}-u^n}{\dt}\dx
 + \theta \kappa\nabla u^{n+1}\cdot\nabla v - v\theta f(\x,t_{n+1}) \nonumber\\
 &\quad - (1-\theta) \kappa\nabla u^{n}\cdot\nabla v +
 v(1-\theta)f(\x,t_{n}\bigr)\dx\nonumber\\
@@ -1571,7 +1627,7 @@ $u$ for $u^{n+1}$ and $u_1$ for $u^n$,
 !bt
 \begin{align}
 F(u;v) &= \int\limits_\Omega \bigl(
-v\varrho c\frac{u-u_1}{\Delta t}\dx
+v\varrho c\frac{u-u_1}{\dt}\dx
 + \theta \kappa\nabla u\cdot\nabla v - v\theta f(\x,t_{n+1}) \nonumber\\
 &\quad - (1-\theta) \kappa\nabla u_1\cdot\nabla v +
 v(1-\theta)f(\x,t_{n}\bigr)\dx\nonumber\\
@@ -1618,7 +1674,7 @@ implemented in the subclass for the particular problem at hand.
 As a simple example, consider the test problem where we have a
 manufactured solution $u=1+x^2 + \alpha y^2 + \beta t$ on
 a uniform mesh over the unit square or cube, with Dirichlet conditions
-on the entire boundary. Suppose we have $\Delta t=0.3$ and
+on the entire boundary. Suppose we have $\dt=0.3$ and
 want to simulate for $t\in [0,0.9]$. A problem class is then
 
 @@@CODE src/heat_class.py fromto: class TestProblemExact@def test_
@@ -1750,7 +1806,7 @@ waves in the Fourier representation of the discrete solution.  The
 oscillations are removed by doubling the spatial resolution from 20 to
 40 elements in the $x$ direction.  With $\theta=1$, we never
 experience any oscillations, but the boundary layer gets thicker and
-less accurate (smaller $\Delta t$ is needed to compensate).
+less accurate (smaller $\dt$ is needed to compensate).
 However, in this problem, we see from Figure ref{ch:diffusion:refactor:class_solver:fig1} that the inaccuracy is only visible for the very first time
 steps as the boundary layer is thin.
 
@@ -1959,12 +2015,12 @@ to make mistakes and inherit functionality that is wrong.
 
 ===== Exercise: Implement second-order schemes in time =====
 
-A backward difference of accuracy $\mathcal{O}(\Delta t^2)$ involves
+A backward difference of accuracy $\mathcal{O}(\dt^2)$ involves
 three time levels:
 
 !bt
 \[ \frac{\partial}{\partial t}u(x, y, t_{n+1}) \approx
-\frac{u^{n+1} - 4u^n + u^{n-1}}{2\Delta t}\tp\]
+\frac{u^{n+1} - 4u^n + u^{n-1}}{2\dt}\tp\]
 !et
 Make a solver based on this scheme. For the first time step, use the
 two-level
@@ -1977,9 +2033,9 @@ method. In addition, implement the Crank-Nicolson method where you solve
 by
 
 !bt
-\[ \frac{u^{n+1}-u^n}{\Delta t} = \frac{1}{2}(G(u^{n+1}) + G(u^n))\tp\]
+\[ \frac{u^{n+1}-u^n}{\dt} = \frac{1}{2}(G(u^{n+1}) + G(u^n))\tp\]
 !et
-This method also has a truncation error of order $\Delta t^2$.
+This method also has a truncation error of order $\dt^2$.
 [hpl: Find some good test problems for comparing the performance of the schemes.]
 
 % endif

@@ -152,6 +152,7 @@ def solver(
     F = F_M + F_K + F_f
     #F = rho*c*(u-u_n)/dt*v*dx + theta*D(u) + (1-theta)*D(u_n)
     if BC == 'Robin':
+        # Add cooling condition integrals from each side
         F_R = sum(B(U, i) for i in range(2*d))
         F += F_R
     if debug:
@@ -204,14 +205,16 @@ def solver(
                 A = assemble(a)
 
         if avoid_b_assemble:
+            A = (1./dt)*M + K  # in case dt varies
+            # OBS: Lacking Robin here!!!!!!!!!!!!!!
             f_m = interpolate(f, V)
             F_m = f_m.vector()
             # Note that M = assemble(u*v), not assemble(F_M) with dt!
-            b = 1./dt*M*u_n.vector() + M*F_m + (1-theta)*K*u_n.vector()
+            b = 1./dt*M*u_n.vector() + M*F_m - (1-theta)*K*u_n.vector()
+            # OBS: Lacking Robin here!!!!!!!!!!!!!!
         else:
             b = assemble(L, tensor=b)
         cpu_assemble += time.clock() - t0
-        # Doesn't work for lumped A:
         [bc.apply(A, b) for bc in bcs]
         if lumped_mass and theta == 0:
             u.vector()[:] = b.array()/A.array()

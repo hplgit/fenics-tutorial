@@ -58,7 +58,7 @@ term, the :math:`\theta` rule reads
 .. math::
 
     \tag{1}
-    \frac{u^{n+1} - u^n}{\Delta t} = \theta\mathcal{G}(u^{n+1})
+    \frac{u^{n+1} - u^n}{{\Delta t}} = \theta\mathcal{G}(u^{n+1})
         + (1-\theta)\mathcal{G}(u^n) + \theta f^{n+1} + (1-\theta)f^n,
         
         
@@ -70,7 +70,7 @@ or
 .. math::
 
     \tag{2}
-    \frac{u^{n+1} - u^n}{\Delta t} = \mathcal{G}(\theta u^{n+1} +
+    \frac{u^{n+1} - u^n}{{\Delta t}} = \mathcal{G}(\theta u^{n+1} +
         (1-\theta)u^n) + f(\theta t_{n+1} + (1-\theta)t_n){\thinspace .}
         
         
@@ -98,7 +98,7 @@ meaning that :math:`\int_\Omega\mathcal{G}(u)v{\, \mathrm{d}x} = -\int_\Omega
 .. math::
 
     \tag{3}
-    F = \int_\Omega \varrho c\frac{u^{n+1} - u^n}{\Delta t}v{\, \mathrm{d}x} +
+    F = \int_\Omega \varrho c\frac{u^{n+1} - u^n}{{\Delta t}}v{\, \mathrm{d}x} +
         \int_\Omega \mathcal{D}(U,v) {\, \mathrm{d}x} -
         \int_\Omega f(\theta t_{n+1}+(1-\theta)t_n) v{\, \mathrm{d}x}
         + \int_\Gamma \mathcal{B}(U,v){\, \mathrm{d}s}
@@ -119,7 +119,7 @@ entire boundary or a Robin condition
 
 where :math:`r` is a heat transfer coefficient and :math:`s` is the surrounding
 temperature. Note that insulated boundaries are obtained by :math:`r=0`.
-We then have
+We also have
 
 .. math::
         
@@ -131,7 +131,20 @@ Normally, in finite element programs, we would need to break up the
 variational formulation :ref:`(3) <Eq:ch:diffusion:opt:num:varform>` into
 a bilinear and a linear part, but in FEniCS we can just use
 ``lhs(F)`` and ``rhs(F)`` for such calculations, which is very convenient from
-a user's point of view.
+a user's point of view. The final version of the variational
+formulation to be coded reads
+
+.. _Eq:ch:diffusion:opt:num:varform2:
+
+.. math::
+
+    \tag{4}
+    F = \int_\Omega (\varrho c\frac{u^{n+1} - u^n}{{\Delta t}}v +
+         p\nabla U\cdot\nabla v  -
+         f(\theta t_{n+1}+(1-\theta)t_n) v){\, \mathrm{d}x}
+        + \int_\Gamma r(U-s)v{\, \mathrm{d}s}
+        
+        
 
 .. _ch:diffusion:opt:bassembly:
 
@@ -143,7 +156,7 @@ Avoiding assembly of the coefficient matrix
 Our time-dependent heat equation gives rise to a linear system
 with coefficient matrix :math:`A` and right-hand side :math:`b` at every time
 level. When :math:`\varrho`, :math:`c`, :math:`p`, and :math:`r` do not depend on time,
-and :math:`\Delta t` is constant,
+and :math:`{\Delta t}` is constant,
 :math:`A` is constant, and it suffices to assemble the matrix once -
 before the time loop. To be able to do this, we need to
 explicitly create matrices and vectors from variational
@@ -231,7 +244,7 @@ if ``BC == 'Dirichlet'``).
 
 .. index:: assert
 
-Check of input data
+Checking input data
 ~~~~~~~~~~~~~~~~~~~
 
 It is wise to start the function with checking the values of some
@@ -362,8 +375,10 @@ The use of this function in the solver function goes as follows:
 Note that we either have Dirichlet values at all boundaries or we
 have Robin conditions.
 
-Implementation of variational formulation
------------------------------------------
+Implementation of the variational formulation
+---------------------------------------------
+
+[**hpl 2**: Important messgage: the variational form can be implemented in many steps, utilizing Python functions if desired, and this is very convenient, especially for debugging later. Not sure how this message can be explicitly formulated...]
 
 We start with implementing the initial condition:
 
@@ -614,6 +629,8 @@ code needed in FEniCS ``Expression`` objects.
 Debugging of FEniCS programs
 ----------------------------
 
+[**hpl 3**: This section is unfinished.]
+
 When the first author implemented the present ``solver`` function, the
 solution looked nice in visualizations, but the verification tests
 where the solutions should be reproduced to machine precision, were
@@ -646,13 +663,13 @@ separate program. The details in the present PDE application are documented
 next.
 
 We start with reducing the problem to 1D. There are four types of terms
-in our PDE: the mass matrix term :math:`\int\frac{1}{\Delta t}u^{n+1}v`,
+in our PDE: the mass matrix term :math:`\int\frac{1}{{\Delta t}}u^{n+1}v`,
 the stiffness matrix term :math:`\int p\nabla u\cdot\nabla v`, the source term
 :math:`\int fv`, and the Robin condition term :math:`\int_\Gamma r(u-s)v`.
 
 .. math::
         
-        \frac{h}{6\Delta t}
+        \frac{h}{6{\Delta t}}
         \left(\begin{array}{rr}
         2 & 1\\ 
         1 & 2
@@ -661,7 +678,7 @@ the stiffness matrix term :math:`\int p\nabla u\cdot\nabla v`, the source term
 
 .. math::
         
-        \frac{h}{6\Delta t}
+        \frac{h}{6{\Delta t}}
         \left(\begin{array}{rrr}
         2 & 1 & 0\\ 
         1 & 4 & 1\\ 
@@ -766,10 +783,10 @@ Deriving recursive linear systems
 
 To see how repeated assembly can be avoided, we look at the
 "right-hand side part" of the variational form (i.e., the linear form
-:math:`L(v)`) when (for simplicity) :math:`\theta=1`:
+:math:`L(v)`) when, for simplicity, :math:`\theta=1`:
 
 .. math::
-         L(v) = \int_\Omega \left(\frac{1}{{\Delta t}}u^{n} + f^{n+1}\right)v {\, \mathrm{d}x}{\thinspace .} 
+        \int_\Omega \left(\frac{1}{{\Delta t}}u^{n} + f^{n+1}\right)v {\, \mathrm{d}x}{\thinspace .} 
 
 This expression varies in general with time through :math:`u^{n}`, :math:`f^{n+1}`, and
 possibly also with :math:`{\Delta t}` if the time step is adjusted during the
@@ -781,7 +798,7 @@ and we can expand :math:`f^n` as
 :math:`f^{n}=\sum_{j=1}^NF^{n}_j\phi_j`. Inserting these expressions in
 :math:`L(v)` and using :math:`v=\hat\phi_i` result in
 
-[**hpl 2**: Why :math:`hat\phi_i`? No need for Petrov-Galerkin here... Cannot remember why the hat.]
+[**hpl 4**: Why :math:`hat\phi_i`? No need for Petrov-Galerkin here... Cannot remember why the hat. Remove it.]
 
 .. math::
         
@@ -833,18 +850,54 @@ side :math:`b` can be calculated as
 
 That is, no assembly is necessary to compute :math:`b`!
 
-It now remains to extend the results to the full :math:`\theta` rule and
-to the boundary terms arising from the Robin conditions.
-.......
+Generalization to the full model
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Any point with splitting :math:`A`? It is to be assembled once...
-The coefficient matrix :math:`A` can also be split into two terms.  We
+It now remains to extend the results to the full :math:`\theta` rule and
+to the boundary terms arising from the Robin conditions. Looking
+at :ref:`(4) <Eq:ch:diffusion:opt:num:varform2>`, inserting
+
+.. math::
+         U = \theta\sum_j\phi_jU_j + (1-\theta)\sum_j\phi_jU_j^{n},
+
+and utilizing that :math:`p\nabla U\cdot\nabla v` and :math:`r(U-s)v` are linear in :math:`U`,
+we get a right-hand side contribution
+
+.. _Eq:_auto1:
+
+.. math::
+
+    \tag{5}
+    b = \frac{1}{{\Delta t}}MU^{n} + \theta MF^n - (1-\theta)KU^n - (1-theta)RU^n
+        - g,
+        
+        
+
+where :math:`R` is the matrix arising from the Robin condition:
+
+.. math::
+         R_{i,j} = \int_\Gamma r\phi_i\phi_j{\, \mathrm{d}s},
+
+and :math:`g` is the associated vector,
+
+.. math::
+         g_i = \int_\Gamma rs\phi_i{\, \mathrm{d}s}{\thinspace .}
+
+Splitting the coefficient matrix
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+If we decide to use a varying time step :math:`{\Delta t}`, the :math:`A` matrix
+will vary with time, but it has a special structure so that it can
+easily and cheaply be computed at each time level.
+To see this, we
 insert :math:`v=\hat\phi_i` and :math:`u^n = \sum_{j=1}^N U^n_j\phi_j` in the
-bilinear expression to get
+bilinear expression for the simplified case :math:`\theta=1` and no Robin
+conditions to get
 
 .. math::
         
-        \sum_{j=1}^N \left(\int_\Omega \hat\phi_i\phi_j {\, \mathrm{d}x}\right)U^n_j + {{\Delta t}}
+        \sum_{j=1}^N \left(\int_\Omega \frac{1}{{\Delta t}}
+        \hat\phi_i\phi_j {\, \mathrm{d}x}\right)U^n_j +
         \sum_{j=1}^N \left(\int_\Omega \nabla\hat\phi_i\cdot\nabla\phi_j {\, \mathrm{d}x}\right)U^n_j,
         
 
@@ -852,17 +905,17 @@ which can be written as a sum of matrix-vector products,
 
 .. math::
         
-        MU^n + {{\Delta t}} KU^n = (M + {{\Delta t}} K)U^n,
+        \frac{1}{{\Delta t}}MU^n + KU^n = (\frac{1}{{\Delta t}}M + {{\Delta t}} K)U^n,
         
 
 if we identify the matrix :math:`M` with entries :math:`M_{ij}` as above and
 the matrix :math:`K` with entries
 
-.. _Eq:_auto1:
+.. _Eq:_auto2:
 
 .. math::
 
-    \tag{4}
+    \tag{6}
     K_{ij} = \int_\Omega \nabla\hat\phi_i\cdot\nabla\phi_j {\, \mathrm{d}x}{\thinspace .}
         
         
@@ -872,47 +925,47 @@ matrix" is a common nickname for :math:`K`. The associated bilinear forms
 for these matrices, as we need them for the assembly process in a
 FEniCS program, become
 
-.. _Eq:ch:diffusion0:pde1:aK:
-
-.. math::
-
-    \tag{5}
-    a_K(u,v) = \int_\Omega\nabla u\cdot\nabla v {\, \mathrm{d}x},
-        
-        
-
-.. _Eq:ch:diffusion0:pde1:aM:
-
-.. math::
-
-    \tag{6}
-    a_M(u,v) = \int_\Omega uv {\, \mathrm{d}x}
-        {\thinspace .}
-        
+====================================================================  ====================================  
+                            Mathematics                                           FEniCS Code               
+====================================================================  ====================================  
+:math:`a_K(u,v) = \int_\Omega\nabla u\cdot\nabla v {\, \mathrm{d}x}`  ``a_K = dot(nabla(u), nabla(v))*dx``  
+:math:`a_M(u,v) = \int_\Omega uv {\, \mathrm{d}x}`                    ``a_M = u*v*dx``                      
+====================================================================  ====================================  
 
 The linear system at each time level, written as :math:`AU^n=b`,
 can now be computed by first computing :math:`M` and :math:`K`, and then forming
 :math:`A=M+{{\Delta t}} K` at :math:`t=0`, while :math:`b` is computed as
-:math:`b=MU^{n-1} + {{\Delta t}}MF^n` at each time level.
+:math:`b=\frac{1}{{\Delta t}}MU^{n-1} + MF^n` at each time level.
+
+Generalization to full model
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The coefficient matrix associated with the complete variational form
+:ref:`(4) <Eq:ch:diffusion:opt:num:varform2>`
+
+[**hpl 5**: Not finished.]
 
 FEniCS implementation          (1)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-The following modifications are needed in the ``ft12_heat_func.py``
-program from the previous section in order to implement the new
+The following modifications are needed
+
+.. in the ``ft12_heat_func.py`` program from the previous section
+
+in order to implement the new
 strategy of avoiding assembly at each time level:
 
  1. Define separate forms :math:`a_M` and :math:`a_K`
 
  2. Assemble :math:`a_M` to :math:`M` and :math:`a_K` to :math:`K`
 
- 3. Compute :math:`A=M+{{\Delta t}}K`
+ 3. Compute :math:`A=\frac{1}{{\Delta t}}M+K`
 
  4. Define :math:`f` as an ``Expression``
 
  5. Interpolate the formula for :math:`f` to a finite element function :math:`F^n`
 
- 6. Compute :math:`b=MU^{n-1} + {{\Delta t}}MF^n`
+ 6. Compute :math:`b=\frac{1}{{\Delta t}}MU^{n-1} + MF^n`
 
 The relevant code segments become
 
@@ -1142,7 +1195,7 @@ A welding example with post processing and animation
 ====================================================
 
 The focus so far in this tutorial has been on producing the solution
-of PDE problems. [**hpl 3**: This is book 2, it depends on how things end up in the previous chapter.] For scientific investigations, the primary work is
+of PDE problems. [**hpl 6**: This is book 2, it depends on how things end up in the previous chapter.] For scientific investigations, the primary work is
 often with post processing results: computing quantities derived from
 the solution and inspecting these with visualization or data analysis tools.
 This is the focus of the present section.
