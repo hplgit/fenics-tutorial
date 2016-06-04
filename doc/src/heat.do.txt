@@ -1207,14 +1207,16 @@ Anyway, a factor 6 may be important in many applications, and the increased
 accuracy for less smooth solutions of the diffusion equations,
 as provided by a lumped mass matrix, may often be more important.
 
-=== Application: diffusion of a spike ===
+==== Application: diffusion of a spike =====
 
 Just to demonstrate how to use the `solver` function in an application,
 we consider pure diffusion of a spike in a domain $[0,L]\times [0,L]$:
 
 !bt
-\[ u_0(x,y) = T_0 + A\sin^8(\pi\frac{x}{L})\sin^8(\pi\frac{y}{L})\tp\]
+\[ u_0(x,y) = T_0 + A\sin^m(\pi\frac{x}{L})\sin^m(\pi\frac{y}{L}),\]
 !et
+for some parameters $T_0$, $A$, and $m$. The latter governs the thickness
+of the spike.
 It is convenient to scale the problem by introducing
 
 !bt
@@ -1234,15 +1236,41 @@ The Robin bondary condition with surrounding temperature $T_0$ becomes
 !et
 with the Nusselt number $\mathrm{Nu}=Lr/p$ as a dimensionless variable.
 
-We can run the solver with $p=c=\varrho =1$, $f=0$, $s=0$,
+!bnotice Partial verification
+With $\mathrm{Nu}=0$ and insulated boundaries one can integrate the
+PDE over the spatial domain and obtain $\frac{\partial}{\partial t}\int_\Omega
+u\dx = 0$ (the $\nabla^2 u$ term is converted to a surface integral
+involving $\partial u/partial n$).
+That is, the integral under the solution remains constant in time.
+We can use this result as a partial verification at each time level
+in the `user_action` function. The integral is easily calculated in
+FEniCS by `assemble(u*dx)`.
+!enotice
+
+Observe that running the solver with $p=c=\varrho =1$, $f=0$, $s=0$,
 $r=\mathrm{Nu}$ (on each side of the square domain), and
-$u(x,y,0)=\sin^8(\pi x)\sin^8(\pi y)$ to solve the scaled problem. In
-case of Dirichlet conditions, $r$ is a list of `Constant(0)` objects
-for the Dirichlet conditions (length 4, one `Constant(0)` for each
-side of the 2D domain). In this case, $s$ is a just a dummy variable
-but needs to be of type `Expression` or `Constant`, so we choose
-`Constant(0)`.  The scaled domain $[0,1]\times[0,1]$ is divided into a
-$60\times 60$ partitioning with P1 elements.
+$u(x,y,0)=\sin^8(\pi x)\sin^8(\pi y)$ solves the scaled problem.  The
+scaled domain $[0,1]\times[0,1]$ is divided into a $60\times 60$
+partitioning with P1 elements.
+
+The integral of $u$ for a thin ($m=8$) and a thick ($m=2$) spike is
+
+!bc sys
+Terminal> isympy
+In [1]: m=2
+
+In [2]: integrate(sin(pi*x)**m*sin(pi*y)**m, (x,0,1), (y,0,1))
+Out[2]: 1/4
+
+In [3]: m=8
+
+In [4]: integrate(sin(pi*x)**m*sin(pi*y)**m, (x,0,1), (y,0,1))
+Out[4]: 1225/16384
+
+!ec
+(The SymPy interactive shell, `isympy`, is a convenient symbolic calculator
+that predefines `x` and `y` as
+symbols and automatically performs `from sympy import *`.)
 
 We want to animate the solution using the FEniCS built-in `plot` command.
 The necessary actions must be done in the `user_action` function, here
@@ -1260,22 +1288,28 @@ variable. The solution is to let it be a global variable `plt`
 (or one could implement `animate` via a class that has `plt` as an
 attribute and the callback function as method, usually `__call__`).
 
+The animation shows that the thick spike raises the values at the
+boundaries with time, and we can see the solution approaches a
+constant (1/4), while the thin spike ($m=8$) just diffusions and
+vanishes with minor impact on the boundary values (these values are to
+end up at 0.075 as $t\rightarrow\infty$, but this is hardly visible in
+the plot).
+
 #===== Methods of lines and ODE solvers =====
 
 ======= A welding example with post processing and animation =======
 label{ch:diffusion:welding}
 
 The focus so far in this tutorial has been on producing the solution
-of PDE problems. [hpl: This is book 2, it depends on how things end
-up in the previous chapter.] For scientific investigations, the primary work is
-often with post processing results: computing quantities derived from
-the solution and inspecting these with visualization or data analysis tools.
-This is the focus of the present section.
-To ease the programming, we shall make use of a convenient tool, `cbcpost`,
-for post processing, saving data to file(s), and animating solutions.
-We recommend to use
-`cbcpost` in all time-dependent FEniCS solvers, but it also has a lot
-to offer in stationary problems too.
+of PDE problems. [hpl: This is book 2, it depends on how things end up
+in the previous chapter.] For scientific investigations, the primary
+work is often with post processing results: computing quantities
+derived from the solution and inspecting these with visualization or
+data analysis tools.  This is the focus of the present section.  To
+ease the programming, we shall make use of a convenient tool,
+`cbcpost`, for post processing, saving data to file(s), and animating
+solutions.  We recommend to use `cbcpost` in all time-dependent FEniCS
+solvers.
 
 To explain the usage of `cbcpost` for storage and plotting, we address
 a real physical application: welding of a plate, where a moving heat
@@ -1372,26 +1406,30 @@ Let us solve a diffusion problem taken from welding.  A moving
 welding equipment acts as a moving heat source at the top of a thin
 metal plate.  The question is how the heat from the equipment spreads
 out in the material that is being welded. We use the standard heat
-equation, treat the material as two dimensional, and do not take phase
+equation and do not take phase
 transitions into account.  The governing PDE is then
 
 !bt
-\[ \varrho c \frac{\partial u}{\partial t} = \kappa\nabla^2 u + f,\]
+\[ \varrho c \frac{\partial u}{\partial t} = p\nabla^2 u + f,\]
 !et
 where $u$ is temperature, $\varrho$ is the density of the material,
-$c$ is the heat capacity at constant volume, $\kappa$ is the heat
+$c$ is the heat capacity at constant volume, $p$ is the heat
 conduction coefficient, and $f$ models the heat source from the
-welding equipment. The domain is $\Omega = [0,L]\times [0,L]$.  An
-additional major simplification is that we set $u=U_s$ at the
-boundary, where $U_s$ is the temperature of the surroundings (a Robin
-condition, modeling cooling at the boundary would be more accurate,
-but then we should also consider cooling in the third dimension as
-well).  The initial condition reads $u=U_s$.
+welding equipment. The domain is $\Omega = [0,L]\times [0,L]\times [0,L_z]$.
+The plate is thin, meaning that $L_z\ll L$. The relevant boundary
+condition is a cooling law; that is, a Robin condition
+
+!bt
+\[ -p\frac{\partial u}{\partial n} = r(u-s),\]
+!et
+on the entire boundary. Here, $r$ is the heat transfer coefficient at
+the boundary and $s$ is the surrounding temperature.
+The initial condition reads $u=s$.
 
 A welding source is moving and very localized in space.  The
 localization can be modeled by a peak-shaped Gaussian function.  The
 movement is taken to be a circle with radius $R$ about a point
-$(x_0,y_0)$. An appropriate $f$ is
+$(x_0,y_0,L_z)$. A possible $f$ is
 
 !bt
 \[ f(x,y,t) = A\exp{\left(-\frac{1}{2\sigma^2}
@@ -1400,24 +1438,30 @@ $(x_0,y_0)$. An appropriate $f$ is
 !et
 The parameter $A$ is the strength of the heat source, and $\sigma$ is
 the ``standard deviation'' (i.e., a measure of the width) of the Gaussian
-function.
+function. This source is equally strong throughout the thickness of
+the material. We could easily multiply by some function modeling decay
+of the source in $z$ direction as we move away from the top boundary where
+the welding equipment is applied.
 
 ===== Scaling of the welding problem =====
 label{ch:diffusion:welding:scaling}
 
 There are 10 physical parameters in the problem: $L$, $\varrho$, $c$,
-$\kappa$, $A$, $x_0$, $y_0$, $R$, $\omega$, $\sigma$.  Scaling can
+$p$, $A$, $x_0$, $y_0$, $R$, $\omega$, $\sigma$.  Scaling can
 dramatically reduce the number of parameters and also introduce new
 parameters that are much easier to assign numerical values when doing
-numerical experiments. We therefore scale the problem. As length
-scale, we choose $L$ so the scaled domain becomes the unit square. As
+numerical experiments. In the present application, we end up with essentially
+one interesting parameter to vary in the scaled problem!
+As length
+scale, we choose $L$ so the scaled domain becomes $[0,1]\times [0,1]\times
+[0,\Delta]$, where $\Delta = L_z/L$ is a small dimensionless parameter. As
 time scale and characteristic size of $u$, we just introduce $t_c$ ad
 $u_c$.  This means that we introduce scaled variables
 
 !bt
 \[
 \bar x = \frac{x}{L},\quad \bar y = \frac{y}{L},\quad \bar t =\frac{t}{t_c},
-\quad\bar u = \frac{u-U_s}{u_c}\tp
+\quad\bar u = \frac{u-s}{u_c}\tp
 \]
 !et
 The scaled form of $f$ is naturally $\bar f = f/A$, since this makes
@@ -1427,7 +1471,8 @@ also be scaled:
 !bt
 \begin{align*}
 \bar f &= \exp{\left(-\frac{1}{2\sigma^2}
-\left({\bar xL -(L \bar x_0 + L\bar R\cos\omega t_c t)}\right)^2 -\frac{1}{2\sigma^2}
+\left({\bar xL -(L \bar x_0 + L\bar R\cos\omega t_c t)}\right)^2 -
+\frac{1}{2\sigma^2}
 \left({L \bar y-(L\bar y0 + L\bar R\sin\omega t_c t)}\right)^2\right)}\\
 &= \exp{\left(-\frac{1}{2}\frac{L^2}{\sigma^2}
 \left(x -(\bar x_0 + \bar R\cos\omega t_c \bar t)\right)^2 -
@@ -1450,23 +1495,22 @@ of the domain:
 !bt
 \[ (\bar x_0,\bar y_0) = (\frac{1}{2},\frac{1}{2})\tp\]
 !et
-The time scale
-in diffusion problems is usually related to the ``speed of the
-diffusion'', but in this problem it is more natural to base the time
-scale on the movement of the heat source, which suggests setting
+The time scale in diffusion problems is usually related to the ``speed
+of diffusion'', but in this problem it is more natural to base the
+time scale on the movement of the heat source, which suggests setting
 $t_c = 1/\omega$.
 
 Inserting the new scaled variables in the PDE leads to
 
 !bt
 \[ \frac{\partial \bar u}{\partial\bar t} =
-\frac{\kappa}{\omega\varrho c L^2}\bar\nabla^2\bar u +
+\frac{p}{\omega\varrho c L^2}\bar\nabla^2\bar u +
 \frac{A}{\omega u_c\varrho c}\bar f(\bar x,\bar y,\bar t)\tp\]
 !et
 The first coefficient is a dimensionless number,
 
 !bt
-\[ \gamma = \frac{\kappa}{\omega\varrho c L^2},\]
+\[ \gamma = \frac{p}{\omega\varrho c L^2},\]
 !et
 while the second coefficient can be used to determine $u_c$ by demanding
 the source term to balance the time derivative term,
@@ -1494,12 +1538,17 @@ tuned from experiments to give $\bar u$ a typically size of unity.
 Looking at $\gamma$, we see that it can be written
 
 !bt
-\[ \gamma = \frac{1/\omega}{\varrho c L^2/\kappa},\]
+\[ \gamma = \frac{1/\omega}{\varrho c L^2/p},\]
 !et
 which is the ratio of the time scale for the heat source and the
 time scale for diffusion. Multiplying by $R/R$ gives another
 interpretation: $\gamma$ is the ratio of the speed of diffusion and
-the speed of the heat source.
+the speed of the heat source. In welding, the speed of the heat
+source is very much larger than the speed of heat conduction.
+
+[hpl: This is vol II and we have done scaling many times, so we
+perhaps don't need more selling points. We had some in the introduction
+to this section.]
 
 !bnotice The benefits of scaling
 The physics of our problem depends now on $\beta$, $\bar
@@ -1510,7 +1559,7 @@ source in space, $\beta=10$ is a suitable value.  Then we are
 actually left with only one interesting parameter to adjust: $\gamma$.
 It is so much easier to assign this parameter a value (speed of
 diffusion versus speed of heat source) than to set $\varrho$, $c$, and
-$\kappa$ for some chosen material, and then determine relevant values for
+$p$ for some chosen material, and then determine relevant values for
 $A$, $L$, etc. There are no approximations in the scaling procedure;
 it just dramatically simplifies numerical simulations.
 The book cite{Langtangen_scaling} gives a comprehensive treatment
@@ -1520,33 +1569,55 @@ of scaling.
 ===== A function-based solver =====
 label{ch:diffusion:welding:funcsolver}
 
-We can use the `solver_minimize_assembly` function to solve the
-welding problem. The application code just declares the problem-dependent
-parameters and calls the solver function:
+We can use the `solver` function from Section ref{ch:diffusion:opt} to
+solve the welding problem. The application code just declares the
+problem-dependent parameters and calls the solver function:
 
 !bc pycod
-def application_welding(gamma=1, delta=1, beta=10, num_rotations=2):
+def welding(gamma=1, delta=70, beta=10, num_rotations=2, Nu=1):
     """Circular moving heat source for simulating welding."""
+    d = 3  # no space dim
     from math import pi, sin, cos
-    u_b = Constant(0)
-    I = Constant(0)
+    # Define physical parameters and boundary conditions
+    u0 = Constant(0)
+    rho = c = p = Constant(1)
+    BC = 'Robin'
+    Nu = 1
+    r = [Constant(Nu) for i in range(2*d)]
+    s = Constant(0)
+
+    # Define welding source
     R = 0.2
     f = Expression(
         'delta*exp(-0.5*pow(beta,2)*(pow(x[0]-(0.5+R*cos(t)),2) + '
                                     'pow(x[1]-(0.5+R*sin(t)),2)))',
         delta=delta, beta=beta, R=R, t=0)
-    # Simulate to rotations with the equipment
     omega = 1.0      # Scaled angular velocity
     P = 2*pi/omega   # One period of rotation
-    T = 2*P          # Total simulation time
+    T = num_rotations*P
     dt = P/40        # 40 steps per rotation
-    Nx = Ny = 60
-    solver_minimize_assembly(
-        gamma, f, u_b, I, dt, T, (Nx, Ny), (1, 1), degree=1,
-        user_action=ProcessResults(), I_project=False)
+
+    divisions = (40, 40, 4)
+    L = (1, 1, 0.05)
+
+    solver(
+        rho, c, p, f, r, s, u0, T, L,
+        dt, divisions, degree=1, theta=0.5,
+        user_action=ProcessResults(),
+        u0_project=False,
+        lumped_mass=False,
+        BC=BC,
+        A_is_const=False,
+        avoid_b_assembly=False)
 !ec
 
-The remaining task is to write the user action callback function to
+Note that our efficiency enhancements in the `solver` function do
+not incorporate contributions from Robin conditions, so we cannot
+take advantage here of the fact that the coefficient matrix is constant
+and that assembly can be completely avoided.
+
+The remaining task is to write the user action callback function
+(class `ProcessResults`) to
 process the solution at teach time step. We want to make use of
 `cbcpost` for storage and plotting.  Since we need the post processor
 variable, called `pp` in Section ref{ch:diffusion:welding:cbcpost},
@@ -1557,9 +1628,16 @@ to make comparisons between the heat source and the temperature
 response, so we register both fields for storage and plotting:
 
 @@@CODE-4 src/heat_func.py fromto: import cbcpost as post@info\('saving results
-We took the opportunity to also
-store the `u` and `f` functions to VTK files, although this is really
-not necessary since ParaView or VisIt can read XDMF files.
+We took the opportunity to store the results in various ways, not only
+using `cbcpost` tools. The basic functionality in FEniCS for storing
+time series of `Function` objects in files is called `TimeSeries`
+(the storage format is HDF5). Other solvers can easily read a field
+at a specified point of time from a `TimeSeries` object. We therefore
+make such an object in the class and dump the solution to this file
+each time the callback function is called. We also store the solution
+and the heat source in VTK files, although this is really
+not necessary since ParaView or VisIt can read XDMF files that `cbcpost`
+produces.
 
 Note that the use of `cbcpost` is usually very dependent on the
 problem at hand, so it does not make sense to include `cbcpost` code
@@ -1568,6 +1646,9 @@ user action function.
 
 Getting an animation on the screen with the built-in plotting tool is
 a matter of running the welding example:
+
+[hpl: The welding source velocity is much larger than the diffusion
+velocity. Are the $\gamma$ values compatible with this?]
 
 !bc pyshell
 >>> from heat_func import application_welding as a
@@ -1614,15 +1695,14 @@ to quickly put together solvers for a number of different PDEs. FEniCS
 makes it simple and straightforward to write the commands needed to
 set up a variational problem, define domains and boundary
 conditions. Then we wrapped such flat programs in functions for
-increased flexibility and easy testing.
-However, for a real application you will likely want to be
-able to reuse the code you write for a particular PDE to solve
-multiple different problems with different domains, boundary
-conditions and other parameters. In this chapter, we look at how to
-structure FEniCS Python code to create flexible, reusable, and
-efficient PDE solvers. The key concept is to use Python classes and
-develop effective an Application Programming Interface (API)
-in terms of methods and their arguments.
+increased flexibility and easy testing.  However, for a real
+application you will likely want to be able to reuse the code you
+write for a particular PDE to solve multiple different problems with
+different domains, boundary conditions and other parameters. In this
+chapter, we look at how to structure FEniCS Python code to create
+flexible, reusable, and efficient PDE solvers. The key concept is to
+use Python classes and develop effective an Application Programming
+Interface (API) in terms of methods and their arguments.
 
 ======= Refactoring a Poisson solver in terms of classes =======
 label{ch:poisson0:refactor:class}
@@ -1630,15 +1710,14 @@ label{ch:poisson0:refactor:class}
 A FEniCS solver for a PDE can be implemented in a general way, but the
 problem-dependent data, like boundary conditions, must be specified in
 each case by the user. For example, the implementation in ref[Section
-ref{ch:poisson0:multi:bc}][ in cite{ftut1}][in cite{ftut1}]
-requires the user to supply a
-`boundary_conditions` dictionary with specifications of the boundary
-condition on each of the four sides of the unit square. If we, e.g.,
-want two Dirichlet conditions at one side, this is not possible
-without modifying the solver function. What do to with a general
-mesh is an open question. To avoid changing the code in what is
-meant to be a general PDE solver for a wide class of problems, we need
-a different software design.
+ref{ch:poisson0:multi:bc}][ in cite{ftut1}][in cite{ftut1}] requires
+the user to supply a `boundary_conditions` dictionary with
+specifications of the boundary condition on each of the four sides of
+the unit square. If we, e.g., want two Dirichlet conditions at one
+side, this is not possible without modifying the solver function. What
+do to with a general mesh is an open question. To avoid changing the
+code in what is meant to be a general PDE solver for a wide class of
+problems, we need a different software design.
 
 Such a different design is to introduce a problem class and
 methods, supplied by the user from case to case, where boundary
@@ -1656,8 +1735,8 @@ the `solver` function in Section ref{ch:poisson0:multi:bc}.
 label{ch:poisson0:refactor:class:solver}
 
 The solver class will need problem information and for this purpose
-call up the methods in a problem class. For example, the solver
-gets the $f$ and $p$ functions in the PDE problem by calling
+call up the methods in a problem class. For example, the solver gets
+the $f$ and $p$ functions in the PDE problem by calling
 `problem.f_rhs()` and `problem.p_coeff()`. The mesh object and the
 polynomial degree of the elements are supposed to be returned from
 `problem.mesh_degree()`. Furthermore, the problem class defines the
@@ -1758,14 +1837,14 @@ are defined. This problem class defines an API that the solver class
 applies for communication.
 
 The solver class will usually have a function to set up data
-structures for the variational formulation, a `step` function
-to advance the solution one time step, and a `solve` function to run
-the time loop. Every time the solver class needs problem-specific
-information, it gets that information from the problem class, either in
-terms of attributes (variables) in the problem class or in terms of method
-(function) calls. The forthcoming examples are tied to the diffusion
-equation, but should be sufficiently general to be reused for
-most time-dependent FEniCS applications.
+structures for the variational formulation, a `step` function to
+advance the solution one time step, and a `solve` function to run the
+time loop. Every time the solver class needs problem-specific
+information, it gets that information from the problem class, either
+in terms of attributes (variables) in the problem class or in terms of
+method (function) calls. The forthcoming examples are tied to the
+diffusion equation, but should be sufficiently general to be reused
+for most time-dependent FEniCS applications.
 
 
 % if EXV:
@@ -1937,17 +2016,17 @@ Neumann, and Robin conditions:
 
 !bt
 \begin{align}
-\varrho c{\partial u\over\partial t} &= \nabla\cdot\left( \kappa\nabla u\right)
+\varrho c{\partial u\over\partial t} &= \nabla\cdot\left( p\nabla u\right)
 + f(\x,t)\hbox{ in }\Omega\times (0,T],\\
 u(\x,0) &= I\hbox{ on }\Omega,\\
 u &= \ub(t)\hbox{ on }\Gamma_D,\\
--\kappa{\partial u\over\partial n} &= g\hbox{ on }\Gamma_N,\\
--\kappa{\partial u\over\partial n} &= r(u-U_s)\hbox{ on }\Gamma_R\tp
+-p{\partial u\over\partial n} &= g\hbox{ on }\Gamma_N,\\
+-p{\partial u\over\partial n} &= r(u-U_s)\hbox{ on }\Gamma_R\tp
 \end{align}
 !et
 The spatial domain $\Omega$ has boundary $\partial\Omega = \Gamma_D\cup
 \Gamma_N\cup\Gamma_R$. We shall assume that all coefficients $\varrho$,
-$c$, $\kappa$ may vary in space, while $f$ and $g$ may vary in time too.
+$c$, $p$ may vary in space, while $f$ and $g$ may vary in time too.
 The coefficients $r$ and $U_s$ are assumed to depend on time only.
 
 We discretize in time by the general $\theta$-rule.  For an evolution
@@ -1968,8 +2047,8 @@ Introducing the $\theta$-rule in our PDE results in
 !bt
 \begin{equation}
 \varrho c\frac{u^{n+1}-u^n}{\dt}
-= \theta(\nabla\cdot\left( \kappa\nabla u^{n+1}\right) + f(\x,t_{n+1})) +
-(1-\theta)(\nabla\cdot\left( \kappa\nabla u^{n}\right) + f(\x,t_{n}))\tp
+= \theta(\nabla\cdot\left( p\nabla u^{n+1}\right) + f(\x,t_{n+1})) +
+(1-\theta)(\nabla\cdot\left( p\nabla u^{n}\right) + f(\x,t_{n}))\tp
 label{ch:diffusion:refactor:math:problem}
 \end{equation}
 !et
@@ -1978,18 +2057,18 @@ A Galerkin method for this initial-boundary value problem consists
 of multiplying (ref{ch:diffusion:refactor:math:problem}) by
 a test function $v\in V$, integrate over $\Omega$, and
 perform integration by parts on the second-order derivative term
-$\nabla\cdot\left( \kappa\nabla u\right)$:
+$\nabla\cdot\left( p\nabla u\right)$:
 
 !bt
 \begin{align*}
 \int\limits_\Omega \bigl(
 v\varrho c\frac{u^{n+1}-u^n}{\dt}\dx
-& + \theta \kappa\nabla u^{n+1}\cdot\nabla v - v\theta f(\x,t_{n+1} \\
-& + (1-\theta) \kappa\nabla u^{n}\cdot\nabla v -
+& + \theta p\nabla u^{n+1}\cdot\nabla v - v\theta f(\x,t_{n+1} \\
+& + (1-\theta) p\nabla u^{n}\cdot\nabla v -
 v(1-\theta)f(\x,t_{n}\bigr)\dx\\
 & - \int\limits_{\Gamma_N\cup\Gamma_R}
-\bigl(\theta \kappa\frac{\partial u^{n+1}}{\partial n}v
-+ (1-\theta) \kappa\frac{\partial u^{n}}{\partial n}v\bigr)\ds = 0
+\bigl(\theta p\frac{\partial u^{n+1}}{\partial n}v
++ (1-\theta) p\frac{\partial u^{n}}{\partial n}v\bigr)\ds = 0
 \tp
 \end{align*}
 !et
@@ -2000,8 +2079,8 @@ us
 \begin{align}
 F(u;v) &= \int\limits_\Omega \bigl(
 v\varrho c\frac{u^{n+1}-u^n}{\dt}\dx
-+ \theta \kappa\nabla u^{n+1}\cdot\nabla v - v\theta f(\x,t_{n+1}) \nonumber\\
-&\quad - (1-\theta) \kappa\nabla u^{n}\cdot\nabla v +
++ \theta p\nabla u^{n+1}\cdot\nabla v - v\theta f(\x,t_{n+1}) \nonumber\\
+&\quad - (1-\theta) p\nabla u^{n}\cdot\nabla v +
 v(1-\theta)f(\x,t_{n}\bigr)\dx\nonumber\\
 &\quad + \int\limits_{\Gamma_N}
 \bigl(\theta g(\x,t_{n+1})v
@@ -2021,8 +2100,8 @@ $u$ for $u^{n+1}$ and $u_1$ for $u^n$,
 \begin{align}
 F(u;v) &= \int\limits_\Omega \bigl(
 v\varrho c\frac{u-u_1}{\dt}\dx
-+ \theta \kappa\nabla u\cdot\nabla v - v\theta f(\x,t_{n+1}) \nonumber\\
-&\quad - (1-\theta) \kappa\nabla u_1\cdot\nabla v +
++ \theta p\nabla u\cdot\nabla v - v\theta f(\x,t_{n+1}) \nonumber\\
+&\quad - (1-\theta) p\nabla u_1\cdot\nabla v +
 v(1-\theta)f(\x,t_{n}\bigr)\dx\nonumber\\
 &\quad + \int\limits_{\Gamma_N}
 \bigl(\theta g(\x,t_{n+1})v
@@ -2131,7 +2210,7 @@ always desired.
 
 After inserting the dimensionless variables in the PDE, we demand the
 time-derivative term and the heat conduction term to balance, and
-find $t_c$ from that condition: $t_c = \varrho c L^2/\kappa$.
+find $t_c$ from that condition: $t_c = \varrho c L^2/p$.
 
 The spatial domain is the unit square. We introduce the boundaries
 $\Gamma_{D_1}$ as the side $x=0$, $\Gamma_{D_2}$ as the side $x=1$,
@@ -2152,7 +2231,7 @@ The scaled initial-boundary problem can be written as
 === FEniCS implementation ===
 
 We can solve our problem with the general problem and solver
-classes by setting $\varrho = c= \kappa = 1$,
+classes by setting $\varrho = c= p = 1$,
 and $I=0$. The most labor-intensive part of the problem class is
 the visualization. We can create a helper class, `ProcessSolution`,
 which applies `cbcpost` to store the solution and perform animation
@@ -2187,21 +2266,22 @@ The problem is solved by
 === Results ===
 
 Figure ref{ch:diffusion:refactor:class_solver:fig1} shows accumulated
-curves (from `plt.figure(2)`). The problem is a
-primary example on a *thermal boundary layer*: the sudden rise in
-temperature at $x=0$ at $t=0$ gives rise to a very steep function, and
-a thin boundary layer that grows with time as heat is transported from
-the boundary into the domain. The jump in the temperature profile at
-$x=0$ makes demands to the numerical methods. Quite typically, a
-Crank-Nicolson scheme may show oscillations (as we can see in the
-first curve) because of inaccurate treatment of the shortest spatial
-waves in the Fourier representation of the discrete solution.  The
-oscillations are removed by doubling the spatial resolution from 20 to
-40 elements in the $x$ direction.  With $\theta=1$, we never
-experience any oscillations, but the boundary layer gets thicker and
-less accurate (smaller $\dt$ is needed to compensate).
-However, in this problem, we see from Figure ref{ch:diffusion:refactor:class_solver:fig1} that the inaccuracy is only visible for the very first time
-steps as the boundary layer is thin.
+curves (from `plt.figure(2)`). The problem is a primary example on a
+*thermal boundary layer*: the sudden rise in temperature at $x=0$ at
+$t=0$ gives rise to a very steep function, and a thin boundary layer
+that grows with time as heat is transported from the boundary into the
+domain. The jump in the temperature profile at $x=0$ makes demands to
+the numerical methods. Quite typically, a Crank-Nicolson scheme may
+show oscillations (as we can see in the first curve) because of
+inaccurate treatment of the shortest spatial waves in the Fourier
+representation of the discrete solution.  The oscillations are removed
+by doubling the spatial resolution from 20 to 40 elements in the $x$
+direction.  With $\theta=1$, we never experience any oscillations, but
+the boundary layer gets thicker and less accurate (smaller $\dt$ is
+needed to compensate).  However, in this problem, we see from Figure
+ref{ch:diffusion:refactor:class_solver:fig1} that the inaccuracy is
+only visible for the very first time steps as the boundary layer is
+thin.
 
 FIGURE: [fig/thermal_layer1, width=800 frac=1] Development of thermal boundary layer: Crank-Nicolson (left) and Backward Euler (right) schemes. label{ch:diffusion:refactor:class_solver:fig1}
 
@@ -2219,7 +2299,7 @@ MOVIE: [mov/thermal_layer1/movie.ogg] Developing thermal boundary layer (notice 
 
 Suppose we now place another material inside the domain with other
 values material properties (i.e., values of $\varrho$, $c$, and
-$\kappa$).  The new material occupies the rectangle $[0.3,0.7]\times
+$p$).  The new material occupies the rectangle $[0.3,0.7]\times
 [0.3,0.7]$ inside the scaled domain.  We also change the boundary
 condition at $x=1$ to be ``no change'', i.e., $\partial u/\partial
 n=0$. Figure ref{ch:diffusion:refactor:class_solver:fig5} depicts the
@@ -2233,36 +2313,36 @@ FIGURE: [fig/thermal_layer2_sketch, width=500 frac=0.6] Domain with internal sub
 === Updated scaling ===
 
 The former scaling is not completely valid as it was based on constant
-$\varrho$, $c$, and $\kappa$. We now introduce
+$\varrho$, $c$, and $p$. We now introduce
 
 !bt
 \[ \bar\varrho = \frac{\varrho}{\varrho_0},\quad
-\bar c = \frac{c}{c_0},\quad \bar\kappa = \frac{\kappa}{\kappa_0},\]
+\bar c = \frac{c}{c_0},\quad \bar p = \frac{p}{p_0},\]
 !et
 where $\varrho_0$ is the value of $\varrho$ in the outer material,
 now to be known as subdomain 0.
 A similar parameter $\varrho_1$ is the value of $\varrho$ inside
 the new material, called subdomain 1.
-The constants $c_0$, $\kappa_0$, $c_1$, and $\kappa_1$ are
+The constants $c_0$, $p_0$, $c_1$, and $p_1$ are
 defined similarly. In subdomain 0, $\bar\varrho = 1$, and in subdomain 1,
 $\bar\varrho = \varrho_1/\varrho_0$, with similar values for
-$\bar c$ and $\bar\kappa$. The scaled PDE becomes
+$\bar c$ and $\bar p$. The scaled PDE becomes
 
 !bt
 \[ \bar\varrho\bar c\frac{\partial\bar u}{\partial\bar t}
- = \bar\nabla\cdot(\bar\kappa\bar\nabla\bar u) + \bar f\tp\]
+ = \bar\nabla\cdot(\bar p\bar\nabla\bar u) + \bar f\tp\]
 !et
 We can call up the solver for the problem with dimensions as long
-as we remember to set $\kappa = \varrho = c =1$ in subdomain 0.
+as we remember to set $p = \varrho = c =1$ in subdomain 0.
 In subdomain 1, we divide by $\bar\varrho = \varrho_1/\varrho_0$
 and $\bar c = c_1/c_0$, which results in a coefficient
 
 !bt
-\[ \alpha = \frac{\varrho_0c_0\kappa_1}{\varrho_1 c_1\kappa_0} \]
+\[ \alpha = \frac{\varrho_0c_0p_1}{\varrho_1 c_1p_0} \]
 !et
 on the right-hand side. This means that we can let `density` and
 `heat_capacity` be of unit value and only operate with a spatially
-varying $\kappa$, which takes on the values 1 in subdomain 0 and
+varying $p$, which takes on the values 1 in subdomain 0 and
 $\alpha$ in subdomain 1. For simplicity, we just name this parameter
 `kappa_values` in the code.
 
@@ -2273,7 +2353,7 @@ Would it be clearer to let all three parameters vary?]
 
 The problem class is very similar to `Problem1` above, except for the
 fact that we need to define the inner subdomain, we need to allow for
-$\kappa$ values in subdomain 0 and 1, the time points
+$p$ values in subdomain 0 and 1, the time points
 for plots and time steps are a bit different, and the Dirichlet condition
 only applies to $x=0$ (no need to implement the Neumann condition as
 long as it is zero).
@@ -2346,7 +2426,7 @@ the numerical methods, or one may not achieve substantial decay
 so the boundary condition on $y=0$ becomes wrong. To zoom in on the
 solution in the right way,
 it turns out that the right spatial length scale is
-$\sqrt{2\kappa/(wc\varrho)}$. With this length scale, a typical
+$\sqrt{2p/(wc\varrho)}$. With this length scale, a typical
 length of the domain in $y$ direction is 4.
 The most appealing time scale is $t_c=2/w$.
 

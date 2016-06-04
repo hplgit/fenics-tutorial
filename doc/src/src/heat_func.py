@@ -480,25 +480,24 @@ def test_solver():
     #                 expect_exact_sol=False)
 
 
-def animate_sine_spike():
+def animate_sine_spike(m=2):
     import numpy as np, time
 
     # Diffusion of a sin^8 spike, scaled homogeneous PDE
-    u0 = Expression('pow(sin(pi*x[0])*sin(pi*x[1]), 8)')
+    u0 = Expression('pow(sin(pi*x[0])*sin(pi*x[1]), m)', m=m)
     c = rho = p = Constant(1)
     f = Constant(0)
-    s = Constant(0)                       # dummy, not used
     dt = 0.0005
     T = 20*dt
     L = [1, 1]
     divisions = (60, 60)
     u_range = [0, 1]
 
+    # Neumann conditions (insulated boundary)
     BC = 'Robin'
-    Nu = 1
+    Nu = 0
     r = [Constant(Nu) for i in range(4)]   # Scaled Robin cond
-    #BC = 'Dirichlet'
-    #r = [Constant(0) for i in range(2*2)] # Dirichlet conditions u=0
+    s = Constant(0)  # dummy, not used
 
     vtkfile = File('diffusion.pvd')
 
@@ -510,6 +509,10 @@ def animate_sine_spike():
                        range_max=float(u_range[1]))  # must be float
         else:
             plt.plot(u)
+            # Integral of u should remain constant
+            u_integral = {2: 1./4, 8: 1225./16384}
+            if m in u_integral:
+                assert abs(assemble(u*dx) - u_integral[m]) < 1E-12
         print('t=%g' % t)
         time.sleep(0.5)           # pause between frames
         vtkfile << (u, float(t))  # store time-dep Function
@@ -526,9 +529,9 @@ def animate_sine_spike():
 
 def welding(gamma=1, delta=70, beta=10, num_rotations=2, Nu=1):
     """Circular moving heat source for simulating welding."""
-    # Only 3D and Robin is physical...
     d = 3  # no space dim
     from math import pi, sin, cos
+    # Define physical parameters and boundary conditions
     u0 = Constant(0)
     rho = c = p = Constant(1)
     BC = 'Robin'
@@ -536,8 +539,9 @@ def welding(gamma=1, delta=70, beta=10, num_rotations=2, Nu=1):
     r = [Constant(Nu) for i in range(2*d)]
     s = Constant(0)
 
+    # Define welding source
     R = 0.2
-    f = Expression(  # should decay in z direction?
+    f = Expression(
         'delta*exp(-0.5*pow(beta,2)*(pow(x[0]-(0.5+R*cos(t)),2) + '
                                     'pow(x[1]-(0.5+R*sin(t)),2)))',
         delta=delta, beta=beta, R=R, t=0)
@@ -550,8 +554,10 @@ def welding(gamma=1, delta=70, beta=10, num_rotations=2, Nu=1):
     class ProcessResults(object):
         def __init__(self):
             """Define fields to be stored/plotted."""
+            # Dump temperature solution to std FEniCS file temp.h5
             self.timeseries_T = TimeSeries(mpi_comm_world(), 'temp')
 
+            # Also dump temperature and source to cbcpost files
             self.pp = post.PostProcessor(
                 dict(casedir='Results', clean_casedir=True))
 
@@ -598,13 +604,11 @@ def welding(gamma=1, delta=70, beta=10, num_rotations=2, Nu=1):
                  (t, T.vector().array().max()))
             # Leave plotting to cbcpost
 
-    divisions = (40, 40)
-    L = (1, 1)
     divisions = (40, 40, 4)
     L = (1, 1, 0.05)
     solver(
         rho, c, p, f, r, s, u0, T, L,
-        dt, divisions, degree=1, theta=1,
+        dt, divisions, degree=1, theta=0.5,
         user_action=ProcessResults(),
         u0_project=False,
         lumped_mass=False,
@@ -700,6 +704,6 @@ if __name__ == '__main__':
     #application_welding(gamma=10)
     #test_solver()
     #test_efficiency()
-    #animate_sine_spike()
-    welding(gamma=1, delta=90, beta=10, num_rotations=2, Nu=1)
+    animate_sine_spike(m=2)
+    #welding(gamma=1, delta=90, beta=10, num_rotations=2, Nu=1)
     interactive()
