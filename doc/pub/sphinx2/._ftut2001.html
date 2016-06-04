@@ -131,13 +131,14 @@
       
   <div class="section" id="developing-a-more-advanced-heat-equation-solver">
 <span id="ch-diffusion"></span><h1>Developing a more advanced heat equation solver<a class="headerlink" href="#developing-a-more-advanced-heat-equation-solver" title="Permalink to this headline">¶</a></h1>
-<p>This chapter is devoted to some important topics when solving
+<p>This chapter is devoted to some important issues when solving
 time-dependent problems with FEniCS: avoiding unnecessary assembly,
-dealing with time-dependent <code class="docutils literal"><span class="pre">Expression</span></code> objects, debugging the coding of
-variational forms, saving results to file, and making animations.  We
-illustrate these techniques in a welding problem and go through all
-aspects of the code development, from scaling of the physical problem
-via debugging to constructing unit tests.</p>
+dealing with time-dependent <code class="docutils literal"><span class="pre">Expression</span></code> objects, debugging the coding
+of variational forms, lumping mass matrices, saving results to file,
+and making animations.  We handle these topics through a welding
+problem and address all aspects of code development, from scaling of
+the physical problem via debugging to constructing unit tests and
+sharing FEniCS best practices.</p>
 <p>The PDE to be addressed is the heat equation</p>
 <div class="math">
 \[\varrho c \frac{\partial u}{\partial t} = \nabla\cdot(p\nabla u) + f,\]</div>
@@ -166,13 +167,20 @@ term, the <span class="math">\(\theta\)</span> rule reads</p>
 <div class="math" id="eq-ch-diffusion-opt-num-thetar1">
 \[\tag{1}
 \frac{u^{n+1} - u^n}{{\Delta t}} = \theta\mathcal{G}(u^{n+1})
-    + (1-\theta)\mathcal{G}(u^n) + \theta f^{n+1} + (1-\theta)f^n,\]</div>
+    + (1-\theta)\mathcal{G}(u^n) + f^{n+\theta},\]</div>
 <p>or</p>
 <div class="math" id="eq-ch-diffusion-opt-num-thetar2">
 \[\tag{2}
 \frac{u^{n+1} - u^n}{{\Delta t}} = \mathcal{G}(\theta u^{n+1} +
-    (1-\theta)u^n) + f(\theta t_{n+1} + (1-\theta)t_n){\thinspace .}\]</div>
-<p>Note that <span class="math">\(\theta=0\)</span> gives a classical Forward Euler scheme,
+    (1-\theta)u^n) + f(t_{n+\theta}){\thinspace .}\]</div>
+<p>These equations are equal only if <span class="math">\(\mathcal{G}\)</span> is a linear operator.
+The notation <span class="math">\(f^{n+\theta}\)</span> means a weighted average of <span class="math">\(f\)</span> at
+time points <span class="math">\(t_n\)</span> and <span class="math">\(t_n{n+1}\)</span>: <span class="math">\(\theta f^{n+1} + (1-\theta)f^n\)</span>, while
+<span class="math">\(f(t_{n+\theta})\)</span> means <span class="math">\(f\)</span> evaluated at the time point
+<span class="math">\(\theta t_{n+1} + (1-\theta)t_n\)</span>.</p>
+<p>The nice feature of the <span class="math">\(\theta\)</span> rule is that it reproduces
+three widely used discretization methods in time:
+<span class="math">\(\theta=0\)</span> gives a classical Forward Euler scheme,
 <span class="math">\(\theta=1\)</span> gives a Backward Euler scheme, and <span class="math">\(\theta=\frac{1}{2}\)</span> gives a
 Crank-Nicolson (or midpoint/centered) scheme. The latter is
 theoretically the most accurate, but suffers from non-physical
@@ -181,21 +189,30 @@ applications may demand the more stable Backward Euler scheme (or a
 more accurate backward difference formula utilizing a third time
 level).</p>
 <p>The corresponding variational formulation for <span class="math">\(u^{n+1}\)</span> is derived by
-multiplying the time-discrete PDE (<span class="xref std std-ref">ch:diffusion:opt:PDEtheta</span>) by
-a test function <span class="math">\(v\in\hat V\)</span> and integrating over the spatial domain
-<span class="math">\(\Omega\)</span>. Terms with second-order derivatives are integrated by parts,
-meaning that <span class="math">\(\int_\Omega\mathcal{G}(u)v{\, \mathrm{d}x} = -\int_\Omega
-\mathcal{D}(u,v){\, \mathrm{d}x} + \int_\Gamma \mathcal{B}(u,v){\, \mathrm{d}s}\)</span>. Using
-<a class="reference internal" href="#eq-ch-diffusion-opt-num-thetar2"><span class="std std-ref">(2)</span></a>, and introducing <span class="math">\(U=\theta u^{n+1}
-+ (1-\theta)u^n)\)</span>, the variational formulation then becomes</p>
+multiplying the time-discrete PDE (<span class="xref std std-ref">ch:diffusion:opt:PDEthetar1</span>)
+or (<span class="xref std std-ref">ch:diffusion:opt:PDEthetar2</span>) by a test function <span class="math">\(v\in\hat V\)</span>
+and integrating over the spatial domain <span class="math">\(\Omega\)</span>. Terms with
+second-order derivatives are integrated by parts. We can express the
+integration by parts as</p>
+<div class="math">
+\[\int_\Omega\mathcal{G}(u)v{\, \mathrm{d}x} = -\int_\Omega \mathcal{D}(u,v){\, \mathrm{d}x} +
+\int_\Gamma \mathcal{B}(u,v){\, \mathrm{d}s}{\thinspace .}\]</div>
+<p>Using
+<a class="reference internal" href="#eq-ch-diffusion-opt-num-thetar2"><span class="std std-ref">(2)</span></a>, and introducing</p>
+<div class="math">
+\[U=\theta u^{n+1} + (1-\theta)u^n),\]</div>
+<p>the variational formulation becomes</p>
 <div class="math" id="eq-ch-diffusion-opt-num-varform">
 \[\tag{3}
 F = \int_\Omega \varrho c\frac{u^{n+1} - u^n}{{\Delta t}}v{\, \mathrm{d}x} +
     \int_\Omega \mathcal{D}(U,v) {\, \mathrm{d}x} -
-    \int_\Omega f(\theta t_{n+1}+(1-\theta)t_n) v{\, \mathrm{d}x}
-    + \int_\Gamma \mathcal{B}(U,v){\, \mathrm{d}s}\]</div>
+    \int_\Omega f(\theta t_{n+\theta}) v{\, \mathrm{d}x}
+    +
+    \quad \int_\Gamma \mathcal{B}(U,v){\, \mathrm{d}s}\]</div>
 <p>Note that we have inserted a factor <span class="math">\(\varrho c\)</span> in the time-derivative term
-since our PDE has this factor. We introduce a general initial condition</p>
+since our PDE has this factor. Also note that all terms are evaluated at
+the time point <span class="math">\(t_{n+\theta}\)</span>.</p>
+<p>We introduce a general initial condition</p>
 <div class="math">
 \[u(\boldsymbol{x}, 0) = u_0(\boldsymbol{x})\hbox{ in }\Omega{\thinspace .}\]</div>
 <p>As boundary conditions, we assume either Dirichlet conditions on the
@@ -203,11 +220,13 @@ entire boundary or a Robin condition</p>
 <div class="math">
 \[-p\frac{\partial u}{\partial n} = r(u-s),\]</div>
 <p>where <span class="math">\(r\)</span> is a heat transfer coefficient and <span class="math">\(s\)</span> is the surrounding
-temperature. Note that insulated boundaries are obtained by <span class="math">\(r=0\)</span>.
-We also have</p>
+temperature. Note that insulated boundaries are modeled by <span class="math">\(r=0\)</span>.
+For the present physical problem we have</p>
 <div class="math">
-\[\begin{split}\mathcal{D}(u,v) &amp;= \nabla\cdot(p\nabla u^{n}),\\
-\mathcal{B}(u,v) &amp;= r(u-s)v{\thinspace .}\end{split}\]</div>
+\[\begin{split}\begin{align*}
+\mathcal{D}(u,v) &amp;= \nabla\cdot(p\nabla u^{n}),\\
+\mathcal{B}(u,v) &amp;= r(u-s)v{\thinspace .}
+\end{align*}\end{split}\]</div>
 <p>Normally, in finite element programs, we would need to break up the
 variational formulation <a class="reference internal" href="#eq-ch-diffusion-opt-num-varform"><span class="std std-ref">(3)</span></a> into
 a bilinear and a linear part, but in FEniCS we can just use
@@ -218,20 +237,9 @@ formulation to be coded reads</p>
 \[\tag{4}
 F = \int_\Omega (\varrho c\frac{u^{n+1} - u^n}{{\Delta t}}v +
      p\nabla U\cdot\nabla v  -
-     f(\theta t_{n+1}+(1-\theta)t_n) v){\, \mathrm{d}x}
+     f(\theta t_{n+\theta}) v){\, \mathrm{d}x}
     + \int_\Gamma r(U-s)v{\, \mathrm{d}s}\]</div>
-</div>
-<div class="section" id="avoiding-assembly-of-the-coefficient-matrix">
-<span id="ch-diffusion-opt-bassembly"></span><h3>Avoiding assembly of the coefficient matrix<a class="headerlink" href="#avoiding-assembly-of-the-coefficient-matrix" title="Permalink to this headline">¶</a></h3>
-<p>[<strong>hpl 1</strong>: I thought this example can just be an exercise now that the Navier-Stokes example covers the topic of <code class="docutils literal"><span class="pre">assemble</span></code>. However, the Navier-Stokes example is relatively complicated, and many students do not have the background to really understand it, so we cannot it rely on all details from all gallery examples to be digested. Therefore, I explain in more detail the pre-assemble idea here.]</p>
-<p>Our time-dependent heat equation gives rise to a linear system
-with coefficient matrix <span class="math">\(A\)</span> and right-hand side <span class="math">\(b\)</span> at every time
-level. When <span class="math">\(\varrho\)</span>, <span class="math">\(c\)</span>, <span class="math">\(p\)</span>, and <span class="math">\(r\)</span> do not depend on time,
-and <span class="math">\({\Delta t}\)</span> is constant,
-<span class="math">\(A\)</span> is constant, and it suffices to assemble the matrix once -
-before the time loop. To be able to do this, we need to
-explicitly create matrices and vectors from variational
-formulations.</p>
+<p>If <span class="math">\(s\)</span> varies with time, we need to evaluate it as <span class="math">\(s(t_{n+\theta})\)</span>.</p>
 </div>
 <div class="section" id="algorithm">
 <span id="ch-diffusion-opt-alg"></span><h3>Algorithm<a class="headerlink" href="#algorithm" title="Permalink to this headline">¶</a></h3>
@@ -259,6 +267,14 @@ for the unknown spatial function at the new time level (<span class="math">\(u^n
 </li>
 </ul>
 </div></blockquote>
+<p>Our time-dependent heat equation gives rise to a linear system
+with coefficient matrix <span class="math">\(A\)</span> and right-hand side <span class="math">\(b\)</span> at every time
+level. When <span class="math">\(\varrho\)</span>, <span class="math">\(c\)</span>, <span class="math">\(p\)</span>, and <span class="math">\(r\)</span> do not depend on time,
+and <span class="math">\({\Delta t}\)</span> is constant,
+<span class="math">\(A\)</span> is constant, and it suffices to assemble the matrix once -
+before the time loop. To be able to do this, we need to
+explicitly create matrices and vectors from variational
+formulations, using the <code class="docutils literal"><span class="pre">assemble</span></code> function.</p>
 <p>The code features a lot of changes from the <code class="docutils literal"><span class="pre">ft03_heat.py</span></code>
 program. We shall go through each part of the above algorithm.</p>
 </div>
@@ -277,7 +293,11 @@ program. We shall go through each part of the above algorithm.</p>
 </div>
 <p>We assume that the domain is an interval, rectangle, or box, with
 dimensions given by the list <code class="docutils literal"><span class="pre">L</span></code> and where <code class="docutils literal"><span class="pre">divisions</span></code> specifies
-the number of cells in each spatial direction.</p>
+the number of cells in each spatial direction.
+Alternatively, we could demand that a ready-made mesh is provided by
+the calling code, but we take the opportunity here to illustrate
+once again the setting of different boundary conditions at different
+parts of the boundary.</p>
 <div class="section" id="boundary-condition-conventions">
 <h4>Boundary condition conventions<a class="headerlink" href="#boundary-condition-conventions" title="Permalink to this headline">¶</a></h4>
 <p>A convention is introduced for the boundary conditions:
@@ -294,7 +314,10 @@ if <code class="docutils literal"><span class="pre">BC</span> <span class="pre">
 <p>It is wise to start the function with checking the values of some
 of the input parameters. Python&#8217;s <code class="docutils literal"><span class="pre">assert</span></code> function is ideal for
 quick writing of tests, at the cost of cryptic error messages for
-less experienced programmers.</p>
+less experienced programmers. When we have some test expressed as
+a boolean condition <code class="docutils literal"><span class="pre">cond</span></code>, we can just write <code class="docutils literal"><span class="pre">assign</span> <span class="pre">cond</span></code>. The statement
+is silent if <code class="docutils literal"><span class="pre">cond</span></code> is <code class="docutils literal"><span class="pre">True</span></code>, otherwise an exception is raised and the
+program is aborted.</p>
 <div class="highlight-python"><div class="highlight"><pre><span></span><span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">divisions</span><span class="p">)</span> <span class="o">==</span> <span class="nb">len</span><span class="p">(</span><span class="n">L</span><span class="p">)</span>
 <span class="n">d</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">L</span><span class="p">)</span>  <span class="c1"># no of space dimensions</span>
 <span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">r</span><span class="p">)</span> <span class="o">==</span> <span class="mi">2</span><span class="o">*</span><span class="n">d</span>
@@ -306,10 +329,11 @@ less experienced programmers.</p>
 </div>
 <div class="section" id="creating-the-mesh">
 <h4>Creating the mesh<a class="headerlink" href="#creating-the-mesh" title="Permalink to this headline">¶</a></h4>
-<p>This solver is supposed to work on any domain, but for now we
-restrict the geometry to a hypercube (an alternative is to send
-a ready-made mesh as argument to <code class="docutils literal"><span class="pre">solver</span></code> - then we could handle
-arbitrary domains).</p>
+<p>For now we restrict the geometry to a hypercube (but the <code class="docutils literal"><span class="pre">solver</span></code>
+function can compute on any type of domain and mesh). We use the
+recipe from the
+section &#8220;Parameterizing the number of space dimensions&#8221;: &#8220;&#8221; in
+<a class="reference internal" href="._ftut2008.html#ref1" id="id2">[Ref1]</a>.</p>
 <div class="highlight-python"><div class="highlight"><pre><span></span><span class="k">if</span> <span class="n">d</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
     <span class="n">mesh</span> <span class="o">=</span> <span class="n">IntervalMesh</span><span class="p">(</span><span class="n">divisions</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="mi">0</span><span class="p">,</span> <span class="n">L</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
 <span class="k">elif</span> <span class="n">d</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>
@@ -320,7 +344,7 @@ arbitrary domains).</p>
 </pre></div>
 </div>
 <p>Note that <code class="docutils literal"><span class="pre">*L</span></code> for a list or tuple variable <code class="docutils literal"><span class="pre">L</span></code> in a function call
-is the same as sending
+is the same as sending the elements as separate arguments
 <code class="docutils literal"><span class="pre">L[0],</span> <span class="pre">L[1],</span> <span class="pre">...,</span> <span class="pre">L[len(L)-1]</span></code>.</p>
 </div>
 </div>
@@ -404,12 +428,20 @@ box:</p>
         <span class="n">bcs</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">DirichletBC</span><span class="p">(</span><span class="n">V</span><span class="p">,</span> <span class="n">r</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="n">boundary_parts</span><span class="p">,</span> <span class="n">i</span><span class="p">))</span>
 </pre></div>
 </div>
-<p>Note that we either have Dirichlet values at all boundaries or we
-have Robin conditions.</p>
+<p>Recall that we <em>either</em> have Dirichlet <em>or</em> Robin conditions
+at the entire boundary. This is just a convention that we, as
+developers of the <code class="docutils literal"><span class="pre">solver</span></code> function, has imposed. Later, in
+the chapter <a class="reference internal" href="._ftut2002.html#ch-classes"><span class="std std-ref">PDE solver design and coding practices</span></a>, we leave it to the user to define the mesh
+and boundary conditions, which results in a very flexible solver, but
+a significant amount of problem-specific code on the user&#8217;s side.</p>
+<p>[<strong>hpl 1</strong>: I&#8217;m really not sure whether it would be better to require a mesh variable from the user also here, along with some representations of the boundary conditons, as arguments for <code class="docutils literal"><span class="pre">solver</span></code> and put the setting of boundary conditions in the calling code. Now the examples with a <em>function</em> <code class="docutils literal"><span class="pre">solver</span></code> operates on hypercube geometries and deal with the partitioning of the boundary and setting of conditions, while the examples with a solver <em>class</em> just requires an API where the user supplies the mesh and info on boundary conditions. Maybe best with showing both ways. The bottom line is to explain something sufficiently general so the user does not copy the entire solver to change the boundary conditions and ends up with multiple solvers.]</p>
 </div>
 <div class="section" id="implementation-of-the-variational-formulation">
-<h3>Implementation of the variational formulation<a class="headerlink" href="#implementation-of-the-variational-formulation" title="Permalink to this headline">¶</a></h3>
-<p>[<strong>hpl 2</strong>: Important messgage: the variational form can be implemented in many steps, utilizing Python functions if desired, and this is very convenient, especially for debugging later. Not sure how this message can be explicitly formulated...]</p>
+<span id="ch-diffusion-opt-varform"></span><h3>Implementation of the variational formulation<a class="headerlink" href="#implementation-of-the-variational-formulation" title="Permalink to this headline">¶</a></h3>
+<p>We shall now implement the variational formulation and demonstrate how
+that formulation can be coded in separate parts, utilizing Python
+variables and functions. Later, we can examine the individual parts
+in search for programming errors.</p>
 <p>We start with implementing the initial condition:</p>
 <div class="highlight-python"><div class="highlight"><pre><span></span><span class="n">u_n</span> <span class="o">=</span> <span class="n">project</span><span class="p">(</span><span class="n">u0</span><span class="p">,</span> <span class="n">V</span><span class="p">)</span> <span class="k">if</span> <span class="n">u0_project</span> <span class="k">else</span> <span class="n">interpolate</span><span class="p">(</span><span class="n">u0</span><span class="p">,</span> <span class="n">V</span><span class="p">)</span>
 <span class="n">u_n</span><span class="o">.</span><span class="n">rename</span><span class="p">(</span><span class="s1">&#39;u&#39;</span><span class="p">,</span> <span class="s1">&#39;initial condition&#39;</span><span class="p">)</span>
@@ -429,14 +461,16 @@ Python functions for various terms in the formulation:</p>
 <span class="k">def</span> <span class="nf">B</span><span class="p">(</span><span class="n">u</span><span class="p">,</span> <span class="n">i</span><span class="p">):</span>
     <span class="k">return</span> <span class="n">r</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">*</span><span class="p">(</span><span class="n">u</span><span class="o">-</span><span class="n">s</span><span class="p">)</span><span class="o">*</span><span class="n">v</span><span class="o">*</span><span class="n">ds</span><span class="p">(</span><span class="n">i</span><span class="p">)</span>
 
-<span class="c1"># Must set the t attribute in f, s, and r[i] to</span>
+<span class="c1"># In time loop: must set the t attribute in f, s, and r[i] to</span>
 <span class="c1"># theta*t + (1-theta)*(t-dt) before evaluating the forms</span>
+
 <span class="n">U</span> <span class="o">=</span> <span class="n">theta</span><span class="o">*</span><span class="n">u</span> <span class="o">+</span> <span class="p">(</span><span class="mi">1</span><span class="o">-</span><span class="n">theta</span><span class="p">)</span><span class="o">*</span><span class="n">u_n</span>
 <span class="n">F_M</span> <span class="o">=</span> <span class="n">rho</span><span class="o">*</span><span class="n">c</span><span class="o">*</span><span class="p">(</span><span class="n">u</span><span class="o">-</span><span class="n">u_n</span><span class="p">)</span><span class="o">/</span><span class="n">dt</span><span class="o">*</span><span class="n">v</span><span class="o">*</span><span class="n">dx</span>
 <span class="n">F_K</span> <span class="o">=</span> <span class="n">D</span><span class="p">(</span><span class="n">U</span><span class="p">)</span>
-<span class="n">F_f</span> <span class="o">=</span> <span class="o">-</span><span class="n">f</span><span class="o">*</span><span class="n">v</span><span class="o">*</span><span class="n">dx</span>
-<span class="n">F</span> <span class="o">=</span> <span class="n">F_M</span> <span class="o">+</span> <span class="n">F_K</span> <span class="o">+</span> <span class="n">F_f</span>
+<span class="n">F_f</span> <span class="o">=</span> <span class="n">f</span><span class="o">*</span><span class="n">v</span><span class="o">*</span><span class="n">dx</span>
+<span class="n">F</span> <span class="o">=</span> <span class="n">F_M</span> <span class="o">+</span> <span class="n">F_K</span> <span class="o">-</span> <span class="n">F_f</span>
 <span class="k">if</span> <span class="n">BC</span> <span class="o">==</span> <span class="s1">&#39;Robin&#39;</span><span class="p">:</span>
+    <span class="c1"># Add cooling condition integrals from each side</span>
     <span class="n">F_R</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span><span class="n">B</span><span class="p">(</span><span class="n">U</span><span class="p">,</span> <span class="n">i</span><span class="p">)</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">2</span><span class="o">*</span><span class="n">d</span><span class="p">))</span>
     <span class="n">F</span> <span class="o">+=</span> <span class="n">F_R</span>
 <span class="n">a</span><span class="p">,</span> <span class="n">L</span> <span class="o">=</span> <span class="n">lhs</span><span class="p">(</span><span class="n">F</span><span class="p">),</span> <span class="n">rhs</span><span class="p">(</span><span class="n">F</span><span class="p">)</span>
@@ -445,7 +479,8 @@ Python functions for various terms in the formulation:</p>
 <p>We have with purpose split the expression for <code class="docutils literal"><span class="pre">F</span></code> into separate terms for
 easier debugging later, as this allows us to assemble terms independently
 and compare with hand calculations.</p>
-<p>It remains to assemble the coefficient matrix:</p>
+<p>It remains to assemble the coefficient matrix, here once and for all before
+the time loop if <span class="math">\(A\)</span> is constant throughout the simulations:</p>
 <div class="highlight-python"><div class="highlight"><pre><span></span><span class="k">if</span> <span class="n">A_is_const</span><span class="p">:</span>
     <span class="n">A</span> <span class="o">=</span> <span class="n">assemble</span><span class="p">(</span><span class="n">a</span><span class="p">)</span>
 </pre></div>
@@ -465,7 +500,7 @@ we must set <code class="docutils literal"><span class="pre">b</span> <span clas
 in the first call to <code class="docutils literal"><span class="pre">assemble</span></code> inside the time loop.</p>
 </div>
 <div class="section" id="the-time-loop">
-<h3>The time loop<a class="headerlink" href="#the-time-loop" title="Permalink to this headline">¶</a></h3>
+<span id="ch-diffusion-opt-timeloop"></span><h3>The time loop<a class="headerlink" href="#the-time-loop" title="Permalink to this headline">¶</a></h3>
 <p>The complete time loop goes as follows:</p>
 <div class="highlight-python"><div class="highlight"><pre><span></span><span class="n">u</span> <span class="o">=</span> <span class="n">Function</span><span class="p">(</span><span class="n">V</span><span class="p">)</span>   <span class="c1"># the unknown at a new time level</span>
 <span class="n">u</span><span class="o">.</span><span class="n">rename</span><span class="p">(</span><span class="s1">&#39;u&#39;</span><span class="p">,</span> <span class="s1">&#39;solution&#39;</span><span class="p">)</span>
@@ -501,42 +536,51 @@ in the first call to <code class="docutils literal"><span class="pre">assemble</
     <span class="n">u_n</span><span class="o">.</span><span class="n">assign</span><span class="p">(</span><span class="n">u</span><span class="p">)</span>
 </pre></div>
 </div>
-<p>The first part of the loop where we update <code class="docutils literal"><span class="pre">Expression</span></code> objects is
-key to get right and one of the most error-prone tasks for FEniCS
-programmers. The variational forms can work with time-dependent
-<code class="docutils literal"><span class="pre">Expression</span></code> objects and evaluate the time when we require an
-<code class="docutils literal"><span class="pre">assemble</span></code> operation. Hence, at each time level, every <code class="docutils literal"><span class="pre">Expression</span></code>
-object that enters the variational formulations that are subject to
-<code class="docutils literal"><span class="pre">assemble</span></code> calls must have its right time value. In addition,
-<code class="docutils literal"><span class="pre">Expression</span></code> objects related to Dirichlet values must contain the
-same time value as that of the unknown to be computed.
-In the present case, <code class="docutils literal"><span class="pre">f</span></code>, <code class="docutils literal"><span class="pre">s</span></code>, and <code class="docutils literal"><span class="pre">r[i]</span></code> enter the variational
-formulation at the weighted time <span class="math">\(t_m = \theta t_{n+1} + (1-\theta)t_{n+1}\)</span>,
-so this time value must be assigned to the <code class="docutils literal"><span class="pre">t</span></code> attribute in these
-objects. However, it may happen that one or more of the objects
-are <code class="docutils literal"><span class="pre">Constant</span></code> objects, or <code class="docutils literal"><span class="pre">Expression</span></code> objects without a time value,
-so a straight assignment <code class="docutils literal"><span class="pre">f.t</span> <span class="pre">=</span> <span class="pre">t_m</span></code> may fail. Therefore, we
-use <code class="docutils literal"><span class="pre">hasattr</span></code> to check that the object has a <code class="docutils literal"><span class="pre">t</span></code> attribute before
-updating the value.</p>
-<p>The update of <code class="docutils literal"><span class="pre">r[i].t</span></code> depends on whether <code class="docutils literal"><span class="pre">r</span></code> is used for Dirichlet or
+<div class="admonition-make-sure-expression-objects-have-the-right-time-value admonition">
+<p class="first admonition-title">Make sure Expression objects have the right time value</p>
+<p>The first part of the loop, where we update <code class="docutils literal"><span class="pre">Expression</span></code> objects, is
+really key to get right and one of the most error-prone tasks for
+FEniCS programmers. All given formulas in the variational form are to
+be evaluated at the intermediate time point <code class="docutils literal"><span class="pre">t_m</span></code> (<span class="math">\(t_{n+\theta}\)</span>).
+The variational forms can work with time-dependent <code class="docutils literal"><span class="pre">Expression</span></code>
+objects and evaluate the time variable in these objects when we
+require an <code class="docutils literal"><span class="pre">assemble</span></code> operation. Hence, at each time level, every
+<code class="docutils literal"><span class="pre">Expression</span></code> object that enters the variational formulation that is
+subject to <code class="docutils literal"><span class="pre">assemble</span></code> calls must have its right time value (or more
+precisely and general: all of its parameters must have the correct
+values). In addition, <code class="docutils literal"><span class="pre">Expression</span></code> objects related to Dirichlet values
+must contain the same time value as that of the unknown to be
+computed.  In the present case, <code class="docutils literal"><span class="pre">f</span></code>, <code class="docutils literal"><span class="pre">s</span></code>, and <code class="docutils literal"><span class="pre">r[i]</span></code> enter the
+variational formulation at the weighted time <span class="math">\(t_m = t_{n+\theta} =
+\theta t_{n+1} +
+(1-\theta)t_{n+1}\)</span>, so this time value must be assigned to the <code class="docutils literal"><span class="pre">t</span></code>
+attribute in these objects. However, it may happen that one or more of
+the objects are <code class="docutils literal"><span class="pre">Constant</span></code> objects, or <code class="docutils literal"><span class="pre">Expression</span></code> objects without a
+time value, so a straight assignment <code class="docutils literal"><span class="pre">f.t</span> <span class="pre">=</span> <span class="pre">t_m</span></code> may fail. Therefore,
+we use <code class="docutils literal"><span class="pre">hasattr</span></code> to check that the object has a <code class="docutils literal"><span class="pre">t</span></code> attribute before
+trying to update the value.</p>
+<p class="last">The update of <code class="docutils literal"><span class="pre">r[i].t</span></code> depends on whether <code class="docutils literal"><span class="pre">r</span></code> is used for Dirichlet or
 Robin conditions. In the latter case, the <span class="math">\(r\)</span> quantity is to be
 evaluated at the weighted time, <code class="docutils literal"><span class="pre">r[i].t</span> <span class="pre">=</span> <span class="pre">t_m</span></code>, while for a Dirichlet
 condition, <code class="docutils literal"><span class="pre">r[i].t</span></code> must reflect the same time level as the unknown we
-compute for, i.e., <span class="math">\(t_{n+1}\)</span>, or <code class="docutils literal"><span class="pre">t</span></code> in the time loop.</p>
+compute for, i.e., <span class="math">\(t_{n+1}\)</span>, or the variable <code class="docutils literal"><span class="pre">t</span></code> in the time loop.</p>
+</div>
 <p>The rest of the statements in the time loop should be quite familiar.
 Note that <code class="docutils literal"><span class="pre">[bc.apply(A,</span> <span class="pre">b)</span> <span class="pre">for</span> <span class="pre">bc</span> <span class="pre">in</span> <span class="pre">bcs]</span></code> is a quick way of writing
-a for loop in one line (using a list comprehension, but the resulting
+a for loop on one line (using Python&#8217;s list comprehension syntax,
+but the resulting
 list is never used for anything, just the calls <code class="docutils literal"><span class="pre">bc.apply(A,</span> <span class="pre">b)</span></code> are
 important for incorporating the Dirichlet conditions at each boundary
 segment).</p>
 <p>The complete <code class="docutils literal"><span class="pre">solver</span></code> function is found in the file
-<a class="reference external" href="https://github.com/hplgit/fenics-tutorial/blob/master/src/ft12_heat_func.py">ft12_heat_func.py</a>.</p>
+<a class="reference external" href="https://github.com/hplgit/fenics-tutorial/blob/master/src/ft12_heat_func.py">ft12_heat_func.py</a>.
+[<strong>hpl 2</strong>: Recall to rerun utility script for renaming these files prior to refereeing and publishing.]</p>
 </div>
 <div class="section" id="verification">
-<h3>Verification<a class="headerlink" href="#verification" title="Permalink to this headline">¶</a></h3>
-<p>The first implementation of a solver the complexity above is
+<span id="ch-diffusion-opt-verify"></span><h3>Verification<a class="headerlink" href="#verification" title="Permalink to this headline">¶</a></h3>
+<p>The first implementation of a solver of the complexity above is
 likely to suffer from programming errors or mathematical
-misunderstandings.  We must therefore set up tests so that we know
+misunderstandings.  We must therefore carefully set up tests so that we know
 that the implementation works. As usual, we favor manufactured
 solutions that can be exactly reproduced by the numerical method. With
 variable coefficients and a lot of input data to adjust, the choice of
@@ -547,18 +591,27 @@ this function compute the consistent source term and the coefficients
 a callback function that asserts the error to be within machine
 precision for this problem, if the manufactured solution is without
 approximation errors.</p>
-<p>We use SymPy to do the mathematics and then we use the code generation
+<p>We use SymPy to do the mathematics and the code generation
 utility in SymPy to translate the symbolic expressions to C++
 code needed in FEniCS <code class="docutils literal"><span class="pre">Expression</span></code> objects.</p>
 <div class="highlight-python"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">verify</span><span class="p">(</span>
-    <span class="n">manufactured_u</span><span class="p">,</span> <span class="n">d</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">degree</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">BC</span><span class="o">=</span><span class="s1">&#39;Robin&#39;</span><span class="p">,</span>
-    <span class="n">N</span><span class="o">=</span><span class="mi">16</span><span class="p">,</span> <span class="n">theta</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">expect_exact_sol</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span>
-    <span class="n">lumped_mass</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span> <span class="n">debug</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+    <span class="n">manufactured_u</span><span class="p">,</span>         <span class="c1"># SymPy expression</span>
+    <span class="n">d</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>                    <span class="c1"># no of space dimensions</span>
+    <span class="n">degree</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>               <span class="c1"># degree of finite element polynomials</span>
+    <span class="n">BC</span><span class="o">=</span><span class="s1">&#39;Robin&#39;</span><span class="p">,</span>             <span class="c1"># type of boundary condition</span>
+    <span class="n">N</span><span class="o">=</span><span class="mi">16</span><span class="p">,</span>                   <span class="c1"># partitioning in each space direction</span>
+    <span class="n">theta</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>                <span class="c1"># time discretization parameter</span>
+    <span class="n">expect_exact_sol</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span>  <span class="c1"># True: no approximation errors</span>
+    <span class="n">lumped_mass</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span>      <span class="c1"># True: lump mass matrix</span>
+    <span class="n">avoid_b_assembly</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span> <span class="c1"># True: construct b as matrix-vector products</span>
+    <span class="n">A_is_const</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>        <span class="c1"># None: set True if BC is &#39;Dirichlet&#39;</span>
+    <span class="n">debug</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span>            <span class="c1"># True: dump a lot of debugging info</span>
+    <span class="n">error_tol</span><span class="o">=</span><span class="mf">1E-13</span><span class="p">):</span>       <span class="c1"># tolerance for exact numerical solution</span>
 
-    <span class="kn">import</span> <span class="nn">sympy</span> <span class="kn">as</span> <span class="nn">sym</span>
     <span class="n">u</span> <span class="o">=</span> <span class="n">manufactured_u</span>  <span class="c1"># short form</span>
-    <span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="n">t</span> <span class="o">=</span> <span class="n">sym</span><span class="o">.</span><span class="n">symbols</span><span class="p">(</span><span class="s1">&#39;x[0] x[1] t&#39;</span><span class="p">)</span>
-    <span class="k">if</span> <span class="n">d</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>  <span class="c1"># 1D</span>
+    <span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="n">z</span><span class="p">,</span> <span class="n">t</span> <span class="o">=</span> <span class="n">sym</span><span class="o">.</span><span class="n">symbols</span><span class="p">(</span><span class="s1">&#39;x[0] x[1] x[2] t&#39;</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">d</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>  <span class="c1"># 1D test problem</span>
         <span class="n">p</span> <span class="o">=</span> <span class="mi">1</span>
         <span class="n">s</span> <span class="o">=</span> <span class="mi">1</span>
         <span class="n">rho</span> <span class="o">=</span> <span class="n">c</span> <span class="o">=</span> <span class="mi">1</span>
@@ -569,8 +622,8 @@ code needed in FEniCS <code class="docutils literal"><span class="pre">Expressio
         <span class="n">r</span> <span class="o">=</span> <span class="p">[</span><span class="bp">None</span><span class="p">]</span><span class="o">*</span><span class="p">(</span><span class="mi">2</span><span class="o">*</span><span class="n">d</span><span class="p">)</span>
         <span class="n">r</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="o">+</span><span class="n">p</span><span class="o">*</span><span class="n">sym</span><span class="o">.</span><span class="n">diff</span><span class="p">(</span><span class="n">u</span><span class="p">,</span> <span class="n">x</span><span class="p">)</span><span class="o">/</span><span class="p">(</span><span class="n">u</span><span class="o">-</span><span class="n">s</span><span class="p">))</span><span class="o">.</span><span class="n">subs</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
         <span class="n">r</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="o">-</span><span class="n">p</span><span class="o">*</span><span class="n">sym</span><span class="o">.</span><span class="n">diff</span><span class="p">(</span><span class="n">u</span><span class="p">,</span> <span class="n">x</span><span class="p">)</span><span class="o">/</span><span class="p">(</span><span class="n">u</span><span class="o">-</span><span class="n">s</span><span class="p">))</span><span class="o">.</span><span class="n">subs</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+
     <span class="k">elif</span> <span class="n">d</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>  <span class="c1"># 2D</span>
-        <span class="c1">#p = 2 + x + 2*y</span>
         <span class="n">p</span> <span class="o">=</span> <span class="mi">1</span>
         <span class="n">s</span> <span class="o">=</span> <span class="mi">2</span>
         <span class="n">rho</span> <span class="o">=</span> <span class="n">c</span> <span class="o">=</span> <span class="mi">1</span>
@@ -578,12 +631,30 @@ code needed in FEniCS <code class="docutils literal"><span class="pre">Expressio
             <span class="o">-</span> <span class="n">sym</span><span class="o">.</span><span class="n">diff</span><span class="p">(</span><span class="n">p</span><span class="o">*</span><span class="n">sym</span><span class="o">.</span><span class="n">diff</span><span class="p">(</span><span class="n">u</span><span class="p">,</span> <span class="n">x</span><span class="p">),</span> <span class="n">x</span><span class="p">)</span> \
             <span class="o">-</span> <span class="n">sym</span><span class="o">.</span><span class="n">diff</span><span class="p">(</span><span class="n">p</span><span class="o">*</span><span class="n">sym</span><span class="o">.</span><span class="n">diff</span><span class="p">(</span><span class="n">u</span><span class="p">,</span> <span class="n">y</span><span class="p">),</span> <span class="n">y</span><span class="p">)</span>
         <span class="n">f</span> <span class="o">=</span> <span class="n">sym</span><span class="o">.</span><span class="n">simplify</span><span class="p">(</span><span class="n">f</span><span class="p">)</span>           <span class="c1"># fitted source term</span>
-        <span class="c1"># Boundary conditions: r = -p*(du/dn)/(u-s)</span>
+        <span class="c1"># For Robin boundary conditions: r = -p*(du/dn)/(u-s)</span>
         <span class="n">r</span> <span class="o">=</span> <span class="p">[</span><span class="bp">None</span><span class="p">]</span><span class="o">*</span><span class="p">(</span><span class="mi">2</span><span class="o">*</span><span class="n">d</span><span class="p">)</span>
         <span class="n">r</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="o">+</span><span class="n">p</span><span class="o">*</span><span class="n">sym</span><span class="o">.</span><span class="n">diff</span><span class="p">(</span><span class="n">u</span><span class="p">,</span> <span class="n">x</span><span class="p">)</span><span class="o">/</span><span class="p">(</span><span class="n">u</span><span class="o">-</span><span class="n">s</span><span class="p">))</span><span class="o">.</span><span class="n">subs</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
         <span class="n">r</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="o">-</span><span class="n">p</span><span class="o">*</span><span class="n">sym</span><span class="o">.</span><span class="n">diff</span><span class="p">(</span><span class="n">u</span><span class="p">,</span> <span class="n">x</span><span class="p">)</span><span class="o">/</span><span class="p">(</span><span class="n">u</span><span class="o">-</span><span class="n">s</span><span class="p">))</span><span class="o">.</span><span class="n">subs</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
         <span class="n">r</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="o">+</span><span class="n">p</span><span class="o">*</span><span class="n">sym</span><span class="o">.</span><span class="n">diff</span><span class="p">(</span><span class="n">u</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span><span class="o">/</span><span class="p">(</span><span class="n">u</span><span class="o">-</span><span class="n">s</span><span class="p">))</span><span class="o">.</span><span class="n">subs</span><span class="p">(</span><span class="n">y</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
         <span class="n">r</span><span class="p">[</span><span class="mi">3</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="o">-</span><span class="n">p</span><span class="o">*</span><span class="n">sym</span><span class="o">.</span><span class="n">diff</span><span class="p">(</span><span class="n">u</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span><span class="o">/</span><span class="p">(</span><span class="n">u</span><span class="o">-</span><span class="n">s</span><span class="p">))</span><span class="o">.</span><span class="n">subs</span><span class="p">(</span><span class="n">y</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+
+    <span class="k">elif</span> <span class="n">d</span> <span class="o">==</span> <span class="mi">3</span><span class="p">:</span>  <span class="c1"># 3D</span>
+        <span class="n">p</span> <span class="o">=</span> <span class="mi">1</span>
+        <span class="n">s</span> <span class="o">=</span> <span class="mi">2</span>
+        <span class="n">rho</span> <span class="o">=</span> <span class="n">c</span> <span class="o">=</span> <span class="mi">1</span>
+        <span class="n">f</span> <span class="o">=</span> <span class="n">rho</span><span class="o">*</span><span class="n">c</span><span class="o">*</span><span class="n">sym</span><span class="o">.</span><span class="n">diff</span><span class="p">(</span><span class="n">u</span><span class="p">,</span> <span class="n">t</span><span class="p">)</span> \
+            <span class="o">-</span> <span class="n">sym</span><span class="o">.</span><span class="n">diff</span><span class="p">(</span><span class="n">p</span><span class="o">*</span><span class="n">sym</span><span class="o">.</span><span class="n">diff</span><span class="p">(</span><span class="n">u</span><span class="p">,</span> <span class="n">x</span><span class="p">),</span> <span class="n">x</span><span class="p">)</span> \
+            <span class="o">-</span> <span class="n">sym</span><span class="o">.</span><span class="n">diff</span><span class="p">(</span><span class="n">p</span><span class="o">*</span><span class="n">sym</span><span class="o">.</span><span class="n">diff</span><span class="p">(</span><span class="n">u</span><span class="p">,</span> <span class="n">y</span><span class="p">),</span> <span class="n">y</span><span class="p">)</span> \
+            <span class="o">-</span> <span class="n">sym</span><span class="o">.</span><span class="n">diff</span><span class="p">(</span><span class="n">p</span><span class="o">*</span><span class="n">sym</span><span class="o">.</span><span class="n">diff</span><span class="p">(</span><span class="n">u</span><span class="p">,</span> <span class="n">z</span><span class="p">),</span> <span class="n">z</span><span class="p">)</span>
+        <span class="n">f</span> <span class="o">=</span> <span class="n">sym</span><span class="o">.</span><span class="n">simplify</span><span class="p">(</span><span class="n">f</span><span class="p">)</span>           <span class="c1"># fitted source term</span>
+        <span class="c1"># For Robin boundary conditions: r = -p*(du/dn)/(u-s)</span>
+        <span class="n">r</span> <span class="o">=</span> <span class="p">[</span><span class="bp">None</span><span class="p">]</span><span class="o">*</span><span class="p">(</span><span class="mi">2</span><span class="o">*</span><span class="n">d</span><span class="p">)</span>
+        <span class="n">r</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="o">+</span><span class="n">p</span><span class="o">*</span><span class="n">sym</span><span class="o">.</span><span class="n">diff</span><span class="p">(</span><span class="n">u</span><span class="p">,</span> <span class="n">x</span><span class="p">)</span><span class="o">/</span><span class="p">(</span><span class="n">u</span><span class="o">-</span><span class="n">s</span><span class="p">))</span><span class="o">.</span><span class="n">subs</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+        <span class="n">r</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="o">-</span><span class="n">p</span><span class="o">*</span><span class="n">sym</span><span class="o">.</span><span class="n">diff</span><span class="p">(</span><span class="n">u</span><span class="p">,</span> <span class="n">x</span><span class="p">)</span><span class="o">/</span><span class="p">(</span><span class="n">u</span><span class="o">-</span><span class="n">s</span><span class="p">))</span><span class="o">.</span><span class="n">subs</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+        <span class="n">r</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="o">+</span><span class="n">p</span><span class="o">*</span><span class="n">sym</span><span class="o">.</span><span class="n">diff</span><span class="p">(</span><span class="n">u</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span><span class="o">/</span><span class="p">(</span><span class="n">u</span><span class="o">-</span><span class="n">s</span><span class="p">))</span><span class="o">.</span><span class="n">subs</span><span class="p">(</span><span class="n">y</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+        <span class="n">r</span><span class="p">[</span><span class="mi">3</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="o">-</span><span class="n">p</span><span class="o">*</span><span class="n">sym</span><span class="o">.</span><span class="n">diff</span><span class="p">(</span><span class="n">u</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span><span class="o">/</span><span class="p">(</span><span class="n">u</span><span class="o">-</span><span class="n">s</span><span class="p">))</span><span class="o">.</span><span class="n">subs</span><span class="p">(</span><span class="n">y</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+        <span class="n">r</span><span class="p">[</span><span class="mi">4</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="o">+</span><span class="n">p</span><span class="o">*</span><span class="n">sym</span><span class="o">.</span><span class="n">diff</span><span class="p">(</span><span class="n">u</span><span class="p">,</span> <span class="n">z</span><span class="p">)</span><span class="o">/</span><span class="p">(</span><span class="n">u</span><span class="o">-</span><span class="n">s</span><span class="p">))</span><span class="o">.</span><span class="n">subs</span><span class="p">(</span><span class="n">z</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+        <span class="n">r</span><span class="p">[</span><span class="mi">5</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="o">-</span><span class="n">p</span><span class="o">*</span><span class="n">sym</span><span class="o">.</span><span class="n">diff</span><span class="p">(</span><span class="n">u</span><span class="p">,</span> <span class="n">z</span><span class="p">)</span><span class="o">/</span><span class="p">(</span><span class="n">u</span><span class="o">-</span><span class="n">s</span><span class="p">))</span><span class="o">.</span><span class="n">subs</span><span class="p">(</span><span class="n">z</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
 
     <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">r</span><span class="p">)):</span>
         <span class="n">r</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">sym</span><span class="o">.</span><span class="n">simplify</span><span class="p">(</span><span class="n">r</span><span class="p">[</span><span class="n">i</span><span class="p">])</span>
@@ -615,14 +686,18 @@ code needed in FEniCS <code class="docutils literal"><span class="pre">Expressio
         <span class="k">if</span> <span class="n">debug</span><span class="p">:</span>
             <span class="k">print</span><span class="p">(</span><span class="s1">&#39;u exact:&#39;</span><span class="p">,</span> <span class="n">u_e</span><span class="o">.</span><span class="n">vector</span><span class="p">()</span><span class="o">.</span><span class="n">array</span><span class="p">())</span>
         <span class="k">if</span> <span class="n">expect_exact_sol</span><span class="p">:</span>
-            <span class="k">assert</span> <span class="n">error</span> <span class="o">&lt;</span> <span class="mf">1E-13</span><span class="p">,</span> <span class="n">error</span>
+            <span class="k">assert</span> <span class="n">error</span> <span class="o">&lt;</span> <span class="n">error_tol</span><span class="p">,</span> <span class="n">error</span>
 
-    <span class="n">A_is_const</span> <span class="o">=</span> <span class="n">BC</span> <span class="o">==</span> <span class="s1">&#39;Dirichlet&#39;</span>
+    <span class="k">if</span> <span class="n">A_is_const</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+        <span class="n">A_is_const</span> <span class="o">=</span> <span class="n">BC</span> <span class="o">==</span> <span class="s1">&#39;Dirichlet&#39;</span>
+    <span class="k">if</span> <span class="n">lumped_mass</span><span class="p">:</span>
+        <span class="k">assert</span> <span class="n">A_is_const</span>
     <span class="c1"># Match dt to N to keep dt/(2*d*dx**q) const,</span>
     <span class="c1"># q=1 for theta=0.5 else q=2</span>
     <span class="n">dx</span> <span class="o">=</span> <span class="mf">1.</span><span class="o">/</span><span class="n">N</span>
     <span class="n">q</span> <span class="o">=</span> <span class="mi">1</span> <span class="k">if</span> <span class="n">theta</span> <span class="o">==</span> <span class="mf">0.5</span> <span class="k">else</span> <span class="mi">2</span>
     <span class="n">dt</span> <span class="o">=</span> <span class="p">(</span><span class="mf">0.05</span><span class="o">/</span><span class="p">(</span><span class="mi">2</span><span class="o">*</span><span class="n">d</span><span class="o">*</span><span class="mf">0.5</span><span class="o">**</span><span class="n">q</span><span class="p">))</span><span class="o">*</span><span class="mi">2</span><span class="o">*</span><span class="n">d</span><span class="o">*</span><span class="n">dx</span><span class="o">**</span><span class="n">q</span>
+    <span class="k">print</span><span class="p">(</span><span class="s1">&#39;dx=</span><span class="si">%g</span><span class="s1">, dt=</span><span class="si">%g</span><span class="s1"> (p=1)&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">dx</span><span class="p">,</span> <span class="n">dt</span><span class="p">))</span>
     <span class="n">T</span> <span class="o">=</span> <span class="mi">5</span><span class="o">*</span><span class="n">dt</span>  <span class="c1"># always 5 steps</span>
     <span class="k">if</span> <span class="n">d</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
         <span class="n">divisions</span> <span class="o">=</span> <span class="p">(</span><span class="n">N</span><span class="p">,)</span>
@@ -630,66 +705,186 @@ code needed in FEniCS <code class="docutils literal"><span class="pre">Expressio
     <span class="k">elif</span> <span class="n">d</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>
         <span class="n">divisions</span> <span class="o">=</span> <span class="p">(</span><span class="n">N</span><span class="p">,</span> <span class="n">N</span><span class="p">)</span>
         <span class="n">L</span> <span class="o">=</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+    <span class="k">elif</span> <span class="n">d</span> <span class="o">==</span> <span class="mi">3</span><span class="p">:</span>
+        <span class="n">divisions</span> <span class="o">=</span> <span class="p">(</span><span class="n">N</span><span class="p">,</span> <span class="n">N</span><span class="p">,</span> <span class="n">N</span><span class="p">)</span>
+        <span class="n">L</span> <span class="o">=</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
     <span class="n">solver</span><span class="p">(</span><span class="n">rho</span><span class="p">,</span> <span class="n">c</span><span class="p">,</span> <span class="n">p</span><span class="p">,</span> <span class="n">f</span><span class="p">,</span> <span class="n">r</span><span class="p">,</span> <span class="n">s</span><span class="p">,</span> <span class="n">u_exact</span><span class="p">,</span> <span class="n">T</span><span class="p">,</span> <span class="n">L</span><span class="p">,</span>
            <span class="n">dt</span><span class="p">,</span> <span class="n">divisions</span><span class="p">,</span> <span class="n">degree</span><span class="o">=</span><span class="n">degree</span><span class="p">,</span> <span class="n">theta</span><span class="o">=</span><span class="n">theta</span><span class="p">,</span>
            <span class="n">user_action</span><span class="o">=</span><span class="n">print_error</span><span class="p">,</span>
            <span class="n">u0_project</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span> <span class="n">BC</span><span class="o">=</span><span class="n">BC</span><span class="p">,</span> <span class="n">A_is_const</span><span class="o">=</span><span class="n">A_is_const</span><span class="p">,</span>
-           <span class="n">lumped_mass</span><span class="o">=</span><span class="n">lumped_mass</span><span class="p">,</span> <span class="n">debug</span><span class="o">=</span><span class="n">debug</span><span class="p">)</span>
+           <span class="n">lumped_mass</span><span class="o">=</span><span class="n">lumped_mass</span><span class="p">,</span>
+           <span class="n">avoid_b_assembly</span><span class="o">=</span><span class="n">avoid_b_assembly</span><span class="p">,</span> <span class="n">debug</span><span class="o">=</span><span class="n">debug</span><span class="p">)</span>
+
+<span class="k">def</span> <span class="nf">test_efficiency</span><span class="p">():</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Measure the efficiency of various versions of a Forward</span>
+<span class="sd">    Euler method: lumped coefficient matrix without any assembly,</span>
+<span class="sd">    consistent coefficient matrix but no assembly, initial assembly</span>
+<span class="sd">    of coefficient matrix and assembly of right-hand side,</span>
+<span class="sd">    and full assembly at each time level.</span>
+<span class="sd">    Gain: a factor of 6, 4, 2, and 1.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="n">z</span><span class="p">,</span> <span class="n">t</span> <span class="o">=</span> <span class="n">sym</span><span class="o">.</span><span class="n">symbols</span><span class="p">(</span><span class="s1">&#39;x[0] x[1] x[2] t&#39;</span><span class="p">)</span>
+
+    <span class="c1"># 2D efficiency test: N=180, same gain</span>
+    <span class="c1"># 3D efficiency test</span>
+    <span class="n">u</span> <span class="o">=</span> <span class="mi">1</span> <span class="o">+</span> <span class="n">x</span><span class="o">**</span><span class="mi">2</span> <span class="o">+</span> <span class="n">y</span> <span class="o">+</span> <span class="n">z</span><span class="o">**</span><span class="mi">2</span> <span class="o">+</span> <span class="mi">3</span><span class="o">*</span><span class="n">t</span>
+    <span class="c1"># Lumped 0.14</span>
+    <span class="n">verify</span><span class="p">(</span><span class="n">u</span><span class="p">,</span> <span class="n">d</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span> <span class="n">degree</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">BC</span><span class="o">=</span><span class="s1">&#39;Dirichlet&#39;</span><span class="p">,</span> <span class="n">N</span><span class="o">=</span><span class="mi">30</span><span class="p">,</span> <span class="n">theta</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
+           <span class="n">lumped_mass</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span> <span class="n">avoid_b_assembly</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span> <span class="n">error_tol</span><span class="o">=</span><span class="mf">1E-11</span><span class="p">)</span>
+    <span class="c1"># No assembly of A and b, just matrix-vector operations 0.22</span>
+    <span class="n">verify</span><span class="p">(</span><span class="n">u</span><span class="p">,</span> <span class="n">d</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span> <span class="n">degree</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">BC</span><span class="o">=</span><span class="s1">&#39;Dirichlet&#39;</span><span class="p">,</span> <span class="n">N</span><span class="o">=</span><span class="mi">30</span><span class="p">,</span> <span class="n">theta</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
+           <span class="n">lumped_mass</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span> <span class="n">avoid_b_assembly</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span> <span class="n">error_tol</span><span class="o">=</span><span class="mf">1E-10</span><span class="p">)</span>
+    <span class="c1"># Initial assembly of A, assembly of b at each time level 0.42</span>
+    <span class="n">verify</span><span class="p">(</span><span class="n">u</span><span class="p">,</span> <span class="n">d</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span> <span class="n">degree</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">BC</span><span class="o">=</span><span class="s1">&#39;Dirichlet&#39;</span><span class="p">,</span> <span class="n">N</span><span class="o">=</span><span class="mi">30</span><span class="p">,</span> <span class="n">theta</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
+           <span class="n">lumped_mass</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span> <span class="n">avoid_b_assembly</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span> <span class="n">error_tol</span><span class="o">=</span><span class="mf">1E-10</span><span class="p">)</span>
+    <span class="c1"># Aseembly of A and b the normal way 0.86</span>
+    <span class="n">verify</span><span class="p">(</span><span class="n">u</span><span class="p">,</span> <span class="n">d</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span> <span class="n">degree</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">BC</span><span class="o">=</span><span class="s1">&#39;Dirichlet&#39;</span><span class="p">,</span> <span class="n">N</span><span class="o">=</span><span class="mi">30</span><span class="p">,</span> <span class="n">theta</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
+           <span class="n">lumped_mass</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span> <span class="n">avoid_b_assembly</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span> <span class="n">A_is_const</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span>
+           <span class="n">error_tol</span><span class="o">=</span><span class="mf">1E-10</span><span class="p">)</span>
 </pre></div>
 </div>
+<p>With the <code class="docutils literal"><span class="pre">verify</span></code> function we can easily construct a range of unit tests.
+For example, one test function might look as</p>
+<div class="highlight-python"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">test_solver</span><span class="p">():</span>
+    <span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="n">z</span><span class="p">,</span> <span class="n">t</span> <span class="o">=</span> <span class="n">sym</span><span class="o">.</span><span class="n">symbols</span><span class="p">(</span><span class="s1">&#39;x[0] x[1] x[2] t&#39;</span><span class="p">)</span>
+
+    <span class="c1"># 1D</span>
+    <span class="n">u</span> <span class="o">=</span> <span class="mi">1</span> <span class="o">+</span> <span class="n">x</span><span class="o">**</span><span class="mi">2</span> <span class="o">+</span> <span class="mi">3</span><span class="o">*</span><span class="n">t</span>
+    <span class="n">verify</span><span class="p">(</span><span class="n">u</span><span class="p">,</span> <span class="n">d</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">degree</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">BC</span><span class="o">=</span><span class="s1">&#39;Dirichlet&#39;</span><span class="p">,</span> <span class="n">N</span><span class="o">=</span><span class="mi">20</span><span class="p">,</span> <span class="n">theta</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+    <span class="n">verify</span><span class="p">(</span><span class="n">u</span><span class="p">,</span> <span class="n">d</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">degree</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">BC</span><span class="o">=</span><span class="s1">&#39;Dirichlet&#39;</span><span class="p">,</span> <span class="n">N</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">theta</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+    <span class="n">verify</span><span class="p">(</span><span class="n">u</span><span class="p">,</span> <span class="n">d</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">degree</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">BC</span><span class="o">=</span><span class="s1">&#39;Robin&#39;</span><span class="p">,</span> <span class="n">N</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>  <span class="n">theta</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+    <span class="n">verify</span><span class="p">(</span><span class="n">u</span><span class="p">,</span> <span class="n">d</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">degree</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">BC</span><span class="o">=</span><span class="s1">&#39;Robin&#39;</span><span class="p">,</span> <span class="n">N</span><span class="o">=</span><span class="mi">20</span><span class="p">,</span> <span class="n">theta</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+    <span class="n">verify</span><span class="p">(</span><span class="n">u</span><span class="p">,</span> <span class="n">d</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">degree</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">BC</span><span class="o">=</span><span class="s1">&#39;Robin&#39;</span><span class="p">,</span> <span class="n">N</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>  <span class="n">theta</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">error_tol</span><span class="o">=</span><span class="mf">1.5E-13</span><span class="p">)</span>
+    <span class="n">verify</span><span class="p">(</span><span class="n">u</span><span class="p">,</span> <span class="n">d</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">degree</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">BC</span><span class="o">=</span><span class="s1">&#39;Robin&#39;</span><span class="p">,</span> <span class="n">N</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>  <span class="n">theta</span><span class="o">=</span><span class="mf">0.5</span><span class="p">)</span>
+    <span class="c1"># Optimized versions</span>
+    <span class="n">verify</span><span class="p">(</span><span class="n">u</span><span class="p">,</span> <span class="n">d</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">degree</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">BC</span><span class="o">=</span><span class="s1">&#39;Dirichlet&#39;</span><span class="p">,</span> <span class="n">N</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">theta</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+           <span class="n">lumped_mass</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span> <span class="n">avoid_b_assembly</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+    <span class="n">verify</span><span class="p">(</span><span class="n">u</span><span class="p">,</span> <span class="n">d</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">degree</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">BC</span><span class="o">=</span><span class="s1">&#39;Dirichlet&#39;</span><span class="p">,</span> <span class="n">N</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">theta</span><span class="o">=</span><span class="mf">0.5</span><span class="p">,</span>
+           <span class="n">lumped_mass</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span> <span class="n">avoid_b_assembly</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+    <span class="n">verify</span><span class="p">(</span><span class="n">u</span><span class="p">,</span> <span class="n">d</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">degree</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">BC</span><span class="o">=</span><span class="s1">&#39;Dirichlet&#39;</span><span class="p">,</span> <span class="n">N</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">theta</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
+           <span class="n">lumped_mass</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span> <span class="n">avoid_b_assembly</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+
+    <span class="c1"># 2D</span>
+    <span class="n">u</span> <span class="o">=</span> <span class="mi">1</span> <span class="o">+</span> <span class="n">x</span> <span class="o">-</span> <span class="mi">4</span><span class="o">*</span><span class="n">y</span><span class="o">**</span><span class="mi">2</span> <span class="o">+</span> <span class="mi">3</span><span class="o">*</span><span class="n">t</span>
+    <span class="n">verify</span><span class="p">(</span><span class="n">u</span><span class="p">,</span> <span class="n">d</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">degree</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">BC</span><span class="o">=</span><span class="s1">&#39;Dirichlet&#39;</span><span class="p">,</span> <span class="n">N</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">theta</span><span class="o">=</span><span class="mf">0.5</span><span class="p">)</span>
+    <span class="n">verify</span><span class="p">(</span><span class="n">u</span><span class="p">,</span> <span class="n">d</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">degree</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">BC</span><span class="o">=</span><span class="s1">&#39;Dirichlet&#39;</span><span class="p">,</span> <span class="n">N</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">theta</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+    <span class="n">verify</span><span class="p">(</span><span class="n">u</span><span class="p">,</span> <span class="n">d</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">degree</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">BC</span><span class="o">=</span><span class="s1">&#39;Dirichlet&#39;</span><span class="p">,</span> <span class="n">N</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">theta</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Recall that <code class="docutils literal"><span class="pre">verify</span></code> performs the right <code class="docutils literal"><span class="pre">assert</span></code> only if the numerical
+solution is without approximation errors. Robin conditions may lead to
+exact solutions in 1D, but this is not true in 2D. There, we get
+a varying <span class="math">\(r\)</span>, depending on the manufactured solution, which destroys
+the exact computation of derivatives. An extension of <code class="docutils literal"><span class="pre">verify</span></code> is
+necessary such that we measure convergence rates when <code class="docutils literal"><span class="pre">expect_exact_sol</span></code>
+is <code class="docutils literal"><span class="pre">False</span></code>.</p>
 </div>
 <div class="section" id="debugging-of-fenics-programs">
-<h3>Debugging of FEniCS programs<a class="headerlink" href="#debugging-of-fenics-programs" title="Permalink to this headline">¶</a></h3>
+<span id="ch-diffusion-opt-debug"></span><h3>Debugging of FEniCS programs<a class="headerlink" href="#debugging-of-fenics-programs" title="Permalink to this headline">¶</a></h3>
 <p>[<strong>hpl 3</strong>: This section is unfinished.]</p>
-<p>When the first author implemented the present <code class="docutils literal"><span class="pre">solver</span></code> function, the
+<p>When the first author implemented the <code class="docutils literal"><span class="pre">solver</span></code> function at hand, the
 solution looked nice in visualizations, but the verification tests
 where the solutions should be reproduced to machine precision, were
-not fulfilled, but the numerical solutions converged. These
+not fulfilled, although the numerical solutions converged. These
 observations pointed to bugs in the code, but the author could not
-spot them from pure reading. How can such a FEniCS code systematically
+spot them from pure reading. How can such a FEniCS code be systematically
 debugged?  The safest way involves the following steps:</p>
-<blockquote>
-<div><ul class="simple">
+<ol class="arabic simple">
 <li>Reduce the problem to one spatial dimension.</li>
 <li>Work with P1 elements.</li>
 <li>Work with the smallest sensible mesh, e.g., two cells.</li>
 <li>Compute by hand the contribution to the coefficient matrix and
 right-hand side from each term in the PDEs.</li>
 <li>Assemble each term in the PDEs individually in FEniCS (easy!)
-for comparison with hand calculations. Be aware of the <code class="docutils literal"><span class="pre">vertex_to_dof</span></code>
-mapping in FEniCS.</li>
+for comparison with hand calculations. (Be aware of the <code class="docutils literal"><span class="pre">vertex_to_dof</span></code>
+mapping in FEniCS!)</li>
 <li>Write out all the Dirichlet conditions and check that they are correct.</li>
 <li>Finally assert that the linear system computed by hand and by FEniCS
 are identical.</li>
-</ul>
-</div></blockquote>
+</ol>
 <p>This procedure requires, of course, that one masters the basic algorithms
 in the finite element method and can perform these by hand or by a
 separate program. The details in the present PDE application are documented
 next.</p>
 <p>We start with reducing the problem to 1D. There are four types of terms
-in our PDE: the mass matrix term <span class="math">\(\int\frac{1}{{\Delta t}}u^{n+1}v\)</span>,
+in our PDE: the mass matrix term <span class="math">\(\int\varrho c\frac{1}{{\Delta t}}u^{n+1}v\)</span>,
 the stiffness matrix term <span class="math">\(\int p\nabla u\cdot\nabla v\)</span>, the source term
-<span class="math">\(\int fv\)</span>, and the Robin condition term <span class="math">\(\int_\Gamma r(u-s)v\)</span>.</p>
+<span class="math">\(\int fv\)</span>, and the Robin condition term <span class="math">\(\int_\Gamma r(u-s)v\)</span>. We must
+compute the element matrix or vector for each of these terms and
+assemble the corresponding matrix or vector. Alternatively, we may compute
+the matrix or vector directly, without considering element contributions.
+We prefer the former approach here.</p>
+<div class="section" id="numbering-of-the-unknowns">
+<h4>Numbering of the unknowns<a class="headerlink" href="#numbering-of-the-unknowns" title="Permalink to this headline">¶</a></h4>
+<p>Before diving into the calculations, we must know what type of mesh
+our FEniCS code works with. The potential issue is how the unknowns in
+the linear system (i.e., the degrees of freedom or dofs) are numbered,
+see in the section
+&#8220;Examining the degrees of freedom&#8221;: &#8220;&#8221; in <a class="reference internal" href="._ftut2008.html#ref1" id="id3">[Ref1]</a>.
+While hand calculations typically prefer a numbering from left to right,
+FEniCS may employ more sophisticated numberings. Each cell has two
+vertices with numbers. For P1 elements, where the degrees of freedom coincide
+with the function values at the vertices, we need to figure out what
+the dof numbering is:</p>
+<div class="highlight-python"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">fenics</span> <span class="kn">import</span> <span class="o">*</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">mesh</span> <span class="o">=</span> <span class="n">UnitIntervalMesh</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">p</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">mesh</span><span class="o">.</span><span class="n">coordinates</span><span class="p">()):</span>  <span class="c1"># vertex numbering</span>
+<span class="gp">... </span>  <span class="k">print</span><span class="p">(</span><span class="n">i</span><span class="p">,</span> <span class="n">p</span><span class="p">)</span>
+<span class="gp">...</span>
+<span class="go">0 [ 0.]</span>
+<span class="go">1 [ 0.5]</span>
+<span class="go">2 [ 1.]</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">V</span> <span class="o">=</span> <span class="n">FunctionSpace</span><span class="p">(</span><span class="n">mesh</span><span class="p">,</span> <span class="s1">&#39;P&#39;</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">print</span> <span class="n">vertex_to_dof_map</span><span class="p">(</span><span class="n">V</span><span class="p">)</span>
+<span class="go">[2 1 0]</span>
+</pre></div>
+</div>
+<p>We see that vertex number 0 corresponds to dof 2, vertex 1 to dof 1, and
+vertex 2 to dof 0. This is very important to remember when doing the
+hand calculations!</p>
+</div>
+<div class="section" id="hand-calculations">
+<h4>Hand calculations<a class="headerlink" href="#hand-calculations" title="Permalink to this headline">¶</a></h4>
+<p>The mass matrix term <span class="math">\(\int\varrho c\frac{1}{{\Delta t}}u^{n+1}v\)</span> leads to
+an integral over each element involving the finite element basis functions:
+<span class="math">\(\int\varrho c\frac{1}{{\Delta t}}\phi_i\phi_j{\, \mathrm{d}x}\)</span>. The corresponding element matrix
+becomes (constant <span class="math">\(\varrho c\)</span>):</p>
 <div class="math">
-\[\begin{split}\frac{h}{6{\Delta t}}
+\[\begin{split}\varrho c \frac{h}{6{\Delta t}}
 \left(\begin{array}{rr}
 2 &amp; 1\\
 1 &amp; 2
 \end{array}\right)\end{split}\]</div>
+<p>The parameter <span class="math">\(h\)</span> is the length of an element.
+Our computational case consists of two elements only, so
+<span class="math">\(h=\frac{1}{2}\)</span> and the global mass matrix reads</p>
 <div class="math">
-\[\begin{split}\frac{h}{6{\Delta t}}
+\[\begin{split}\varrho c\frac{h}{6{\Delta t}}
 \left(\begin{array}{rrr}
 2 &amp; 1 &amp; 0\\
 1 &amp; 4 &amp; 1\\
 0 &amp; 1 &amp; 2
 \end{array}\right)\end{split}\]</div>
+<p>The corresponding computation in FEniCS is</p>
+<div class="highlight-python"><div class="highlight"><pre><span></span><span class="n">F_M</span> <span class="o">=</span> <span class="n">rho</span><span class="o">*</span><span class="n">c</span><span class="o">*</span><span class="p">(</span><span class="n">u</span><span class="o">-</span><span class="n">v</span><span class="p">)</span><span class="o">/</span><span class="n">dt</span><span class="o">*</span><span class="n">v</span><span class="o">*</span><span class="n">dx</span>
+<span class="k">if</span> <span class="n">debug</span><span class="p">:</span>
+    <span class="n">M</span> <span class="o">=</span> <span class="n">assemble</span><span class="p">(</span><span class="n">lhs</span><span class="p">(</span><span class="n">F_M</span><span class="p">))</span>  <span class="c1"># assemble rho*c*u/dt*v*dx</span>
+    <span class="k">print</span><span class="p">(</span><span class="s1">&#39;Mass matrix:</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">,</span> <span class="n">M</span><span class="o">.</span><span class="n">array</span><span class="p">())</span>
+</pre></div>
+</div>
+<p>The &#8220;backward&#8221; dof numbering of unknowns used in FEniCS in this case does
+not influence the assembly by hand of the two element matrices.</p>
+<p>The stiffness matrix term <span class="math">\(\int p\nabla u\cdot\nabla v\)</span> leads to
+an element-wise integral <span class="math">\(\int \phi_i'\phi_j'{\, \mathrm{d}x}\)</span> when <span class="math">\(p=1\)</span> and the
+associated element matrix</p>
 <div class="math">
 \[\begin{split}\frac{1}{h}
 \left(\begin{array}{rr}
 1 &amp; -1\\
 -1 &amp; 1
 \end{array}\right)\end{split}\]</div>
+<p>The assembled, global matrix becomes</p>
 <div class="math">
 \[\begin{split}\frac{1}{h}
 \left(\begin{array}{rrr}
@@ -697,12 +892,15 @@ the stiffness matrix term <span class="math">\(\int p\nabla u\cdot\nabla v\)</sp
 -1 &amp; 2 &amp; -1\\
 0 &amp; -1 &amp; 1
 \end{array}\right)\end{split}\]</div>
-<p>The Robin condition in 1D reduces to <span class="math">\(\int_\Gamma r(u-s)v{\, \mathrm{d}s}\)</span>, which
-gives a contribution <span class="math">\([ruv]^1_0\)</span> to the coefficient matrix
+<p>Also here, there is no impact of the dof numbering in FEniCS.</p>
+<p>The Robin condition in 1D reduces to</p>
+<div class="math">
+\[\int_\Gamma r(u-s)v{\, \mathrm{d}s} = [r(u-s)v]_0^1,\]</div>
+<p>which gives a contribution <span class="math">\([ruv]^1_0\)</span> to the coefficient matrix
 and a contribution <span class="math">\([rsv]^1_0\)</span> to the right-hand side vector.
 We have <span class="math">\([ruv]^1_0=r(1)u(1)v(1)-r(0)u(0)v(0)\)</span>. The first term gives
 a contribution to the dof that corresponds to <span class="math">\(x=1\)</span> only, since
-<span class="math">\(\hat\phi_i(1)\phi_j(1)\neq 0\)</span> iff <span class="math">\(i\)</span> and <span class="math">\(j\)</span> is the dof at <span class="math">\(x=1\)</span>.
+<span class="math">\(\phi_i(1)\phi_j(1)\neq 0\)</span> iff <span class="math">\(i\)</span> and <span class="math">\(j\)</span> is the dof at <span class="math">\(x=1\)</span>.
 We typically get the global matrix</p>
 <div class="math">
 \[\begin{split}r(1,t)
@@ -711,7 +909,9 @@ We typically get the global matrix</p>
  0 &amp; 0 &amp; 0\\
  0 &amp; 0 &amp; 0
 \end{array}\right)\end{split}\]</div>
-<p>if doc 0 corresponds to <span class="math">\(x=1\)</span> (as in this FEniCS numbering).
+<p>when dof 0
+corresponds to the point (vertex) <span class="math">\(x=1\)</span>.
+Now the FEniCS numbering of dofs becomes important!
 The term <span class="math">\(r(0)u(0)v(0)\)</span> gives a similar contribution</p>
 <div class="math">
 \[\begin{split}r(0,t)
@@ -734,7 +934,49 @@ r(0,t)s
  0\\
  0\\
  1
-\end{array}\right)\end{split}\]</div>
+\end{array}\right){\thinspace .}\end{split}\]</div>
+<p>Our final term to be computed is <span class="math">\(\int fv\)</span>, which in the case <span class="math">\(f=1\)</span>
+gives rise to element integrals <span class="math">\(\int \phi_i{\, \mathrm{d}x}\)</span> and the element
+vector <span class="math">\((h/2)(1,1)\)</span>. The assembled, global vector for two
+elements reads <span class="math">\(h(\frac{1}{2},1,\frac{1}{2})\)</span>.</p>
+</div>
+<div class="section" id="comparing-hand-and-fenics-calculations">
+<h4>Comparing hand and FEniCS calculations<a class="headerlink" href="#comparing-hand-and-fenics-calculations" title="Permalink to this headline">¶</a></h4>
+<p>Now we are ready to see if the hand calculations correspond with those
+in FEniCS.
+With the variational form split into different pieces, it is easy to
+assemble each piece individually and print the corresponding matrix or vector:</p>
+<div class="highlight-python"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">D</span><span class="p">(</span><span class="n">u</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">p</span><span class="o">*</span><span class="n">dot</span><span class="p">(</span><span class="n">grad</span><span class="p">(</span><span class="n">u</span><span class="p">),</span> <span class="n">grad</span><span class="p">(</span><span class="n">v</span><span class="p">))</span><span class="o">*</span><span class="n">dx</span>
+
+<span class="k">def</span> <span class="nf">B</span><span class="p">(</span><span class="n">u</span><span class="p">,</span> <span class="n">i</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">r</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">*</span><span class="p">(</span><span class="n">u</span><span class="o">-</span><span class="n">s</span><span class="p">)</span><span class="o">*</span><span class="n">v</span><span class="o">*</span><span class="n">ds</span><span class="p">(</span><span class="n">i</span><span class="p">)</span>
+
+<span class="n">U</span> <span class="o">=</span> <span class="n">theta</span><span class="o">*</span><span class="n">u</span> <span class="o">+</span> <span class="p">(</span><span class="mi">1</span><span class="o">-</span><span class="n">theta</span><span class="p">)</span><span class="o">*</span><span class="n">u_n</span>
+<span class="n">F_M</span> <span class="o">=</span> <span class="n">rho</span><span class="o">*</span><span class="n">c</span><span class="o">*</span><span class="p">(</span><span class="n">u</span><span class="o">-</span><span class="n">u_n</span><span class="p">)</span><span class="o">/</span><span class="n">dt</span><span class="o">*</span><span class="n">v</span><span class="o">*</span><span class="n">dx</span>
+<span class="n">F_K</span> <span class="o">=</span> <span class="n">D</span><span class="p">(</span><span class="n">U</span><span class="p">)</span>
+<span class="n">F_f</span> <span class="o">=</span> <span class="n">f</span><span class="o">*</span><span class="n">v</span><span class="o">*</span><span class="n">dx</span>
+<span class="n">F</span> <span class="o">=</span> <span class="n">F_M</span> <span class="o">+</span> <span class="n">F_K</span> <span class="o">-</span> <span class="n">F_f</span>
+<span class="k">if</span> <span class="n">BC</span> <span class="o">==</span> <span class="s1">&#39;Robin&#39;</span><span class="p">:</span>
+    <span class="c1"># Add cooling condition integrals from each side</span>
+    <span class="n">F_R</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span><span class="n">B</span><span class="p">(</span><span class="n">U</span><span class="p">,</span> <span class="n">i</span><span class="p">)</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">2</span><span class="o">*</span><span class="n">d</span><span class="p">))</span>
+    <span class="n">F</span> <span class="o">+=</span> <span class="n">F_R</span>
+
+<span class="k">if</span> <span class="n">debug</span><span class="p">:</span>
+    <span class="k">print</span><span class="p">(</span><span class="s1">&#39;M:</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">,</span> <span class="n">assemble</span><span class="p">(</span><span class="n">lhs</span><span class="p">(</span><span class="n">F_M</span><span class="p">))</span><span class="o">.</span><span class="n">array</span><span class="p">())</span>
+    <span class="k">print</span><span class="p">(</span><span class="s1">&#39;K:</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">,</span> <span class="n">assemble</span><span class="p">(</span><span class="n">lhs</span><span class="p">(</span><span class="n">F_K</span><span class="p">))</span><span class="o">.</span><span class="n">array</span><span class="p">())</span>
+    <span class="k">print</span><span class="p">(</span><span class="s1">&#39;R:</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">,</span> <span class="n">assemble</span><span class="p">(</span><span class="n">lhs</span><span class="p">(</span><span class="n">F_R</span><span class="p">))</span><span class="o">.</span><span class="n">array</span><span class="p">())</span>
+    <span class="k">print</span><span class="p">(</span><span class="s1">&#39;A:</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">,</span> <span class="n">assemble</span><span class="p">(</span><span class="n">lhs</span><span class="p">(</span><span class="n">F</span><span class="p">))</span><span class="o">.</span><span class="n">array</span><span class="p">())</span>
+    <span class="k">print</span><span class="p">(</span><span class="s1">&#39;rhs M:&#39;</span><span class="p">,</span> <span class="n">assemble</span><span class="p">(</span><span class="n">rhs</span><span class="p">(</span><span class="n">F_M</span><span class="p">))</span><span class="o">.</span><span class="n">array</span><span class="p">())</span>
+    <span class="k">print</span><span class="p">(</span><span class="s1">&#39;rhs f:&#39;</span><span class="p">,</span> <span class="n">assemble</span><span class="p">(</span><span class="n">rhs</span><span class="p">(</span><span class="n">F_f</span><span class="p">))</span><span class="o">.</span><span class="n">array</span><span class="p">())</span>
+    <span class="k">print</span><span class="p">(</span><span class="s1">&#39;rhs R:&#39;</span><span class="p">,</span> <span class="n">assemble</span><span class="p">(</span><span class="n">rhs</span><span class="p">(</span><span class="n">F_R</span><span class="p">))</span><span class="o">.</span><span class="n">array</span><span class="p">())</span>
+    <span class="k">print</span><span class="p">(</span><span class="s1">&#39;b:&#39;</span><span class="p">,</span> <span class="n">assemble</span><span class="p">(</span><span class="n">rhs</span><span class="p">(</span><span class="n">F</span><span class="p">))</span><span class="o">.</span><span class="n">array</span><span class="p">())</span>
+<span class="n">a</span><span class="p">,</span> <span class="n">L</span> <span class="o">=</span> <span class="n">lhs</span><span class="p">(</span><span class="n">F</span><span class="p">),</span> <span class="n">rhs</span><span class="p">(</span><span class="n">F</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Start with a case with Dirichlet conditions and then proceed with
+testing Robin conditions.</p>
+</div>
 </div>
 <div class="section" id="avoiding-all-assembly">
 <span id="ch-diffusion-opt-noassembly"></span><h3>Avoiding all assembly<a class="headerlink" href="#avoiding-all-assembly" title="Permalink to this headline">¶</a></h3>
@@ -767,14 +1009,16 @@ functions <span class="math">\(\phi_i\)</span> to identify matrix-vector product
 the complete system. We have <span class="math">\(u^{n}=\sum_{j=1}^NU^{n}_j\phi_j\)</span>,
 and we can expand <span class="math">\(f^n\)</span> as
 <span class="math">\(f^{n}=\sum_{j=1}^NF^{n}_j\phi_j\)</span>. Inserting these expressions in
-<span class="math">\(L(v)\)</span> and using <span class="math">\(v=\hat\phi_i\)</span> result in</p>
+<span class="math">\(L(v)\)</span> and using <span class="math">\(v=\phi_i\)</span> result in</p>
 <p>[<strong>hpl 4</strong>: Why <span class="math">\(hat\phi_i\)</span>? No need for Petrov-Galerkin here... Cannot remember why the hat. Remove it.]</p>
 <div class="math">
-\[\begin{split}\int_\Omega \left(\frac{1}{{\Delta t}}u^{n} + f^{n+1}\right)v {\, \mathrm{d}x} &amp;=
-\int_\Omega \left(\frac{1}{{\Delta t}}\sum_{j=1}^N U^{n}_j\phi_j + \sum_{j=1}^N F^{n+1}_j\phi_j\right)\hat\phi_i {\, \mathrm{d}x},\\
-&amp;=\sum_{j=1}^N\frac{1}{{\Delta t}}\left(\int_\Omega \hat\phi_i\phi_j {\, \mathrm{d}x}\right)U^{n}_j
- + \sum_{j=1}^N\left(\int_\Omega \hat\phi_i\phi_j {\, \mathrm{d}x}\right)F^{n+1}_j{\thinspace .}\end{split}\]</div>
-<p>Introducing <span class="math">\(M_{ij} = \int_\Omega \hat\phi_i\phi_j {\, \mathrm{d}x}\)</span>, we see that
+\[\begin{split}\begin{align*}
+\int_\Omega \left(\frac{1}{{\Delta t}}u^{n} + f^{n+1}\right)v {\, \mathrm{d}x} &amp;=
+\int_\Omega \left(\frac{1}{{\Delta t}}\sum_{j=1}^N U^{n}_j\phi_j + \sum_{j=1}^N F^{n+1}_j\phi_j\right)\phi_i {\, \mathrm{d}x},\\
+&amp;=\sum_{j=1}^N\frac{1}{{\Delta t}}\left(\int_\Omega \phi_i\phi_j {\, \mathrm{d}x}\right)U^{n}_j
+ + \sum_{j=1}^N\left(\int_\Omega \phi_i\phi_j {\, \mathrm{d}x}\right)F^{n+1}_j{\thinspace .}
+\end{align*}\end{split}\]</div>
+<p>Introducing <span class="math">\(M_{ij} = \int_\Omega \phi_i\phi_j {\, \mathrm{d}x}\)</span>, we see that
 the last expression can be written</p>
 <div class="math">
 \[\sum_{j=1}^N \frac{1}{{\Delta t}}M_{ij}U^{n}_j + \sum_{j=1}^NM_{ij}F^{n+1}_j,\]</div>
@@ -822,13 +1066,13 @@ b = \frac{1}{{\Delta t}}MU^{n} + \theta MF^n - (1-\theta)KU^n - (1-theta)RU^n
 will vary with time, but it has a special structure so that it can
 easily and cheaply be computed at each time level.
 To see this, we
-insert <span class="math">\(v=\hat\phi_i\)</span> and <span class="math">\(u^n = \sum_{j=1}^N U^n_j\phi_j\)</span> in the
+insert <span class="math">\(v=\phi_i\)</span> and <span class="math">\(u^n = \sum_{j=1}^N U^n_j\phi_j\)</span> in the
 bilinear expression for the simplified case <span class="math">\(\theta=1\)</span> and no Robin
 conditions to get</p>
 <div class="math">
 \[\sum_{j=1}^N \left(\int_\Omega \frac{1}{{\Delta t}}
-\hat\phi_i\phi_j {\, \mathrm{d}x}\right)U^n_j +
-\sum_{j=1}^N \left(\int_\Omega \nabla\hat\phi_i\cdot\nabla\phi_j {\, \mathrm{d}x}\right)U^n_j,\]</div>
+\phi_i\phi_j {\, \mathrm{d}x}\right)U^n_j +
+\sum_{j=1}^N \left(\int_\Omega \nabla\phi_i\cdot\nabla\phi_j {\, \mathrm{d}x}\right)U^n_j,\]</div>
 <p>which can be written as a sum of matrix-vector products,</p>
 <div class="math">
 \[\frac{1}{{\Delta t}}MU^n + KU^n = (\frac{1}{{\Delta t}}M + {{\Delta t}} K)U^n,\]</div>
@@ -836,15 +1080,15 @@ conditions to get</p>
 the matrix <span class="math">\(K\)</span> with entries</p>
 <div class="math" id="eq-auto2">
 \[\tag{6}
-K_{ij} = \int_\Omega \nabla\hat\phi_i\cdot\nabla\phi_j {\, \mathrm{d}x}{\thinspace .}\]</div>
+K_{ij} = \int_\Omega \nabla\phi_i\cdot\nabla\phi_j {\, \mathrm{d}x}{\thinspace .}\]</div>
 <p>The matrix <span class="math">\(M\)</span> is often called the &#8220;mass matrix&#8221; while &#8220;stiffness
 matrix&#8221; is a common nickname for <span class="math">\(K\)</span>. The associated bilinear forms
 for these matrices, as we need them for the assembly process in a
 FEniCS program, become</p>
 <table border="1" class="docutils">
 <colgroup>
-<col width="65%" />
-<col width="35%" />
+<col width="66%" />
+<col width="34%" />
 </colgroup>
 <thead valign="bottom">
 <tr class="row-odd"><th class="head">Mathematics</th>
@@ -852,7 +1096,7 @@ FEniCS program, become</p>
 </tr>
 </thead>
 <tbody valign="top">
-<tr class="row-even"><td><span class="math">\(a_K(u,v) = \int_\Omega\nabla u\cdot\nabla v {\, \mathrm{d}x}\)</span></td>
+<tr class="row-even"><td><span class="math">\(a_K(u,v) = \int_\Omega \nabla u\cdot\nabla v {\, \mathrm{d}x}\)</span></td>
 <td><code class="docutils literal"><span class="pre">a_K</span> <span class="pre">=</span> <span class="pre">dot(nabla(u),</span> <span class="pre">nabla(v))*dx</span></code></td>
 </tr>
 <tr class="row-odd"><td><span class="math">\(a_M(u,v) = \int_\Omega uv {\, \mathrm{d}x}\)</span></td>
@@ -862,192 +1106,64 @@ FEniCS program, become</p>
 </table>
 <p>The linear system at each time level, written as <span class="math">\(AU^n=b\)</span>,
 can now be computed by first computing <span class="math">\(M\)</span> and <span class="math">\(K\)</span>, and then forming
-<span class="math">\(A=M+{{\Delta t}} K\)</span> at <span class="math">\(t=0\)</span>, while <span class="math">\(b\)</span> is computed as
-<span class="math">\(b=\frac{1}{{\Delta t}}MU^{n-1} + MF^n\)</span> at each time level.</p>
+<span class="math">\(A={{\Delta t}}^{-1} M+ K\)</span> at <span class="math">\(t=0\)</span>, while <span class="math">\(b\)</span> is computed as
+<span class="math">\(b={{\Delta t}}^{-1} MU^{n-1} + MF^n\)</span> at each time level.</p>
+<p>[<strong>hpl 5</strong>: Using <span class="math">\(u^n\)</span> and <span class="math">\(u^{n-1}\)</span>, should be <span class="math">\(n+1\)</span> and <span class="math">\(n\)</span>.]</p>
 </div>
 <div class="section" id="generalization-to-full-model">
 <h4>Generalization to full model<a class="headerlink" href="#generalization-to-full-model" title="Permalink to this headline">¶</a></h4>
 <p>The coefficient matrix associated with the complete variational form
-<a class="reference internal" href="#eq-ch-diffusion-opt-num-varform2"><span class="std std-ref">(4)</span></a></p>
-<p>[<strong>hpl 5</strong>: Not finished.]</p>
+<a class="reference internal" href="#eq-ch-diffusion-opt-num-varform2"><span class="std std-ref">(4)</span></a> leads to somewhat more complicated
+formulas. Just for simplicity, we
+drop this optimization when we have Robin conditions only. Ignoring the
+integral over the boundary, we get that</p>
+<div class="math">
+\[A=\varrho c\frac{1}{{\Delta t}}M + \theta K,\]</div>
+<p>and</p>
+<div class="math">
+\[b = \varrho c\frac{1}{{\Delta t}} Mu^{n} + MF^m - (1-\theta)Ku^n,\]</div>
+<p>where <span class="math">\(F^{n+\theta}\)</span> is the vector of interpolated <span class="math">\(f\)</span>
+values at time <span class="math">\(t_{n+\theta} = f(\theta t_{n+1} + (1-\theta) t_n)\)</span>.</p>
+<p>[<strong>hpl 6</strong>: Not finished.]</p>
 </div>
 <div class="section" id="fenics-implementation-1">
 <h4>FEniCS implementation<a class="headerlink" href="#fenics-implementation-1" title="Permalink to this headline">¶</a></h4>
-<p>The following modifications are needed</p>
-<p>in order to implement the new
-strategy of avoiding assembly at each time level:</p>
-<blockquote>
-<div><ol class="arabic simple">
-<li>Define separate forms <span class="math">\(a_M\)</span> and <span class="math">\(a_K\)</span></li>
-<li>Assemble <span class="math">\(a_M\)</span> to <span class="math">\(M\)</span> and <span class="math">\(a_K\)</span> to <span class="math">\(K\)</span></li>
-<li>Compute <span class="math">\(A=\frac{1}{{\Delta t}}M+K\)</span></li>
-<li>Define <span class="math">\(f\)</span> as an <code class="docutils literal"><span class="pre">Expression</span></code></li>
-<li>Interpolate the formula for <span class="math">\(f\)</span> to a finite element function <span class="math">\(F^n\)</span></li>
-<li>Compute <span class="math">\(b=\frac{1}{{\Delta t}}MU^{n-1} + MF^n\)</span></li>
-</ol>
-</div></blockquote>
-<p>The relevant code segments become</p>
-<div class="highlight-python"><div class="highlight"><pre><span></span><span class="c1"># 1.</span>
-<span class="n">a_K</span> <span class="o">=</span> <span class="n">dot</span><span class="p">(</span><span class="n">grad</span><span class="p">(</span><span class="n">u</span><span class="p">),</span> <span class="n">grad</span><span class="p">(</span><span class="n">v</span><span class="p">))</span><span class="o">*</span><span class="n">dx</span>
-<span class="n">a_M</span> <span class="o">=</span> <span class="n">u</span><span class="o">*</span><span class="n">v</span><span class="o">*</span><span class="n">dx</span>
-<span class="c1"># No need for L</span>
-
-<span class="c1"># 2. and 3.</span>
-<span class="n">M</span> <span class="o">=</span> <span class="n">assemble</span><span class="p">(</span><span class="n">a_M</span><span class="p">)</span>
-<span class="n">K</span> <span class="o">=</span> <span class="n">assemble</span><span class="p">(</span><span class="n">a_K</span><span class="p">)</span>
-<span class="n">A</span> <span class="o">=</span> <span class="n">M</span> <span class="o">+</span> <span class="n">dt</span><span class="o">*</span><span class="n">K</span>
-
-<span class="c1"># 4.</span>
-<span class="n">f</span> <span class="o">=</span> <span class="n">Expression</span><span class="p">(</span><span class="s1">&#39;beta - 2 - 2*alpha&#39;</span><span class="p">,</span> <span class="n">beta</span><span class="o">=</span><span class="n">beta</span><span class="p">,</span> <span class="n">alpha</span><span class="o">=</span><span class="n">alpha</span><span class="p">)</span>
-
-<span class="c1"># 5. and 6.</span>
-<span class="k">while</span> <span class="n">t</span> <span class="o">&lt;=</span> <span class="n">T</span><span class="p">:</span>
-    <span class="n">f_n</span> <span class="o">=</span> <span class="n">interpolate</span><span class="p">(</span><span class="n">f</span><span class="p">,</span> <span class="n">V</span><span class="p">)</span>
-    <span class="n">F_n</span> <span class="o">=</span> <span class="n">f_n</span><span class="o">.</span><span class="n">vector</span><span class="p">()</span>
-    <span class="n">b</span> <span class="o">=</span> <span class="n">M</span><span class="o">*</span><span class="n">u_1</span><span class="o">.</span><span class="n">vector</span><span class="p">()</span> <span class="o">+</span> <span class="n">dt</span><span class="o">*</span><span class="n">M</span><span class="o">*</span><span class="n">F_n</span>
+<p>It is tempting to construct <span class="math">\(A\)</span> as</p>
+<div class="highlight-python"><div class="highlight"><pre><span></span><span class="n">A</span> <span class="o">=</span> <span class="n">rho</span><span class="o">*</span><span class="n">c</span><span class="o">*</span><span class="p">(</span><span class="mf">1.</span><span class="o">/</span><span class="n">dt</span><span class="p">)</span><span class="o">*</span><span class="n">M</span> <span class="o">+</span> <span class="n">theta</span><span class="o">*</span><span class="n">K</span>
 </pre></div>
 </div>
-<p>We implement these modifications in a refactored version of the
-program <code class="docutils literal"><span class="pre">ft11_heat2.py</span></code>, where the solver is a function
-as explained in the
-section &#8220;Refactored implementation&#8221;: &#8220;&#8221; in <a class="reference internal" href="._ftut2008.html#ref1" id="id2">[Ref1]</a> rather than a
-flat program. The domain can also more flexibly be a 1D, 2D, or 3D
-interval, rectangle, or box.
-The new <code class="docutils literal"><span class="pre">solver_minimize_assembly</span></code> function resides in
-<a class="reference external" href="ft12_heat_func.py">ft12_heat_func.py</a>.</p>
-<div class="highlight-python"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">solver_minimize_assembly</span><span class="p">(</span>
-    <span class="n">alpha</span><span class="p">,</span> <span class="n">f</span><span class="p">,</span> <span class="n">u0</span><span class="p">,</span> <span class="n">I</span><span class="p">,</span> <span class="n">dt</span><span class="p">,</span> <span class="n">T</span><span class="p">,</span> <span class="n">divisions</span><span class="p">,</span> <span class="n">L</span><span class="p">,</span> <span class="n">degree</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
-    <span class="n">user_action</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">I_project</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
-    <span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">    Solve diffusion PDE u_t = div(alpha*grad(u)) + f on</span>
-<span class="sd">    an interval, rectangle, or box with side lengths in L.</span>
-<span class="sd">    divisions reflect cell partitioning, degree the element</span>
-<span class="sd">    degree. user_action(t, u, timetesp) is a callback function</span>
-<span class="sd">    where the calling code can process the solution.</span>
-<span class="sd">    If I_project is false, use interpolation for the initial</span>
-<span class="sd">    condition.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
-    <span class="c1"># Create mesh and define function space</span>
-    <span class="n">d</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">L</span><span class="p">)</span>  <span class="c1"># No of space dimensions</span>
-    <span class="k">if</span> <span class="n">d</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
-        <span class="n">mesh</span> <span class="o">=</span> <span class="n">IntervalMesh</span><span class="p">(</span><span class="n">divisions</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="mi">0</span><span class="p">,</span> <span class="n">L</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
-    <span class="k">elif</span> <span class="n">d</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>
-        <span class="n">mesh</span> <span class="o">=</span> <span class="n">RectangleMesh</span><span class="p">(</span><span class="n">Point</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">),</span> <span class="n">Point</span><span class="p">(</span><span class="o">*</span><span class="n">L</span><span class="p">),</span> <span class="o">*</span><span class="n">divisions</span><span class="p">)</span>
-    <span class="k">elif</span> <span class="n">d</span> <span class="o">==</span> <span class="mi">3</span><span class="p">:</span>
-        <span class="n">mesh</span> <span class="o">=</span> <span class="n">BoxMesh</span><span class="p">(</span><span class="n">Point</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">),</span> <span class="n">Point</span><span class="p">(</span><span class="o">*</span><span class="n">L</span><span class="p">),</span> <span class="o">*</span><span class="n">divisions</span><span class="p">)</span>
-    <span class="n">V</span> <span class="o">=</span> <span class="n">FunctionSpace</span><span class="p">(</span><span class="n">mesh</span><span class="p">,</span> <span class="s1">&#39;P&#39;</span><span class="p">,</span> <span class="n">degree</span><span class="p">)</span>
-
-    <span class="k">class</span> <span class="nc">Boundary</span><span class="p">(</span><span class="n">SubDomain</span><span class="p">):</span>  <span class="c1"># define the Dirichlet boundary</span>
-        <span class="k">def</span> <span class="nf">inside</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">on_boundary</span><span class="p">):</span>
-            <span class="k">return</span> <span class="n">on_boundary</span>
-
-    <span class="n">boundary</span> <span class="o">=</span> <span class="n">Boundary</span><span class="p">()</span>
-    <span class="n">bc</span> <span class="o">=</span> <span class="n">DirichletBC</span><span class="p">(</span><span class="n">V</span><span class="p">,</span> <span class="n">u0</span><span class="p">,</span> <span class="n">boundary</span><span class="p">)</span>
-
-    <span class="c1"># Initial condition</span>
-    <span class="n">u_1</span> <span class="o">=</span> <span class="n">project</span><span class="p">(</span><span class="n">I</span><span class="p">,</span> <span class="n">V</span><span class="p">)</span> <span class="k">if</span> <span class="n">I_project</span> <span class="k">else</span> <span class="n">interpolate</span><span class="p">(</span><span class="n">I</span><span class="p">,</span> <span class="n">V</span><span class="p">)</span>
-    <span class="k">if</span> <span class="n">user_action</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
-        <span class="n">user_action</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">u_1</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
-
-    <span class="c1"># Define variational problem</span>
-    <span class="n">u</span> <span class="o">=</span> <span class="n">TrialFunction</span><span class="p">(</span><span class="n">V</span><span class="p">)</span>
-    <span class="n">v</span> <span class="o">=</span> <span class="n">TestFunction</span><span class="p">(</span><span class="n">V</span><span class="p">)</span>
-    <span class="n">a_M</span> <span class="o">=</span> <span class="n">u</span><span class="o">*</span><span class="n">v</span><span class="o">*</span><span class="n">dx</span>
-    <span class="n">a_K</span> <span class="o">=</span> <span class="n">alpha</span><span class="o">*</span><span class="n">dot</span><span class="p">(</span><span class="n">grad</span><span class="p">(</span><span class="n">u</span><span class="p">),</span> <span class="n">grad</span><span class="p">(</span><span class="n">v</span><span class="p">))</span><span class="o">*</span><span class="n">dx</span>
-
-    <span class="n">M</span> <span class="o">=</span> <span class="n">assemble</span><span class="p">(</span><span class="n">a_M</span><span class="p">)</span>
-    <span class="n">K</span> <span class="o">=</span> <span class="n">assemble</span><span class="p">(</span><span class="n">a_K</span><span class="p">)</span>
-    <span class="n">A</span> <span class="o">=</span> <span class="n">M</span> <span class="o">+</span> <span class="n">dt</span><span class="o">*</span><span class="n">K</span>
-    <span class="c1"># Compute solution</span>
-    <span class="n">u</span> <span class="o">=</span> <span class="n">Function</span><span class="p">(</span><span class="n">V</span><span class="p">)</span>   <span class="c1"># the unknown at a new time level</span>
-
-    <span class="n">b_assemble</span> <span class="o">=</span> <span class="mi">0</span>  <span class="c1"># CPU time for assembling all the b vectors</span>
-    <span class="n">timestep</span> <span class="o">=</span> <span class="mi">1</span>
-    <span class="n">t</span> <span class="o">=</span> <span class="n">dt</span>
-    <span class="k">while</span> <span class="n">t</span> <span class="o">&lt;=</span> <span class="n">T</span><span class="p">:</span>
-        <span class="n">t0</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">clock</span><span class="p">()</span>
-        <span class="n">f_n</span> <span class="o">=</span> <span class="n">interpolate</span><span class="p">(</span><span class="n">f</span><span class="p">,</span> <span class="n">V</span><span class="p">)</span>
-        <span class="n">F_n</span> <span class="o">=</span> <span class="n">f_n</span><span class="o">.</span><span class="n">vector</span><span class="p">()</span>
-        <span class="n">b</span> <span class="o">=</span> <span class="n">M</span><span class="o">*</span><span class="n">u_1</span><span class="o">.</span><span class="n">vector</span><span class="p">()</span> <span class="o">+</span> <span class="n">dt</span><span class="o">*</span><span class="n">M</span><span class="o">*</span><span class="n">F_n</span>
-        <span class="n">b_assemble</span> <span class="o">+=</span> <span class="n">time</span><span class="o">.</span><span class="n">clock</span><span class="p">()</span> <span class="o">-</span> <span class="n">t0</span>
-        <span class="k">try</span><span class="p">:</span>
-            <span class="n">u0</span><span class="o">.</span><span class="n">t</span> <span class="o">=</span> <span class="n">t</span>
-            <span class="n">f</span><span class="o">.</span><span class="n">t</span> <span class="o">=</span> <span class="n">t</span>
-        <span class="k">except</span> <span class="ne">AttributeError</span><span class="p">:</span>
-            <span class="k">pass</span>  <span class="c1"># ok if no t attribute in u0</span>
-        <span class="n">bc</span><span class="o">.</span><span class="n">apply</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="n">b</span><span class="p">)</span>
-        <span class="n">solve</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="n">u</span><span class="o">.</span><span class="n">vector</span><span class="p">(),</span> <span class="n">b</span><span class="p">)</span>
-
-        <span class="k">if</span> <span class="n">user_action</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
-            <span class="n">user_action</span><span class="p">(</span><span class="n">t</span><span class="p">,</span> <span class="n">u</span><span class="p">,</span> <span class="n">timestep</span><span class="p">)</span>
-        <span class="n">t</span> <span class="o">+=</span> <span class="n">dt</span>
-        <span class="n">timestep</span> <span class="o">+=</span> <span class="mi">1</span>
-        <span class="n">u_1</span><span class="o">.</span><span class="n">assign</span><span class="p">(</span><span class="n">u</span><span class="p">)</span>
-    <span class="c1">#info(&#39;total time for assembly of right-hand side: %.2f&#39; % b_assemble)</span>
-
-<span class="k">def</span> <span class="nf">application_animate</span><span class="p">(</span><span class="n">model_problem</span><span class="p">):</span>
-    <span class="kn">import</span> <span class="nn">numpy</span> <span class="kn">as</span> <span class="nn">np</span><span class="o">,</span> <span class="nn">time</span>
-
-    <span class="k">if</span> <span class="n">model_problem</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
-        <span class="c1"># Test problem with exact solution at the nodes also for P1 elements</span>
-        <span class="n">alpha</span> <span class="o">=</span> <span class="mi">3</span><span class="p">;</span> <span class="n">beta</span> <span class="o">=</span> <span class="mf">1.2</span>
-        <span class="n">u0</span> <span class="o">=</span> <span class="n">Expression</span><span class="p">(</span><span class="s1">&#39;1 + x[0]*x[0] + alpha*x[1]*x[1] + beta*t&#39;</span><span class="p">,</span>
-                        <span class="n">alpha</span><span class="o">=</span><span class="n">alpha</span><span class="p">,</span> <span class="n">beta</span><span class="o">=</span><span class="n">beta</span><span class="p">,</span> <span class="n">t</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
-        <span class="n">f</span> <span class="o">=</span> <span class="n">Constant</span><span class="p">(</span><span class="n">beta</span> <span class="o">-</span> <span class="mi">2</span> <span class="o">-</span> <span class="mi">2</span><span class="o">*</span><span class="n">alpha</span><span class="p">)</span>
-        <span class="n">I</span> <span class="o">=</span> <span class="n">u0</span>
-        <span class="n">dt</span> <span class="o">=</span> <span class="mf">0.05</span><span class="p">;</span> <span class="n">T</span> <span class="o">=</span> <span class="mi">2</span>
-        <span class="n">Nx</span> <span class="o">=</span> <span class="n">Ny</span> <span class="o">=</span> <span class="mi">20</span>
-        <span class="n">u_range</span> <span class="o">=</span> <span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="o">+</span><span class="mi">1</span><span class="o">+</span><span class="n">alpha</span><span class="o">*</span><span class="mi">1</span><span class="o">+</span><span class="n">beta</span><span class="o">*</span><span class="n">T</span><span class="p">]</span>
-    <span class="k">elif</span> <span class="n">model_problem</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>
-        <span class="c1"># Diffusion of a sin^8 spike</span>
-        <span class="n">I</span> <span class="o">=</span> <span class="n">Expression</span><span class="p">(</span><span class="s1">&#39;pow(sin(pi*x[0])*sin(pi*x[1]), 8)&#39;</span><span class="p">)</span>
-        <span class="n">f</span> <span class="o">=</span> <span class="n">Constant</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
-        <span class="n">u0</span> <span class="o">=</span> <span class="n">Constant</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
-        <span class="n">dt</span> <span class="o">=</span> <span class="mf">0.0005</span><span class="p">;</span> <span class="n">T</span> <span class="o">=</span> <span class="mi">20</span><span class="o">*</span><span class="n">dt</span>
-        <span class="n">Nx</span> <span class="o">=</span> <span class="n">Ny</span> <span class="o">=</span> <span class="mi">60</span>
-        <span class="n">u_range</span> <span class="o">=</span> <span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">]</span>
-
-    <span class="n">vtkfile</span> <span class="o">=</span> <span class="n">File</span><span class="p">(</span><span class="s1">&#39;diffusion.pvd&#39;</span><span class="p">)</span>
-
-    <span class="k">def</span> <span class="nf">animate</span><span class="p">(</span><span class="n">t</span><span class="p">,</span> <span class="n">u</span><span class="p">,</span> <span class="n">timestep</span><span class="p">):</span>
-        <span class="k">global</span> <span class="n">p</span>
-        <span class="k">if</span> <span class="n">t</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
-            <span class="n">p</span> <span class="o">=</span> <span class="n">plot</span><span class="p">(</span><span class="n">u</span><span class="p">,</span> <span class="n">title</span><span class="o">=</span><span class="s1">&#39;u&#39;</span><span class="p">,</span>
-                     <span class="n">range_min</span><span class="o">=</span><span class="nb">float</span><span class="p">(</span><span class="n">u_range</span><span class="p">[</span><span class="mi">0</span><span class="p">]),</span>  <span class="c1"># must be float</span>
-                     <span class="n">range_max</span><span class="o">=</span><span class="nb">float</span><span class="p">(</span><span class="n">u_range</span><span class="p">[</span><span class="mi">1</span><span class="p">]))</span>  <span class="c1"># must be float</span>
-        <span class="k">else</span><span class="p">:</span>
-            <span class="n">p</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">u</span><span class="p">)</span>
-        <span class="k">print</span><span class="p">(</span><span class="s1">&#39;t=</span><span class="si">%g</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="n">t</span><span class="p">)</span>
-        <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mf">0.5</span><span class="p">)</span>
-        <span class="n">vtkfile</span> <span class="o">&lt;&lt;</span> <span class="p">(</span><span class="n">u</span><span class="p">,</span> <span class="nb">float</span><span class="p">(</span><span class="n">t</span><span class="p">))</span>  <span class="c1"># store time-dep Function</span>
-
-    <span class="n">solver_minimize_assembly</span><span class="p">(</span>
-        <span class="mf">1.0</span><span class="p">,</span> <span class="n">f</span><span class="p">,</span> <span class="n">u0</span><span class="p">,</span> <span class="n">I</span><span class="p">,</span> <span class="n">dt</span><span class="p">,</span> <span class="n">T</span><span class="p">,</span> <span class="p">(</span><span class="n">Nx</span><span class="p">,</span> <span class="n">Ny</span><span class="p">),</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="n">degree</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
-        <span class="n">user_action</span><span class="o">=</span><span class="n">animate</span><span class="p">,</span> <span class="n">I_project</span><span class="o">=</span><span class="bp">False</span><span class="p">)</span>
+<p>but that statement invokes a problem: matrix arithmetics works with scalars
+only, while <code class="docutils literal"><span class="pre">rho</span></code>, and <code class="docutils literal"><span class="pre">c</span></code> are <code class="docutils literal"><span class="pre">Constant</span></code> objects. We therefore need to
+convert them to plain real numbers:</p>
+<div class="highlight-python"><div class="highlight"><pre><span></span><span class="n">A</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">rho</span><span class="p">)</span><span class="o">*</span><span class="nb">float</span><span class="p">(</span><span class="n">c</span><span class="p">)</span><span class="o">*</span><span class="p">(</span><span class="mf">1.</span><span class="o">/</span><span class="n">dt</span><span class="p">)</span><span class="o">*</span><span class="n">M</span> <span class="o">+</span> <span class="n">theta</span><span class="o">*</span><span class="n">K</span>
 </pre></div>
 </div>
-<p>A special feature in this program is the <code class="docutils literal"><span class="pre">user_action</span></code> callback function:
-at every time level, the solution is sent to <code class="docutils literal"><span class="pre">user_action</span></code>, which is
-some function provided by the user where the solution can be processed, e.g.,
-stored, analyzed, or visualized. In a unit test for the test example without
-numerical approximation errors, we can write a call to the solver function,</p>
-<div class="highlight-python"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">test_solver</span><span class="p">():</span>
-    <span class="kn">import</span> <span class="nn">numpy</span> <span class="kn">as</span> <span class="nn">np</span>
-    <span class="n">alpha</span> <span class="o">=</span> <span class="mi">3</span><span class="p">;</span> <span class="n">beta</span> <span class="o">=</span> <span class="mf">1.2</span>
-    <span class="n">u_b</span> <span class="o">=</span> <span class="n">Expression</span><span class="p">(</span><span class="s1">&#39;1 + x[0]*x[0] + alpha*x[1]*x[1] + beta*t&#39;</span><span class="p">,</span>
-                     <span class="n">alpha</span><span class="o">=</span><span class="n">alpha</span><span class="p">,</span> <span class="n">beta</span><span class="o">=</span><span class="n">beta</span><span class="p">,</span> <span class="n">t</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
-    <span class="n">f</span> <span class="o">=</span> <span class="n">Constant</span><span class="p">(</span><span class="n">beta</span> <span class="o">-</span> <span class="mi">2</span> <span class="o">-</span> <span class="mi">2</span><span class="o">*</span><span class="n">alpha</span><span class="p">)</span>
-    <span class="n">dt</span> <span class="o">=</span> <span class="mf">0.3</span><span class="p">;</span> <span class="n">T</span> <span class="o">=</span> <span class="mf">1.9</span>
-    <span class="n">u_b</span><span class="o">.</span><span class="n">t</span> <span class="o">=</span> <span class="mi">0</span>
-
-    <span class="c1"># Define assert_error callback function</span>
-    <span class="o">...</span>
-
-    <span class="n">solver_minimize_assembly</span><span class="p">(</span>
-        <span class="n">f</span><span class="p">,</span> <span class="n">u_b</span><span class="p">,</span> <span class="n">u_b</span><span class="p">,</span> <span class="n">dt</span><span class="p">,</span> <span class="n">T</span><span class="p">,</span> <span class="n">Nx</span><span class="p">,</span> <span class="n">Ny</span><span class="p">,</span> <span class="n">degree</span><span class="p">,</span>
-        <span class="n">user_action</span><span class="o">=</span><span class="n">assert_error</span><span class="p">,</span> <span class="n">I_project</span><span class="o">=</span><span class="bp">False</span><span class="p">)</span>
+<p>Assume that we have already made the mass and stiffness matrices prior
+to the time loop,</p>
+<div class="highlight-python"><div class="highlight"><pre><span></span><span class="k">if</span> <span class="n">avoid_b_assemble</span><span class="p">:</span>
+    <span class="n">M</span> <span class="o">=</span> <span class="n">assemble</span><span class="p">(</span><span class="n">u</span><span class="o">*</span><span class="n">v</span><span class="o">*</span><span class="n">dx</span><span class="p">)</span>
+    <span class="n">K</span> <span class="o">=</span> <span class="n">assemble</span><span class="p">(</span><span class="n">D</span><span class="p">(</span><span class="n">u</span><span class="p">))</span>
 </pre></div>
 </div>
+<p>we can in the time loop write</p>
+<div class="highlight-python"><div class="highlight"><pre><span></span><span class="k">if</span> <span class="n">avoid_b_assemble</span><span class="p">:</span>
+    <span class="k">assert</span> <span class="n">BC</span> <span class="o">==</span> <span class="s1">&#39;Dirichlet&#39;</span>  <span class="c1"># restrict for simplicity</span>
+    <span class="n">f_m</span> <span class="o">=</span> <span class="n">interpolate</span><span class="p">(</span><span class="n">f</span><span class="p">,</span> <span class="n">V</span><span class="p">)</span>
+    <span class="n">F_m</span> <span class="o">=</span> <span class="n">f_m</span><span class="o">.</span><span class="n">vector</span><span class="p">()</span>
+    <span class="n">A</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">rho</span><span class="p">)</span><span class="o">*</span><span class="nb">float</span><span class="p">(</span><span class="n">c</span><span class="p">)</span><span class="o">*</span><span class="p">(</span><span class="mf">1.</span><span class="o">/</span><span class="n">dt</span><span class="p">)</span><span class="o">*</span><span class="n">M</span> <span class="o">+</span> <span class="n">theta</span><span class="o">*</span><span class="n">K</span>
+    <span class="n">b</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">rho</span><span class="p">)</span><span class="o">*</span><span class="nb">float</span><span class="p">(</span><span class="n">c</span><span class="p">)</span><span class="o">*</span><span class="p">(</span><span class="mf">1.</span><span class="o">/</span><span class="n">dt</span><span class="o">*</span><span class="n">M</span><span class="o">*</span><span class="n">u_n</span><span class="o">.</span><span class="n">vector</span><span class="p">()</span> <span class="o">+</span> \
+        <span class="n">M</span><span class="o">*</span><span class="n">F_m</span> <span class="o">-</span> <span class="p">(</span><span class="mi">1</span><span class="o">-</span><span class="n">theta</span><span class="p">)</span><span class="o">*</span><span class="n">K</span><span class="o">*</span><span class="n">u_n</span><span class="o">.</span><span class="n">vector</span><span class="p">()</span>
+<span class="k">else</span><span class="p">:</span>
+    <span class="c1"># Assume A is assembled initially as A = assemble(lhs(F))</span>
+    <span class="n">b</span> <span class="o">=</span> <span class="n">assemble</span><span class="p">(</span><span class="n">L</span><span class="p">,</span> <span class="n">tensor</span><span class="o">=</span><span class="n">b</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>That is, no assembly at all is needed inside the time loop, just
+matrix-vector operations. We hope that this can give a performance
+boost, but experiments to be reported later show that the gain is
+about a factor of 4 compared to full assembly of <span class="math">\(A\)</span> and <span class="math">\(b\)</span> the
+usual way.</p>
+<p>Finished here. [[[</p>
 <p>The <code class="docutils literal"><span class="pre">user_action</span></code> function <code class="docutils literal"><span class="pre">assert_error</span></code> asserts equality of the
 exact and numerical solution at every time level:</p>
 <div class="highlight-python"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">assert_error</span><span class="p">(</span><span class="n">t</span><span class="p">,</span> <span class="n">u</span><span class="p">,</span> <span class="n">timestep</span><span class="p">):</span>
@@ -1078,27 +1194,272 @@ the solution:</p>
 animating the solution in two test problems is found in the
 function <code class="docutils literal"><span class="pre">application_animate</span></code> in
 <a class="reference external" href="ft12_heat_func.py">ft12_heat_func.py</a>.</p>
-<p>Note that <code class="docutils literal"><span class="pre">p</span></code>, which must survive between subsequent calls to the
-callback function, has to be declared as a global variable. This is
-necessary when the user action function is a <em>closure</em> (function
-inside function, &#8220;remembering&#8221; variables in the parent function) and
-<code class="docutils literal"><span class="pre">p</span></code> is changed inside the closure.  Some programmers find it more
-convenient to let the user action be class instead, where <code class="docutils literal"><span class="pre">p</span></code> can be
-an attribute. Later examples employ the class design.</p>
-<p>The function <code class="docutils literal"><span class="pre">solver_vs_solver_minimize_assembly</span></code> measures the
-impact of the optimization technique in this section compared to
-the simpler technique from the previous section where we need
-to assemble the right-hand side of the linear system at every time
-level. The impact is not huge, just a speed-up factor of 1-2 for 2D problems
-and around 2 for 3D problems. Still, this may be an important
-improvement when you run a code a lot.</p>
+</div>
+</div>
+<div class="section" id="lumped-mass-matrix">
+<span id="ch-diffusion-opt-lumping"></span><h3>Lumped mass matrix<a class="headerlink" href="#lumped-mass-matrix" title="Permalink to this headline">¶</a></h3>
+<div class="section" id="what-is-the-problem-with-the-mass-matrix">
+<h4>What is the problem with the mass matrix?<a class="headerlink" href="#what-is-the-problem-with-the-mass-matrix" title="Permalink to this headline">¶</a></h4>
+<p>Comparing a P1 finite element method with a standard finite difference
+method, on a uniformly partitioned hypercube mesh, reveals that the
+stiffness matrix <span class="math">\(K\)</span>, arising from <span class="math">\(\int p\nabla u\cdot\nabla v{\, \mathrm{d}x}\)</span>,
+is the same for both methods, while the mass matrix <span class="math">\(M\)</span>, arising from
+a term like <span class="math">\(\int uv{\, \mathrm{d}x}\)</span>, is very different in the two methods.  The
+mass matrix is diagonal in the finite difference method, thus making
+<span class="math">\(\theta=0\)</span> a truly explicit scheme with no need for solving a system
+of linear algebraic equations in each time step. It would be very
+convenient to have this mass matrix also in finite element solvers to
+speed up computations. Moreover, analysis of the damping properties of
+the finite element and finite difference methods in diffusion problems
+<span class="math">\(\frac{\partial u}{\partial t} = \alpha\frac{\partial^2 u}{\partial
+x^2}\)</span> shows that the finite difference method, with its diagonal mass
+matrix, is more accurate than the finite element method. For <span class="math">\(\theta=0\)</span>
+it also has less strict stability properties.</p>
+<p>To be more precise with the mentioned analysis, a Fourier component
+<span class="math">\(u(x,t)=A(t)\sin(kx)\)</span> of the solution is damped by a factor <span class="math">\(A\)</span> from
+one time step to the next (<span class="math">\(A=e^{-\alpha k^2 t}\)</span>).  It turns out that
+in a P1 finite element method or a finite difference method with
+second-order, centered spatial differences, <span class="math">\(A\)</span> depends on <span class="math">\(p=kh/2\)</span>
+and <span class="math">\(F=\alpha\Delta t/ h^2\)</span>, where <span class="math">\(h\)</span> is the cell length. The
+dimensionless number <span class="math">\(F\)</span> is known as the mesh Fourier number. The
+Forward Euler scheme, <span class="math">\(\theta=0\)</span>, is unstable unless <span class="math">\(F\leq 1/6\)</span> in the
+finite element method and <span class="math">\(F\leq 1/2\)</span> in the finite difference method.
+Figure <a class="reference internal" href="#ch-diffusion-opt-lumping-fig-fe"><span class="std std-ref">Comparison of damping factors for the Forward Euler scheme</span></a> compares the graphs of <span class="math">\(A\)</span>
+for the two methods an values of <span class="math">\(F\)</span> that give stable solutions. We
+clearly see that the finite element method gives rise to <span class="math">\(A&lt;0\)</span> for
+short waves, which is manifested as &#8220;flipping noise&#8221; in animations where
+the solution oscillates from time step to time step. In very smooth solutions,
+the short waves have too small amplitudes for this effect to be visible,
+but in problems with discontinuities, it is easy to spot that reducing <span class="math">\(F\)</span>
+increases the noise.</p>
+<p>Figures <a class="reference internal" href="#ch-diffusion-opt-lumping-fig-be"><span class="std std-ref">Comparison of damping factors for the Backward Euler scheme</span></a> and
+<a class="reference internal" href="#ch-diffusion-opt-lumping-fig-cn"><span class="std std-ref">Comparison of damping factors for the Crank-Nicolson scheme</span></a> compares <span class="math">\(A\)</span> for a wider range of
+<span class="math">\(F\)</span> values for the Backward Euler and Crank-Nicolson schemes,
+respectively. Also here we clearly see that the finite element method
+leads to inferior damping properties compared to the finite difference
+method. &#8220;Flipping noise&#8221; for high frequencies (due to <span class="math">\(A&lt;0\)</span>) is a
+well-known flaw in the Crank-Nicolson scheme, but the negative
+effect is more pronounced in the finite element method. However, it is
+easy to come up with a remedy for the finite element method: if we
+make the mass matrix diagonal, the method will be equivalent to the
+finite difference method on a uniformly partitioned mesh and hence
+equally accurate.</p>
+<div class="figure" id="id6">
+<span id="ch-diffusion-opt-lumping-fig-fe"></span><a class="reference internal image-reference" href="_images/diffu_A_factors_fine_FE.png"><img alt="_images/diffu_A_factors_fine_FE.png" src="_images/diffu_A_factors_fine_FE.png" style="width: 600px;" /></a>
+<p class="caption"><span class="caption-text"><em>Comparison of damping factors for the Forward Euler scheme</em></span></p>
+</div>
+<div class="figure" id="id7">
+<span id="ch-diffusion-opt-lumping-fig-be"></span><a class="reference internal image-reference" href="_images/diffu_A_factors_BE.png"><img alt="_images/diffu_A_factors_BE.png" src="_images/diffu_A_factors_BE.png" style="width: 800px;" /></a>
+<p class="caption"><span class="caption-text"><em>Comparison of damping factors for the Backward Euler scheme</em></span></p>
+</div>
+<div class="figure" id="id8">
+<span id="ch-diffusion-opt-lumping-fig-cn"></span><a class="reference internal image-reference" href="_images/diffu_A_factors_CN.png"><img alt="_images/diffu_A_factors_CN.png" src="_images/diffu_A_factors_CN.png" style="width: 800px;" /></a>
+<p class="caption"><span class="caption-text"><em>Comparison of damping factors for the Crank-Nicolson scheme</em></span></p>
+</div>
+</div>
+<div class="section" id="lumping-the-mass-matrix">
+<h4>Lumping the mass matrix<a class="headerlink" href="#lumping-the-mass-matrix" title="Permalink to this headline">¶</a></h4>
+<p>A widely used method for making the mass matrix diagonal, or <em>lump</em> it as
+the phrase often goes <a class="footnote-reference" href="#lumping" id="id4">[1]</a>, is to sum all elements in a row, set
+the sum on the diagonal, and put zeros in all the other columns. This is
+called the row-sum technique and applies well to P1 elements, but it does
+not work well with P2 and higher-order elements. For these elements, one
+should instead use a quadrature that only samples the integrands at the
+points where we have the function value degrees of freedom. This
+is not yet possible in FEniCS [<strong>hpl 7</strong>: Anders, right?] so lumping remains
+restricted to P1 elements as explained here.</p>
+<table class="docutils footnote" frame="void" id="lumping" rules="none">
+<colgroup><col class="label" /><col /></colgroup>
+<tbody valign="top">
+<tr><td class="label"><a class="fn-backref" href="#id4">[1]</a></td><td>The term arose in the days where the primary application
+was wave motion (in elastic or other media) and the diagonalization
+consisted in concentrating uniformly distributed mass as lumps at the
+nodes only.</td></tr>
+</tbody>
+</table>
+</div>
+<div class="section" id="implementation-in-fenics">
+<h4>Implementation in FEniCS<a class="headerlink" href="#implementation-in-fenics" title="Permalink to this headline">¶</a></h4>
+<p>The row sum can be computed by multiplying the matrix by a vector with 1
+for all elements,</p>
+<div class="highlight-python"><div class="highlight"><pre><span></span><span class="n">unity</span> <span class="o">=</span> <span class="n">Function</span><span class="p">(</span><span class="n">V</span><span class="p">)</span>
+<span class="n">unity</span><span class="o">.</span><span class="n">vector</span><span class="p">()[:]</span> <span class="o">=</span> <span class="mf">1.</span>
+
+<span class="p">[</span><span class="n">bc</span><span class="o">.</span><span class="n">apply</span><span class="p">(</span><span class="n">M</span><span class="p">,</span> <span class="n">b</span><span class="p">)</span> <span class="k">for</span> <span class="n">bc</span> <span class="ow">in</span> <span class="n">bcs</span><span class="p">]</span>
+<span class="n">ML</span> <span class="o">=</span> <span class="n">M</span><span class="o">*</span><span class="n">unity</span><span class="o">.</span><span class="n">vector</span><span class="p">()</span>  <span class="c1"># lump M</span>
+</pre></div>
+</div>
+<p>It is very important that we carry out the multiplication with <code class="docutils literal"><span class="pre">unity</span></code>
+(i.e., the row sum) <em>after</em> Dirichlet boundary conditions are inserted in the
+matrix <code class="docutils literal"><span class="pre">M</span></code>! Otherwise, the boundary conditions will not be incorporated
+in the vector <code class="docutils literal"><span class="pre">ML</span></code>.</p>
+<p>We introduce a boolean <code class="docutils literal"><span class="pre">lumped_mass</span></code> in the <code class="docutils literal"><span class="pre">solver</span></code> function for indicating
+computations with a lumped mass matrix. Prior to the time loop we need
+to make sure we have the <code class="docutils literal"><span class="pre">unity</span></code> field available as well as <code class="docutils literal"><span class="pre">M</span></code> and <code class="docutils literal"><span class="pre">K</span></code>
+for the mass matrix and the stiffness matrix:</p>
+<div class="highlight-python"><div class="highlight"><pre><span></span><span class="k">if</span> <span class="n">lumped_mass</span><span class="p">:</span>
+    <span class="n">M</span> <span class="o">=</span> <span class="n">assemble</span><span class="p">(</span><span class="n">u</span><span class="o">*</span><span class="n">v</span><span class="o">*</span><span class="n">dx</span><span class="p">)</span>
+    <span class="n">K</span> <span class="o">=</span> <span class="n">assemble</span><span class="p">(</span><span class="n">D</span><span class="p">(</span><span class="n">u</span><span class="p">))</span>
+</pre></div>
+</div>
+<p>We need to distinguish between two cases: <span class="math">\(\theta=0\)</span> and <span class="math">\(\theta &gt;0\)</span>.
+In the former case, the entire coefficient matrix is lumped and we can avoid
+calling <code class="docutils literal"><span class="pre">solve</span></code>, while in the latter case, parts of the coefficient matrix
+involves a lumped mass matrix while other parts employ standard, assembled
+matrices. For <span class="math">\(\theta =0\)</span> we create the coefficient matrix as the
+matrix <code class="docutils literal"><span class="pre">rho*c*M</span></code> or</p>
+<div class="highlight-python"><div class="highlight"><pre><span></span><span class="k">if</span> <span class="n">lumped_mass</span> <span class="ow">and</span> <span class="n">theta</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+    <span class="n">A</span> <span class="o">=</span> <span class="n">assemble</span><span class="p">(</span><span class="n">lhs</span><span class="p">(</span><span class="n">F_M</span><span class="p">))</span> <span class="c1"># make consistent mass, lump later</span>
+<span class="k">else</span><span class="p">:</span>
+    <span class="n">A</span> <span class="o">=</span> <span class="n">assemble</span><span class="p">(</span><span class="n">lhs</span><span class="p">(</span><span class="n">F</span><span class="p">))</span>
+</pre></div>
+</div>
+<p>For <span class="math">\(\theta &gt;0\)</span>, the implementation is a bit tricky. We would like to
+write</p>
+<div class="highlight-python"><div class="highlight"><pre><span></span><span class="n">ML</span> <span class="o">=</span> <span class="n">M</span><span class="o">*</span><span class="n">unity</span><span class="o">.</span><span class="n">vector</span><span class="p">()</span>  <span class="c1"># lump</span>
+<span class="n">A1</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">rho</span><span class="p">)</span><span class="o">*</span><span class="nb">float</span><span class="p">(</span><span class="n">c</span><span class="p">)</span><span class="o">*</span><span class="p">(</span><span class="mf">1.</span><span class="o">/</span><span class="n">dt</span><span class="p">)</span><span class="o">*</span><span class="n">ML</span>
+<span class="n">A</span> <span class="o">=</span> <span class="n">A1</span> <span class="o">+</span> <span class="n">theta</span><span class="o">*</span><span class="n">K</span>
+</pre></div>
+</div>
+<p>but <code class="docutils literal"><span class="pre">A1</span> <span class="pre">+</span> <span class="pre">theta*K</span></code> does not work because it is a vector plus a matrix.
+The trick is to add <code class="docutils literal"><span class="pre">A1</span></code> to the diagonal of <code class="docutils literal"><span class="pre">theta*K</span></code>:</p>
+<div class="highlight-text"><div class="highlight"><pre><span></span>A2 = theta*K
+diag = unity.vector().copy()  # allocate vector
+A2.get_diagonal(diag)
+A2.set_diagonal(diag + A1)
+A = A2
+</pre></div>
+</div>
+<p>Now, <code class="docutils literal"><span class="pre">A</span></code> is a matrix, but with a lumped mass matrix contribution.</p>
+<p>The right-hand side <span class="math">\(b=\varrho c {{\Delta t}}^{-1}Mu^n + MF^m - (1-\theta)K\)</span>
+is for a lumped mass matrix and <span class="math">\(\theta &gt;0\)</span> computed as</p>
+<div class="highlight-python"><div class="highlight"><pre><span></span><span class="n">b</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">rho</span><span class="p">)</span><span class="o">*</span><span class="nb">float</span><span class="p">(</span><span class="n">c</span><span class="p">)</span><span class="o">*</span><span class="mf">1.</span><span class="o">/</span><span class="n">dt</span><span class="o">*</span><span class="n">ML</span><span class="o">*</span><span class="n">u_n</span><span class="o">.</span><span class="n">vector</span><span class="p">()</span> <span class="o">+</span> \
+    <span class="n">ML</span><span class="o">*</span><span class="n">F_m</span> <span class="o">-</span> <span class="p">(</span><span class="mi">1</span><span class="o">-</span><span class="n">theta</span><span class="p">)</span><span class="o">*</span><span class="n">K</span><span class="o">*</span><span class="n">u_n</span><span class="o">.</span><span class="n">vector</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>We have decided to put all the mentioned methods together in the <code class="docutils literal"><span class="pre">solver</span></code>
+function, and together with debug output, this makes a quite
+lengthy function in file <a class="reference external" href="https://github.com/hplgit/fenics-tutorial/blob/master/src/ft12_heat_func.py">ft12_heat_func.py</a>. There are four methods for different kinds of assembly
+and three boolean variables to control them:</p>
+<blockquote>
+<div><ul class="simple">
+<li><code class="docutils literal"><span class="pre">lumped_mass</span></code>: <code class="docutils literal"><span class="pre">True</span></code> if the mass matrix is lumped</li>
+<li><code class="docutils literal"><span class="pre">avoid_b_assembly</span></code>: <code class="docutils literal"><span class="pre">True</span></code> if the right-hand side is to be computed
+from matrix-vector products and no assembly</li>
+<li><code class="docutils literal"><span class="pre">A_is_const</span></code>: <code class="docutils literal"><span class="pre">True</span></code> if the coefficient matrix is constant (assumption
+when using lumped mass).</li>
+</ul>
+</div></blockquote>
+<p>Four methods are available for assembling the coefficient matrix <span class="math">\(A\)</span> and
+right-hand side <span class="math">\(b\)</span>:</p>
+<ol class="arabic simple">
+<li>Full assembly of <span class="math">\(A\)</span> and <span class="math">\(b\)</span> at each time level:
+<code class="docutils literal"><span class="pre">lumped_mass=False</span></code>, <code class="docutils literal"><span class="pre">avoid_b_assembly=False</span></code>, <code class="docutils literal"><span class="pre">A_is_const=False</span></code></li>
+<li>Initial assembly of <span class="math">\(A\)</span>, full assembly of <span class="math">\(b\)</span> at each time level:
+<code class="docutils literal"><span class="pre">lumped_mass=False</span></code>, <code class="docutils literal"><span class="pre">avoid_b_assembly=False</span></code>, <code class="docutils literal"><span class="pre">A_is_const=True</span></code></li>
+<li>No assembly of <span class="math">\(A\)</span> and <span class="math">\(b\)</span> at each time level, just construction
+through matrix-vector products:
+<code class="docutils literal"><span class="pre">lumped_mass=False</span></code>, <code class="docutils literal"><span class="pre">avoid_b_assembly=True</span></code>, <code class="docutils literal"><span class="pre">A_is_const=True</span></code></li>
+<li>No assembly of <span class="math">\(A\)</span> and <span class="math">\(b\)</span> at each time level, just construction
+through matrix-vector products, but with lumped mass matrices:
+<code class="docutils literal"><span class="pre">lumped_mass=True</span></code>, <code class="docutils literal"><span class="pre">avoid_b_assembly=True</span></code>, <code class="docutils literal"><span class="pre">A_is_const=True</span></code></li>
+</ol>
+<p>The function <code class="docutils literal"><span class="pre">test_efficiency</span></code> measures the impact of the four
+optimization technique using the verification problem from
+the section <a class="reference internal" href="#ch-diffusion-opt-verify"><span class="std std-ref">Verification</span></a>.
+The results are independent of the number of space
+dimensions and the number of unknowns. We find typically for <span class="math">\(\theta
+=0\)</span> that method 2-4, compared to method 1, speeds up the code by a
+factor of 2, 4, and 6, respectively.  The factor 2 is easy to explain:
+if the work of creating <span class="math">\(A\)</span> and <span class="math">\(b\)</span> by assembly is about the same, we
+gain a factor of two by omitting one of them at every time
+step. One would perhaps expect that the factors 4 and 6 would be
+better, but in these tests, we have used a sparse matrix
+representation of <span class="math">\(A\)</span>, and matrix - vector arithmetics with sparse
+matrices are demanding to implement efficiently because of the many
+cache misses, a problem shared with the assembly algorithm. It may well
+happen that both algorithms suffer from spending most of the time grabbing data
+from memory and not on computing (where matrix - vector arithmetics should
+involve far fewer operations than the assembly algorithm).
+The trick with manipulating the diagonal of <code class="docutils literal"><span class="pre">A2</span></code> is also
+more costly than tailored support for lumped mass matrices in FEniCS.
+Anyway, a factor 6 may be important in many applications, and the increased
+accuracy for less smooth solutions of the diffusion equations,
+as provided by a lumped mass matrix, may often be more important.</p>
+</div>
+<div class="section" id="application-diffusion-of-a-spike">
+<h4>Application: diffusion of a spike<a class="headerlink" href="#application-diffusion-of-a-spike" title="Permalink to this headline">¶</a></h4>
+<p>Just to demonstrate how to use the <code class="docutils literal"><span class="pre">solver</span></code> function in an application,
+we consider pure diffusion of a spike</p>
+<div class="math">
+\[u_0(x,y) = sin^8(\pi x)\sin^8(\pi y),\]</div>
+<p>with boundary conditions <span class="math">\(u=0\)</span>. We solve the homogeneous, constant-coefficient,
+scaled diffusion equation,
+so <span class="math">\(p=c=\varrho =1\)</span>, <span class="math">\(f=0\)</span>. Moreover, <span class="math">\(r\)</span> is a list of <code class="docutils literal"><span class="pre">Constant(0)</span></code> objects for
+the Dirichlet conditions (length 4, one <code class="docutils literal"><span class="pre">Constant(0)</span></code> for each side of
+the 2D domain). In this case, <span class="math">\(s\)</span> is a just a dummy variable but needs to
+be of type <code class="docutils literal"><span class="pre">Expression</span></code> or <code class="docutils literal"><span class="pre">Constant</span></code>, so we choose <code class="docutils literal"><span class="pre">Constant(0)</span></code>.
+The domain <span class="math">\([0,1]\times[0,1]\)</span> is divided into a <span class="math">\(60\times 60\)</span> partitioning
+with P1 elements.</p>
+<p>We want to animate the solution using the FEniCS built-in <code class="docutils literal"><span class="pre">plot</span></code> command.
+The necessary actions must be done in the <code class="docutils literal"><span class="pre">user_action</span></code> function, here
+called <code class="docutils literal"><span class="pre">animate</span></code>.</p>
+<p>The application code reads</p>
+<div class="highlight-python"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">animate_sine_spike</span><span class="p">():</span>
+    <span class="kn">import</span> <span class="nn">numpy</span> <span class="kn">as</span> <span class="nn">np</span><span class="o">,</span> <span class="nn">time</span>
+
+    <span class="c1"># Diffusion of a sin^8 spike, scaled homogeneous PDE</span>
+    <span class="n">u0</span> <span class="o">=</span> <span class="n">Expression</span><span class="p">(</span><span class="s1">&#39;pow(sin(pi*x[0])*sin(pi*x[1]), 8)&#39;</span><span class="p">)</span>
+    <span class="n">c</span> <span class="o">=</span> <span class="n">rho</span> <span class="o">=</span> <span class="n">p</span> <span class="o">=</span> <span class="n">Constant</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+    <span class="n">f</span> <span class="o">=</span> <span class="n">Constant</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+    <span class="n">r</span> <span class="o">=</span> <span class="p">[</span><span class="n">Constant</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">2</span><span class="o">*</span><span class="mi">2</span><span class="p">)]</span> <span class="c1"># Dirichlet conditions u=0</span>
+    <span class="n">s</span> <span class="o">=</span> <span class="n">Constant</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>                       <span class="c1"># dummy, not used</span>
+    <span class="n">dt</span> <span class="o">=</span> <span class="mf">0.0005</span>
+    <span class="n">T</span> <span class="o">=</span> <span class="mi">20</span><span class="o">*</span><span class="n">dt</span>
+    <span class="n">L</span> <span class="o">=</span> <span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">]</span>
+    <span class="n">divisions</span> <span class="o">=</span> <span class="p">(</span><span class="mi">60</span><span class="p">,</span> <span class="mi">60</span><span class="p">)</span>
+    <span class="n">u_range</span> <span class="o">=</span> <span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">]</span>
+
+    <span class="n">vtkfile</span> <span class="o">=</span> <span class="n">File</span><span class="p">(</span><span class="s1">&#39;diffusion.pvd&#39;</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">animate</span><span class="p">(</span><span class="n">t</span><span class="p">,</span> <span class="n">u</span><span class="p">,</span> <span class="n">timestep</span><span class="p">):</span>
+        <span class="k">global</span> <span class="n">plt</span>
+        <span class="k">if</span> <span class="n">t</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="n">plt</span> <span class="o">=</span> <span class="n">plot</span><span class="p">(</span><span class="n">u</span><span class="p">,</span> <span class="n">title</span><span class="o">=</span><span class="s1">&#39;u&#39;</span><span class="p">,</span>
+                       <span class="n">range_min</span><span class="o">=</span><span class="nb">float</span><span class="p">(</span><span class="n">u_range</span><span class="p">[</span><span class="mi">0</span><span class="p">]),</span>  <span class="c1"># must be float</span>
+                       <span class="n">range_max</span><span class="o">=</span><span class="nb">float</span><span class="p">(</span><span class="n">u_range</span><span class="p">[</span><span class="mi">1</span><span class="p">]))</span>  <span class="c1"># must be float</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">u</span><span class="p">)</span>
+        <span class="k">print</span><span class="p">(</span><span class="s1">&#39;t=</span><span class="si">%g</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="n">t</span><span class="p">)</span>
+        <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mf">0.5</span><span class="p">)</span>           <span class="c1"># pause between frames</span>
+        <span class="n">vtkfile</span> <span class="o">&lt;&lt;</span> <span class="p">(</span><span class="n">u</span><span class="p">,</span> <span class="nb">float</span><span class="p">(</span><span class="n">t</span><span class="p">))</span>  <span class="c1"># store time-dep Function</span>
+
+    <span class="n">solver</span><span class="p">(</span>
+        <span class="n">rho</span><span class="p">,</span> <span class="n">c</span><span class="p">,</span> <span class="n">p</span><span class="p">,</span> <span class="n">f</span><span class="p">,</span> <span class="n">r</span><span class="p">,</span> <span class="n">s</span><span class="p">,</span> <span class="n">u0</span><span class="p">,</span> <span class="n">T</span><span class="p">,</span> <span class="n">L</span><span class="p">,</span>
+        <span class="n">dt</span><span class="p">,</span> <span class="n">divisions</span><span class="p">,</span> <span class="n">degree</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">theta</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+        <span class="n">user_action</span><span class="o">=</span><span class="n">animate</span><span class="p">,</span>
+        <span class="n">u0_project</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span>
+        <span class="n">lumped_mass</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span>
+        <span class="n">BC</span><span class="o">=</span><span class="s1">&#39;Dirichlet&#39;</span><span class="p">,</span>
+        <span class="n">A_is_const</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span>
+        <span class="n">avoid_b_assembly</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>A little trick is needed in the <code class="docutils literal"><span class="pre">animate</span></code> function. To fix the
+color scale throughout the animation, we must initially provide the
+range of <span class="math">\(u\)</span> values for the scale, while later we must update the plot
+using the object returned from initial <code class="docutils literal"><span class="pre">plot</span></code> call. This object must
+survive between successive calls to <code class="docutils literal"><span class="pre">animate</span></code> so it cannot be a local
+variable. The solution is to let it be a global variable <code class="docutils literal"><span class="pre">plt</span></code>
+(or one could implement <code class="docutils literal"><span class="pre">animate</span></code> via a class that has <code class="docutils literal"><span class="pre">plt</span></code> as an
+attribute and the callback function as method, usually <code class="docutils literal"><span class="pre">__call__</span></code>).</p>
 </div>
 </div>
 </div>
 <div class="section" id="a-welding-example-with-post-processing-and-animation">
 <span id="ch-diffusion-welding"></span><h2>A welding example with post processing and animation<a class="headerlink" href="#a-welding-example-with-post-processing-and-animation" title="Permalink to this headline">¶</a></h2>
 <p>The focus so far in this tutorial has been on producing the solution
-of PDE problems. [<strong>hpl 6</strong>: This is book 2, it depends on how things end up in the previous chapter.] For scientific investigations, the primary work is
+of PDE problems. [<strong>hpl 8</strong>: This is book 2, it depends on how things end up in the previous chapter.] For scientific investigations, the primary work is
 often with post processing results: computing quantities derived from
 the solution and inspecting these with visualization or data analysis tools.
 This is the focus of the present section.
@@ -1237,7 +1598,8 @@ time scale and characteristic size of <span class="math">\(u\)</span>, we just i
 <span class="math">\(\bar f\in (0,1]\)</span>. The arguments in the exponential function in <span class="math">\(f\)</span> can
 also be scaled:</p>
 <div class="math">
-\[\begin{split}\bar f &amp;= \exp{\left(-\frac{1}{2\sigma^2}
+\[\begin{split}\begin{align*}
+\bar f &amp;= \exp{\left(-\frac{1}{2\sigma^2}
 \left({\bar xL -(L \bar x_0 + L\bar R\cos\omega t_c t)}\right)^2 -\frac{1}{2\sigma^2}
 \left({L \bar y-(L\bar y0 + L\bar R\sin\omega t_c t)}\right)^2\right)}\\
 &amp;= \exp{\left(-\frac{1}{2}\frac{L^2}{\sigma^2}
@@ -1246,7 +1608,8 @@ also be scaled:</p>
 \left(\bar y-(\bar y0 + \bar R\sin\omega t_c \bar t)\right)^2\right)}\\
 &amp;= \exp{\left(-\frac{1}{2}\beta^2
 \left((x -(\frac{1}{2} + \bar R\cos\bar t)\right)^2 -
-\left(\bar y-(\frac{1}{2} + \bar R\sin\bar t))^2\right)\right)},\end{split}\]</div>
+\left(\bar y-(\frac{1}{2} + \bar R\sin\bar t))^2\right)\right)},
+\end{align*}\end{split}\]</div>
 <p>where <span class="math">\(\beta\)</span> is a dimensionless parameter,</p>
 <div class="math">
 \[\beta = \frac{L}{\sigma},\]</div>
@@ -1304,7 +1667,7 @@ diffusion versus speed of heat source) than to set <span class="math">\(\varrho\
 <span class="math">\(\kappa\)</span> for some chosen material, and then determine relevant values for
 <span class="math">\(A\)</span>, <span class="math">\(L\)</span>, etc. There are no approximations in the scaling procedure;
 it just dramatically simplifies numerical simulations.
-The book <a class="reference internal" href="._ftut2008.html#ref2" id="id3">[Ref2]</a> gives a comprehensive treatment
+The book <a class="reference internal" href="._ftut2008.html#ref2" id="id5">[Ref2]</a> gives a comprehensive treatment
 of scaling.</p>
 </div>
 </div>

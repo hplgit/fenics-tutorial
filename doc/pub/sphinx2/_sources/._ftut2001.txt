@@ -7,13 +7,14 @@ Developing a more advanced heat equation solver
 
 .. theta-rule is new?!
 
-This chapter is devoted to some important topics when solving
+This chapter is devoted to some important issues when solving
 time-dependent problems with FEniCS: avoiding unnecessary assembly,
-dealing with time-dependent ``Expression`` objects, debugging the coding of
-variational forms, saving results to file, and making animations.  We
-illustrate these techniques in a welding problem and go through all
-aspects of the code development, from scaling of the physical problem
-via debugging to constructing unit tests.
+dealing with time-dependent ``Expression`` objects, debugging the coding
+of variational forms, lumping mass matrices, saving results to file,
+and making animations.  We handle these topics through a welding
+problem and address all aspects of code development, from scaling of
+the physical problem via debugging to constructing unit tests and
+sharing FEniCS best practices.
 
 The PDE to be addressed is the heat equation
 
@@ -59,7 +60,7 @@ term, the :math:`\theta` rule reads
 
     \tag{1}
     \frac{u^{n+1} - u^n}{{\Delta t}} = \theta\mathcal{G}(u^{n+1})
-        + (1-\theta)\mathcal{G}(u^n) + \theta f^{n+1} + (1-\theta)f^n,
+        + (1-\theta)\mathcal{G}(u^n) + f^{n+\theta},
         
         
 
@@ -71,11 +72,19 @@ or
 
     \tag{2}
     \frac{u^{n+1} - u^n}{{\Delta t}} = \mathcal{G}(\theta u^{n+1} +
-        (1-\theta)u^n) + f(\theta t_{n+1} + (1-\theta)t_n){\thinspace .}
+        (1-\theta)u^n) + f(t_{n+\theta}){\thinspace .}
         
         
 
-Note that :math:`\theta=0` gives a classical Forward Euler scheme,
+These equations are equal only if :math:`\mathcal{G}` is a linear operator.
+The notation :math:`f^{n+\theta}` means a weighted average of :math:`f` at
+time points :math:`t_n` and :math:`t_n{n+1}`: :math:`\theta f^{n+1} + (1-\theta)f^n`, while
+:math:`f(t_{n+\theta})` means :math:`f` evaluated at the time point
+:math:`\theta t_{n+1} + (1-\theta)t_n`.
+
+The nice feature of the :math:`\theta` rule is that it reproduces
+three widely used discretization methods in time:
+:math:`\theta=0` gives a classical Forward Euler scheme,
 :math:`\theta=1` gives a Backward Euler scheme, and :math:`\theta=\frac{1}{2}` gives a
 Crank-Nicolson (or midpoint/centered) scheme. The latter is
 theoretically the most accurate, but suffers from non-physical
@@ -85,13 +94,23 @@ more accurate backward difference formula utilizing a third time
 level).
 
 The corresponding variational formulation for :math:`u^{n+1}` is derived by
-multiplying the time-discrete PDE (:ref:`ch:diffusion:opt:PDEtheta`) by
-a test function :math:`v\in\hat V` and integrating over the spatial domain
-:math:`\Omega`. Terms with second-order derivatives are integrated by parts,
-meaning that :math:`\int_\Omega\mathcal{G}(u)v{\, \mathrm{d}x} = -\int_\Omega
-\mathcal{D}(u,v){\, \mathrm{d}x} + \int_\Gamma \mathcal{B}(u,v){\, \mathrm{d}s}`. Using
-:ref:`(2) <Eq:ch:diffusion:opt:num:thetar2>`, and introducing :math:`U=\theta u^{n+1}
-+ (1-\theta)u^n)`, the variational formulation then becomes
+multiplying the time-discrete PDE (:ref:`ch:diffusion:opt:PDEthetar1`)
+or (:ref:`ch:diffusion:opt:PDEthetar2`) by a test function :math:`v\in\hat V`
+and integrating over the spatial domain :math:`\Omega`. Terms with
+second-order derivatives are integrated by parts. We can express the
+integration by parts as
+
+.. math::
+         \int_\Omega\mathcal{G}(u)v{\, \mathrm{d}x} = -\int_\Omega \mathcal{D}(u,v){\, \mathrm{d}x} +
+        \int_\Gamma \mathcal{B}(u,v){\, \mathrm{d}s}{\thinspace .}
+
+Using
+:ref:`(2) <Eq:ch:diffusion:opt:num:thetar2>`, and introducing
+
+.. math::
+         U=\theta u^{n+1} + (1-\theta)u^n),
+
+the variational formulation becomes
 
 .. _Eq:ch:diffusion:opt:num:varform:
 
@@ -100,13 +119,17 @@ meaning that :math:`\int_\Omega\mathcal{G}(u)v{\, \mathrm{d}x} = -\int_\Omega
     \tag{3}
     F = \int_\Omega \varrho c\frac{u^{n+1} - u^n}{{\Delta t}}v{\, \mathrm{d}x} +
         \int_\Omega \mathcal{D}(U,v) {\, \mathrm{d}x} -
-        \int_\Omega f(\theta t_{n+1}+(1-\theta)t_n) v{\, \mathrm{d}x}
-        + \int_\Gamma \mathcal{B}(U,v){\, \mathrm{d}s}
+        \int_\Omega f(\theta t_{n+\theta}) v{\, \mathrm{d}x}
+        +
+        \quad \int_\Gamma \mathcal{B}(U,v){\, \mathrm{d}s}
         
         
 
 Note that we have inserted a factor :math:`\varrho c` in the time-derivative term
-since our PDE has this factor. We introduce a general initial condition
+since our PDE has this factor. Also note that all terms are evaluated at
+the time point :math:`t_{n+\theta}`.
+
+We introduce a general initial condition
 
 .. math::
          u(\boldsymbol{x}, 0) = u_0(\boldsymbol{x})\hbox{ in }\Omega{\thinspace .}
@@ -118,14 +141,14 @@ entire boundary or a Robin condition
          -p\frac{\partial u}{\partial n} = r(u-s),
 
 where :math:`r` is a heat transfer coefficient and :math:`s` is the surrounding
-temperature. Note that insulated boundaries are obtained by :math:`r=0`.
-We also have
+temperature. Note that insulated boundaries are modeled by :math:`r=0`.
+For the present physical problem we have
 
 .. math::
-        
+        \begin{align*}
         \mathcal{D}(u,v) &= \nabla\cdot(p\nabla u^{n}),\\ 
         \mathcal{B}(u,v) &= r(u-s)v{\thinspace .}
-        
+        \end{align*}
 
 Normally, in finite element programs, we would need to break up the
 variational formulation :ref:`(3) <Eq:ch:diffusion:opt:num:varform>` into
@@ -141,30 +164,12 @@ formulation to be coded reads
     \tag{4}
     F = \int_\Omega (\varrho c\frac{u^{n+1} - u^n}{{\Delta t}}v +
          p\nabla U\cdot\nabla v  -
-         f(\theta t_{n+1}+(1-\theta)t_n) v){\, \mathrm{d}x}
+         f(\theta t_{n+\theta}) v){\, \mathrm{d}x}
         + \int_\Gamma r(U-s)v{\, \mathrm{d}s}
         
         
 
-.. _ch:diffusion:opt:bassembly:
-
-Avoiding assembly of the coefficient matrix
--------------------------------------------
-
-[**hpl 1**: I thought this example can just be an exercise now that the Navier-Stokes example covers the topic of ``assemble``. However, the Navier-Stokes example is relatively complicated, and many students do not have the background to really understand it, so we cannot it rely on all details from all gallery examples to be digested. Therefore, I explain in more detail the pre-assemble idea here.]
-
-Our time-dependent heat equation gives rise to a linear system
-with coefficient matrix :math:`A` and right-hand side :math:`b` at every time
-level. When :math:`\varrho`, :math:`c`, :math:`p`, and :math:`r` do not depend on time,
-and :math:`{\Delta t}` is constant,
-:math:`A` is constant, and it suffices to assemble the matrix once -
-before the time loop. To be able to do this, we need to
-explicitly create matrices and vectors from variational
-formulations.
-
-.. as demonstrated in the section :ref:`ch:poisson0:linalg`.
-
-.. in N-S as well
+If :math:`s` varies with time, we need to evaluate it as :math:`s(t_{n+\theta})`.
 
 .. _ch:diffusion:opt:alg:
 
@@ -205,6 +210,15 @@ for the unknown spatial function at the new time level (:math:`u^n`) and
 
    * :math:`u^n \leftarrow u` (be ready for next step)
 
+Our time-dependent heat equation gives rise to a linear system
+with coefficient matrix :math:`A` and right-hand side :math:`b` at every time
+level. When :math:`\varrho`, :math:`c`, :math:`p`, and :math:`r` do not depend on time,
+and :math:`{\Delta t}` is constant,
+:math:`A` is constant, and it suffices to assemble the matrix once -
+before the time loop. To be able to do this, we need to
+explicitly create matrices and vectors from variational
+formulations, using the ``assemble`` function.
+
 The code features a lot of changes from the ``ft03_heat.py``
 program. We shall go through each part of the above algorithm.
 
@@ -229,6 +243,10 @@ Instead of a flat program, we wrap the solver in a function:
 We assume that the domain is an interval, rectangle, or box, with
 dimensions given by the list ``L`` and where ``divisions`` specifies
 the number of cells in each spatial direction.
+Alternatively, we could demand that a ready-made mesh is provided by
+the calling code, but we take the opportunity here to illustrate
+once again the setting of different boundary conditions at different
+parts of the boundary.
 
 Boundary condition conventions
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -250,7 +268,10 @@ Checking input data
 It is wise to start the function with checking the values of some
 of the input parameters. Python's ``assert`` function is ideal for
 quick writing of tests, at the cost of cryptic error messages for
-less experienced programmers.
+less experienced programmers. When we have some test expressed as
+a boolean condition ``cond``, we can just write ``assign cond``. The statement
+is silent if ``cond`` is ``True``, otherwise an exception is raised and the
+program is aborted.
 
 .. code-block:: python
 
@@ -264,10 +285,11 @@ less experienced programmers.
 Creating the mesh
 ~~~~~~~~~~~~~~~~~
 
-This solver is supposed to work on any domain, but for now we
-restrict the geometry to a hypercube (an alternative is to send
-a ready-made mesh as argument to ``solver`` - then we could handle
-arbitrary domains).
+For now we restrict the geometry to a hypercube (but the ``solver``
+function can compute on any type of domain and mesh). We use the
+recipe from the
+section "Parameterizing the number of space dimensions": "" in
+[Ref1]_.
 
 .. code-block:: python
 
@@ -280,7 +302,7 @@ arbitrary domains).
     V = FunctionSpace(mesh, 'P', degree)
 
 Note that ``*L`` for a list or tuple variable ``L`` in a function call
-is the same as sending
+is the same as sending the elements as separate arguments
 ``L[0], L[1], ..., L[len(L)-1]``.
 
 .. _ch:diffusion:opt:markboundary:
@@ -372,13 +394,24 @@ The use of this function in the solver function goes as follows:
         for i in range(2*d):
             bcs.append(DirichletBC(V, r[i], boundary_parts, i))
 
-Note that we either have Dirichlet values at all boundaries or we
-have Robin conditions.
+Recall that we *either* have Dirichlet *or* Robin conditions
+at the entire boundary. This is just a convention that we, as
+developers of the ``solver`` function, has imposed. Later, in
+the chapter :ref:`ch:classes`, we leave it to the user to define the mesh
+and boundary conditions, which results in a very flexible solver, but
+a significant amount of problem-specific code on the user's side.
+
+[**hpl 1**: I'm really not sure whether it would be better to require a mesh variable from the user also here, along with some representations of the boundary conditons, as arguments for ``solver`` and put the setting of boundary conditions in the calling code. Now the examples with a *function* ``solver`` operates on hypercube geometries and deal with the partitioning of the boundary and setting of conditions, while the examples with a solver *class* just requires an API where the user supplies the mesh and info on boundary conditions. Maybe best with showing both ways. The bottom line is to explain something sufficiently general so the user does not copy the entire solver to change the boundary conditions and ends up with multiple solvers.]
+
+.. _ch:diffusion:opt:varform:
 
 Implementation of the variational formulation
 ---------------------------------------------
 
-[**hpl 2**: Important messgage: the variational form can be implemented in many steps, utilizing Python functions if desired, and this is very convenient, especially for debugging later. Not sure how this message can be explicitly formulated...]
+We shall now implement the variational formulation and demonstrate how
+that formulation can be coded in separate parts, utilizing Python
+variables and functions. Later, we can examine the individual parts
+in search for programming errors.
 
 We start with implementing the initial condition:
 
@@ -404,14 +437,16 @@ Python functions for various terms in the formulation:
     def B(u, i):
         return r[i]*(u-s)*v*ds(i)
     
-    # Must set the t attribute in f, s, and r[i] to
+    # In time loop: must set the t attribute in f, s, and r[i] to
     # theta*t + (1-theta)*(t-dt) before evaluating the forms
+    
     U = theta*u + (1-theta)*u_n
     F_M = rho*c*(u-u_n)/dt*v*dx
     F_K = D(U)
-    F_f = -f*v*dx
-    F = F_M + F_K + F_f
+    F_f = f*v*dx
+    F = F_M + F_K - F_f
     if BC == 'Robin':
+        # Add cooling condition integrals from each side
         F_R = sum(B(U, i) for i in range(2*d))
         F += F_R
     a, L = lhs(F), rhs(F)
@@ -420,7 +455,8 @@ We have with purpose split the expression for ``F`` into separate terms for
 easier debugging later, as this allows us to assemble terms independently
 and compare with hand calculations.
 
-It remains to assemble the coefficient matrix:
+It remains to assemble the coefficient matrix, here once and for all before
+the time loop if :math:`A` is constant throughout the simulations:
 
 .. code-block:: python
 
@@ -442,6 +478,8 @@ and returned from ``assemble``. Now there will be only a single
 memory allocation of the right-hand side vector. Before the time loop
 we must set ``b = None`` such that ``b`` is defined as a variable
 in the first call to ``assemble`` inside the time loop.
+
+.. _ch:diffusion:opt:timeloop:
 
 The time loop
 -------------
@@ -483,46 +521,60 @@ The complete time loop goes as follows:
         timestep += 1
         u_n.assign(u)
 
-The first part of the loop where we update ``Expression`` objects is
-key to get right and one of the most error-prone tasks for FEniCS
-programmers. The variational forms can work with time-dependent
-``Expression`` objects and evaluate the time when we require an
-``assemble`` operation. Hence, at each time level, every ``Expression``
-object that enters the variational formulations that are subject to
-``assemble`` calls must have its right time value. In addition,
-``Expression`` objects related to Dirichlet values must contain the
-same time value as that of the unknown to be computed.
-In the present case, ``f``, ``s``, and ``r[i]`` enter the variational
-formulation at the weighted time :math:`t_m = \theta t_{n+1} + (1-\theta)t_{n+1}`,
-so this time value must be assigned to the ``t`` attribute in these
-objects. However, it may happen that one or more of the objects
-are ``Constant`` objects, or ``Expression`` objects without a time value,
-so a straight assignment ``f.t = t_m`` may fail. Therefore, we
-use ``hasattr`` to check that the object has a ``t`` attribute before
-updating the value.
 
-The update of ``r[i].t`` depends on whether ``r`` is used for Dirichlet or
-Robin conditions. In the latter case, the :math:`r` quantity is to be
-evaluated at the weighted time, ``r[i].t = t_m``, while for a Dirichlet
-condition, ``r[i].t`` must reflect the same time level as the unknown we
-compute for, i.e., :math:`t_{n+1}`, or ``t`` in the time loop.
+.. admonition:: Make sure Expression objects have the right time value
+
+   The first part of the loop, where we update ``Expression`` objects, is
+   really key to get right and one of the most error-prone tasks for
+   FEniCS programmers. All given formulas in the variational form are to
+   be evaluated at the intermediate time point ``t_m`` (:math:`t_{n+\theta}`).
+   The variational forms can work with time-dependent ``Expression``
+   objects and evaluate the time variable in these objects when we
+   require an ``assemble`` operation. Hence, at each time level, every
+   ``Expression`` object that enters the variational formulation that is
+   subject to ``assemble`` calls must have its right time value (or more
+   precisely and general: all of its parameters must have the correct
+   values). In addition, ``Expression`` objects related to Dirichlet values
+   must contain the same time value as that of the unknown to be
+   computed.  In the present case, ``f``, ``s``, and ``r[i]`` enter the
+   variational formulation at the weighted time :math:`t_m = t_{n+\theta} =
+   \theta t_{n+1} +
+   (1-\theta)t_{n+1}`, so this time value must be assigned to the ``t``
+   attribute in these objects. However, it may happen that one or more of
+   the objects are ``Constant`` objects, or ``Expression`` objects without a
+   time value, so a straight assignment ``f.t = t_m`` may fail. Therefore,
+   we use ``hasattr`` to check that the object has a ``t`` attribute before
+   trying to update the value.
+   
+   The update of ``r[i].t`` depends on whether ``r`` is used for Dirichlet or
+   Robin conditions. In the latter case, the :math:`r` quantity is to be
+   evaluated at the weighted time, ``r[i].t = t_m``, while for a Dirichlet
+   condition, ``r[i].t`` must reflect the same time level as the unknown we
+   compute for, i.e., :math:`t_{n+1}`, or the variable ``t`` in the time loop.
+
+
+
 
 The rest of the statements in the time loop should be quite familiar.
 Note that ``[bc.apply(A, b) for bc in bcs]`` is a quick way of writing
-a for loop in one line (using a list comprehension, but the resulting
+a for loop on one line (using Python's list comprehension syntax,
+but the resulting
 list is never used for anything, just the calls ``bc.apply(A, b)`` are
 important for incorporating the Dirichlet conditions at each boundary
 segment).
 
 The complete ``solver`` function is found in the file
 `ft12_heat_func.py <https://github.com/hplgit/fenics-tutorial/blob/master/src/ft12_heat_func.py>`__.
+[**hpl 2**: Recall to rerun utility script for renaming these files prior to refereeing and publishing.]
+
+.. _ch:diffusion:opt:verify:
 
 Verification
 ------------
 
-The first implementation of a solver the complexity above is
+The first implementation of a solver of the complexity above is
 likely to suffer from programming errors or mathematical
-misunderstandings.  We must therefore set up tests so that we know
+misunderstandings.  We must therefore carefully set up tests so that we know
 that the implementation works. As usual, we favor manufactured
 solutions that can be exactly reproduced by the numerical method. With
 variable coefficients and a lot of input data to adjust, the choice of
@@ -534,21 +586,30 @@ a callback function that asserts the error to be within machine
 precision for this problem, if the manufactured solution is without
 approximation errors.
 
-We use SymPy to do the mathematics and then we use the code generation
+We use SymPy to do the mathematics and the code generation
 utility in SymPy to translate the symbolic expressions to C++
 code needed in FEniCS ``Expression`` objects.
 
 .. code-block:: python
 
     def verify(
-        manufactured_u, d=2, degree=1, BC='Robin',
-        N=16, theta=1, expect_exact_sol=True,
-        lumped_mass=False, debug=False):
+        manufactured_u,         # SymPy expression
+        d=2,                    # no of space dimensions
+        degree=1,               # degree of finite element polynomials
+        BC='Robin',             # type of boundary condition
+        N=16,                   # partitioning in each space direction
+        theta=1,                # time discretization parameter
+        expect_exact_sol=True,  # True: no approximation errors
+        lumped_mass=False,      # True: lump mass matrix
+        avoid_b_assembly=False, # True: construct b as matrix-vector products
+        A_is_const=None,        # None: set True if BC is 'Dirichlet'
+        debug=False,            # True: dump a lot of debugging info
+        error_tol=1E-13):       # tolerance for exact numerical solution
     
-        import sympy as sym
         u = manufactured_u  # short form
-        x, y, t = sym.symbols('x[0] x[1] t')
-        if d == 1:  # 1D
+        x, y, z, t = sym.symbols('x[0] x[1] x[2] t')
+    
+        if d == 1:  # 1D test problem
             p = 1
             s = 1
             rho = c = 1
@@ -559,8 +620,8 @@ code needed in FEniCS ``Expression`` objects.
             r = [None]*(2*d)
             r[0] = (+p*sym.diff(u, x)/(u-s)).subs(x, 0)
             r[1] = (-p*sym.diff(u, x)/(u-s)).subs(x, 1)
+    
         elif d == 2:  # 2D
-            #p = 2 + x + 2*y
             p = 1
             s = 2
             rho = c = 1
@@ -568,12 +629,30 @@ code needed in FEniCS ``Expression`` objects.
                 - sym.diff(p*sym.diff(u, x), x) \ 
                 - sym.diff(p*sym.diff(u, y), y)
             f = sym.simplify(f)           # fitted source term
-            # Boundary conditions: r = -p*(du/dn)/(u-s)
+            # For Robin boundary conditions: r = -p*(du/dn)/(u-s)
             r = [None]*(2*d)
             r[0] = (+p*sym.diff(u, x)/(u-s)).subs(x, 0)
             r[1] = (-p*sym.diff(u, x)/(u-s)).subs(x, 1)
             r[2] = (+p*sym.diff(u, y)/(u-s)).subs(y, 0)
             r[3] = (-p*sym.diff(u, y)/(u-s)).subs(y, 1)
+    
+        elif d == 3:  # 3D
+            p = 1
+            s = 2
+            rho = c = 1
+            f = rho*c*sym.diff(u, t) \ 
+                - sym.diff(p*sym.diff(u, x), x) \ 
+                - sym.diff(p*sym.diff(u, y), y) \ 
+                - sym.diff(p*sym.diff(u, z), z)
+            f = sym.simplify(f)           # fitted source term
+            # For Robin boundary conditions: r = -p*(du/dn)/(u-s)
+            r = [None]*(2*d)
+            r[0] = (+p*sym.diff(u, x)/(u-s)).subs(x, 0)
+            r[1] = (-p*sym.diff(u, x)/(u-s)).subs(x, 1)
+            r[2] = (+p*sym.diff(u, y)/(u-s)).subs(y, 0)
+            r[3] = (-p*sym.diff(u, y)/(u-s)).subs(y, 1)
+            r[4] = (+p*sym.diff(u, z)/(u-s)).subs(z, 0)
+            r[5] = (-p*sym.diff(u, z)/(u-s)).subs(z, 1)
     
         for i in range(len(r)):
             r[i] = sym.simplify(r[i])
@@ -605,14 +684,18 @@ code needed in FEniCS ``Expression`` objects.
             if debug:
                 print('u exact:', u_e.vector().array())
             if expect_exact_sol:
-                assert error < 1E-13, error
+                assert error < error_tol, error
     
-        A_is_const = BC == 'Dirichlet'
+        if A_is_const is None:
+            A_is_const = BC == 'Dirichlet'
+        if lumped_mass:
+            assert A_is_const
         # Match dt to N to keep dt/(2*d*dx**q) const,
         # q=1 for theta=0.5 else q=2
         dx = 1./N
         q = 1 if theta == 0.5 else 2
         dt = (0.05/(2*d*0.5**q))*2*d*dx**q
+        print('dx=%g, dt=%g (p=1)' % (dx, dt))
         T = 5*dt  # always 5 steps
         if d == 1:
             divisions = (N,)
@@ -620,41 +703,113 @@ code needed in FEniCS ``Expression`` objects.
         elif d == 2:
             divisions = (N, N)
             L = (1, 1)
+        elif d == 3:
+            divisions = (N, N, N)
+            L = (1, 1, 1)
         solver(rho, c, p, f, r, s, u_exact, T, L,
                dt, divisions, degree=degree, theta=theta,
                user_action=print_error,
                u0_project=False, BC=BC, A_is_const=A_is_const,
-               lumped_mass=lumped_mass, debug=debug)
+               lumped_mass=lumped_mass,
+               avoid_b_assembly=avoid_b_assembly, debug=debug)
+    
+    def test_efficiency():
+        """
+        Measure the efficiency of various versions of a Forward
+        Euler method: lumped coefficient matrix without any assembly,
+        consistent coefficient matrix but no assembly, initial assembly
+        of coefficient matrix and assembly of right-hand side,
+        and full assembly at each time level.
+        Gain: a factor of 6, 4, 2, and 1.
+        """
+        x, y, z, t = sym.symbols('x[0] x[1] x[2] t')
+    
+        # 2D efficiency test: N=180, same gain
+        # 3D efficiency test
+        u = 1 + x**2 + y + z**2 + 3*t
+        # Lumped 0.14
+        verify(u, d=3, degree=1, BC='Dirichlet', N=30, theta=0,
+               lumped_mass=True, avoid_b_assembly=True, error_tol=1E-11)
+        # No assembly of A and b, just matrix-vector operations 0.22
+        verify(u, d=3, degree=1, BC='Dirichlet', N=30, theta=0,
+               lumped_mass=False, avoid_b_assembly=True, error_tol=1E-10)
+        # Initial assembly of A, assembly of b at each time level 0.42
+        verify(u, d=3, degree=1, BC='Dirichlet', N=30, theta=0,
+               lumped_mass=False, avoid_b_assembly=False, error_tol=1E-10)
+        # Aseembly of A and b the normal way 0.86
+        verify(u, d=3, degree=1, BC='Dirichlet', N=30, theta=0,
+               lumped_mass=False, avoid_b_assembly=False, A_is_const=False,
+               error_tol=1E-10)
+
+With the ``verify`` function we can easily construct a range of unit tests.
+For example, one test function might look as
+
+.. code-block:: python
+
+    def test_solver():
+        x, y, z, t = sym.symbols('x[0] x[1] x[2] t')
+    
+        # 1D
+        u = 1 + x**2 + 3*t
+        verify(u, d=1, degree=1, BC='Dirichlet', N=20, theta=1)
+        verify(u, d=1, degree=2, BC='Dirichlet', N=2, theta=1)
+        verify(u, d=1, degree=1, BC='Robin', N=2,  theta=1)
+        verify(u, d=1, degree=1, BC='Robin', N=20, theta=1)
+        verify(u, d=1, degree=2, BC='Robin', N=2,  theta=1, error_tol=1.5E-13)
+        verify(u, d=1, degree=2, BC='Robin', N=2,  theta=0.5)
+        # Optimized versions
+        verify(u, d=1, degree=1, BC='Dirichlet', N=2, theta=1,
+               lumped_mass=True, avoid_b_assembly=True)
+        verify(u, d=1, degree=1, BC='Dirichlet', N=2, theta=0.5,
+               lumped_mass=True, avoid_b_assembly=True)
+        verify(u, d=1, degree=1, BC='Dirichlet', N=2, theta=0,
+               lumped_mass=True, avoid_b_assembly=True)
+    
+        # 2D
+        u = 1 + x - 4*y**2 + 3*t
+        verify(u, d=2, degree=1, BC='Dirichlet', N=2, theta=0.5)
+        verify(u, d=2, degree=1, BC='Dirichlet', N=2, theta=1)
+        verify(u, d=2, degree=1, BC='Dirichlet', N=2, theta=0)
+
+Recall that ``verify`` performs the right ``assert`` only if the numerical
+solution is without approximation errors. Robin conditions may lead to
+exact solutions in 1D, but this is not true in 2D. There, we get
+a varying :math:`r`, depending on the manufactured solution, which destroys
+the exact computation of derivatives. An extension of ``verify`` is
+necessary such that we measure convergence rates when ``expect_exact_sol``
+is ``False``.
+
+.. _ch:diffusion:opt:debug:
 
 Debugging of FEniCS programs
 ----------------------------
 
 [**hpl 3**: This section is unfinished.]
 
-When the first author implemented the present ``solver`` function, the
+When the first author implemented the ``solver`` function at hand, the
 solution looked nice in visualizations, but the verification tests
 where the solutions should be reproduced to machine precision, were
-not fulfilled, but the numerical solutions converged. These
+not fulfilled, although the numerical solutions converged. These
 observations pointed to bugs in the code, but the author could not
-spot them from pure reading. How can such a FEniCS code systematically
+spot them from pure reading. How can such a FEniCS code be systematically
 debugged?  The safest way involves the following steps:
 
- * Reduce the problem to one spatial dimension.
+1. Reduce the problem to one spatial dimension.
 
- * Work with P1 elements.
+2. Work with P1 elements.
 
- * Work with the smallest sensible mesh, e.g., two cells.
+3. Work with the smallest sensible mesh, e.g., two cells.
 
- * Compute by hand the contribution to the coefficient matrix and
+4. Compute by hand the contribution to the coefficient matrix and
    right-hand side from each term in the PDEs.
 
- * Assemble each term in the PDEs individually in FEniCS (easy!)
-   for comparison with hand calculations. Be aware of the ``vertex_to_dof``
-   mapping in FEniCS.
+5. Assemble each term in the PDEs individually in FEniCS (easy!)
+   for comparison with hand calculations. (Be aware of the ``vertex_to_dof``
+   mapping in FEniCS!)
 
- * Write out all the Dirichlet conditions and check that they are correct.
+6. Write out all the Dirichlet conditions and check that they are correct.
 
- * Finally assert that the linear system computed by hand and by FEniCS
+7. Finally assert that the linear system computed by hand and by FEniCS
    are identical.
 
 This procedure requires, of course, that one masters the basic algorithms
@@ -663,28 +818,92 @@ separate program. The details in the present PDE application are documented
 next.
 
 We start with reducing the problem to 1D. There are four types of terms
-in our PDE: the mass matrix term :math:`\int\frac{1}{{\Delta t}}u^{n+1}v`,
+in our PDE: the mass matrix term :math:`\int\varrho c\frac{1}{{\Delta t}}u^{n+1}v`,
 the stiffness matrix term :math:`\int p\nabla u\cdot\nabla v`, the source term
-:math:`\int fv`, and the Robin condition term :math:`\int_\Gamma r(u-s)v`.
+:math:`\int fv`, and the Robin condition term :math:`\int_\Gamma r(u-s)v`. We must
+compute the element matrix or vector for each of these terms and
+assemble the corresponding matrix or vector. Alternatively, we may compute
+the matrix or vector directly, without considering element contributions.
+We prefer the former approach here.
+
+Numbering of the unknowns
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Before diving into the calculations, we must know what type of mesh
+our FEniCS code works with. The potential issue is how the unknowns in
+the linear system (i.e., the degrees of freedom or dofs) are numbered,
+see in the section
+"Examining the degrees of freedom": "" in [Ref1]_.
+While hand calculations typically prefer a numbering from left to right,
+FEniCS may employ more sophisticated numberings. Each cell has two
+vertices with numbers. For P1 elements, where the degrees of freedom coincide
+with the function values at the vertices, we need to figure out what
+the dof numbering is:
+
+.. code-block:: python
+
+    >>> from fenics import *
+    >>> mesh = UnitIntervalMesh(2)
+    >>> for i, p in enumerate(mesh.coordinates()):  # vertex numbering
+    ...   print(i, p)
+    ...
+    0 [ 0.]
+    1 [ 0.5]
+    2 [ 1.]
+    >>> V = FunctionSpace(mesh, 'P', 1)
+    >>> print vertex_to_dof_map(V)
+    [2 1 0]
+
+We see that vertex number 0 corresponds to dof 2, vertex 1 to dof 1, and
+vertex 2 to dof 0. This is very important to remember when doing the
+hand calculations!
+
+Hand calculations
+~~~~~~~~~~~~~~~~~
+
+The mass matrix term :math:`\int\varrho c\frac{1}{{\Delta t}}u^{n+1}v` leads to
+an integral over each element involving the finite element basis functions:
+:math:`\int\varrho c\frac{1}{{\Delta t}}\phi_i\phi_j{\, \mathrm{d}x}`. The corresponding element matrix
+becomes (constant :math:`\varrho c`):
 
 .. math::
         
-        \frac{h}{6{\Delta t}}
+        \varrho c \frac{h}{6{\Delta t}}
         \left(\begin{array}{rr}
         2 & 1\\ 
         1 & 2
         \end{array}\right)
         
 
+The parameter :math:`h` is the length of an element.
+Our computational case consists of two elements only, so
+:math:`h=\frac{1}{2}` and the global mass matrix reads
+
 .. math::
         
-        \frac{h}{6{\Delta t}}
+        \varrho c\frac{h}{6{\Delta t}}
         \left(\begin{array}{rrr}
         2 & 1 & 0\\ 
         1 & 4 & 1\\ 
         0 & 1 & 2
         \end{array}\right)
         
+
+The corresponding computation in FEniCS is
+
+.. code-block:: python
+
+    F_M = rho*c*(u-v)/dt*v*dx
+    if debug:
+        M = assemble(lhs(F_M))  # assemble rho*c*u/dt*v*dx
+        print('Mass matrix:\n', M.array())
+
+The "backward" dof numbering of unknowns used in FEniCS in this case does
+not influence the assembly by hand of the two element matrices.
+
+The stiffness matrix term :math:`\int p\nabla u\cdot\nabla v` leads to
+an element-wise integral :math:`\int \phi_i'\phi_j'{\, \mathrm{d}x}` when :math:`p=1` and the
+associated element matrix
 
 .. math::
         
@@ -694,6 +913,8 @@ the stiffness matrix term :math:`\int p\nabla u\cdot\nabla v`, the source term
         -1 & 1
         \end{array}\right)
         
+
+The assembled, global matrix becomes
 
 .. math::
         
@@ -705,12 +926,18 @@ the stiffness matrix term :math:`\int p\nabla u\cdot\nabla v`, the source term
         \end{array}\right)
         
 
-The Robin condition in 1D reduces to :math:`\int_\Gamma r(u-s)v{\, \mathrm{d}s}`, which
-gives a contribution :math:`[ruv]^1_0` to the coefficient matrix
+Also here, there is no impact of the dof numbering in FEniCS.
+
+The Robin condition in 1D reduces to
+
+.. math::
+         \int_\Gamma r(u-s)v{\, \mathrm{d}s} = [r(u-s)v]_0^1,
+
+which gives a contribution :math:`[ruv]^1_0` to the coefficient matrix
 and a contribution :math:`[rsv]^1_0` to the right-hand side vector.
 We have :math:`[ruv]^1_0=r(1)u(1)v(1)-r(0)u(0)v(0)`. The first term gives
 a contribution to the dof that corresponds to :math:`x=1` only, since
-:math:`\hat\phi_i(1)\phi_j(1)\neq 0` iff :math:`i` and :math:`j` is the dof at :math:`x=1`.
+:math:`\phi_i(1)\phi_j(1)\neq 0` iff :math:`i` and :math:`j` is the dof at :math:`x=1`.
 We typically get the global matrix
 
 .. math::
@@ -723,7 +950,9 @@ We typically get the global matrix
         \end{array}\right)
         
 
-if doc 0 corresponds to :math:`x=1` (as in this FEniCS numbering).
+when dof 0
+corresponds to the point (vertex) :math:`x=1`.
+Now the FEniCS numbering of dofs becomes important!
 The term :math:`r(0)u(0)v(0)` gives a similar contribution
 
 .. math::
@@ -752,8 +981,53 @@ The corresponding contributions to the right-hand side vector are
          0\\ 
          0\\ 
          1
-        \end{array}\right)
+        \end{array}\right){\thinspace .}
         
+
+Our final term to be computed is :math:`\int fv`, which in the case :math:`f=1`
+gives rise to element integrals :math:`\int \phi_i{\, \mathrm{d}x}` and the element
+vector :math:`(h/2)(1,1)`. The assembled, global vector for two
+elements reads :math:`h(\frac{1}{2},1,\frac{1}{2})`.
+
+Comparing hand and FEniCS calculations
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Now we are ready to see if the hand calculations correspond with those
+in FEniCS.
+With the variational form split into different pieces, it is easy to
+assemble each piece individually and print the corresponding matrix or vector:
+
+.. code-block:: python
+
+    def D(u):
+        return p*dot(grad(u), grad(v))*dx
+    
+    def B(u, i):
+        return r[i]*(u-s)*v*ds(i)
+    
+    U = theta*u + (1-theta)*u_n
+    F_M = rho*c*(u-u_n)/dt*v*dx
+    F_K = D(U)
+    F_f = f*v*dx
+    F = F_M + F_K - F_f
+    if BC == 'Robin':
+        # Add cooling condition integrals from each side
+        F_R = sum(B(U, i) for i in range(2*d))
+        F += F_R
+    
+    if debug:
+        print('M:\n', assemble(lhs(F_M)).array())
+        print('K:\n', assemble(lhs(F_K)).array())
+        print('R:\n', assemble(lhs(F_R)).array())
+        print('A:\n', assemble(lhs(F)).array())
+        print('rhs M:', assemble(rhs(F_M)).array())
+        print('rhs f:', assemble(rhs(F_f)).array())
+        print('rhs R:', assemble(rhs(F_R)).array())
+        print('b:', assemble(rhs(F)).array())
+    a, L = lhs(F), rhs(F)
+
+Start with a case with Dirichlet conditions and then proceed with
+testing Robin conditions.
 
 .. _ch:diffusion:opt:noassembly:
 
@@ -796,19 +1070,19 @@ functions :math:`\phi_i` to identify matrix-vector products that build up
 the complete system. We have :math:`u^{n}=\sum_{j=1}^NU^{n}_j\phi_j`,
 and we can expand :math:`f^n` as
 :math:`f^{n}=\sum_{j=1}^NF^{n}_j\phi_j`. Inserting these expressions in
-:math:`L(v)` and using :math:`v=\hat\phi_i` result in
+:math:`L(v)` and using :math:`v=\phi_i` result in
 
 [**hpl 4**: Why :math:`hat\phi_i`? No need for Petrov-Galerkin here... Cannot remember why the hat. Remove it.]
 
 .. math::
-        
+        \begin{align*}
         \int_\Omega \left(\frac{1}{{\Delta t}}u^{n} + f^{n+1}\right)v {\, \mathrm{d}x} &=
-        \int_\Omega \left(\frac{1}{{\Delta t}}\sum_{j=1}^N U^{n}_j\phi_j + \sum_{j=1}^N F^{n+1}_j\phi_j\right)\hat\phi_i {\, \mathrm{d}x},\\ 
-        &=\sum_{j=1}^N\frac{1}{{\Delta t}}\left(\int_\Omega \hat\phi_i\phi_j {\, \mathrm{d}x}\right)U^{n}_j
-         + \sum_{j=1}^N\left(\int_\Omega \hat\phi_i\phi_j {\, \mathrm{d}x}\right)F^{n+1}_j{\thinspace .}
-        
+        \int_\Omega \left(\frac{1}{{\Delta t}}\sum_{j=1}^N U^{n}_j\phi_j + \sum_{j=1}^N F^{n+1}_j\phi_j\right)\phi_i {\, \mathrm{d}x},\\ 
+        &=\sum_{j=1}^N\frac{1}{{\Delta t}}\left(\int_\Omega \phi_i\phi_j {\, \mathrm{d}x}\right)U^{n}_j
+         + \sum_{j=1}^N\left(\int_\Omega \phi_i\phi_j {\, \mathrm{d}x}\right)F^{n+1}_j{\thinspace .}
+        \end{align*}
 
-Introducing :math:`M_{ij} = \int_\Omega \hat\phi_i\phi_j {\, \mathrm{d}x}`, we see that
+Introducing :math:`M_{ij} = \int_\Omega \phi_i\phi_j {\, \mathrm{d}x}`, we see that
 the last expression can be written
 
 .. math::
@@ -890,15 +1164,15 @@ If we decide to use a varying time step :math:`{\Delta t}`, the :math:`A` matrix
 will vary with time, but it has a special structure so that it can
 easily and cheaply be computed at each time level.
 To see this, we
-insert :math:`v=\hat\phi_i` and :math:`u^n = \sum_{j=1}^N U^n_j\phi_j` in the
+insert :math:`v=\phi_i` and :math:`u^n = \sum_{j=1}^N U^n_j\phi_j` in the
 bilinear expression for the simplified case :math:`\theta=1` and no Robin
 conditions to get
 
 .. math::
         
         \sum_{j=1}^N \left(\int_\Omega \frac{1}{{\Delta t}}
-        \hat\phi_i\phi_j {\, \mathrm{d}x}\right)U^n_j +
-        \sum_{j=1}^N \left(\int_\Omega \nabla\hat\phi_i\cdot\nabla\phi_j {\, \mathrm{d}x}\right)U^n_j,
+        \phi_i\phi_j {\, \mathrm{d}x}\right)U^n_j +
+        \sum_{j=1}^N \left(\int_\Omega \nabla\phi_i\cdot\nabla\phi_j {\, \mathrm{d}x}\right)U^n_j,
         
 
 which can be written as a sum of matrix-vector products,
@@ -916,7 +1190,7 @@ the matrix :math:`K` with entries
 .. math::
 
     \tag{6}
-    K_{ij} = \int_\Omega \nabla\hat\phi_i\cdot\nabla\phi_j {\, \mathrm{d}x}{\thinspace .}
+    K_{ij} = \int_\Omega \nabla\phi_i\cdot\nabla\phi_j {\, \mathrm{d}x}{\thinspace .}
         
         
 
@@ -925,215 +1199,90 @@ matrix" is a common nickname for :math:`K`. The associated bilinear forms
 for these matrices, as we need them for the assembly process in a
 FEniCS program, become
 
-====================================================================  ====================================  
-                            Mathematics                                           FEniCS Code               
-====================================================================  ====================================  
-:math:`a_K(u,v) = \int_\Omega\nabla u\cdot\nabla v {\, \mathrm{d}x}`  ``a_K = dot(nabla(u), nabla(v))*dx``  
-:math:`a_M(u,v) = \int_\Omega uv {\, \mathrm{d}x}`                    ``a_M = u*v*dx``                      
-====================================================================  ====================================  
+=====================================================================  ====================================  
+                             Mathematics                                           FEniCS Code               
+=====================================================================  ====================================  
+:math:`a_K(u,v) = \int_\Omega \nabla u\cdot\nabla v {\, \mathrm{d}x}`  ``a_K = dot(nabla(u), nabla(v))*dx``  
+:math:`a_M(u,v) = \int_\Omega uv {\, \mathrm{d}x}`                     ``a_M = u*v*dx``                      
+=====================================================================  ====================================  
 
 The linear system at each time level, written as :math:`AU^n=b`,
 can now be computed by first computing :math:`M` and :math:`K`, and then forming
-:math:`A=M+{{\Delta t}} K` at :math:`t=0`, while :math:`b` is computed as
-:math:`b=\frac{1}{{\Delta t}}MU^{n-1} + MF^n` at each time level.
+:math:`A={{\Delta t}}^{-1} M+ K` at :math:`t=0`, while :math:`b` is computed as
+:math:`b={{\Delta t}}^{-1} MU^{n-1} + MF^n` at each time level.
+
+[**hpl 5**: Using :math:`u^n` and :math:`u^{n-1}`, should be :math:`n+1` and :math:`n`.]
 
 Generalization to full model
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 The coefficient matrix associated with the complete variational form
-:ref:`(4) <Eq:ch:diffusion:opt:num:varform2>`
+:ref:`(4) <Eq:ch:diffusion:opt:num:varform2>` leads to somewhat more complicated
+formulas. Just for simplicity, we
+drop this optimization when we have Robin conditions only. Ignoring the
+integral over the boundary, we get that
 
-[**hpl 5**: Not finished.]
+.. math::
+         A=\varrho c\frac{1}{{\Delta t}}M + \theta K,
+
+and
+
+.. math::
+         b = \varrho c\frac{1}{{\Delta t}} Mu^{n} + MF^m - (1-\theta)Ku^n,
+
+where :math:`F^{n+\theta}` is the vector of interpolated :math:`f`
+values at time :math:`t_{n+\theta} = f(\theta t_{n+1} + (1-\theta) t_n)`.
+
+[**hpl 6**: Not finished.]
 
 FEniCS implementation          (1)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-The following modifications are needed
-
-.. in the ``ft12_heat_func.py`` program from the previous section
-
-in order to implement the new
-strategy of avoiding assembly at each time level:
-
- 1. Define separate forms :math:`a_M` and :math:`a_K`
-
- 2. Assemble :math:`a_M` to :math:`M` and :math:`a_K` to :math:`K`
-
- 3. Compute :math:`A=\frac{1}{{\Delta t}}M+K`
-
- 4. Define :math:`f` as an ``Expression``
-
- 5. Interpolate the formula for :math:`f` to a finite element function :math:`F^n`
-
- 6. Compute :math:`b=\frac{1}{{\Delta t}}MU^{n-1} + MF^n`
-
-The relevant code segments become
+It is tempting to construct :math:`A` as
 
 .. code-block:: python
 
-    # 1.
-    a_K = dot(grad(u), grad(v))*dx
-    a_M = u*v*dx
-    # No need for L
-    
-    # 2. and 3.
-    M = assemble(a_M)
-    K = assemble(a_K)
-    A = M + dt*K
-    
-    # 4.
-    f = Expression('beta - 2 - 2*alpha', beta=beta, alpha=alpha)
-    
-    # 5. and 6.
-    while t <= T:
-        f_n = interpolate(f, V)
-        F_n = f_n.vector()
-        b = M*u_1.vector() + dt*M*F_n
+    A = rho*c*(1./dt)*M + theta*K
 
-We implement these modifications in a refactored version of the
-program ``ft11_heat2.py``, where the solver is a function
-as explained in the
-section "Refactored implementation": "" in [Ref1]_ rather than a
-flat program. The domain can also more flexibly be a 1D, 2D, or 3D
-interval, rectangle, or box.
-The new ``solver_minimize_assembly`` function resides in
-`ft12_heat_func.py <ft12_heat_func.py>`__.
+but that statement invokes a problem: matrix arithmetics works with scalars
+only, while ``rho``, and ``c`` are ``Constant`` objects. We therefore need to
+convert them to plain real numbers:
 
 .. code-block:: python
 
-    def solver_minimize_assembly(
-        alpha, f, u0, I, dt, T, divisions, L, degree=1,
-        user_action=None, I_project=False):
-        """
-        Solve diffusion PDE u_t = div(alpha*grad(u)) + f on
-        an interval, rectangle, or box with side lengths in L.
-        divisions reflect cell partitioning, degree the element
-        degree. user_action(t, u, timetesp) is a callback function
-        where the calling code can process the solution.
-        If I_project is false, use interpolation for the initial
-        condition.
-        """
-        # Create mesh and define function space
-        d = len(L)  # No of space dimensions
-        if d == 1:
-            mesh = IntervalMesh(divisions[0], 0, L[0])
-        elif d == 2:
-            mesh = RectangleMesh(Point(0,0), Point(*L), *divisions)
-        elif d == 3:
-            mesh = BoxMesh(Point(0,0), Point(*L), *divisions)
-        V = FunctionSpace(mesh, 'P', degree)
-    
-        class Boundary(SubDomain):  # define the Dirichlet boundary
-            def inside(self, x, on_boundary):
-                return on_boundary
-    
-        boundary = Boundary()
-        bc = DirichletBC(V, u0, boundary)
-    
-        # Initial condition
-        u_1 = project(I, V) if I_project else interpolate(I, V)
-        if user_action is not None:
-            user_action(0, u_1, 0)
-    
-        # Define variational problem
-        u = TrialFunction(V)
-        v = TestFunction(V)
-        a_M = u*v*dx
-        a_K = alpha*dot(grad(u), grad(v))*dx
-    
-        M = assemble(a_M)
-        K = assemble(a_K)
-        A = M + dt*K
-        # Compute solution
-        u = Function(V)   # the unknown at a new time level
-    
-        b_assemble = 0  # CPU time for assembling all the b vectors
-        timestep = 1
-        t = dt
-        while t <= T:
-            t0 = time.clock()
-            f_n = interpolate(f, V)
-            F_n = f_n.vector()
-            b = M*u_1.vector() + dt*M*F_n
-            b_assemble += time.clock() - t0
-            try:
-                u0.t = t
-                f.t = t
-            except AttributeError:
-                pass  # ok if no t attribute in u0
-            bc.apply(A, b)
-            solve(A, u.vector(), b)
-    
-            if user_action is not None:
-                user_action(t, u, timestep)
-            t += dt
-            timestep += 1
-            u_1.assign(u)
-        #info('total time for assembly of right-hand side: %.2f' % b_assemble)
-    
-    def application_animate(model_problem):
-        import numpy as np, time
-    
-        if model_problem == 1:
-            # Test problem with exact solution at the nodes also for P1 elements
-            alpha = 3; beta = 1.2
-            u0 = Expression('1 + x[0]*x[0] + alpha*x[1]*x[1] + beta*t',
-                            alpha=alpha, beta=beta, t=0)
-            f = Constant(beta - 2 - 2*alpha)
-            I = u0
-            dt = 0.05; T = 2
-            Nx = Ny = 20
-            u_range = [1, 1+1+alpha*1+beta*T]
-        elif model_problem == 2:
-            # Diffusion of a sin^8 spike
-            I = Expression('pow(sin(pi*x[0])*sin(pi*x[1]), 8)')
-            f = Constant(0)
-            u0 = Constant(0)
-            dt = 0.0005; T = 20*dt
-            Nx = Ny = 60
-            u_range = [0, 1]
-    
-        vtkfile = File('diffusion.pvd')
-    
-        def animate(t, u, timestep):
-            global p
-            if t == 0:
-                p = plot(u, title='u',
-                         range_min=float(u_range[0]),  # must be float
-                         range_max=float(u_range[1]))  # must be float
-            else:
-                p.plot(u)
-            print('t=%g' % t)
-            time.sleep(0.5)
-            vtkfile << (u, float(t))  # store time-dep Function
-    
-        solver_minimize_assembly(
-            1.0, f, u0, I, dt, T, (Nx, Ny), (1, 1), degree=2,
-            user_action=animate, I_project=False)
+    A = float(rho)*float(c)*(1./dt)*M + theta*K
 
-A special feature in this program is the ``user_action`` callback function:
-at every time level, the solution is sent to ``user_action``, which is
-some function provided by the user where the solution can be processed, e.g.,
-stored, analyzed, or visualized. In a unit test for the test example without
-numerical approximation errors, we can write a call to the solver function,
+Assume that we have already made the mass and stiffness matrices prior
+to the time loop,
 
 .. code-block:: python
 
-    def test_solver():
-        import numpy as np
-        alpha = 3; beta = 1.2
-        u_b = Expression('1 + x[0]*x[0] + alpha*x[1]*x[1] + beta*t',
-                         alpha=alpha, beta=beta, t=0)
-        f = Constant(beta - 2 - 2*alpha)
-        dt = 0.3; T = 1.9
-        u_b.t = 0
-    
-        # Define assert_error callback function
-        ...
-    
-        solver_minimize_assembly(
-            f, u_b, u_b, dt, T, Nx, Ny, degree,
-            user_action=assert_error, I_project=False)
+    if avoid_b_assemble:
+        M = assemble(u*v*dx)
+        K = assemble(D(u))
+
+we can in the time loop write
+
+.. code-block:: python
+
+    if avoid_b_assemble:
+        assert BC == 'Dirichlet'  # restrict for simplicity
+        f_m = interpolate(f, V)
+        F_m = f_m.vector()
+        A = float(rho)*float(c)*(1./dt)*M + theta*K
+        b = float(rho)*float(c)*(1./dt*M*u_n.vector() + \ 
+            M*F_m - (1-theta)*K*u_n.vector()
+    else:
+        # Assume A is assembled initially as A = assemble(lhs(F))
+        b = assemble(L, tensor=b)
+
+That is, no assembly at all is needed inside the time loop, just
+matrix-vector operations. We hope that this can give a performance
+boost, but experiments to be reported later show that the gain is
+about a factor of 4 compared to full assembly of :math:`A` and :math:`b` the
+usual way.
+
+Finished here. [[[
 
 The ``user_action`` function ``assert_error`` asserts equality of the
 exact and numerical solution at every time level:
@@ -1171,21 +1320,300 @@ animating the solution in two test problems is found in the
 function ``application_animate`` in
 `ft12_heat_func.py <ft12_heat_func.py>`__.
 
-Note that ``p``, which must survive between subsequent calls to the
-callback function, has to be declared as a global variable. This is
-necessary when the user action function is a *closure* (function
-inside function, "remembering" variables in the parent function) and
-``p`` is changed inside the closure.  Some programmers find it more
-convenient to let the user action be class instead, where ``p`` can be
-an attribute. Later examples employ the class design.
+.. _ch:diffusion:opt:lumping:
 
-The function ``solver_vs_solver_minimize_assembly`` measures the
-impact of the optimization technique in this section compared to
-the simpler technique from the previous section where we need
-to assemble the right-hand side of the linear system at every time
-level. The impact is not huge, just a speed-up factor of 1-2 for 2D problems
-and around 2 for 3D problems. Still, this may be an important
-improvement when you run a code a lot.
+Lumped mass matrix
+------------------
+
+What is the problem with the mass matrix?
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Comparing a P1 finite element method with a standard finite difference
+method, on a uniformly partitioned hypercube mesh, reveals that the
+stiffness matrix :math:`K`, arising from :math:`\int p\nabla u\cdot\nabla v{\, \mathrm{d}x}`,
+is the same for both methods, while the mass matrix :math:`M`, arising from
+a term like :math:`\int uv{\, \mathrm{d}x}`, is very different in the two methods.  The
+mass matrix is diagonal in the finite difference method, thus making
+:math:`\theta=0` a truly explicit scheme with no need for solving a system
+of linear algebraic equations in each time step. It would be very
+convenient to have this mass matrix also in finite element solvers to
+speed up computations. Moreover, analysis of the damping properties of
+the finite element and finite difference methods in diffusion problems
+:math:`\frac{\partial u}{\partial t} = \alpha\frac{\partial^2 u}{\partial
+x^2}` shows that the finite difference method, with its diagonal mass
+matrix, is more accurate than the finite element method. For :math:`\theta=0`
+it also has less strict stability properties.
+
+To be more precise with the mentioned analysis, a Fourier component
+:math:`u(x,t)=A(t)\sin(kx)` of the solution is damped by a factor :math:`A` from
+one time step to the next (:math:`A=e^{-\alpha k^2 t}`).  It turns out that
+in a P1 finite element method or a finite difference method with
+second-order, centered spatial differences, :math:`A` depends on :math:`p=kh/2`
+and :math:`F=\alpha\Delta t/ h^2`, where :math:`h` is the cell length. The
+dimensionless number :math:`F` is known as the mesh Fourier number. The
+Forward Euler scheme, :math:`\theta=0`, is unstable unless :math:`F\leq 1/6` in the
+finite element method and :math:`F\leq 1/2` in the finite difference method.
+Figure :ref:`ch:diffusion:opt:lumping:fig:FE` compares the graphs of :math:`A`
+for the two methods an values of :math:`F` that give stable solutions. We
+clearly see that the finite element method gives rise to :math:`A<0` for
+short waves, which is manifested as "flipping noise" in animations where
+the solution oscillates from time step to time step. In very smooth solutions,
+the short waves have too small amplitudes for this effect to be visible,
+but in problems with discontinuities, it is easy to spot that reducing :math:`F`
+increases the noise.
+
+Figures :ref:`ch:diffusion:opt:lumping:fig:BE` and
+:ref:`ch:diffusion:opt:lumping:fig:CN` compares :math:`A` for a wider range of
+:math:`F` values for the Backward Euler and Crank-Nicolson schemes,
+respectively. Also here we clearly see that the finite element method
+leads to inferior damping properties compared to the finite difference
+method. "Flipping noise" for high frequencies (due to :math:`A<0`) is a
+well-known flaw in the Crank-Nicolson scheme, but the negative
+effect is more pronounced in the finite element method. However, it is
+easy to come up with a remedy for the finite element method: if we
+make the mass matrix diagonal, the method will be equivalent to the
+finite difference method on a uniformly partitioned mesh and hence
+equally accurate.
+
+.. _ch:diffusion:opt:lumping:fig:FE:
+
+.. figure:: diffu_A_factors_fine_FE.png
+   :width: 600
+
+   *Comparison of damping factors for the Forward Euler scheme*
+
+.. _ch:diffusion:opt:lumping:fig:BE:
+
+.. figure:: diffu_A_factors_BE.png
+   :width: 800
+
+   *Comparison of damping factors for the Backward Euler scheme*
+
+.. _ch:diffusion:opt:lumping:fig:CN:
+
+.. figure:: diffu_A_factors_CN.png
+   :width: 800
+
+   *Comparison of damping factors for the Crank-Nicolson scheme*
+
+Lumping the mass matrix
+~~~~~~~~~~~~~~~~~~~~~~~
+
+A widely used method for making the mass matrix diagonal, or *lump* it as
+the phrase often goes [#lumping]_, is to sum all elements in a row, set
+the sum on the diagonal, and put zeros in all the other columns. This is
+called the row-sum technique and applies well to P1 elements, but it does
+not work well with P2 and higher-order elements. For these elements, one
+should instead use a quadrature that only samples the integrands at the
+points where we have the function value degrees of freedom. This
+is not yet possible in FEniCS [**hpl 7**: Anders, right?] so lumping remains
+restricted to P1 elements as explained here.
+
+.. [#lumping] The term arose in the days where the primary application
+   was wave motion (in elastic or other media) and the diagonalization
+   consisted in concentrating uniformly distributed mass as lumps at the
+   nodes only.
+
+Implementation in FEniCS
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+The row sum can be computed by multiplying the matrix by a vector with 1
+for all elements,
+
+.. code-block:: python
+
+    unity = Function(V)
+    unity.vector()[:] = 1.
+    
+    [bc.apply(M, b) for bc in bcs]
+    ML = M*unity.vector()  # lump M
+
+It is very important that we carry out the multiplication with ``unity``
+(i.e., the row sum) *after* Dirichlet boundary conditions are inserted in the
+matrix ``M``! Otherwise, the boundary conditions will not be incorporated
+in the vector ``ML``.
+
+We introduce a boolean ``lumped_mass`` in the ``solver`` function for indicating
+computations with a lumped mass matrix. Prior to the time loop we need
+to make sure we have the ``unity`` field available as well as ``M`` and ``K``
+for the mass matrix and the stiffness matrix:
+
+.. code-block:: python
+
+    if lumped_mass:
+        M = assemble(u*v*dx)
+        K = assemble(D(u))
+
+We need to distinguish between two cases: :math:`\theta=0` and :math:`\theta >0`.
+In the former case, the entire coefficient matrix is lumped and we can avoid
+calling ``solve``, while in the latter case, parts of the coefficient matrix
+involves a lumped mass matrix while other parts employ standard, assembled
+matrices. For :math:`\theta =0` we create the coefficient matrix as the
+matrix ``rho*c*M`` or
+
+.. code-block:: python
+
+    if lumped_mass and theta == 0:
+        A = assemble(lhs(F_M)) # make consistent mass, lump later
+    else:
+        A = assemble(lhs(F))
+
+For :math:`\theta >0`, the implementation is a bit tricky. We would like to
+write
+
+.. code-block:: python
+
+    ML = M*unity.vector()  # lump
+    A1 = float(rho)*float(c)*(1./dt)*ML
+    A = A1 + theta*K
+
+but ``A1 + theta*K`` does not work because it is a vector plus a matrix.
+The trick is to add ``A1`` to the diagonal of ``theta*K``:
+
+.. code-block:: text
+
+    A2 = theta*K
+    diag = unity.vector().copy()  # allocate vector
+    A2.get_diagonal(diag)
+    A2.set_diagonal(diag + A1)
+    A = A2
+
+Now, ``A`` is a matrix, but with a lumped mass matrix contribution.
+
+The right-hand side :math:`b=\varrho c {{\Delta t}}^{-1}Mu^n + MF^m - (1-\theta)K`
+is for a lumped mass matrix and :math:`\theta >0` computed as
+
+.. code-block:: python
+
+    b = float(rho)*float(c)*1./dt*ML*u_n.vector() + \ 
+        ML*F_m - (1-theta)*K*u_n.vector()
+
+We have decided to put all the mentioned methods together in the ``solver``
+function, and together with debug output, this makes a quite
+lengthy function in file `ft12_heat_func.py <https://github.com/hplgit/fenics-tutorial/blob/master/src/ft12_heat_func.py>`__. There are four methods for different kinds of assembly
+and three boolean variables to control them:
+
+ * ``lumped_mass``: ``True`` if the mass matrix is lumped
+
+ * ``avoid_b_assembly``: ``True`` if the right-hand side is to be computed
+   from matrix-vector products and no assembly
+
+ * ``A_is_const``: ``True`` if the coefficient matrix is constant (assumption
+   when using lumped mass).
+
+Four methods are available for assembling the coefficient matrix :math:`A` and
+right-hand side :math:`b`:
+
+1. Full assembly of :math:`A` and :math:`b` at each time level:
+   ``lumped_mass=False``, ``avoid_b_assembly=False``, ``A_is_const=False``
+
+2. Initial assembly of :math:`A`, full assembly of :math:`b` at each time level:
+   ``lumped_mass=False``, ``avoid_b_assembly=False``, ``A_is_const=True``
+
+3. No assembly of :math:`A` and :math:`b` at each time level, just construction
+   through matrix-vector products:
+   ``lumped_mass=False``, ``avoid_b_assembly=True``, ``A_is_const=True``
+
+4. No assembly of :math:`A` and :math:`b` at each time level, just construction
+   through matrix-vector products, but with lumped mass matrices:
+   ``lumped_mass=True``, ``avoid_b_assembly=True``, ``A_is_const=True``
+
+The function ``test_efficiency`` measures the impact of the four
+optimization technique using the verification problem from
+the section :ref:`ch:diffusion:opt:verify`.
+The results are independent of the number of space
+dimensions and the number of unknowns. We find typically for :math:`\theta
+=0` that method 2-4, compared to method 1, speeds up the code by a
+factor of 2, 4, and 6, respectively.  The factor 2 is easy to explain:
+if the work of creating :math:`A` and :math:`b` by assembly is about the same, we
+gain a factor of two by omitting one of them at every time
+step. One would perhaps expect that the factors 4 and 6 would be
+better, but in these tests, we have used a sparse matrix
+representation of :math:`A`, and matrix - vector arithmetics with sparse
+matrices are demanding to implement efficiently because of the many
+cache misses, a problem shared with the assembly algorithm. It may well
+happen that both algorithms suffer from spending most of the time grabbing data
+from memory and not on computing (where matrix - vector arithmetics should
+involve far fewer operations than the assembly algorithm).
+The trick with manipulating the diagonal of ``A2`` is also
+more costly than tailored support for lumped mass matrices in FEniCS.
+Anyway, a factor 6 may be important in many applications, and the increased
+accuracy for less smooth solutions of the diffusion equations,
+as provided by a lumped mass matrix, may often be more important.
+
+Application: diffusion of a spike
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Just to demonstrate how to use the ``solver`` function in an application,
+we consider pure diffusion of a spike
+
+.. math::
+         u_0(x,y) = sin^8(\pi x)\sin^8(\pi y),
+
+with boundary conditions :math:`u=0`. We solve the homogeneous, constant-coefficient,
+scaled diffusion equation,
+so :math:`p=c=\varrho =1`, :math:`f=0`. Moreover, :math:`r` is a list of ``Constant(0)`` objects for
+the Dirichlet conditions (length 4, one ``Constant(0)`` for each side of
+the 2D domain). In this case, :math:`s` is a just a dummy variable but needs to
+be of type ``Expression`` or ``Constant``, so we choose ``Constant(0)``.
+The domain :math:`[0,1]\times[0,1]` is divided into a :math:`60\times 60` partitioning
+with P1 elements.
+
+We want to animate the solution using the FEniCS built-in ``plot`` command.
+The necessary actions must be done in the ``user_action`` function, here
+called ``animate``.
+
+The application code reads
+
+.. code-block:: python
+
+    def animate_sine_spike():
+        import numpy as np, time
+    
+        # Diffusion of a sin^8 spike, scaled homogeneous PDE
+        u0 = Expression('pow(sin(pi*x[0])*sin(pi*x[1]), 8)')
+        c = rho = p = Constant(1)
+        f = Constant(0)
+        r = [Constant(0) for i in range(2*2)] # Dirichlet conditions u=0
+        s = Constant(0)                       # dummy, not used
+        dt = 0.0005
+        T = 20*dt
+        L = [1, 1]
+        divisions = (60, 60)
+        u_range = [0, 1]
+    
+        vtkfile = File('diffusion.pvd')
+    
+        def animate(t, u, timestep):
+            global plt
+            if t == 0:
+                plt = plot(u, title='u',
+                           range_min=float(u_range[0]),  # must be float
+                           range_max=float(u_range[1]))  # must be float
+            else:
+                plt.plot(u)
+            print('t=%g' % t)
+            time.sleep(0.5)           # pause between frames
+            vtkfile << (u, float(t))  # store time-dep Function
+    
+        solver(
+            rho, c, p, f, r, s, u0, T, L,
+            dt, divisions, degree=1, theta=1,
+            user_action=animate,
+            u0_project=False,
+            lumped_mass=False,
+            BC='Dirichlet',
+            A_is_const=True,
+            avoid_b_assembly=True)
+
+A little trick is needed in the ``animate`` function. To fix the
+color scale throughout the animation, we must initially provide the
+range of :math:`u` values for the scale, while later we must update the plot
+using the object returned from initial ``plot`` call. This object must
+survive between successive calls to ``animate`` so it cannot be a local
+variable. The solution is to let it be a global variable ``plt``
+(or one could implement ``animate`` via a class that has ``plt`` as an
+attribute and the callback function as method, usually ``__call__``).
 
 .. ===== Methods of lines and ODE solvers =====
 
@@ -1195,7 +1623,7 @@ A welding example with post processing and animation
 ====================================================
 
 The focus so far in this tutorial has been on producing the solution
-of PDE problems. [**hpl 6**: This is book 2, it depends on how things end up in the previous chapter.] For scientific investigations, the primary work is
+of PDE problems. [**hpl 8**: This is book 2, it depends on how things end up in the previous chapter.] For scientific investigations, the primary work is
 often with post processing results: computing quantities derived from
 the solution and inspecting these with visualization or data analysis tools.
 This is the focus of the present section.
@@ -1372,7 +1800,7 @@ The scaled form of :math:`f` is naturally :math:`\bar f = f/A`, since this makes
 also be scaled:
 
 .. math::
-        
+        \begin{align*}
         \bar f &= \exp{\left(-\frac{1}{2\sigma^2}
         \left({\bar xL -(L \bar x_0 + L\bar R\cos\omega t_c t)}\right)^2 -\frac{1}{2\sigma^2}
         \left({L \bar y-(L\bar y0 + L\bar R\sin\omega t_c t)}\right)^2\right)}\\ 
@@ -1383,7 +1811,7 @@ also be scaled:
         &= \exp{\left(-\frac{1}{2}\beta^2
         \left((x -(\frac{1}{2} + \bar R\cos\bar t)\right)^2 -
         \left(\bar y-(\frac{1}{2} + \bar R\sin\bar t))^2\right)\right)},
-        
+        \end{align*}
 
 where :math:`\beta` is a dimensionless parameter,
 

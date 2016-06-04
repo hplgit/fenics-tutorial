@@ -578,7 +578,6 @@ def solver_bc(
             bcs.append(bc)
 
     if debug:
-
         # Print all vertices that belong to the boundary parts
         for x in mesh.coordinates():
             if bx0.inside(x, True): print('%s is on x = 0' % x)
@@ -588,13 +587,17 @@ def solver_bc(
 
         # Print the Dirichlet conditions
         print('Number of Dirichlet conditions:', len(bcs))
+        if V.ufl_element().degree() == 1:  # P1 elements
+            d2v = dof_to_vertex_map(V)
+            coor = mesh.coordinates()
         for n, bc in enumerate(bcs):
             print('Dirichlet condition %d' % n)
             boundary_values = bc.get_boundary_values()
             for dof in boundary_values:
-                print('  dof %2d: u=%g' % (dof, boundary_values[dof]))
-
-    # Note: Removed some code here that only worked for P1 elements
+                print('   dof %2d: u=%g' % (dof, boundary_values[dof]))
+                if V.ufl_element().degree() == 1:
+                    print('    at point %s' %
+                          (str(tuple(coor[d2v[dof]].tolist()))))
 
     # Define trial and test functions
     u = TrialFunction(V)

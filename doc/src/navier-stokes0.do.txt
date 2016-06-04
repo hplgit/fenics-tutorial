@@ -19,12 +19,17 @@ for the velocity $u$ and pressure $p$ in an incompressible fluid:
 [hpl: Quite uncommon to write $\dot u$ for the time-derivative in the
 N-S equations. Only Claes Johnson comes to my mind... In mechanics,
 the dot is reserved for ODEs. I suggest the more common notation
-$\partial u/\partial t$, also since we use this elsewhere in the books.]
+$\partial u/\partial t$, also since we use this elsewhere in the books.
+One can also argue that $\naba^2 u$ is a much more common form for
+the viscosity term (and compatible with your boundary conditions at
+outlets now), but the stress formulation has many advantages, especially
+if stress is a boundary condition.]
 
 !bt
 \begin{align}
   label{ftut1:ns:momentum}
-  \varrho(\dot{u} + u \cdot \nabla u) &= \nabla\cdot\sigma(u, p) + f, \\
+  \varrho(\frac{\partial u}{\partial t} +
+  u \cdot \nabla u) &= \nabla\cdot\sigma(u, p) + f, \\
   label{ftut1:ns:continuity}
   \nabla \cdot u &= 0.
 \end{align}
@@ -59,15 +64,15 @@ The Navier--Stokes equations are different from
 the time-dependent heat equation in that we need to solve a system of
 equations and this system is of a special type. If we apply the same
 technique as for the heat equation; that is, replacing the time
-derivative with a simple difference quotient, we face two
-challenges. First, we obtain a nonlinear system of equations. This in
+derivative with a simple difference quotient, we get a nonlinear
+system of equations. This in
 itself is not a problem for FEniCS as we saw in Section
 ref{ftut1:gallery:nonlinearpoisson}, but the system has a so-called
 *saddle point structure* and requires special techniques
 (preconditioners and iterative methods) to be solved efficiently.
 
-Instead, we will apply a simpler and often very efficient approach
-which is to use a *splitting method*. In a splitting method, we
+Instead, we will apply a simpler and often very efficient approach,
+known as a *splitting method*. The idea is to
 consider the two equations (ref{ftut1:ns:momentum}) and
 (ref{ftut1:ns:continuity}) separately. There exist many splitting
 strategies for the incompressible Navier-Stokes equations. One of the
@@ -79,20 +84,21 @@ improved accuracy compared to the original scheme at little extra
 cost.
 
 The IPCS scheme involves three steps. First, we compute a *tentative
-velocity* $u^{\bigstar}$ by advancing the momentum equation
-(ref{ftut1:ns:momentum}) using the pressure $p^{n-1}$ from the
-previous time interval. We will also be using the velocity $u^{n-1}$
-in the nonlinear term $u\cdot\nabla u$. The variational problem for
-this first step is:
+velocity* $u^{\star}$ by advancing the momentum equation
+(ref{ftut1:ns:momentum}) by a midpoint finite difference scheme in
+time, but using the pressure $p^{n-1}$ from the
+previous time interval. We will also linearize the nonlinear convective
+term by using the known velocity $u^{n-1}$: $u^{n-1}\cdot\nabla u^{n-1}$.
+The variational problem for this first step is:
 
-[hpl: This equation applies `textit` and `multiline` in
-math. At least `textit` does not work in MathJax. Must test what
-works in Sphinx. Answer: Sphinx MathJax did not accept anything of this.]
+[hpl: It's somewhat strange that we are inconsistent with the convective
+term, it should be linearized as $u^{n-1}\cdot\nabla u^{n-1/2}$, but we
+just have to follow the IPCS formulas...]
 
 !bt
 \begin{equation}
 label{ftut1:ipcs1}
-        \renni{v}{\rho(u^{\bigstar} - u^{n-1}) / \dt}
+        \renni{v}{\rho(u^{\star} - u^{n-1}) / \dt}
       + \renni{v}{\rho u^{n-1} \cdot \nabla u^{n-1}}
       + \renni{\epsilon(v)}{\sigma(u^{n-\frac{1}{2}}, p^{n-1})}
       \\
@@ -232,7 +238,7 @@ compute the new pressure $p^n$:
 \begin{equation}
 label{ftut1:ipcs2}
   \renni{\nabla q}{\nabla p^n}
-  = \renni{\nabla q}{\nabla p^{n-1}} - \dt^{-1}\renni{q}{\nabla \cdot u^{\bigstar}}.
+  = \renni{\nabla q}{\nabla p^{n-1}} - \dt^{-1}\renni{q}{\nabla \cdot u^{\star}}.
 \end{equation}
 !et
 Note here that $q$ is a scalar-valued test function from the pressure
@@ -264,7 +270,7 @@ $v$, we obtain
 \begin{equation}
 label{ftut1:ipcs3}
   \renni{v}{u^n} =
-  \renni{v}{u^{\bigstar}} - \dt\renni{v}{\nabla(p^n-p^{n-1})}.
+  \renni{v}{u^{\star}} - \dt\renni{v}{\nabla(p^n-p^{n-1})}.
 \end{equation}
 !et
 [hpl: Check that $\rho$ is correctly handled in the three steps.]
