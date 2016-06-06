@@ -1405,7 +1405,8 @@ label{ch:diffusion:welding:problem}
 Let us solve a diffusion problem taken from welding.  A moving
 welding equipment acts as a moving heat source at the top of a thin
 metal plate.  The question is how the heat from the equipment spreads
-out in the material that is being welded. We use the standard heat
+out in the material that is being exposed to the external heat source.
+We use the standard heat
 equation and do not take phase
 transitions into account.  The governing PDE is then
 
@@ -1424,12 +1425,22 @@ condition is a cooling law; that is, a Robin condition
 !et
 on the entire boundary. Here, $r$ is the heat transfer coefficient at
 the boundary and $s$ is the surrounding temperature.
-The initial condition reads $u=s$.
+The natural initial condition is $u=s$. Note that when the plate is thin,
+one might be tempted to use a 2D model, but this implies the assumption of
+$\partial u/\partial z =0$, which again means insulated boundaries at the
+top and bottom surfaces of the plate. This is not physically relevant as we
+know there will be quite some heat loss from the surfaces of the plate.
+We must therefore have a cooling condition in these surfaces, which implies
+$\partial u/\partial z \neq0$ and hence a 3D problem. (Nevertheless, one
+could integrate over the thickness and develop a 2D model that takes the
+heat loss at the surfaces into account -- the PDE will then get an extra
+$r(u-s)$ term and turn into a reaction-diffusion equation.)
 
 A welding source is moving and very localized in space.  The
 localization can be modeled by a peak-shaped Gaussian function.  The
 movement is taken to be a circle with radius $R$ about a point
-$(x_0,y_0,L_z)$. A possible $f$ is
+$(x_0,y_0,L_z)$. The velocity of the equipment is constant. A possible
+form of $f$ is
 
 !bt
 \[ f(x,y,t) = A\exp{\left(-\frac{1}{2\sigma^2}
@@ -1440,7 +1451,7 @@ The parameter $A$ is the strength of the heat source, and $\sigma$ is
 the ``standard deviation'' (i.e., a measure of the width) of the Gaussian
 function. This source is equally strong throughout the thickness of
 the material. We could easily multiply by some function modeling decay
-of the source in $z$ direction as we move away from the top boundary where
+of the source in $z$ direction as we move away from the top surface where
 the welding equipment is applied.
 
 ===== Scaling of the welding problem =====
@@ -1576,11 +1587,12 @@ problem-dependent parameters and calls the solver function:
 !bc pycod
 def welding(gamma=1, delta=70, beta=10, num_rotations=2, Nu=1):
     """Circular moving heat source for simulating welding."""
-    d = 3  # no space dim
+    d = 3  # number of space dim
     from math import pi, sin, cos
     # Define physical parameters and boundary conditions
     u0 = Constant(0)
-    rho = c = p = Constant(1)
+    rho = c = Constant(1)
+    p = Constant(1.0/gamma)
     BC = 'Robin'
     Nu = 1
     r = [Constant(Nu) for i in range(2*d)]
@@ -1589,9 +1601,9 @@ def welding(gamma=1, delta=70, beta=10, num_rotations=2, Nu=1):
     # Define welding source
     R = 0.2
     f = Expression(
-        'delta*exp(-0.5*pow(beta,2)*(pow(x[0]-(0.5+R*cos(t)),2) + '
-                                    'pow(x[1]-(0.5+R*sin(t)),2)))',
-        delta=delta, beta=beta, R=R, t=0)
+        'delta*exp(-b*(pow(x[0]-(0.5+R*cos(t)),2) + '
+        'pow(x[1]-(0.5+R*sin(t)),2)))',
+        delta=delta, b=0.5*beta**2, R=R, t=0)
     omega = 1.0      # Scaled angular velocity
     P = 2*pi/omega   # One period of rotation
     T = num_rotations*P
@@ -1651,7 +1663,7 @@ a matter of running the welding example:
 velocity. Are the $\gamma$ values compatible with this?]
 
 !bc pyshell
->>> from heat_func import application_welding as a
+>>> from heat_func import welding as a
 >>> a(gamma=10, delta=700)
 !ec
 (We introduced the synonym `a` to save some typing.)
@@ -1664,26 +1676,36 @@ a(gamma=10, delta=700)'
 !ec
 
 Since we have fixed the color scale of the temperature to have values
-in $[0,1.1]$, we must adjust $\delta$ appropriately to $\gamma$.  For
-example, running $\gamma=40$ reveals, from the output in the terminal,
-that the maximum temperature is about 0.25, and consequently we do not
-see much. For any given $\gamma$, run the problem with $\delta=1$ (and
-say `num_rotations=0.2` to make a quick simulation), and rerun with
-$\delta$ as one over the maximum temperature.  Here we get an
-approximate $\delta = 66.7\gamma$ for $\gamma \leq 0.1$. Try running
-$\gamma=0.01$ and $\delta=1$ to observe some more significant heat
-transfer away from the welding equipment. With $\gamma =0.001$ there
-is significant heat build-up, but for so small $\gamma$ we should
-re-scale the problem and use the diffusion time scale as time scale.
+in $[0,1.1]$, we must adjust $\delta$ appropriately to $\gamma$. To this end,
+it is important that we monitor the maximum $u$ value printed in the
+terminal window. We find that for $\gamma=30$, a value $\delta=15$
+gives $u$ close to unity. Actually, we must have $\gamma=2000$ for $\delta=1$
+to give maximum values of $u$ close to unity. The values of $\delta$ indicates
+that the scaling is ``right'' for large $\gamma$ values -- for small $\gamma$
+we need a very large $\delta$, pointing to the fact that the characteristic
+temperature in the scaling is not correct (one would then use a time scale
+based on heat conductivity and not the movement of the welding equipment).
 
 In ParaView, load `Results/Temperature/Temperature.xdmf` as file,
 click _Apply_, then the play button for animation. If the animation is
 not correct, repeat the procedure. Thereafter, split the layout in
 two, choose _3D View_, load `Results/Heat source/Heat_source.xmdf`,
 click _Apply_, and run the animation. The two plots are synchronized
-in time.
+in time. The plots and movies below were made in Paraview.
 
-MOVIE: [mov/welding_gamma1.ogg] Welding example with $\gamma=1$.
+FIGURE: [fig/welding3D, width=800, frac=1] Heat source (upper left) and temperature distributions for $\gamma=0.1$ (upper right), $\gamma=1$ (lower left), and $\gamma=30# (lower right), after two rotations. label{ch:diffusion:welding:fig1}
+
+FIGURE: [fig/welding3D, width=800, frac=1] The temperature field for $\gamma=2000$ after two rotations. label{ch:diffusion:welding:fig2}
+
+MOVIE: [mov/welding/welding_gamma1_2D.ogg] $\gamma=1$, 2D view.
+
+MOVIE: [mov/welding/welding_gamma01_3D.ogg] $\gamma=0.1$.
+
+MOVIE: [mov/welding/welding_gamma1_3D.ogg] $\gamma=1$.
+
+MOVIE: [mov/welding/welding_gamma30_3D.ogg] $\gamma=30$.
+
+MOVIE: [mov/welding/welding_gamma2000_3D.ogg] $\gamma=2000$.
 
 
 #========= Implementing PDE solvers as classes =========
@@ -1694,7 +1716,8 @@ In the very beginning of this tutorial cite{ftut1} we focused on how
 to quickly put together solvers for a number of different PDEs. FEniCS
 makes it simple and straightforward to write the commands needed to
 set up a variational problem, define domains and boundary
-conditions. Then we wrapped such flat programs in functions for
+conditions. In the last chapter of cite{ftut1} and the first of the
+present volume, we wrapped such flat programs in functions for
 increased flexibility and easy testing.  However, for a real
 application you will likely want to be able to reuse the code you
 write for a particular PDE to solve multiple different problems with
@@ -2509,6 +2532,6 @@ by
 \[ \frac{u^{n+1}-u^n}{\dt} = \frac{1}{2}(G(u^{n+1}) + G(u^n))\tp\]
 !et
 This method also has a truncation error of order $\dt^2$.
-[hpl: Find some good test problems for comparing the performance of the schemes.]
+[hpl: Find some good test problems for comparing the performance of the schemes. What about starting Couette flow in 1D and a 2D tube with non-trivial cross section, and some adaptive strategy in time? Can find appropriate $\Delta t$ for visualization in different time intervals, then refine for numerical computations and then smoooth through the piecewise constant values.]
 
 % endif

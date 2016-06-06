@@ -533,7 +533,8 @@ def welding(gamma=1, delta=70, beta=10, num_rotations=2, Nu=1):
     from math import pi, sin, cos
     # Define physical parameters and boundary conditions
     u0 = Constant(0)
-    rho = c = p = Constant(1)
+    rho = c = Constant(1)
+    p = Constant(1.0/gamma)
     BC = 'Robin'
     Nu = 1
     r = [Constant(Nu) for i in range(2*d)]
@@ -542,9 +543,9 @@ def welding(gamma=1, delta=70, beta=10, num_rotations=2, Nu=1):
     # Define welding source
     R = 0.2
     f = Expression(
-        'delta*exp(-0.5*pow(beta,2)*(pow(x[0]-(0.5+R*cos(t)),2) + '
-                                    'pow(x[1]-(0.5+R*sin(t)),2)))',
-        delta=delta, beta=beta, R=R, t=0)
+        'delta*exp(-b*(pow(x[0]-(0.5+R*cos(t)),2) + '
+        'pow(x[1]-(0.5+R*sin(t)),2)))',
+        delta=delta, b=0.5*beta**2, R=R, t=0)
     omega = 1.0      # Scaled angular velocity
     P = 2*pi/omega   # One period of rotation
     T = num_rotations*P
@@ -608,7 +609,8 @@ def welding(gamma=1, delta=70, beta=10, num_rotations=2, Nu=1):
     L = (1, 1, 0.05)
     solver(
         rho, c, p, f, r, s, u0, T, L,
-        dt, divisions, degree=1, theta=0.5,
+        dt, divisions, degree=1,
+        theta=1,  # some oscillations in the beginning with theta=0.5
         user_action=ProcessResults(),
         u0_project=False,
         lumped_mass=False,
@@ -704,6 +706,9 @@ if __name__ == '__main__':
     #application_welding(gamma=10)
     #test_solver()
     #test_efficiency()
-    animate_sine_spike(m=2)
+    #animate_sine_spike(m=2)
     #welding(gamma=1, delta=90, beta=10, num_rotations=2, Nu=1)
+    #welding(gamma=0.1, delta=280, beta=10, num_rotations=2, Nu=1)
+    #welding(gamma=30, delta=15, beta=10, num_rotations=2, Nu=1)
+    welding(gamma=2000, delta=1, beta=10, num_rotations=2, Nu=1)
     interactive()
