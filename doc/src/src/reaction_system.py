@@ -9,6 +9,7 @@ is given by the flow field w from the Navier-Stokes demo navier_stokes.py.
   u_3' + w . nabla(u_3) - div(eps*grad(u_3)) = f_3 +K*u_1*u_2 - K*u_3
 
 """
+# Changes: U_1 -> u_1 etc, remove U_1, remove theta
 
 from __future__ import print_function
 from fenics import *
@@ -26,7 +27,7 @@ mesh = Mesh('channel.xml.gz')
 # Define function space for velocity
 W = VectorFunctionSpace(mesh, 'P', 2)
 
-# Define function space for system
+# Define function space for system of concentrations
 P1 = FiniteElement('P', 'triangle', 1)
 element = MixedElement([P1, P1, P1])
 V = FunctionSpace(mesh, element)

@@ -52,13 +52,13 @@ p = TrialFunction(Q)
 q = TestFunction(Q)
 
 # Define functions for solutions at previous and current time steps
-u0 = Function(V)
-u1 = Function(V)
-p0 = Function(Q)
-p1 = Function(Q)
+u_n = Function(V)
+u_  = Function(V)
+p_n = Function(Q)
+p_  = Function(Q)
 
 # Define expressions used in variational forms
-U   = 0.5*(u0 + u)
+U   = 0.5*(u_n + u)
 n   = FacetNormal(mesh)
 f   = Constant((0, 0))
 k   = Constant(dt)
@@ -73,21 +73,21 @@ def sigma(u, p):
     return 2*mu*epsilon(u) - p*Identity(len(u))
 
 # Define variational problem for step 1
-F1 = rho*dot((u - u0) / k, v)*dx \
-   + rho*dot(dot(u0, nabla_grad(u0)), v)*dx \
-   + inner(sigma(U, p0), epsilon(v))*dx \
-   + dot(p0*n, v)*ds - dot(mu*nabla_grad(U)*n, v)*ds \
+F1 = rho*dot((u - u_n) / k, v)*dx \
+   + rho*dot(dot(u_n, nabla_grad(u_n)), v)*dx \
+   + inner(sigma(U, p_n), epsilon(v))*dx \
+   + dot(p_n*n, v)*ds - dot(mu*nabla_grad(U)*n, v)*ds \
    - rho*dot(f, v)*dx
 a1 = lhs(F1)
 L1 = rhs(F1)
 
 # Define variational problem for step 2
 a2 = dot(nabla_grad(p), nabla_grad(q))*dx
-L2 = dot(nabla_grad(p0), nabla_grad(q))*dx - (1/k)*div(u1)*q*dx
+L2 = dot(nabla_grad(p_n), nabla_grad(q))*dx - (1/k)*div(u_)*q*dx
 
 # Define variational problem for step 3
 a3 = dot(u, v)*dx
-L3 = dot(u1, v)*dx - k*dot(nabla_grad(p1 - p0), v)*dx
+L3 = dot(u_, v)*dx - k*dot(nabla_grad(p_ - p_n), v)*dx
 
 # Assemble matrices
 A1 = assemble(a1)
@@ -129,36 +129,36 @@ for n in xrange(num_steps):
     # Step 1: Tentative velocity step
     b1 = assemble(L1)
     [bc.apply(b1) for bc in bcu]
-    solve(A1, u1.vector(), b1, 'bicgstab', 'ilu')
+    solve(A1, u_.vector(), b1, 'bicgstab', 'ilu')
 
     # Step 2: Pressure correction step
     b2 = assemble(L2)
     [bc.apply(b2) for bc in bcp]
-    solve(A2, p1.vector(), b2, 'bicgstab', 'ilu')
+    solve(A2, p_.vector(), b2, 'bicgstab', 'ilu')
 
     # Step 3: Velocity correction step
     b3 = assemble(L3)
-    solve(A3, u1.vector(), b3, 'bicgstab')
+    solve(A3, u_.vector(), b3, 'bicgstab')
 
     # Plot solution
-    plot(u1, title='Velocity')
-    plot(p1, title='Pressure')
+    plot(u_, title='Velocity')
+    plot(p_, title='Pressure')
 
     # Save solution to file
-    vtkfile_u << (u1, t)
-    vtkfile_p << (p1, t)
+    vtkfile_u << (u_, t)
+    vtkfile_p << (p_, t)
 
     # Save solution to file (HDF5)
-    timeseries_u.store(u1.vector(), t)
-    timeseries_p.store(p1.vector(), t)
+    timeseries_u.store(u_.vector(), t)
+    timeseries_p.store(p_.vector(), t)
 
     # Update previous solution
-    u0.assign(u1)
-    p0.assign(p1)
+    u_n.assign(u_)
+    p_n.assign(p_)
 
     # Update progress bar
     progress.update(t / T)
-    print('u max:', u1.vector().array().max())
+    print('u max:', u_.vector().array().max())
 
 # Hold plot
 interactive()

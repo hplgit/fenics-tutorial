@@ -1199,18 +1199,16 @@ solution.
 ===== A variable-coefficient Poisson problem =====
 
 As a test problem, we will extend the Poisson problem from Chapter
-ref{ch:fundamentals} with a variable coefficient $p(x,y)$ in the
+ref{ch:fundamentals} with a variable coefficient $\kappa(x,y)$ in the
 Laplace operator:
 
 !bt
-\begin{equation} label{ch:poisson0:2D:varcoeff}
-  \begin{split}
+\begin{alignat}{2}
     - \nabla\cdot \left\lbrack
-p(x,y)\nabla u(x,y)\right\rbrack &= f(x,y) \quad \mbox{in } \Omega,
-    \\
-    u(x,y) &= \ub(x,y) \quad \mbox{on}\  \partial\Omega\tp
-  \end{split}
-\end{equation}
+\kappa(x,y)\nabla u(x,y)\right\rbrack &= f(x,y) \quad &\mbox{in } \Omega,
+label{ch:poisson0:2D:varcoeff} \\
+    u(x,y) &= \ub(x,y) \quad &\mbox{on}\  \partial\Omega\tp
+\end{alignat}
 !et
 Let us continue to use our favorite solution $u(x,y)=1+x^2+2y^2$ and
 then prescribe $p(x,y)=x+y$. It follows that
@@ -1224,30 +1222,28 @@ shown codes:
   * the `solver` function must take `p` as argument,
   * the right-hand side `f`
     must be an `Expression` since it is no longer a constant,
-  * a new `Expression p` must be defined for the variable coefficient,
+  * a new `Expression kappa` must be defined for the variable coefficient,
   * the formula for $a(u,v)$ in the variational problem must be updated.
 
-We first address the modified variational problem. Multiplying
-the PDE by a test function $v$ and
-integrating by parts now results
-in
+We first address the modified variational problem. Multiplying the PDE
+by a test function $v$ and integrating by parts now results in
 
 !bt
 \begin{equation*}
-\int_\Omega p\nabla u\cdot\nabla v \dx -
+\int_\Omega \kappa\nabla u\cdot\nabla v \dx -
 \int_{\partial\Omega} p{\partial u\over
 \partial n}v \ds = \int_\Omega fv \dx\tp
 \end{equation*}
 !et
 The function spaces for $u$ and $v$ are the same as in
-the problem with $p=1$, implying that the boundary integral
+the problem with $\kappa=1$, implying that the boundary integral
 vanishes since $v=0$ on $\partial\Omega$ where we have Dirichlet conditions.
 The variational forms $a$ and $L$ in the variational problem
 $a(u,v)=L(v)$ then become
 
 !bt
 \begin{equation}
-a(u,v) = \int_\Omega p\nabla u\cdot\nabla v \dx,\quad
+a(u,v) = \int_\Omega \kappa\nabla u\cdot\nabla v \dx,\quad
 L(v) = \int_\Omega fv \dx\tp
 \end{equation}
 !et
@@ -1259,13 +1255,15 @@ a = dot(grad(u), grad(v))*dx
 by
 
 !bc pycod
-a = p*dot(grad(u), grad(v))*dx
+a = kappa*dot(grad(u), grad(v))*dx
+# or
+a = dot(kappa*grad(u), grad(v))*dx
 !ec
-to solve $-\nabla\cdot(p\nabla u)=f$. Moreover,
-the definitions of `p` and `f` in the test problem read
+to solve $-\nabla\cdot(\kappa\nabla u)=f$. Moreover,
+the definitions of `kappa` and `f` in the test problem read
 
 !bc pycod
-p = Expression('x[0] + x[1]')
+kappa = Expression('x[0] + x[1]')
 f = Expression('-8*x[0] - 10*x[1]')
 !ec
 No additional modifications are necessary. The file
@@ -1284,12 +1282,13 @@ label{ch:poisson0:gradu}
 
 idx{projection}
 
-It is often of interest to compute the flux $Q = -p\nabla u$ is often of interest to compute. Since
-$u = \sum_{j=1}^N U_j \phi_j$, it follows that
+It is often of interest to compute the flux $Q = -\kappa\nabla u$ is often
+of interest to compute. Since $u = \sum_{j=1}^N U_j \phi_j$, it
+follows that
 
 !bt
 \begin{equation*}
-Q = -p\sum_{j=1}^N U_j \nabla \phi_j\tp
+Q = -\kappa\sum_{j=1}^N U_j \nabla \phi_j\tp
 \end{equation*}
 !et
 
@@ -1313,7 +1312,7 @@ idx{`project`} idx{projection}
 Projection is a common operation in finite element analysis and FEniCS
 has a function for easily performing the projection:
 `project(expression, W)`, which returns the projection of some
-expression into the space `W`. In our case, the flux $Q = -p\nabla u$
+expression into the space `W`. In our case, the flux $Q = -\kappa\nabla u$
 is vector-valued and we need to pick `W` as the vector-valued function
 space of the same degree as the space `V` where `u` resides:
 
@@ -1324,14 +1323,14 @@ degree = V.ufl_element().degree()
 W = VectorFunctionSpace(mesh(), 'P', degree)
 
 grad_u = project(grad(u), W)
-flux_u = project(-p*grad(u), W)
+flux_u = project(-kappa*grad(u), W)
 !ec
 
 #Figure ref{ch:poisson0:2D:fig:ex1:gradu} shows
 #example of how such a smoothed `gradu(u)` vector field is visualized.
 #FIGURE:[fig/ex1_gradu, width=480] Example of visualizing the vector field $\nabla u$ by arrows at the nodes. label{ch:poisson0:2D:fig:ex1:gradu}
 
-An appropriate function for computing the flux based on `u` and `p` is
+An appropriate function for computing the flux based on `u` and `kappa` is
 
 @@@CODE src/poisson_vc.py fromto: def flux@def application_test_flux
 
@@ -1348,8 +1347,8 @@ anything else:
 plot(flux, title='flux field')
 
 flux_x, flux_y = flux.split(deepcopy=True) # extract components
-plot(flux_x, title='x-component of flux (-p*grad(u))')
-plot(flux_y, title='y-component of flux (-p*grad(u))')
+plot(flux_x, title='x-component of flux (-kappa*grad(u))')
+plot(flux_y, title='y-component of flux (-kappa*grad(u))')
 !ec
 The `deepcopy=True` argument signifies a *deep copy*, which is
 a general term in computer science implying that a copy of the data is
@@ -1709,23 +1708,26 @@ u_c = u_c.replace('M_PI', 'pi')
 u_b = Expression(u_c)
 !ec
 
-Thereafter, we can progress with the computation of $f = -\nabla\cdot(p\nabla u)$:
+Thereafter, we can progress with the computation of
+$f = -\nabla\cdot(\kappa\nabla u)$:
 
 !bc pycod
-p = 1
-f = sym.diff(-p*sym.diff(u, x), x) + sym.diff(-p*sym.diff(u, y), y)
+kappa = 1
+f = sym.diff(-kappa*sym.diff(u, x), x) + \
+    sym.diff(-kappa*sym.diff(u, y), y)
 f = sym.simplify(f)
 f_c = sym.printing.ccode(f)
 f_c = f_c.replace('M_PI', 'pi')
 f = Expression(f_c)
 !ec
-We also need a Python function for the exact flux $-p\partial u/\partial x$:
+We also need a Python function for the exact flux
+$-\kappa\partial u/\partial x$:
 
 !bc pycod
-flux_u_x_exact = sym.lambdify([x, y], -p*sym.diff(u, x),
+flux_u_x_exact = sym.lambdify([x, y], -kappa*sym.diff(u, x),
                               modules='numpy')
 !ec
-It remains to define `p = Constant(1)` and set `nx` and `ny` before calling
+It remains to define `kappa = Constant(1)` and set `nx` and `ny` before calling
 `solver` to compute the finite element solution of this problem.
 
 
@@ -1782,11 +1784,11 @@ $\Gamma$ of the boundary $\partial\Omega$,
 
 !bt
 \begin{equation}
-F = -\int_\Gamma p\nabla u\cdot\normalvec \ds,
+F = -\int_\Gamma \kappa\nabla u\cdot\normalvec \ds,
 label{ch:poisson0:functionals:flux}
 \end{equation}
 !et
-where $\normalvec$ is an outward unit normal at $\Gamma$ and $p$ is a
+where $\normalvec$ is an outward unit normal at $\Gamma$ and $\kappa$ is a
 coefficient (see the problem in Section ref{ftut:possion:2D:varcoeff}
 for a specific example).
 
@@ -1873,7 +1875,7 @@ idx{flux functional}
 
 === Flux Functional ===
 
-To compute flux integrals like $F = -\int_\Gamma p\nabla
+To compute flux integrals like $F = -\int_\Gamma \kappa\nabla
 u\cdot\normalvec \ds$, we need to define the $\normalvec$ vector,
 referred to as *facet normal* in FEniCS. If the surface domain
 $\Gamma$ in the flux integral is the complete boundary, we can perform
@@ -1881,7 +1883,7 @@ the flux computation by
 
 !bc pycod
 n = FacetNormal(mesh)
-flux = -p*dot(grad(u), n)*ds
+flux = -kappa*dot(grad(u), n)*ds
 total_flux = assemble(flux)
 !ec
 Although `grad(u)` and `grad(u)` are interchangeable in the above
@@ -1901,7 +1903,7 @@ It is possible to restrict the integration to a part of the boundary
 using a mesh function to mark the relevant part, as explained in
 Section ref{ch:poisson0:multi:bc}. Assuming that the part corresponds
 to subdomain number `i`, the relevant syntax for the variational
-formulation of the flux is `-p*dot(grad(u), n)*ds(i)`.
+formulation of the flux is `-kappa*dot(grad(u), n)*ds(i)`.
 
 ===== Computing convergence rates =====
 label{ch:poisson0:convrates}

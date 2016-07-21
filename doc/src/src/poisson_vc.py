@@ -1,11 +1,9 @@
-"""As poisson_iter.py, but the PDE is -div(p*grad(u)=f."""
+"""As poisson_iter.py, but the PDE is -div(kappa*grad(u)=f."""
 from __future__ import print_function
 from fenics import *
 
-# FIXME: Update after corresponding edits in book
-
 def solver(
-    p, f, u_D, Nx, Ny, degree=1,
+    kappa, f, u_D, Nx, Ny, degree=1,
     linear_solver='Krylov', # Alt: 'direct'
     abs_tol=1E-5,           # Absolute tolerance in Krylov solver
     rel_tol=1E-3,           # Relative tolerance in Krylov solver
@@ -14,7 +12,7 @@ def solver(
     dump_parameters=False,  # Write out parameter database?
     ):
     """
-    Solve -div(p*grad(u)=f on [0,1]x[0,1] with 2*Nx*Ny Lagrange
+    Solve -div(kappa*grad(u)=f on [0,1]x[0,1] with 2*Nx*Ny Lagrange
     elements of specified degree and u=u_D (Expresssion) on
     the boundary.
     """
@@ -30,7 +28,7 @@ def solver(
     # Define variational problem
     u = TrialFunction(V)
     v = TestFunction(V)
-    a = dot(p*grad(u), grad(v))*dx
+    a = dot(kappa*grad(u), grad(v))*dx
     L = f*v*dx
 
     # Compute solution
@@ -54,7 +52,7 @@ def solver(
     return u
 
 def solver_objects(
-    p, f, u_D, Nx, Ny, degree=1,
+    kappa, f, u_D, Nx, Ny, degree=1,
     linear_solver='Krylov', # Alt: 'direct'
     abs_tol=1E-5,           # Absolute tolerance in Krylov solver
     rel_tol=1E-3,           # Relative tolerance in Krylov solver
@@ -76,7 +74,7 @@ def solver_objects(
     # Define variational problem
     u = TrialFunction(V)
     v = TestFunction(V)
-    a = dot(p*grad(u), grad(v))*dx
+    a = dot(kappa*grad(u), grad(v))*dx
     L = f*v*dx
 
     # Compute solution
@@ -114,7 +112,7 @@ def test_solvers():
     tol = {'direct': {1: 1E-11, 2: 1E-11, 3: 1E-11},
            'Krylov': {1: 1E-14, 2: 1E-05, 3: 1E-03}}
     u_D = Expression('1 + x[0]*x[0] + 2*x[1]*x[1]')
-    p = Expression('x[0] + x[1]')
+    kappa = Expression('x[0] + x[1]')
     f = Expression('-8*x[0] - 10*x[1]')
     for Nx, Ny in [(3,3), (3,5), (5,3)]:
         for degree in 1, 2, 3:
@@ -127,7 +125,7 @@ def test_solvers():
                     # Important: Krylov solver error must be smaller
                     # than tol!
                     u = solver_func(
-                         p, f, u_D, Nx, Ny, degree,
+                         kappa, f, u_D, Nx, Ny, degree,
                          linear_solver=linear_solver,
                          abs_tol=0.1*tol[linear_solver][degree],
                          rel_tol=0.1*tol[linear_solver][degree])
@@ -147,9 +145,9 @@ def test_solvers():
 def application_test():
     """Plot the solution in the test problem."""
     u_D = Expression('1 + x[0]*x[0] + 2*x[1]*x[1]')
-    p = Expression('x[0] + x[1]')
+    kappa = Expression('x[0] + x[1]')
     f = Expression('-8*x[0] - 10*x[1]')
-    u = solver(p, f, u_D, 6, 4, 1)
+    u = solver(kappa, f, u_D, 6, 4, 1)
     # Dump solution to file in VTK format
     file = File("poisson.pvd")
     file << u
@@ -158,9 +156,9 @@ def application_test():
 
 def compare_exact_and_numerical_solution(Nx, Ny, degree=1):
     u_D = Expression('1 + x[0]*x[0] + 2*x[1]*x[1]')
-    p = Expression('x[0] + x[1]')
+    kappa = Expression('x[0] + x[1]')
     f = Expression('-8*x[0] - 10*x[1]')
-    u = solver(p, f, u_D, Nx, Ny, degree, linear_solver='direct')
+    u = solver(kappa, f, u_D, Nx, Ny, degree, linear_solver='direct')
     # Grab exact and numerical solution at the vertices and compare
     V = u.function_space()
     u_D_Function = interpolate(u_D, V)
@@ -195,23 +193,23 @@ def test_normalize_solution():
     expected = 1.0
     assert abs(expected - computed) < 1E-15
 
-def flux(u, p):
-    """Return -p*grad(u) projected into same space as u."""
+def flux(u, kappa):
+    """Return -kappa*grad(u) projected into same space as u."""
     V = u.function_space()
     mesh = V.mesh()
     degree = V.ufl_element().degree()
     W = VectorFunctionSpace(mesh, 'P', degree)
-    flux_u = project(-p*grad(u), W)
+    flux_u = project(-kappa*grad(u), W)
     flux_u.rename('flux(u)', 'continuous flux field')
     return flux_u
 
 def application_test_flux(Nx=6, Ny=4):
     u_D = Expression('1 + x[0]*x[0] + 2*x[1]*x[1]')
-    p = Expression('x[0] + x[1]')
+    kappa = Expression('x[0] + x[1]')
     f = Expression('-8*x[0] - 10*x[1]')
-    u = solver(p, f, u_D, Nx, Ny, 1, linear_solver='direct')
+    u = solver(kappa, f, u_D, Nx, Ny, 1, linear_solver='direct')
     u.rename('u', 'solution')
-    flux_u = flux(u, p)
+    flux_u = flux(u, kappa)
     # Grab each component as a scalar field
     flux_u_x, flux_u_y = flux_u.split(deepcopy=True)
     flux_u_x.rename('flux(u)_x', 'x-component of flux(u)')
@@ -305,7 +303,7 @@ def compute_errors(u, u_exact):
 
     return errors
 
-def convergence_rate(u_exact, f, u_D, p, degrees):
+def convergence_rate(u_exact, f, u_D, kappa, degrees):
     """
     Compute convergence rates for various error norms for a
     sequence of meshes with Nx=Ny=b and P1, P2, ...,
@@ -326,7 +324,7 @@ def convergence_rate(u_exact, f, u_D, p, degrees):
         for i in range(num_meshes):
             n *= 2
             h[degree].append(1.0/n)
-            u = solver(p, f, u_D, n, n, degree,
+            u = solver(kappa, f, u_D, n, n, degree,
                        linear_solver='direct')
             errors = compute_errors(u, u_exact)
             E[degree].append(errors)
@@ -355,9 +353,9 @@ def convergence_rate_sin():
                          omega=omega)
     f = 2*omega**2*pi**2*u_exact
     u_D = Constant(0)
-    p = Constant(1)
+    kappa = Constant(1)
     # Note: P4 for n>=128 seems to break down
-    rates = convergence_rates(u_exact, f, u_D, p, degrees=4)
+    rates = convergence_rates(u_exact, f, u_D, kappa, degrees=4)
     # Print rates
     print('\n\n')
     for error_type in error_types:
@@ -381,7 +379,7 @@ def application_structured_mesh(model_problem=1):
     if model_problem == 1:
         # Numerical solution is exact
         u_D = Expression('1 + x[0]*x[0] + 2*x[1]*x[1]')
-        p = Expression('x[0] + x[1]')
+        kappa = Expression('x[0] + x[1]')
         f = Expression('-8*x[0] - 10*x[1]')
         flux_u_x_exact = lambda x, y: -(x + y)*2*x
         nx = 6;  ny = 4
@@ -399,20 +397,20 @@ def application_structured_mesh(model_problem=1):
         print('u in C:', u_c)
         u_D = Expression(u_c)
 
-        p = 1  # Don't use Constant(1) here (!)
-        f = sym.diff(-p*sym.diff(u, x), x) + \
-            sym.diff(-p*sym.diff(u, y), y)
+        kappa = 1  # Don't use Constant(1) here because of sym.diff (!)
+        f = sym.diff(-kappa*sym.diff(u, x), x) + \
+            sym.diff(-kappa*sym.diff(u, y), y)
         f = sym.simplify(f)
         f_c = sym.printing.ccode(f)
         f_c = f_c.replace('M_PI', 'pi')
         f = Expression(f_c)
-        flux_u_x_exact = sym.lambdify([x, y], -p*sym.diff(u, x),
+        flux_u_x_exact = sym.lambdify([x, y], -kappa*sym.diff(u, x),
                                       modules='numpy')
         print('f in C:', f_c)
-        p = Constant(1)
+        kappa = Constant(1)   # wrap for FEniCS
         nx = 22;  ny = 22
 
-    u = solver(p, f, u_D, nx, ny, 1, linear_solver='direct')
+    u = solver(kappa, f, u_D, nx, ny, 1, linear_solver='direct')
     u_box = structured_mesh(u, (nx, ny))
     u_ = u_box.values  # numpy array
     X = 0;  Y = 1      # for indexing in x and y direction
@@ -462,7 +460,7 @@ def application_structured_mesh(model_problem=1):
     plt.xlabel('x');  plt.ylabel('u')
     plt.savefig('tmp2.png'); plt.savefig('tmp2.pdf')
 
-    flux_u = flux(u, p)
+    flux_u = flux(u, kappa)
     flux_u_x, flux_u_y = flux_u.split(deepcopy=True)
 
     # Plot the numerical and exact flux along the same line
@@ -486,7 +484,7 @@ def application_structured_mesh(model_problem=1):
     plt.show()
 
 def solver_bc(
-    p, f,                   # Coefficients in the PDE
+    kappa, f,               # Coefficients in the PDE
     boundary_conditions,    # Dict of boundary conditions
     Nx, Ny,                 # Cell division of the domain
     degree=1,               # Polynomial degree
@@ -500,7 +498,7 @@ def solver_bc(
     debug=False,
     ):
     """
-    Solve -div(p*grad(u)=f on [0,1]x[0,1] with 2*Nx*Ny Lagrange
+    Solve -div(kappa*grad(u)=f on [0,1]x[0,1] with 2*Nx*Ny Lagrange
     elements of specified degree and Dirichlet, Neumann, or Robin
     conditions on the boundary. Piecewise constant p over subdomains
     are also allowed.
@@ -517,25 +515,25 @@ def solver_bc(
         # subdomains is list of SubDomain objects,
         # p is array of corresponding constant values of p
         # in each subdomain
-        if not isinstance(p, (list, tuple, np.ndarray)):
+        if not isinstance(kappa, (list, tuple, np.ndarray)):
             raise TypeError(
-                'p must be array if we have sudomains, not %s'
-                % type(p))
+                'kappa must be array if we have sudomains, not %s'
+                % type(kappa))
         materials = CellFunction('size_t', mesh)
         materials.set_all(0)  # "the rest"
         for m, subdomain in enumerate(subdomains[1:], 1):
             subdomain.mark(materials, m)
 
-        p_values = p
+        kappa_values = kappa
         V0 = FunctionSpace(mesh, 'DG', 0)
-        p  = Function(V0)
+        kappa  = Function(V0)
         help = np.asarray(materials.array(), dtype=np.int32)
-        p.vector()[:] = np.choose(help, p_values)
+        kappa.vector()[:] = np.choose(help, kappa_values)
     else:
-        if not isinstance(p, (Expression, Constant)):
+        if not isinstance(kappa, (Expression, Constant)):
             raise TypeError(
-                'p is type %s, must be Expression or Constant'
-                % type(p))
+                'kappa is type %s, must be Expression or Constant'
+                % type(kappa))
 
     # Boundary subdomains
     class BoundaryX0(SubDomain):
@@ -628,11 +626,11 @@ def solver_bc(
             integrals_R.append(r*(u-s)*v*ds(n))
 
     # Define variational problem, solver_bc
-    a = p*dot(grad(u), grad(v))*dx + sum(integrals_R_a)
+    a = kappa*dot(grad(u), grad(v))*dx + sum(integrals_R_a)
     L = f*v*dx - sum(integrals_N) + sum(integrals_R_L)
 
     # Simpler variational formulation
-    F = p*dot(grad(u), grad(v))*dx + \
+    F = kappa*dot(grad(u), grad(v))*dx + \
         sum(integrals_R) - f*v*dx + sum(integrals_N)
     a, L = lhs(F), rhs(F)
 
@@ -654,7 +652,7 @@ def solver_bc(
         solver_parameters = {'linear_solver': 'lu'}
 
     solve(a == L, u, bcs, solver_parameters=solver_parameters)
-    return u, p  # Note: p may be modified (Function on V0)
+    return u, kappa  # Note: kappa may be modified (Function on V0)
 
 def application_bc_test():
 
@@ -692,9 +690,10 @@ def application_bc_test():
     # Compute solution
     p = Constant(1)
     Nx = Ny = 2
-    u, p = solver_bc(p, f, boundary_conditions, Nx, Ny, degree=1,
-                     linear_solver='direct',
-                     debug=2*Nx*Ny < 50)
+    u, kappa = solver_bc(kappa, f, boundary_conditions,
+                         Nx, Ny, degree=1,
+                         linear_solver='direct',
+                         debug=2*Nx*Ny < 50)
 
     # Compute max error in infinity norm
     u_e = interpolate(u_e, u.function_space())
@@ -754,7 +753,6 @@ def test_solvers_bc():
                            2: {'Robin':     (r, s)},
                            3: {'Neumann':   g}}
 
-    p = Constant(1)
     for Nx, Ny in [(3,3), (3,5), (5,3), (20,20)]:
         for degree in 1, 2, 3:
             for linear_solver in ['direct']:
@@ -762,8 +760,9 @@ def test_solvers_bc():
                       % (Nx, Ny, degree)),
                 print(' %s solver, %s function' %
                       (linear_solver, solver_func.__name__))
-                u, p = solver_bc(
-                    p, f, boundary_conditions, Nx, Ny, degree,
+                kappa = Constant(1)
+                u, kappa = solver_bc(
+                    kappa, f, boundary_conditions, Nx, Ny, degree,
                 linear_solver=linear_solver,
                     abs_tol=0.1*tol,
                     rel_tol=0.1*tol)
@@ -792,13 +791,12 @@ def application_bc_test_2mat():
             return x[1] >= 0.5-tol
 
     subdomains = [Omega0(), Omega1()]
-    p_values = [2.0, 13.0]
+    kappa_values = [2.0, 13.0]
 
     u_exact = Expression(
-        'x[1] <= 0.5? 2*x[1]*p_1/(p_0+p_1) : '
-        '((2*x[1]-1)*p_0 + p_1)/(p_0+p_1)',
-        p_0=p_values[0], p_1=p_values[1])
-
+        'x[1] <= 0.5? 2*x[1]*k_1/(k_0+k_1) : '
+        '((2*x[1]-1)*k_0 + k_1)/(k_0+k_1)',
+        k_0=kappa_values[0], k_1=kappa_values[1])
 
     boundary_conditions = {
         0: {'Neumann': 0},
@@ -809,8 +807,8 @@ def application_bc_test_2mat():
 
     f = Constant(0)
     Nx = Ny = 2
-    u, p = solver_bc(
-        p_values, f, boundary_conditions, Nx, Ny, degree=1,
+    u, kappa = solver_bc(
+        kappa_values, f, boundary_conditions, Nx, Ny, degree=1,
         linear_solver='direct', subdomains=subdomains,
         debug=2*Nx*Ny < 50,  # for small problems only
         )
@@ -845,7 +843,7 @@ def test_solvers_bc_2mat():
             return x[1] >= 0.5-tol
 
     subdomains = [Omega0(), Omega1()]
-    p_values = [2.0, 13.0]
+    kappa_values = [2.0, 13.0]
     boundary_conditions = {
         0: {'Neumann': 0},
         1: {'Neumann': 0},
@@ -855,14 +853,14 @@ def test_solvers_bc_2mat():
 
     f = Constant(0)
     u_exact = Expression(
-        'x[1] <= 0.5? 2*x[1]*p_1/(p_0+p_1) : '
-        '((2*x[1]-1)*p_0 + p_1)/(p_0+p_1)',
-        p_0=p_values[0], p_1=p_values[1])
+        'x[1] <= 0.5? 2*x[1]*k_1/(k_0+k_1) : '
+        '((2*x[1]-1)*k_0 + k_1)/(k_0+k_1)',
+        k_0=kappa_values[0], k_1=kappa_values[1])
 
     for Nx, Ny in [(2,2), (2,4), (8,4)]:
         for degree in 1, 2, 3:
-            u, p = solver_bc(
-                p_values, f, boundary_conditions, Nx, Ny, degree,
+            u, kappa = solver_bc(
+                kappa_values, f, boundary_conditions, Nx, Ny, degree,
                 linear_solver='direct', subdomains=subdomains,
                 debug=False)
 
@@ -886,7 +884,7 @@ def application_flow_around_circle(obstacle='rectangle'):
 
     obstacle = Circle() if obstacle == 'circle' else Rectangle()
     subdomains = [None, obstacle]
-    p_values = [1.0, 1E-4]
+    kappa_values = [1.0, 1E-4]
 
     boundary_conditions = {
         0: {'Neumann': 0},
@@ -897,11 +895,11 @@ def application_flow_around_circle(obstacle='rectangle'):
 
     f = Constant(0)
     Nx = Ny = 50
-    u, p = solver_bc(
-        p_values, f, boundary_conditions, Nx, Ny, degree=1,
+    u, kappa = solver_bc(
+        kappa_values, f, boundary_conditions, Nx, Ny, degree=1,
         linear_solver='direct', subdomains=subdomains)
 
-    v = flux(u, p)
+    v = flux(u, kappa)
     file = File('porous_media_flow.pvd')
     file << u
     file << v

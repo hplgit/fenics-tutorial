@@ -1338,11 +1338,13 @@ a finite element space before we can visualize it.
 Scaling          (2)
 ~~~~~~~~~~~~~~~~~~~~
 
-Before doing simulations, it is often advantageous to scale the problem
-as it reduces the need for setting physical parameters, and one obtains
-dimensionsless numbers that reflect the competition of parameters and
-physical effects. These numbers are often easy to assign values for
-scientific investigations.
+Before doing simulations for a specific problem, it is often
+advantageous to scale the problem as it reduces the need for setting
+physical parameters, and one obtains dimensionsless numbers that
+reflect the competition of parameters and physical effects. We develop
+the code for the original model with dimensions, and run the scaled
+problem by tweaking parameters appropriately. Scaling reduces the
+number of active parameters from 6 to 2 in the present application.
 
 In Navier's equation for :math:`u`, arising from inserting
 :ref:`(37) <Eq:ftut:elast:varform:stresstrain>` and
@@ -1374,31 +1376,32 @@ term :math:`\mu\nabla^2 u\sim \mu U/L^2` in the PDE.
 
 [**AL 10**: :math:`W` not defined below. Width?] [**hpl 11**: Defined in the test problem in the intro. But a comment what :math:`L/W` is, is now inserted.]
 
-Sometimes, one will argue to chose :math:`U` to make :math:`\gamma` unity (:math:`U
-= \varrho gL^2/\mu`). However, in elasticity, this leads us
-to displacements of the size of the geometry, which makes plots look
-very strange. We therefore want the characteristic displacement to be a
+Sometimes, one will argue to chose :math:`U` to make :math:`\gamma` unity (:math:`U =
+\varrho gL^2/\mu`). However, in elasticity, this leads us to
+displacements of the size of the geometry, which makes plots look very
+strange. We therefore want the characteristic displacement to be a
 small fraction of the characteristic length of the geometry.
 Actually, for a clamped beam, one has a deflection formula which gives
-:math:`U = \frac{3}{2}\varrho gL^2\delta^2/E`, where :math:`\delta = L/W` is
-a parameter reflecting how slender the beam is.
-Thus, the dimensionless parameter :math:`\delta` is very important in the
-problem (as expected, since :math:`\delta\gg 1` is what gives beam theory!).
-Taking :math:`E` to be of the same order as :math:`\mu`, we realize that
-:math:`\gamma \sim \delta^{-2}`.  Experiments with the code point to :math:`\gamma
-= 0.4\delta^{-2}` as an appropriate choice of :math:`\gamma`.
+:math:`U = \frac{3}{2}\varrho gL^2\delta^2/E`, where :math:`\delta = L/W` is a
+parameter reflecting how slender the beam is.  Thus, the dimensionless
+parameter :math:`\delta` is very important in the problem (as expected,
+since :math:`\delta\gg 1` is what gives beam theory!).  Taking :math:`E` to be of
+the same order as :math:`\mu`, which is common for a lot of materials, we
+realize that :math:`\gamma \sim \delta^{-2}`.  Experiments with the code to
+find a displacement that "looks right" in plots of the deformed
+geometry, we arrive at :math:`\gamma = 0.4\delta^{-2}` as an appropriate
+choice.
 
 The simulation code implements the problem with dimensions and
 physical parameters :math:`\lambda`, :math:`\mu`, :math:`\varrho`, :math:`g`, :math:`L`, and :math:`W`.
-However, we can usually easily reuse this code for a scaled problem.
-In the present case, we just set :math:`\mu = \varrho = L = 1`, :math:`W` as
-:math:`W/L`, :math:`g=\gamma`, and :math:`\lambda=\beta`.
+However, we can easily reuse this code for a scaled problem: just set
+:math:`\mu = \varrho = L = 1`, :math:`W` as :math:`W/L` (:math:`\delta^{-1}`), :math:`g=\gamma`, and
+:math:`\lambda=\beta`.
 
 [**AL 12**: I find this somewhat confusing. First we talk about a rescaled equation but then we solve the unscaled equation, but we choose the parameters so that it is somehow related to the scaled problem...?]
+[**hpl 13**: Rewrote the sequence of topics to make all this clearer. First, implement non-scaled orginal problem, then for each problem in problems, scale this problem, run scaled problem with non-scaled code.]
 
-[**AL 13**: Need to look at code again once I have understood the scaling.]
-
-[**hpl 14**: This is the way to do it ;-) Implement with dimensions to have the code as general as possible. Then scale a particular problem - and the scaling is restricted to this problem.  It makes it much easier to set parameters for numerical investigations and to understand the model and what the competing effects are. You can run the scaled model with the original program by a proper choice of parameters.]
+[**AL 14**: Need to look at code again once I have understood the scaling.]
 
 .. figure:: beam2.png
    :width: 800
@@ -1423,14 +1426,15 @@ PDE problem          (4)
 The incompressible Navier-Stokes equations are a system of equations
 for the velocity :math:`u` and pressure :math:`p` in an incompressible fluid:
 
-[**hpl 15**: Quite uncommon to write :math:`\dot u` for the time-derivative in the N-S equations. Only Claes Johnson comes to my mind... In mechanics, the dot is reserved for ODEs. I suggest the more common notation :math:`\partial u/\partial t`, also since we use this elsewhere in the books.]
+[**hpl 15**: Quite uncommon to write :math:`\dot u` for the time-derivative in the N-S equations. Only Claes Johnson comes to my mind... In mechanics, the dot is reserved for ODEs. I suggest the more common notation :math:`\partial u/\partial t`, also since we use this elsewhere in the books. One can also argue that :math:`\nabla^2 u` is a much more common form for the viscosity term (and compatible with your boundary conditions at outlets now), but the stress formulation has many advantages, especially if stress is a boundary condition.]
 
 .. _Eq:ftut1:ns:momentum:
 
 .. math::
 
     \tag{45}
-    \varrho(\dot{u} + u \cdot \nabla u) = \nabla\cdot\sigma(u, p) + f, 
+    \varrho(\frac{\partial u}{\partial t} +
+          u \cdot \nabla u) = \nabla\cdot\sigma(u, p) + f, 
         
 
 .. _Eq:ftut1:ns:continuity:
@@ -1477,14 +1481,14 @@ The Navier - Stokes equations are different from
 the time-dependent heat equation in that we need to solve a system of
 equations and this system is of a special type. If we apply the same
 technique as for the heat equation; that is, replacing the time
-derivative with a simple difference quotient, we face two
-challenges. First, we obtain a nonlinear system of equations. This in
+derivative with a simple difference quotient, we get a nonlinear
+system of equations. This in
 itself is not a problem for FEniCS as we saw in the section :ref:`ftut1:gallery:nonlinearpoisson`, but the system has a so-called
 *saddle point structure* and requires special techniques
 (preconditioners and iterative methods) to be solved efficiently.
 
-Instead, we will apply a simpler and often very efficient approach
-which is to use a *splitting method*. In a splitting method, we
+Instead, we will apply a simpler and often very efficient approach,
+known as a *splitting method*. The idea is to
 consider the two equations :ref:`(45) <Eq:ftut1:ns:momentum>` and
 :ref:`(46) <Eq:ftut1:ns:continuity>` separately. There exist many splitting
 strategies for the incompressible Navier-Stokes equations. One of the
@@ -1495,27 +1499,38 @@ pressure correction scheme (IPCS) due to [Ref27]_ which gives
 improved accuracy compared to the original scheme at little extra
 cost.
 
-The IPCS scheme involves three steps. First, we compute a *tentative
-velocity* :math:`u^{\bigstar}` by advancing the momentum equation
-:ref:`(45) <Eq:ftut1:ns:momentum>` using the pressure :math:`p^{n-1}` from the
-previous time interval. We will also be using the velocity :math:`u^{n-1}`
-in the nonlinear term :math:`u\cdot\nabla u`. The variational problem for
-this first step is:
+[**hpl 16**: I changed the sampling point in time to :math:`n+1/2` instead of :math:`n-1/2` because the former gives the same type as formulas as we use elsewhere in time-dependent problems (:math:`n+1` is the new level, :math:`n`, :math:`n-1` etc are old levels) and it fits the naming convention that we agreed upon. This is also widely used in the FDM/FEM/FVM literature. Backward Euler for the heat equation is the only example where one often applies :math:`n` and :math:`n-1`, if the theta scheme is not mentioned.]
 
-[**hpl 16**: This equation applies ``textit`` and ``multiline`` in math. At least ``textit`` does not work in MathJax. Must test what works in Sphinx. Answer: Sphinx MathJax did not accept anything of this.]
+The IPCS scheme involves three steps. First, we compute a *tentative
+velocity* :math:`u^{\star}` by advancing the momentum equation
+:ref:`(45) <Eq:ftut1:ns:momentum>` by a midpoint finite difference scheme in
+time, but using the pressure :math:`p^{n}` from the
+previous time interval. We will also linearize the nonlinear convective
+term by using the known velocity :math:`u^{n}`: :math:`u^{n}\cdot\nabla u^{n}`.
+The variational problem for this first step is:
+
+[**hpl 17**: It's somewhat strange that we are inconsistent with the convective term, it should be linearized as :math:`u^{n-1}\cdot\nabla u^{n-1/2}`, but we just have to follow the IPCS formulas...]
 
 .. _Eq:ftut1:ipcs1:
 
 .. math::
 
     \tag{48}
-    {\langle \rho(u^{\bigstar, v \rangle} - u^{n-1}) / {\Delta t}}
-              + {\langle \rho u^{n-1, v \rangle} \cdot \nabla u^{n-1}}
-              + {\langle \sigma(u^{n-\frac{1, \epsilon(v) \rangle}{2}}, p^{n-1})}
-              \\ 
-              + {\langle p^{n-1, v \rangle} n}_{\partial\Omega}
-              - {\langle \mu \nabla u^{n-\frac{1, v \rangle}{2}}\cdot n}_{\partial\Omega}
-              = {\langle \rho f^n, v \rangle}
+    {\langle \rho(u^{\star, v \rangle} - u^{n}) / {\Delta t}}
+              + {\langle \rho u^{n, v \rangle} \cdot \nabla u^{n}}
+              + \nonumber
+        
+
+.. _Eq:_auto10:
+
+.. math::
+
+    \tag{49}
+    {\langle \sigma(u^{n+\frac{1, \epsilon(v) \rangle}{2}}, p^{n})}
+              + {\langle p^{n, v \rangle} n}_{\partial\Omega}
+              - {\langle \mu \nabla u^{n+\frac{1, v \rangle}{2}}\cdot n}_{\partial\Omega}
+              = {\langle \rho f^{n+1, v \rangle}}
+        
         
 
 This notation requires some explanation. First, we use the short-hand
@@ -1528,13 +1543,13 @@ notation
         
 
 This allows us to express the variational problem in a more compact
-way. Second, we use the notation :math:`u^{n-\frac{1}{2}}`. This notation
+way. Second, we use the notation :math:`u^{n+\frac{1}{2}}`. This notation
 means the value of :math:`u` at the midpoint of the interval, usually approximated
 by an arithmetic mean
 
 .. math::
         
-          u^{n-\frac{1}{2}} \approx (u^{n-1} + u^n) / 2.
+          u^{n+\frac{1}{2}} \approx (u^{n+1} + u^n) / 2.
         
 
 Third, we notice that the variational problem :ref:`(48) <Eq:ftut1:ipcs1>`
@@ -1558,13 +1573,13 @@ we then make is that the derivative of the velocity in the direction
 of the channel is zero at the outflow, corresponding to a flow that is
 "fully developed" or doesn't change significantly downstream of the
 outflow. Doing so, the remaining boundary term at the outflow becomes
-:math:`pn - \nu \nabla u \cdot n` which is the term appearing in the
+:math:`pn - \mu\nabla u \cdot n` which is the term appearing in the
 variational problem :ref:`(48) <Eq:ftut1:ipcs1>`.
 
-[**hpl 17**: Here a boundary term :math:`(\mu n\cdot \nabla u^{n-\frac{1}{2}},v)` is missing. This is the intricate discussions we had back in 2009-2010 with Harish on using N-S with :math:`\sigma` or :math:`\nabla^2 u`.]
+[**hpl 18**: Here a boundary term :math:`(\mu n\cdot \nabla u^{n+\frac{1}{2}},v)` is missing. This is the intricate discussions we had back in 2009-2010 with Harish on using N-S with :math:`\nabla\cdot\sigma` or :math:`\nabla^2 u`.]
 
-[**AL 18**: Apostrophes like "these" don't look like what I would expect in LaTeX.]
-[**hpl 19**: No, double quotes must be written as in LaTeX "quotes". Two backticks and two forward ticks become the right double quotes in various output formats.]
+[**AL 19**: Apostrophes like "these" don't look like what I would expect in LaTeX.]
+[**hpl 20**: No, double quotes must be written as in LaTeX "quotes". Two backticks and two forward ticks become the right double quotes in various output formats.]
 
 
 .. admonition:: ``grad(u)`` vs. ``nabla_grad(u)``
@@ -1604,7 +1619,7 @@ variational problem :ref:`(48) <Eq:ftut1:ipcs1>`.
    ``dot(u, nabla_grad(u))`` below since it corresponds more closely
    to the standard notation :math:`u \cdot \nabla u`.
    
-   [**hpl 20**: I like the straightforward formulation above, but it should be complemented by the arguments below since it is not a matter of taste in the end, but dictated by derivation of the PDE and what :math:`\nabla` was meant to be there.]
+   [**hpl 21**: I like the straightforward formulation above, but it should be complemented by the arguments below since it is not a matter of taste in the end, but dictated by derivation of the PDE and what :math:`\nabla` was meant to be there.]
    
    To be more precise, there are three different notations used for PDEs
    involving gradient, divergence, and curl operators.
@@ -1642,9 +1657,9 @@ compute the new pressure :math:`p^n`:
 
 .. math::
 
-    \tag{49}
+    \tag{50}
     {\langle \nabla p^n, \nabla q \rangle}
-          = {\langle \nabla p^{n-1, \nabla q \rangle}} - {\Delta t}^{-1}{\langle \nabla \cdot u^{\bigstar, q \rangle}}.
+          = {\langle \nabla p^{n-1, \nabla q \rangle}} - {\Delta t}^{-1}{\langle \nabla \cdot u^{\star, q \rangle}}.
         
 
 Note here that :math:`q` is a scalar-valued test function from the pressure
@@ -1661,7 +1676,7 @@ pressure :math:`p^n`. This results in the equation
 
 .. math::
 
-    \tag{50}
+    \tag{51}
     \
           (u^n - u^{\star}) / {\Delta t} + \nabla p^n - \nabla p^{n-1} = 0.
         
@@ -1670,22 +1685,20 @@ Taking the divergence and requiring that :math:`\nabla \cdot u^n = 0` by the
 Navier-Stokes continuity equation :ref:`(46) <Eq:ftut1:ns:continuity>`, we
 obtain the equation :math:`-\nabla\cdot u^{\star} / {\Delta t} + \nabla^2 p^n -
 \nabla p^{n-1}`, which is a Poisson problem for the pressure :math:`p^n`
-resulting in the variational problem :ref:`(49) <Eq:ftut1:ipcs2>`.
+resulting in the variational problem :ref:`(50) <Eq:ftut1:ipcs2>`.
 
 Finally, we compute the corrected velocity :math:`u^n` from the equation
-:ref:`(50) <Eq:ftut1:ipcs:step>`. Multiplying this equation by a test function
+:ref:`(51) <Eq:ftut1:ipcs:step>`. Multiplying this equation by a test function
 :math:`v`, we obtain
 
 .. _Eq:ftut1:ipcs3:
 
 .. math::
 
-    \tag{51}
+    \tag{52}
     {\langle u^n, v \rangle} =
-          {\langle u^{\bigstar, v \rangle}} - {\Delta t}{\langle \nabla(p^n-p^{n-1, v \rangle})}.
+          {\langle u^{\star, v \rangle}} - {\Delta t}{\langle \nabla(p^n-p^{n-1, v \rangle})}.
         
-
-[**hpl 21**: Check that :math:`\rho` is correctly handled in the three steps.]
 
 In summary, we may thus solve the incompressible Navier-Stokes
 equations efficiently by solving a sequence of three linear variational
@@ -1694,8 +1707,8 @@ problems (steps 1, 2, 3) in each time step.
 A simple FEniCS implementation          (4)
 -------------------------------------------
 
-Test problem 1
-~~~~~~~~~~~~~~
+Test problem 1: Channel flow
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 As a first test problem, we compute the flow between two infinite plates,
 so-called channel or Poiseuille flow, since this problem has a known
@@ -1724,7 +1737,7 @@ H^2/\nu` in the equations results in the scaled Navier-Stokes equations
 Here, Re is the Reynolds number :math:`\rho UH/\mu`. Because of the time and
 pressure scale, which are different from convection-dominated fluid flow,
 the Reynolds number is associated with the convective term and not the
-viscosity term (as usual). Note that the last term in the first
+viscosity term. Note that the last term in the first
 equation is zero, but we included this term as it arises naturally
 from the original :math:`\nabla\cdot\sigma` term.
 
@@ -1736,7 +1749,8 @@ two-dimensional so we can omit the :math:`z` coordinate (more precisely:
 governing equations gives :math:`u_x''(y) = \partial p/\partial x`.
 Differentiating this equation with respect to :math:`x` shows that :math:`\partial
 p/\partial x` is a constant, here called :math:`-\beta`. This is the driving
-force of the flow and specified as known in the problem.  Integrating
+force of the flow and can be specified as a known parameter in the problem.
+Integrating
 :math:`u_x''(y)=-\beta` over the width of the channel, :math:`[0,1]`, and
 requiring :math:`u=0` at the channel walls, results in :math:`u_x=\frac{1}{2}\beta
 y(1-y)`. The characteristic inlet flow in the channel, :math:`U`, can be
@@ -1752,7 +1766,7 @@ drop and should result in unit maximum velocity at the inlet and outlet
 and a parabolic velocity profile without further specifications.
 Note that it is only meaningful to solve the Navier-Stokes equations in
 2D or 3D geometries, although the underlying mathematical problem
-collapses to two 1D problems, one for :math:`u_x` and one for :math:`p`.
+collapses to two 1D problems, one for :math:`u_x(y)` and one for :math:`p(x)`.
 
 The scaled model is not so easy to simulate using a standard Navier-Stokes
 solver with dimensions. However, one can argue that the convection term
@@ -1776,7 +1790,7 @@ the pressure:
     Q = FunctionSpace(mesh, 'P', 1)
 
 The first space ``V`` is a vector-valued function space for the velocity
-and the second space ``P`` is a scalar-valued function space for the
+and the second space ``Q`` is a scalar-valued function space for the
 pressure. We use piecewise quadratic elements for the velocity and
 piecewise linear elements for the pressure. When creating a
 ``VectorFunctionSpace`` in FEniCS, the value-dimension (the length of
@@ -1818,6 +1832,8 @@ of trial and test functions:
     p = TrialFunction(Q)
     q = TestFunction(Q)
 
+.. index:: near
+
 As we have seen in previous examples, boundaries may be defined in
 FEniCS by defining Python functions that return ``True`` or ``False``
 depending on whether a point should be considered part of the
@@ -1829,7 +1845,10 @@ boundary, for example
         return near(x[0], 0)
 
 This function defines the boundary to be all points with
-:math:`x`-coordinate equal to (near) zero. Alternatively, we may give the boundary
+:math:`x`-coordinate equal to (near) zero. The ``near`` function comes from
+FEniCS and performs a test with tolerance: ``abs(x[0]-0) < 3E-16`` so
+we do not run into rounding troubles.
+Alternatively, we may give the boundary
 definition as a string of C++ code, much like we have previously
 defined expressions such as ``u0 = Expression('1 + x[0]*x[0] +
 2*x[1]*x[1]')``. The above definition of the boundary in terms of a
@@ -1842,6 +1861,7 @@ Python function may thus be replaced by a simple C++ string:
 This has the advantage of moving the computation of which nodes
 belong to boundary to C++ from Python, which improves the efficiency
 of the program.
+
 For the current example, we will set three different boundary
 conditions. First, we will set :math:`u = 0` at the walls of the channel;
 that is, at :math:`y = 0` and :math:`y = 1`. Second, we will set :math:`p = 1` at the
@@ -1870,12 +1890,12 @@ following computation.
 
 We now move on to the definition of the variational forms. There are
 three variational problems to be defined, one for each step in the
-IPCS scheme. Let's look at the definition of the first variational
-problem:
+IPCS scheme. Let us look at the definition of the first variational
+problem. We start with some constants:
 
 .. code-block:: python
 
-    U   = 0.5*(u0 + u)
+    U   = 0.5*(u_n + u)
     n   = FacetNormal(mesh)
     f   = Constant((0, 0))
     k   = Constant(dt)
@@ -1884,11 +1904,12 @@ problem:
 
 This expression for ``F1`` is very similar to the mathematical definition
 :ref:`(48) <Eq:ftut1:ipcs1>`. Since the variational problem contains a mix of
-known and unknown quantities - the unknown :math:`u^n` (which we name ``u``
-in the variational problem) and the known value :math:`u^{n-1}` (which we
-name ``u0``) - it is convenient to use the FEniCS functions ``lhs`` and
-``rhs`` to extract the left- and right-hand sides of the variational
-problem.
+known and unknown quantities we have introduced a naming convention to
+be used throughout the book: ``u`` is the unknown (mathematically :math:`u^{n+1}`)
+as a trial function in the variational form, ``u_`` is the most recently
+computed approximation to ``u`` (:math:`u^{n+1}` available as a finite element
+FEniCS ``Function`` object), ``u_n`` is :math:`u^n`, and the same convention
+goes for ``p``. ``p_``, and ``p_n``.
 
 In the definition of the variational problem, we take advantage of the
 Python programming language to define our own operators ``sigma`` and
@@ -1901,8 +1922,22 @@ constitutive laws:
     def epsilon(u):
         return sym(nabla_grad(u))
     
+    # Define stress tensor
     def sigma(u, p):
         return 2*mu*epsilon(u) - p*Identity(len(u))
+    
+    # Define variational problem for step 1
+    F1 = rho*dot((u - u_n) / k, v)*dx + \ 
+         rho*dot(dot(u_n, nabla_grad(u_n)), v)*dx \ 
+       + inner(sigma(U, p_n), epsilon(v))*dx \ 
+       + dot(p_n*n, v)*ds - dot(mu*nabla_grad(U)*n, v)*ds \ 
+       - rho*dot(f, v)*dx
+    a1 = lhs(F1)
+    L1 = rhs(F1)
+
+Note that FEniCS can sort out the (matrix) :math:`a(u,v)` and
+(right-hand side) :math:`L(v)` forms by the ``lhs``
+and ``rhs`` functions.
 
 The splitting scheme requires the solution of a sequence of three
 variational problems in each time step. We have previously used the
@@ -1950,7 +1985,7 @@ and compact way to construct a loop that applies
 all boundary conditions in a single line. Also, the code works if
 we add more Dirichlet boundary conditions in the future.
 
-Finally, let's look at an important detail in how we use parameters
+Finally, let us look at an important detail in how we use parameters
 such as the time step ``dt`` and viscosity ``mu`` in the
 definition of our variational problems. Since we might want to change
 these later, for example if we want to experiment with smaller or
@@ -1972,10 +2007,12 @@ generation. In the case of the time step, we choose a new name ``k``
 instead of ``dt`` for the ``Constant`` since we also want to use the
 variable ``dt`` as a Python float as part of the time-stepping.
 
-[**hpl 22**: Some pure fluid mechanics guys will think of Poiseulle as 1D, so they get confused why you need to launch 2D/3D code when it's about :math:`u''=4` and can be done in Matlab... Renamed file to ``navier_stokes_channel.py``.]
+[**hpl 22**: Some pure fluid mechanics guys will think of Poiseulle as 1D, so they get confused why you need to launch 2D/3D code when it's about :math:`u''=4` and can be done in Matlab... Renamed file to ``navier_stokes_channel.py``. :smiley:]
 
 The complete code for simulating 2D channel flow with FEniCS looks as
 follows:
+
+[**hpl 23**: The names ``u0``, ``u1``, ``p0``, ``p1`` are odd compared to the rest of the book. I changed to ``u_``, ``u_n``, ``p_``, ``p_n``, with ``u`` and ``p`` reserved for ``TrialFunction``. The we encourage users to use a consistent naming - and this naming works for multiple time levels too.]
 
 .. code-block:: python
 
@@ -2012,13 +2049,13 @@ follows:
     q = TestFunction(Q)
     
     # Define functions for solutions at previous and current time steps
-    u0 = Function(V)
-    u1 = Function(V)
-    p0 = Function(Q)
-    p1 = Function(Q)
+    u_n = Function(V)
+    u_  = Function(V)
+    p_n = Function(Q)
+    p_  = Function(Q)
     
     # Define expressions used in variational forms
-    U   = 0.5*(u0 + u)
+    U   = 0.5*(u_n + u)
     n   = FacetNormal(mesh)
     f   = Constant((0, 0))
     k   = Constant(dt)
@@ -2034,21 +2071,21 @@ follows:
         return 2*mu*epsilon(u) - p*Identity(len(u))
     
     # Define variational problem for step 1
-    F1 = rho*dot((u - u0) / k, v)*dx + \ 
-         rho*dot(dot(u0, nabla_grad(u0)), v)*dx \ 
-       + inner(sigma(U, p0), epsilon(v))*dx \ 
-       + dot(p0*n, v)*ds - dot(mu*nabla_grad(U)*n, v)*ds \ 
+    F1 = rho*dot((u - u_n) / k, v)*dx + \ 
+         rho*dot(dot(u_n, nabla_grad(u_n)), v)*dx \ 
+       + inner(sigma(U, p_n), epsilon(v))*dx \ 
+       + dot(p_n*n, v)*ds - dot(mu*nabla_grad(U)*n, v)*ds \ 
        - rho*dot(f, v)*dx
     a1 = lhs(F1)
     L1 = rhs(F1)
     
     # Define variational problem for step 2
     a2 = dot(nabla_grad(p), nabla_grad(q))*dx
-    L2 = dot(nabla_grad(p0), nabla_grad(q))*dx - (1/k)*div(u1)*q*dx
+    L2 = dot(nabla_grad(p_n), nabla_grad(q))*dx - (1/k)*div(u_)*q*dx
     
     # Define variational problem for step 3
     a3 = dot(u, v)*dx
-    L3 = dot(u1, v)*dx - k*dot(nabla_grad(p1 - p0), v)*dx
+    L3 = dot(u_, v)*dx - k*dot(nabla_grad(p_ - p_n), v)*dx
     
     # Assemble matrices
     A1 = assemble(a1)
@@ -2069,33 +2106,36 @@ follows:
         # Step 1: Tentative velocity step
         b1 = assemble(L1)
         [bc.apply(b1) for bc in bcu]
-        solve(A1, u1.vector(), b1)
+        solve(A1, u_.vector(), b1)
     
         # Step 2: Pressure correction step
         b2 = assemble(L2)
         [bc.apply(b2) for bc in bcp]
-        solve(A2, p1.vector(), b2)
+        solve(A2, p_.vector(), b2)
     
         # Step 3: Velocity correction step
         b3 = assemble(L3)
-        solve(A3, u1.vector(), b3)
+        solve(A3, u_.vector(), b3)
     
         # Plot solution
-        plot(u1)
+        plot(u_)
     
         # Compute error
         u_e = Expression(('4*x[1]*(1.0 - x[1])', '0'), degree=2)
         u_e = interpolate(u_e, V)
-        error = np.abs(u_e.vector().array() - u1.vector().array()).max()
+        error = np.abs(u_e.vector().array() - u_.vector().array()).max()
         print('t = %.2f: error = %.3g' % (t, error))
-        print('max u:', u1.vector().array().max())
+        print('max u:', u_.vector().array().max())
     
         # Update previous solution
-        u0.assign(u1)
-        p0.assign(p1)
+        u_n.assign(u_)
+        p_n.assign(p_)
     
     # Hold plot
     interactive()
+
+Verification
+~~~~~~~~~~~~
 
 We compute the error at the nodes as we have done before to verify
 that our implementation is correct. Our Navier-Stokes solver computes
@@ -2364,7 +2404,7 @@ and ``-`` (set difference). To access the CSG functionality in FEniCS,
 one must import the FEniCS module ``mshr`` which provides the
 extended meshing functionality of FEniCS.
 
-[**AL 23**: Need to cite mshr.]
+[**AL 24**: Need to cite mshr.]
 
 The geometry for the cylinder flow test problem can be defined easily
 by first defining the rectangular channel and then subtracting the
@@ -2378,7 +2418,7 @@ circle:
 
 We may then create the mesh by calling the function ``generate_mesh``:
 
-[**hpl 24**: Should do some refinement of the boundary layer? Can we mark elements in a distance from the cylinder and ask these elements to be refine a given number of times?]
+[**hpl 25**: Should do some refinement of the boundary layer? Can we mark elements in a distance from the cylinder and ask these elements to be refine a given number of times?]
 
 .. code-block:: python
 
@@ -2397,10 +2437,10 @@ boundaries are specified as follows:
     walls    = 'near(x[1], 0) || near(x[1], 0.41)'
     cylinder = 'on_boundary && x[0]>0.1 && x[0]<0.3 && x[1]>0.1 && x[1]<0.3'
 
-[**hpl 25**: I did not understand the ``cylinder`` line. Seems to be all points in a square that also lie on the boundary? Are there any?]
+[**hpl 26**: I did not understand the ``cylinder`` line. Seems to be all points in a square that also lie on the boundary? Are there any?]
 
-[**AL 26**: We set :math:`p = 0` at the outflow. This seems to be necessary, but we should really not need to specify the pressure at all.]
-[**hpl 27**: Need to specify the pressure at one point, mathematically.]
+[**AL 27**: We set :math:`p = 0` at the outflow. This seems to be necessary, but we should really not need to specify the pressure at all.]
+[**hpl 28**: Need to specify the pressure at one point, mathematically.]
 
 .. index:: set_log_level
 
@@ -2566,13 +2606,13 @@ follows:
     q = TestFunction(Q)
     
     # Define functions for solutions at previous and current time steps
-    u0 = Function(V)
-    u1 = Function(V)
-    p0 = Function(Q)
-    p1 = Function(Q)
+    u_n = Function(V)
+    u_  = Function(V)
+    p_n = Function(Q)
+    p_  = Function(Q)
     
     # Define expressions used in variational forms
-    U   = 0.5*(u0 + u)
+    U   = 0.5*(u_n + u)
     n   = FacetNormal(mesh)
     f   = Constant((0, 0))
     k   = Constant(dt)
@@ -2587,21 +2627,21 @@ follows:
         return 2*mu*epsilon(u) - p*Identity(len(u))
     
     # Define variational problem for step 1
-    F1 = rho*dot((u - u0) / k, v)*dx \ 
-       + rho*dot(dot(u0, nabla_grad(u0)), v)*dx \ 
-       + inner(sigma(U, p0), epsilon(v))*dx \ 
-       + dot(p0*n, v)*ds - dot(mu*nabla_grad(U)*n, v)*ds \ 
+    F1 = rho*dot((u - u_n) / k, v)*dx \ 
+       + rho*dot(dot(u_n, nabla_grad(u_n)), v)*dx \ 
+       + inner(sigma(U, p_n), epsilon(v))*dx \ 
+       + dot(p_n*n, v)*ds - dot(mu*nabla_grad(U)*n, v)*ds \ 
        - rho*dot(f, v)*dx
     a1 = lhs(F1)
     L1 = rhs(F1)
     
     # Define variational problem for step 2
     a2 = dot(nabla_grad(p), nabla_grad(q))*dx
-    L2 = dot(nabla_grad(p0), nabla_grad(q))*dx - (1/k)*div(u1)*q*dx
+    L2 = dot(nabla_grad(p_n), nabla_grad(q))*dx - (1/k)*div(u_)*q*dx
     
     # Define variational problem for step 3
     a3 = dot(u, v)*dx
-    L3 = dot(u1, v)*dx - k*dot(nabla_grad(p1 - p0), v)*dx
+    L3 = dot(u_, v)*dx - k*dot(nabla_grad(p_ - p_n), v)*dx
     
     # Assemble matrices
     A1 = assemble(a1)
@@ -2643,36 +2683,36 @@ follows:
         # Step 1: Tentative velocity step
         b1 = assemble(L1)
         [bc.apply(b1) for bc in bcu]
-        solve(A1, u1.vector(), b1, 'bicgstab', 'ilu')
+        solve(A1, u_.vector(), b1, 'bicgstab', 'ilu')
     
         # Step 2: Pressure correction step
         b2 = assemble(L2)
         [bc.apply(b2) for bc in bcp]
-        solve(A2, p1.vector(), b2, 'bicgstab', 'ilu')
+        solve(A2, p_.vector(), b2, 'bicgstab', 'ilu')
     
         # Step 3: Velocity correction step
         b3 = assemble(L3)
-        solve(A3, u1.vector(), b3, 'bicgstab')
+        solve(A3, u_.vector(), b3, 'bicgstab')
     
         # Plot solution
-        plot(u1, title='Velocity')
-        plot(p1, title='Pressure')
+        plot(u_, title='Velocity')
+        plot(p_, title='Pressure')
     
         # Save solution to file
-        vtkfile_u << (u1, t)
-        vtkfile_p << (p1, t)
+        vtkfile_u << (u_, t)
+        vtkfile_p << (p_, t)
     
         # Save solution to file (HDF5)
-        timeseries_u.store(u1.vector(), t)
-        timeseries_p.store(p1.vector(), t)
+        timeseries_u.store(u_.vector(), t)
+        timeseries_p.store(p_.vector(), t)
     
         # Update previous solution
-        u0.assign(u1)
-        p0.assign(p1)
+        u_n.assign(u_)
+        p_n.assign(p_)
     
         # Update progress bar
         progress.update(t / T)
-        print('u max:', u1.vector().array().max())
+        print('u max:', u_.vector().array().max())
     
     # Hold plot
     interactive()
@@ -2707,7 +2747,7 @@ advection - diffusion - reaction equations:
 
 .. math::
 
-    \tag{52}
+    \tag{53}
     \dot{u}_1 + \beta \cdot \nabla u_1 - \nabla\cdot(\epsilon\nabla u_1)
             = f_1 -K u_1 u_2, 
         
@@ -2716,7 +2756,7 @@ advection - diffusion - reaction equations:
 
 .. math::
 
-    \tag{53}
+    \tag{54}
     \dot{u}_2 + \beta \cdot \nabla u_2 - \nabla\cdot(\epsilon\nabla u_2)
             = f_2 -K u_1 u_2, 
         
@@ -2725,7 +2765,7 @@ advection - diffusion - reaction equations:
 
 .. math::
 
-    \tag{54}
+    \tag{55}
     \dot{u}_3 + \beta \cdot \nabla u_3 - \nabla\cdot(\epsilon\nabla u_3)
             = f_3 + K u_1 u_2 - K u_3.
         
@@ -2749,7 +2789,7 @@ the two species :math:`A` and :math:`B`:
 
 We also assume that the formed species :math:`C` spontaneously decays with a
 rate proportional to the concentration :math:`[C]`. In the PDE system
-:ref:`(52) <Eq:ftut1:reactionsystem:system:1>`--:ref:`(54) <Eq:ftut1:reactionsystem:system:3>`,
+:ref:`(53) <Eq:ftut1:reactionsystem:system:1>`--:ref:`(55) <Eq:ftut1:reactionsystem:system:3>`,
 we use the variables :math:`u_1`, :math:`u_2`, and :math:`u_3` to denote the
 concentrations of the three species:
 
@@ -2759,7 +2799,7 @@ concentrations of the three species:
         
 
 We see that the chemical reactions are accounted for in the
-right-hand sides of the PDE system :ref:`(52) <Eq:ftut1:reactionsystem:system:1>`--:ref:`(54) <Eq:ftut1:reactionsystem:system:3>`.
+right-hand sides of the PDE system :ref:`(53) <Eq:ftut1:reactionsystem:system:1>`--:ref:`(55) <Eq:ftut1:reactionsystem:system:3>`.
 
 The chemical reactions take part at each point in the domain
 :math:`\Omega`. In addition, we assume that the species :math:`A`, :math:`B`, and :math:`C`
@@ -2767,7 +2807,7 @@ diffuse throughout the domain with diffusivity :math:`\epsilon` (the terms
 :math:`-\nabla\cdot(\epsilon\nabla u_i)`) and are advected with velocity
 :math:`\beta` (the terms :math:`\beta\cdot\nabla u_i`). The
 advection - diffusion - reaction system
-:ref:`(52) <Eq:ftut1:reactionsystem:system:1>`--:ref:`(54) <Eq:ftut1:reactionsystem:system:3>`
+:ref:`(53) <Eq:ftut1:reactionsystem:system:1>`--:ref:`(55) <Eq:ftut1:reactionsystem:system:3>`
 is expressed using mathematical dimensionless parameters :math:`\beta` and
 :math:`\epsilon` and we will not worry about scaling for this particular
 problem.
@@ -2781,17 +2821,8 @@ solving the following coupled system of nonlinear PDEs:
 
 .. math::
 
-    \tag{55}
-    \varrho(\dot{w} + w \cdot \nabla w) = \nabla\cdot\sigma(w, p) + f, 
-        
-
-.. _Eq:_auto10:
-
-.. math::
-
     \tag{56}
-    \nabla \cdot u = 0, 
-        
+    \varrho(\dot{w} + w \cdot \nabla w) = \nabla\cdot\sigma(w, p) + f, 
         
 
 .. _Eq:_auto11:
@@ -2799,8 +2830,7 @@ solving the following coupled system of nonlinear PDEs:
 .. math::
 
     \tag{57}
-    \dot{u}_1 + w \cdot \nabla u_1 - \nabla\cdot(\epsilon\nabla u_1)
-            = f_1 - K u_1 u_2, 
+    \nabla \cdot u = 0, 
         
         
 
@@ -2809,8 +2839,8 @@ solving the following coupled system of nonlinear PDEs:
 .. math::
 
     \tag{58}
-    \dot{u}_2 + w \cdot \nabla u_2 - \nabla\cdot(\epsilon\nabla u_2)
-            = f_2 - K u_1 u_2, 
+    \dot{u}_1 + w \cdot \nabla u_1 - \nabla\cdot(\epsilon\nabla u_1)
+            = f_1 - K u_1 u_2, 
         
         
 
@@ -2819,6 +2849,16 @@ solving the following coupled system of nonlinear PDEs:
 .. math::
 
     \tag{59}
+    \dot{u}_2 + w \cdot \nabla u_2 - \nabla\cdot(\epsilon\nabla u_2)
+            = f_2 - K u_1 u_2, 
+        
+        
+
+.. _Eq:_auto14:
+
+.. math::
+
+    \tag{60}
     \dot{u}_3 + w \cdot \nabla u_3 - \nabla\cdot(\epsilon\nabla u_3)
             = f_3 + K u_1 u_2 - K u_3.
         
@@ -2851,21 +2891,10 @@ obtain
 
 .. math::
 
-    \tag{60}
+    \tag{61}
     \int_{\Omega}
           {\Delta t}^{-1} (u_1^{n+1} - u_1^n) v_1 + w \cdot \nabla U_1 \, v_1
           + \epsilon \nabla U_1 \cdot \nabla v_1 {\, \mathrm{d}x} 
-        
-
-.. _Eq:_auto14:
-
-.. math::
-
-    \tag{61}
-    +  \int_{\Omega} {\Delta t}^{-1} (u_2^{n+1} - u_2^n) v_2
-          + w \cdot \nabla U_2 \, v_2
-          + \epsilon \nabla U_2 \cdot \nabla v_2 {\, \mathrm{d}x} 
-        
         
 
 .. _Eq:_auto15:
@@ -2873,9 +2902,9 @@ obtain
 .. math::
 
     \tag{62}
-    +  \int_{\Omega} {\Delta t}^{-1} (u_3^{n+1} - u_3^n) v_3
-          + w \cdot \nabla U_3 \, v_3
-          + \epsilon \nabla U_3 \cdot \nabla v_3 {\, \mathrm{d}x} 
+    +  \int_{\Omega} {\Delta t}^{-1} (u_2^{n+1} - u_2^n) v_2
+          + w \cdot \nabla U_2 \, v_2
+          + \epsilon \nabla U_2 \cdot \nabla v_2 {\, \mathrm{d}x} 
         
         
 
@@ -2884,7 +2913,9 @@ obtain
 .. math::
 
     \tag{63}
-    \quad + \int_{\Omega} f_1 v_1 + f_2 v_2 + f_3 v_3 {\, \mathrm{d}x} 
+    +  \int_{\Omega} {\Delta t}^{-1} (u_3^{n+1} - u_3^n) v_3
+          + w \cdot \nabla U_3 \, v_3
+          + \epsilon \nabla U_3 \cdot \nabla v_3 {\, \mathrm{d}x} 
         
         
 
@@ -2893,6 +2924,15 @@ obtain
 .. math::
 
     \tag{64}
+    \quad + \int_{\Omega} f_1 v_1 + f_2 v_2 + f_3 v_3 {\, \mathrm{d}x} 
+        
+        
+
+.. _Eq:_auto18:
+
+.. math::
+
+    \tag{65}
     \quad + \int_{\Omega} K U_1 U_2 v_1 + K U_1 U_2 v_2
           - K U_1 U_2 v_3 + K U_3 v_3 {\, \mathrm{d}x} = 0.
         
@@ -2907,7 +2947,7 @@ We have replaced the time-derivatives :math:`\dot{u}_i` by the difference
 quotients :math:`{\Delta t}^{-1} (u_i^{n+1} - u_i^n)`. We also introduce the
 shorthand notation
 
-[**hpl 28**: If you use :math:`\theta=1` anyway, I would simplify already here. The problem is that you need to consistently evaluate the other terms (including the reaction and :math:`w` terms) also at the weighted time point :math:`\theta t_n + (1-\theta)t_{n+1}`, and besides giving very long formulas, this brings up some nontrivial FEniCS issues that I now deal with in detail in the time-dependent solver chapter in volume II - in a simpler context.  It is very easy to make mistakes here as the code works and converges, but Crank-Nicolson/midpoint method does not give increased convergence rate. It may work here as you have a stationary velocity field etc., but the :math:`\theta` rule is a tricky thing that when generalized from this example easily goes wrong, unless we really emphasize the :math:`\theta` weighting of all terms. The example is complicated enough for the FEniCS beginnner...]
+[**hpl 29**: If you use :math:`\theta=1` anyway, I would simplify already here. The problem is that you need to consistently evaluate the other terms (including the reaction and :math:`w` terms) also at the weighted time point :math:`\theta t_n + (1-\theta)t_{n+1}`, and besides giving very long formulas, this brings up some nontrivial FEniCS issues that I now deal with in detail in the time-dependent solver chapter in volume II - in a simpler context.  It is very easy to make mistakes here as the code works and converges, but Crank-Nicolson/midpoint method does not give increased convergence rate. It may work here as you have a stationary velocity field etc., but the :math:`\theta` rule is a tricky thing that when generalized from this example easily goes wrong, unless we really emphasize the :math:`\theta` weighting of all terms. The example is complicated enough for the FEniCS beginnner...]
 
 .. math::
         
@@ -2948,7 +2988,7 @@ It is important that this space is exactly the same as the space we
 used for the velocity field in the Navier - Stokes solver. To read the
 values for the velocity field, we use a ``TimeSeries``
 
-[**AL 29**: Check if we can remove `mpi_comm_world`]
+[**AL 30**: Check if we can remove `mpi_comm_world`]
 
 .. code-block:: python
 
@@ -3050,7 +3090,7 @@ left end-points will be denoted by ``u_p1``, ``u_p2``, and ``u_p3``. Our
 
 When now all functions and test functions have been defined, we can
 express the nonlinear variational problem
-:ref:`(60) <Eq:ftu1:reactionsystem:varproblem>`:
+:ref:`(61) <Eq:ftu1:reactionsystem:varproblem>`:
 
 .. code-block:: python
 
@@ -3079,7 +3119,7 @@ field from the time series we have previously stored. We then solve
 the nonlinear system, and assign the computed values to the left-hand
 side values for the next time interval.
 
-[**FIXME 30**: Haven't learned how to reference figures yet in Doconce so I just write 'below' - fix!]
+[**FIXME 31**: Haven't learned how to reference figures yet in Doconce so I just write 'below' - fix!]
 
 The solution at the final time is shown in the figure below. We
 clearly see the advection of the species :math:`A` and :math:`B` and the formation
