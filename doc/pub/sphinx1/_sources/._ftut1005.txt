@@ -169,8 +169,8 @@ FEniCS implementation          (7)
 How does the Neumann condition impact the implementation?  Let us
 revisit our previous implementation ``ft01_poisson.py``, from
 the section :ref:`ch:poisson0:impl` and examine which changes
-we need to make to incorporate the Neumann condition. It runs out that
-only two are necessary.Ö
+we need to make to incorporate the Neumann condition. It turns out that
+only two are necessary.
 
   * The function ``boundary`` defining the Dirichlet boundary
     must be modified.
@@ -416,11 +416,11 @@ method that defines the function is called ``eval``:
     
         def eval(self, value, x):
             "Set value[0] to value at point x"
-    	tol = 1E-14
+            tol = 1E-14
             if x[1] <= 0.5 + tol:
-    	    value[0] = self.k0
-    	else:
-    	    value[0] = self.k1
+                value[0] = self.k0
+            else:
+                value[0] = self.k1
     
     # Initialize
     k = K()
@@ -605,18 +605,14 @@ variable coefficient :math:`k`, we create a FEniCS ``Expression``:
             self.materials = materials
             self.k0 = k0
             self.k1 = k1
-        def eval_cell(self, values, x, cell):
-            if materials[cell.index] == 0:
+    
+    def eval_cell(self, values, x, cell):
+            if self.materials[cell.index] == 0:
                 values[0] = self.k0
             else:
                 values[0] = self.k1
     
     k = K(materials, k0, k1, degree=0)
-
-The ``help`` array is required since ``choose`` cannot work with
-``materials.array()`` because this array has elements of
-type ``uint32``. We must therefore transform this array to an array
-``help`` with standard ``int32`` integers.
 
 This is similar to the ``Expression`` subclass we defined above, but we
 make use of the member function ``eval_cell`` in place of the regular
@@ -626,13 +622,36 @@ currently evaluating the function.
 
 .. index:: CompiledSubDomain
 
+Vectorized version of subdomain definitions
+-------------------------------------------
+
+To speed up this code, we can vectorize the expressions:
+
+.. code-block:: python
+
+    materials = CellFunction('size_t', mesh)
+    materials.set_all(0)  # "the rest"
+    for m, subdomain in enumerate(subdomains[1:], 1):
+        subdomain.mark(materials, m)
+    
+    kappa_values = kappa
+    V0 = FunctionSpace(mesh, 'DG', 0)
+    kappa  = Function(V0)
+    help = np.asarray(materials.array(), dtype=np.int32)
+    kappa.vector()[:] = np.choose(help, kappa_values)
+
+The ``help`` array is required since ``choose`` cannot work with
+``materials.array()`` because this array has elements of
+type ``uint32``. We must therefore transform this array to an array
+``help`` with standard ``int32`` integers.
+
 C++ strings for subdomain definitions
 -------------------------------------
 
 The ``SubDomain`` and ``Expression`` Python classes are very convenient,
 but their use leads to function calls from C++ to Python for each node
 in the mesh. Since this involves a significant cost, we need to make
-use of C++ code for large problems.
+use of C++ code for large-scale computational problems.
 
 Instead of writing the ``SubDomain`` subclass in Python, we may instead use
 the ``CompiledSubDomain`` tool in FEniCS to specify the subdomain in C++
@@ -1510,6 +1529,8 @@ wire, :math:`R` be the radius of our domain, and :math:`n` be the number of
 windings (giving a total of :math:`2n` copper-wire cross-sections). This
 geometry can be described easily using ``mshr`` and a little bit of
 Python programming:
+
+[**hpl 38**: Student wrote that I don’t really understand this naming, current-carrying wires don’t have north and south poles? For me at least inside and outside iron cylinder makes much more sense to talk about than north/south.]
 
 .. code-block:: python
 

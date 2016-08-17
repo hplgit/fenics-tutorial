@@ -285,7 +285,10 @@ where :math:`(x_j,y_j)` are the coordinates of node number :math:`j`. We refer t
 these two strategies as computing the initial condition by either
 projection or interpolation. Both operations are easy to
 compute in FEniCS through one statement, using either the ``project`` or
-``interpolate`` function.
+``interpolate`` function. The most common choice is ``project``, which computes an
+approximation to :math:`u_0`, but in some
+applications where we want to verify the code by reproducing exact solutions,
+one must use ``interpolate`` (and we use such a test problem!).
 
 In summary, we thus need to solve the following sequence of variational
 problems to compute the finite element solution to the heat equation:
@@ -1014,7 +1017,7 @@ know very well that automated procedures may fail in nonlinear
 problems, and that it is often necessary to have much better manual
 control of the solution process than what we have in the current
 case. Therefore, we return to this problem in the chapter
-"Implementing solvers for nonlinear PDEs": "" [Ref24]_
+"Implementing solvers for nonlinear PDEs": "" [Ref25]_
 and show how we can implement our
 own solution algorithms for nonlinear equations and also how we can
 steer the parameters in the automated Newton method used above. You
@@ -1201,7 +1204,7 @@ where :math:`\varepsilon(v)` is the symmetric part of :math:`\nabla v`:
          \varepsilon(v) = \frac{1}{2}\left(\nabla v + (\nabla v)^{\top}\right){\thinspace .}
 
 The formulation :ref:`(44) <Eq:ftut:elast:varform:sigma_inner_eps>` is what naturally
-arises from minimization of elastic potential energy is a more
+arises from minimization of elastic potential energy and is a more
 popular formulation than :ref:`(41) <Eq:ftut:elast:varform:sigma_inner_gradv>`.
 
 A simple FEniCS implementation          (3)
@@ -1380,17 +1383,19 @@ Sometimes, one will argue to chose :math:`U` to make :math:`\gamma` unity (:math
 \varrho gL^2/\mu`). However, in elasticity, this leads us to
 displacements of the size of the geometry, which makes plots look very
 strange. We therefore want the characteristic displacement to be a
-small fraction of the characteristic length of the geometry.
-Actually, for a clamped beam, one has a deflection formula which gives
-:math:`U = \frac{3}{2}\varrho gL^2\delta^2/E`, where :math:`\delta = L/W` is a
-parameter reflecting how slender the beam is.  Thus, the dimensionless
-parameter :math:`\delta` is very important in the problem (as expected,
-since :math:`\delta\gg 1` is what gives beam theory!).  Taking :math:`E` to be of
-the same order as :math:`\mu`, which is common for a lot of materials, we
-realize that :math:`\gamma \sim \delta^{-2}`.  Experiments with the code to
-find a displacement that "looks right" in plots of the deformed
-geometry, we arrive at :math:`\gamma = 0.4\delta^{-2}` as an appropriate
-choice.
+small fraction of the characteristic length of the geometry.  This can
+be achieved by choosing :math:`U` equal to the maximum deflection of a
+clamped beam, for which there actually exists an formula: :math:`U =
+\frac{3}{2}\varrho gL^2\delta^2/E`, where :math:`\delta = L/W` is a
+parameter reflecting how slender the beam is, and :math:`E` is the modulus
+of elasticity.  Thus, the dimensionless parameter :math:`\delta` is very
+important in the problem (as expected, since :math:`\delta\gg 1` is what
+gives beam theory!).  Taking :math:`E` to be of the same order as :math:`\mu`,
+which is common for a lot of materials, we realize that :math:`\gamma \sim
+\delta^{-2}` is an appropriate choice.  Doing experiments with the
+code to find a displacement that "looks right" in plots of the
+deformed geometry, points to :math:`\gamma = 0.4\delta^{-2}` as our final
+choice of :math:`\gamma`.
 
 The simulation code implements the problem with dimensions and
 physical parameters :math:`\lambda`, :math:`\mu`, :math:`\varrho`, :math:`g`, :math:`L`, and :math:`W`.
@@ -1422,7 +1427,10 @@ and vector-valued variables. We shall touch a number of FEniCS topics,
 many of them quite advanced, so the exposition has the flavor of being
 a teaser of what can be easily achieved in FEniCS, while later
 chapters will dive into more detail with the most fundamental new
-topics.
+topics touched upon here. Do not expect to understand every detail of
+this section - the point is rather to show how a quite complex PDE
+problem is broken down to an implementation that still can be defended
+to be carried out in minutes rather than hours or days.
 
 PDE problem          (4)
 ------------------------
@@ -1473,8 +1481,10 @@ equation :ref:`(45) <Eq:ftut1:ns:momentum>` is very similar to the elasticity
 equation :ref:`(36) <Eq:ftut:elast:varform:equilibrium>`. The difference is the
 two additional terms :math:`\varrho(\dot{u} + u \cdot \nabla u)` and the different
 expression for the stress tensor. The two extra terms express the
-acceleration :math:`\rho \ddot{x}` balanced by the force :math:`F = f +
+acceleration balanced by the force :math:`F = f +
 \nabla\cdot\sigma` per unit volume in Newton's second law of motion.
+However, the differences from the elasticity are big enough to call for
+a much more complicated solution procedure.
 
 .. _ftut1:NS:varform:
 
@@ -1496,10 +1506,10 @@ known as a *splitting method*. The idea is to
 consider the two equations :ref:`(45) <Eq:ftut1:ns:momentum>` and
 :ref:`(46) <Eq:ftut1:ns:continuity>` separately. There exist many splitting
 strategies for the incompressible Navier-Stokes equations. One of the
-oldest is the method proposed by Chorin [Ref25]_ and
-Temam [Ref26]_, often referred to as *Chorin's method*. We will
+oldest is the method proposed by Chorin [Ref26]_ and
+Temam [Ref27]_, often referred to as *Chorin's method*. We will
 use a modified version of Chorin's method, the so-called incremental
-pressure correction scheme (IPCS) due to [Ref27]_ which gives
+pressure correction scheme (IPCS) due to [Ref28]_ which gives
 improved accuracy compared to the original scheme at little extra
 cost.
 
@@ -1525,19 +1535,25 @@ The variational problem for this first step is:
               + \nonumber
         
 
+.. math::
+          
+               {\langle \sigma(u^{n+\frac{1, \epsilon(v) \rangle}{2}}, p^{n})}
+              + {\langle p^{n, v \rangle} n}_{\partial\Omega}
+              - \nonumber
+        
+
 .. _Eq:_auto10:
 
 .. math::
 
     \tag{49}
-    {\langle \sigma(u^{n+\frac{1, \epsilon(v) \rangle}{2}}, p^{n})}
-              + {\langle p^{n, v \rangle} n}_{\partial\Omega}
-              - {\langle \mu \nabla u^{n+\frac{1, v \rangle}{2}}\cdot n}_{\partial\Omega}
+    {\langle \mu \nabla u^{n+\frac{1, v \rangle}{2}}\cdot n}_{\partial\Omega}
               = {\langle \rho f^{n+1, v \rangle}}
         
         
 
-This notation requires some explanation. First, we use the short-hand
+This notation, suitable for problems with many terms in the variational
+formulations, requires some explanation. First, we use the short-hand
 notation
 
 .. math::
@@ -1571,7 +1587,7 @@ the section :ref:`ftut:elast`, we obtain
 where :math:`T = \sigma\cdot n` is the boundary traction. If we solve a
 problem with a free boundary, we can take :math:`T = 0` on the
 boundary. However, if we compute the flow through a channel or a pipe
-and want to model e flow that continues into an "imaginary channel" at
+and want to model flow that continues into an "imaginary channel" at
 the outflow, we need to treat this term with some care. The assumption
 we then make is that the derivative of the velocity in the direction
 of the channel is zero at the outflow, corresponding to a flow that is
@@ -1706,7 +1722,7 @@ Finally, we compute the corrected velocity :math:`u^n` from the equation
 
 In summary, we may thus solve the incompressible Navier-Stokes
 equations efficiently by solving a sequence of three linear variational
-problems (steps 1, 2, 3) in each time step.
+problems in each time step.
 
 A simple FEniCS implementation          (4)
 -------------------------------------------
@@ -1739,11 +1755,11 @@ H^2/\nu` in the equations results in the scaled Navier-Stokes equations
         \end{align*}
 
 Here, Re is the Reynolds number :math:`\rho UH/\mu`. Because of the time and
-pressure scale, which are different from convection-dominated fluid flow,
-the Reynolds number is associated with the convective term and not the
-viscosity term. Note that the last term in the first
-equation is zero, but we included this term as it arises naturally
-from the original :math:`\nabla\cdot\sigma` term.
+pressure scale, which are different from convection-dominated fluid
+flow, the Reynolds number is associated with the convective term and
+not the viscosity term. Note that the last term in the first equation
+is zero, but we included this term as it arises naturally from the
+original :math:`\nabla\cdot\sigma` term.
 
 The exact solution is derived by assuming :math:`u=(u_x(x,y,z),0,0)`, with
 the :math:`x` axis pointing along the channel. Since :math:`\nabla\cdot u=0`, :math:`u`
@@ -1753,31 +1769,32 @@ two-dimensional so we can omit the :math:`z` coordinate (more precisely:
 governing equations gives :math:`u_x''(y) = \partial p/\partial x`.
 Differentiating this equation with respect to :math:`x` shows that :math:`\partial
 p/\partial x` is a constant, here called :math:`-\beta`. This is the driving
-force of the flow and can be specified as a known parameter in the problem.
-Integrating
-:math:`u_x''(y)=-\beta` over the width of the channel, :math:`[0,1]`, and
-requiring :math:`u=0` at the channel walls, results in :math:`u_x=\frac{1}{2}\beta
-y(1-y)`. The characteristic inlet flow in the channel, :math:`U`, can be
-taken as the maximum inflow at :math:`x=1/2`, implying that :math:`\beta = 8`.
-The length of the channel, :math:`L/H` in the scaled model, has no impact on
-the result, so for simplicity we just compute on the unit square.  The
-pressure can then be set to :math:`p=0` at the outlet :math:`x=1`, giving
-:math:`p(x)=8(1-x)` and :math:`u_x=4y(1-y)`.
+force of the flow and can be specified as a known parameter in the
+problem.  Integrating :math:`u_x''(y)=-\beta` over the width of the channel,
+:math:`[0,1]`, and requiring :math:`u=0` at the channel walls, results in
+:math:`u_x=\frac{1}{2}\beta y(1-y)`. The characteristic inlet flow in the
+channel, :math:`U`, can be taken as the maximum inflow at :math:`x=1/2`, implying
+that :math:`\beta = 8`.  The length of the channel, :math:`L/H` in the scaled
+model, has no impact on the result, so for simplicity we just compute
+on the unit square.  Mathematically, the pressure must be prescribed
+at a point, but since :math:`p` does not depend on :math:`y`, we can set :math:`p` to a
+known value, e.g. zero, along the outlet boundary :math:`x=1`.  The result
+is :math:`p(x)=8(1-x)` and :math:`u_x=4y(1-y)`.
 
-The boundary conditions can be set as :math:`p=1` on :math:`x=0`, :math:`p=0` on
-:math:`x=1` and :math:`u=0` on the walls :math:`y=0,1`. This defines the pressure
-drop and should result in unit maximum velocity at the inlet and outlet
-and a parabolic velocity profile without further specifications.
-Note that it is only meaningful to solve the Navier-Stokes equations in
-2D or 3D geometries, although the underlying mathematical problem
-collapses to two 1D problems, one for :math:`u_x(y)` and one for :math:`p(x)`.
+The boundary conditions can be set as :math:`p=1` on :math:`x=0`, :math:`p=0` on :math:`x=1`
+and :math:`u=0` on the walls :math:`y=0,1`. This defines the pressure drop and
+should result in unit maximum velocity at the inlet and outlet and a
+parabolic velocity profile without further specifications.  Note that
+it is only meaningful to solve the Navier-Stokes equations in 2D or 3D
+geometries, although the underlying mathematical problem collapses to
+two 1D problems, one for :math:`u_x(y)` and one for :math:`p(x)`.
 
-The scaled model is not so easy to simulate using a standard Navier-Stokes
-solver with dimensions. However, one can argue that the convection term
-is zero, so the Re coefficient in front of this term in the scaled PDEs
-is not important and can be set to unity. In that case, setting
-:math:`\rho = \mu = 1`
-in the original Navier-Stokes equations resembles the scaled model.
+The scaled model is not so easy to simulate using a standard
+Navier-Stokes solver with dimensions. However, one can argue that the
+convection term is zero, so the Re coefficient in front of this term
+in the scaled PDEs is not important and can be set to unity. In that
+case, setting :math:`\rho = \mu = 1` in the original Navier-Stokes equations
+resembles the scaled model.
 
 FEniCS implementation          (5)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -1906,20 +1923,15 @@ problem. We start with some constants:
     mu  = Constant(mu)
     rho = Constant(rho)
 
-This expression for ``F1`` is very similar to the mathematical definition
-:ref:`(48) <Eq:ftut1:ipcs1>`. Since the variational problem contains a mix of
+The next step now is to set up the variational form for the first step
+:ref:`(48) <Eq:ftut1:ipcs1>` in the solution process.
+Since the variational problem contains a mix of
 known and unknown quantities we have introduced a naming convention to
 be used throughout the book: ``u`` is the unknown (mathematically :math:`u^{n+1}`)
 as a trial function in the variational form, ``u_`` is the most recently
 computed approximation to ``u`` (:math:`u^{n+1}` available as a finite element
 FEniCS ``Function`` object), ``u_n`` is :math:`u^n`, and the same convention
 goes for ``p``. ``p_``, and ``p_n``.
-
-In the definition of the variational problem, we take advantage of the
-Python programming language to define our own operators ``sigma`` and
-``epsilon``. Using Python this way makes it easy to extend the
-mathematical language of FEniCS with special operators and
-constitutive laws:
 
 .. code-block:: python
 
@@ -1939,9 +1951,17 @@ constitutive laws:
     a1 = lhs(F1)
     L1 = rhs(F1)
 
-Note that FEniCS can sort out the (matrix) :math:`a(u,v)` and
+Note that we, in the definition of the variational problem,
+take advantage of the
+Python programming language to define our own operators ``sigma`` and
+``epsilon``. Using Python this way makes it easy to extend the
+mathematical language of FEniCS with special operators and
+constitutive laws.
+
+Also note that FEniCS can sort out the (matrix) :math:`a(u,v)` and
 (right-hand side) :math:`L(v)` forms by the ``lhs``
-and ``rhs`` functions.
+and ``rhs`` functions. This is particularly convenient in longer and
+more complicated variational forms.
 
 The splitting scheme requires the solution of a sequence of three
 variational problems in each time step. We have previously used the
@@ -1979,9 +1999,17 @@ function as here for the first of the three steps:
 
 .. code-block:: python
 
-    b1 = assemble(L1)
-    [bc.apply(b1) for bc in bcu]
-    solve(A1, u1.vector(), b1)
+    # Time-stepping
+    t = 0
+    for n in range(num_steps):
+    
+        # Update current time
+        t += dt
+    
+        # Step 1: Tentative velocity step
+        b1 = assemble(L1)
+        [bc.apply(b1) for bc in bcu]
+        solve(A1, u_.vector(), b1)
 
 Notice the Python *list comprehension* ``[bc.apply(b1) for bc in bcu]``
 which iterates over all ``bc`` in the list ``bcu``. This is a convenient
@@ -1990,23 +2018,22 @@ all boundary conditions in a single line. Also, the code works if
 we add more Dirichlet boundary conditions in the future.
 
 Finally, let us look at an important detail in how we use parameters
-such as the time step ``dt`` and viscosity ``mu`` in the
-definition of our variational problems. Since we might want to change
-these later, for example if we want to experiment with smaller or
-larger time steps, we wrap these using a FEniCS ``Constant``:
+such as the time step ``dt`` in the definition of our variational
+problems. Since we might want to change these later, for example if we
+want to experiment with smaller or larger time steps, we wrap these
+using a FEniCS ``Constant``:
 
 .. code-block:: python
 
     k = Constant(dt)
-    mu = Constant(mu)
 
 The assembly of matrices and vectors in FEniCS is based on code
 generation. This means that whenever we change a variational problem,
 FEniCS will have to generate new code, which may take a little
 time. New code will also be generated when a float value for the time
-step or viscosity is changed. By wrapping these parameters using
-``Constant``, FEniCS will treat these parameters as generic constants and
-not specific numerical values, which prevents repeated code
+step is changed. By wrapping this parameter using
+``Constant``, FEniCS will treat the parameter as a generic constant and
+not a specific numerical value, which prevents repeated code
 generation. In the case of the time step, we choose a new name ``k``
 instead of ``dt`` for the ``Constant`` since we also want to use the
 variable ``dt`` as a Python float as part of the time-stepping.
@@ -2102,7 +2129,7 @@ follows:
     
     # Time-stepping
     t = 0
-    for n in xrange(num_steps):
+    for n in range(num_steps):
     
         # Update current time
         t += dt
@@ -2367,7 +2394,8 @@ specified as
         
 
 which has a maximum magnitude of :math:`1.5` at :math:`y = 0.41/2`. We do not
-scale anything in this benchmark.
+scale anything in this benchmark since exact parameters in the case
+we want to simulate are known.
 
 .. _ftut1:navier_stokes_cylinder:geometry:
 
@@ -2432,7 +2460,8 @@ boundaries are specified as follows:
 
 The last line may seem cryptic before you catch the idea: we want to pick
 out all boundary points (``on_boundary``) that also lie within the 2D
-domain :math:`[0.1,0.3]\times [0.1,0.3]`, see Figure :ref:`ftut1:navier_stokes_cylinder:geometry`.
+domain :math:`[0.1,0.3]\times [0.1,0.3]`, see Figure :ref:`ftut1:navier_stokes_cylinder:geometry`. The only possible points are then the points on the
+circular boundary!
 
 [**AL 26**: We set :math:`p = 0` at the outflow. This seems to be necessary, but we should really not need to specify the pressure at all.]
 [**hpl 27**: Need to specify the pressure at one point, mathematically.]

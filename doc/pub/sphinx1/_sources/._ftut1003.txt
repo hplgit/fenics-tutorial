@@ -35,8 +35,13 @@ Mathematical problem formulation
 
 .. index:: Poisson's equation
 
-Let us start by writing a "Hello, World!" program. In the world of
-PDEs, this must be a program that solves the Poisson equation:
+Most books on a programming language starts with a "Hello, World!"
+program. That is, one is curious about how a very fundamental task is
+expressed in the language, and writing a text to the screen can be
+such a task. In the world of *finite element methods for PDEs*, the
+most fundamental task must be to solve the Poisson equation. Our
+counterpart to the classical "Hello, World!"  program therefore
+solves
 
 .. _Eq:ftut:poisson1:
 
@@ -52,7 +57,7 @@ PDEs, this must be a program that solves the Poisson equation:
 .. math::
 
     \tag{2}
-    u(\boldsymbol{x}) = u_0(\boldsymbol{x}),\quad \boldsymbol{x}\mbox{ on } \partial \Omega{\thinspace .} 
+    u(\boldsymbol{x}) = u_{_\mathrm{D}}(\boldsymbol{x}),\quad \boldsymbol{x}\mbox{ on } \partial \Omega{\thinspace .} 
         
 
 Here, :math:`u = u(\boldsymbol{x})` is the unknown function, :math:`f = f(\boldsymbol{x})` is a
@@ -102,9 +107,23 @@ following steps:
     visualize the results.
 
 We shall now go through steps 2 - 4 in detail. The key feature of
-FEniCS is that steps 3 and 4 result in fairly short code, while most
-other software frameworks for PDEs require much more code and more
-technically difficult programming.
+FEniCS is that steps 3 and 4 result in fairly short code, while a
+similar program in most other software frameworks for PDEs require
+much more code and more technically difficult programming.
+
+
+.. admonition:: What makes FEniCS attractive
+
+   Although
+   many frameworks has a really elegant "Hello, World!" example on the
+   Poisson equation, FEniCS is to our knowledge the only framework where
+   the code stays compact and nice, very close to the mathematical
+   formulation, also when the complexity increases with, e.g., systems of
+   PDEs and mixed finite elements for computing on massively
+   high-performance parallel platforms.
+
+
+
 
 .. _ch:poisson0:varform:
 
@@ -117,10 +136,13 @@ FEniCS is based on the finite element method, which is a general and
 efficient mathematical machinery for numerical solution of PDEs. The
 starting point for the finite element methods is a PDE expressed in
 *variational form*. Readers who are not familiar with variational
-problems will get a brief introduction to the topic in this tutorial,
+problems will get a very brief introduction to the topic in this tutorial,
 but getting and reading a proper book on the finite element method in
 addition is encouraged. The section :ref:`ftut:fembooks` contains a list of
-some suitable books.
+some suitable books. Experience shows that you can work with FEniCS as
+a tool to solve your PDEs even without thorough knowledge of the finite
+element method as long as you get somebody to help you with formulating
+the PDE as a variational problem.
 
 .. index:: test function
 
@@ -147,8 +169,16 @@ by the test function :math:`v` and integrate over :math:`\Omega`:
     \tag{4}
     -\int_\Omega (\nabla^2 u)v {\, \mathrm{d}x} = \int_\Omega fv {\, \mathrm{d}x}{\thinspace .} 
 
-We then apply integration by parts to the integrand with
-second-order derivatives. We find that
+A common rule when we derive variational formulations is that we try
+to keep the order of the derivatives of :math:`u` and :math:`v`
+as low as possible (this will enlarge the collection of finite elements
+that can be used in the problem). Here, where we
+have a second-order spatial derivative of :math:`u`, which can be transformed
+to a first-derivative of :math:`u` and :math:`v` and we apply the technique of
+`integration by parts <https://en.wikipedia.org/wiki/Integration_by_parts>`__.
+A Laplace term will always be subject to integration
+by parts [#itgparts]_.
+The formula reads
 
 .. _Eq:ch:poisson0:eqbyparts:
 
@@ -162,9 +192,20 @@ second-order derivatives. We find that
 
 where :math:`\frac{\partial u}{\partial n} = \nabla u \cdot n` is the
 derivative of :math:`u` in the outward normal direction :math:`n` on the
-boundary. The test function :math:`v` is required to vanish on the parts of
-the boundary where the solution :math:`u` is known, which in the present
-problem implies that :math:`v=0` on the whole boundary :math:`\partial\Omega`.
+boundary.
+
+.. [#itgparts] Integration by parts in more than one space dimension is based on
+   Gauss' divergence theorem. Simply take :ref:`(5) <Eq:ch:poisson0:eqbyparts>` as
+   the formula to be used.
+
+Another feature of variational formulations is that
+the test function :math:`v` is required to vanish on the parts of
+the boundary where the solution :math:`u` is known (the book [Ref10]_ explains in detail why this requirement is necessary).
+In the present
+problem, this means that :math:`v=0` on the whole boundary :math:`\partial\Omega`
+(strangely enough, :math:`v=0` is a requirement in the mathematical formulation,
+but we cannot see any track of that in the FEniCS program, see
+[Ref10]_ for detailed explanations).
 The second term on the right-hand side of
 :ref:`(5) <Eq:ch:poisson0:eqbyparts>` therefore vanishes. From
 :ref:`(4) <Eq:ch:poisson0:multbyv>` and :ref:`(5) <Eq:ch:poisson0:eqbyparts>` it
@@ -207,7 +248,7 @@ problem defined as
 
 .. math::
         \begin{align*}
-             V      &= \{v \in H^1(\Omega) : v = u_0 \mbox{ on } \partial\Omega\}, \\ 
+             V      &= \{v \in H^1(\Omega) : v = u_{_\mathrm{D}} \mbox{ on } \partial\Omega\}, \\ 
             \hat{V} &= \{v \in H^1(\Omega) : v = 0 \mbox{ on } \partial\Omega\}{\thinspace .}
         \end{align*}
 
@@ -263,7 +304,7 @@ variational problems like :ref:`(8) <Eq:ch:poisson0:vard>`!
 
 .. over a mesh of triangles, where the functions in :math:`\hat V_h` are zero
 
-.. on the boundary and those in :math:`V_h` equal :math:`u_0` on the boundary.
+.. on the boundary and those in :math:`V_h` equal :math:`u_{_\mathrm{D}}` on the boundary.
 
 
 .. admonition:: What we mean by the notation :math:`u` and :math:`V`
@@ -355,18 +396,18 @@ perform only two steps:
 Choosing a test problem
 -----------------------
 
-The Poisson equation :ref:`(1) <Eq:ftut:poisson1>` has so far featured a general
-domain :math:`\Omega` and general functions :math:`u_{_\mathrm{D}}` and :math:`f`. For our first
-implementation, we must decide on specific choices of :math:`\Omega`, :math:`u_{_\mathrm{D}}`,
-and :math:`f`.  It will be wise to construct a specific problem where we can
-easily check that the computed solution is correct. Solutions that are
-lower-order polynomials are primary candidates. Standard finite
-element function spaces of degree :math:`r` will exactly reproduce
-polynomials of degree :math:`r`. And piecewise linear elements (:math:`r=1`) are
-able to exactly reproduce a quadratic polynomial on a uniformly
-partitioned mesh. This important result can be used to verify our
-implementation. We just manufacture some quadratic function in 2D as
-the exact solution, say
+The Poisson equation :ref:`(1) <Eq:ftut:poisson1>` has so far featured a
+general domain :math:`\Omega` and general functions :math:`u_{_\mathrm{D}}` for the boundary
+conditions and :math:`f` for the right-hand side. Our first implementation
+require us to decide on specific choices of :math:`\Omega`, :math:`u_{_\mathrm{D}}`, and :math:`f`.
+It will be wise to construct a problem where we can easily check that
+the computed solution is correct. Solutions that are lower-order
+polynomials are primary candidates. Standard finite element function
+spaces of degree :math:`r` will exactly reproduce polynomials of degree
+:math:`r`. And piecewise linear elements (:math:`r=1`) are able to exactly
+reproduce a quadratic polynomial on a uniformly partitioned mesh. This
+important result can be used to verify our implementation. We just
+manufacture some quadratic function in 2D as the exact solution, say
 
 .. _Eq:ch:poisson0:impl:uex:
 
@@ -669,7 +710,7 @@ argument is the degree of the basis functions of the element. The type
 of element is here "P", implying the standard Lagrange family of
 elements. You may also use ``'Lagrange'`` to specify this type of
 element. FEniCS supports all simplex element families and the notation
-defined in the `Periodic Table of the Finite Elements <http://femtable.org>`__ [Ref21]_.
+defined in the `Periodic Table of the Finite Elements <http://femtable.org>`__ [Ref22]_.
 
 .. index:: Periodic Table of the Finite Elements
 
@@ -913,7 +954,7 @@ is a key strength of FEniCS: the formulas in the variational
 formulation translate directly to very similar Python code, a feature
 that makes it easy to specify and solve complicated PDE problems.  The
 language used to express weak forms is called UFL (Unified Form
-Language) [Ref22]_ [Ref01]_ and is an integral part of FEniCS.
+Language) [Ref23]_ [Ref01]_ and is an integral part of FEniCS.
 
 .. Instead of ``grad`` we could also just have written ``grad`` in the
 
@@ -1405,8 +1446,12 @@ at these points:
     plt.plot(y, 100*w_line, 'r-', y, p_line, 'b--') # magnify w
     plt.legend(['100 x deflection', 'load'], loc='upper left')
     plt.xlabel('y');  plt.ylabel('$p$ and $100u$')
+    plt.savefig('tmp1.pdf');  plt.savefig('tmp1.png')
+    
+    # Should be at the end
+    interactive()
+    plt.show()
 
-(Remember a ``plt.show()`` at the end to show the plot on the screen.)
 The resulting curve plot appears in Figure :ref:`ch:poisson0:membrane:fig2`.
 It is seen how the localized input (:math:`p`) is heavily damped and smoothened in
 the output (:math:`w`). This reflects a typical property of the Poisson equation.
@@ -1523,7 +1568,7 @@ get them translated to Python code. This allows you automate the
 visualization process. You can also make curve plots along lines through
 the domain, etc.
 
-For more information, we refer to The ParaView Guide [Ref23]_
+For more information, we refer to The ParaView Guide [Ref24]_
 (free PDF available) and to the `ParaView tutorial <http://www.paraview.org/Wiki/The_ParaView_Tutorial>`__ as well as
 an `instruction video <https://vimeo.com/34037236>`__.
 
@@ -1611,7 +1656,7 @@ problems.
 .. figure:: membrane_deflection.png
    :width: 480
 
-   *Plot of the deflection of a membrane*
+   *Plot of the deflection of a membrane using the built-in visualization tool*
 
 .. --- begin exercise ---
 

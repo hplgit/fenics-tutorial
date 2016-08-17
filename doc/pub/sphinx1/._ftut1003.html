@@ -145,14 +145,19 @@ applying boundary conditions, calling the FEniCS solver, and plotting
 the solution.</div></blockquote>
 <div class="section" id="mathematical-problem-formulation">
 <span id="ftut-poisson1-bvp"></span><h2>Mathematical problem formulation<a class="headerlink" href="#mathematical-problem-formulation" title="Permalink to this headline">¶</a></h2>
-<p id="index-0">Let us start by writing a &#8220;Hello, World!&#8221; program. In the world of
-PDEs, this must be a program that solves the Poisson equation:</p>
+<p id="index-0">Most books on a programming language starts with a &#8220;Hello, World!&#8221;
+program. That is, one is curious about how a very fundamental task is
+expressed in the language, and writing a text to the screen can be
+such a task. In the world of <em>finite element methods for PDEs</em>, the
+most fundamental task must be to solve the Poisson equation. Our
+counterpart to the classical &#8220;Hello, World!&#8221;  program therefore
+solves</p>
 <div class="math" id="eq-ftut-poisson1">
 \[\tag{1}
 - \nabla^2 u(\boldsymbol{x}) = f(\boldsymbol{x}),\quad \boldsymbol{x}\mbox{ in } \Omega,\]</div>
 <div class="math" id="eq-ch-poisson0-bc">
 \[\tag{2}
-u(\boldsymbol{x}) = u_0(\boldsymbol{x}),\quad \boldsymbol{x}\mbox{ on } \partial \Omega{\thinspace .}\]</div>
+u(\boldsymbol{x}) = u_{_\mathrm{D}}(\boldsymbol{x}),\quad \boldsymbol{x}\mbox{ on } \partial \Omega{\thinspace .}\]</div>
 <p>Here, <span class="math">\(u = u(\boldsymbol{x})\)</span> is the unknown function, <span class="math">\(f = f(\boldsymbol{x})\)</span> is a
 prescribed function, <span class="math">\(\nabla^2\)</span> is the Laplace operator (also
 often written as <span class="math">\(\Delta\)</span>), <span class="math">\(\Omega\)</span> is the spatial domain, and
@@ -189,19 +194,32 @@ visualize the results.</li>
 </ol>
 </div></blockquote>
 <p>We shall now go through steps 2 - 4 in detail. The key feature of
-FEniCS is that steps 3 and 4 result in fairly short code, while most
-other software frameworks for PDEs require much more code and more
-technically difficult programming.</p>
+FEniCS is that steps 3 and 4 result in fairly short code, while a
+similar program in most other software frameworks for PDEs require
+much more code and more technically difficult programming.</p>
+<div class="admonition-what-makes-fenics-attractive admonition">
+<p class="first admonition-title">What makes FEniCS attractive</p>
+<p class="last">Although
+many frameworks has a really elegant &#8220;Hello, World!&#8221; example on the
+Poisson equation, FEniCS is to our knowledge the only framework where
+the code stays compact and nice, very close to the mathematical
+formulation, also when the complexity increases with, e.g., systems of
+PDEs and mixed finite elements for computing on massively
+high-performance parallel platforms.</p>
+</div>
 <div class="section" id="finite-element-variational-formulation">
 <span id="ch-poisson0-varform"></span><h3>Finite element variational formulation<a class="headerlink" href="#finite-element-variational-formulation" title="Permalink to this headline">¶</a></h3>
 <p id="index-1">FEniCS is based on the finite element method, which is a general and
 efficient mathematical machinery for numerical solution of PDEs. The
 starting point for the finite element methods is a PDE expressed in
 <em>variational form</em>. Readers who are not familiar with variational
-problems will get a brief introduction to the topic in this tutorial,
+problems will get a very brief introduction to the topic in this tutorial,
 but getting and reading a proper book on the finite element method in
 addition is encouraged. The section <a class="reference internal" href="._ftut1002.html#ftut-fembooks"><span class="std std-ref">The finite element method</span></a> contains a list of
-some suitable books.</p>
+some suitable books. Experience shows that you can work with FEniCS as
+a tool to solve your PDEs even without thorough knowledge of the finite
+element method as long as you get somebody to help you with formulating
+the PDE as a variational problem.</p>
 <span class="target" id="index-2"></span><p id="index-3">The basic recipe for turning a PDE into a variational problem is to
 multiply the PDE by a function <span class="math">\(v\)</span>, integrate the resulting equation
 over the domain <span class="math">\(\Omega\)</span>, and perform integration by parts of terms
@@ -217,8 +235,16 @@ by the test function <span class="math">\(v\)</span> and integrate over <span cl
 <div class="math" id="eq-ch-poisson0-multbyv">
 \[\tag{4}
 -\int_\Omega (\nabla^2 u)v {\, \mathrm{d}x} = \int_\Omega fv {\, \mathrm{d}x}{\thinspace .}\]</div>
-<p>We then apply integration by parts to the integrand with
-second-order derivatives. We find that</p>
+<p>A common rule when we derive variational formulations is that we try
+to keep the order of the derivatives of <span class="math">\(u\)</span> and <span class="math">\(v\)</span>
+as low as possible (this will enlarge the collection of finite elements
+that can be used in the problem). Here, where we
+have a second-order spatial derivative of <span class="math">\(u\)</span>, which can be transformed
+to a first-derivative of <span class="math">\(u\)</span> and <span class="math">\(v\)</span> and we apply the technique of
+<a class="reference external" href="https://en.wikipedia.org/wiki/Integration_by_parts">integration by parts</a>.
+A Laplace term will always be subject to integration
+by parts <a class="footnote-reference" href="#itgparts" id="id1">[1]</a>.
+The formula reads</p>
 <div class="math" id="eq-ch-poisson0-eqbyparts">
 \[\tag{5}
 -\int_\Omega (\nabla^2 u)v {\, \mathrm{d}x}
@@ -226,9 +252,23 @@ second-order derivatives. We find that</p>
     \partial n}v {\, \mathrm{d}s} ,\]</div>
 <p>where <span class="math">\(\frac{\partial u}{\partial n} = \nabla u \cdot n\)</span> is the
 derivative of <span class="math">\(u\)</span> in the outward normal direction <span class="math">\(n\)</span> on the
-boundary. The test function <span class="math">\(v\)</span> is required to vanish on the parts of
-the boundary where the solution <span class="math">\(u\)</span> is known, which in the present
-problem implies that <span class="math">\(v=0\)</span> on the whole boundary <span class="math">\(\partial\Omega\)</span>.
+boundary.</p>
+<table class="docutils footnote" frame="void" id="itgparts" rules="none">
+<colgroup><col class="label" /><col /></colgroup>
+<tbody valign="top">
+<tr><td class="label"><a class="fn-backref" href="#id1">[1]</a></td><td>Integration by parts in more than one space dimension is based on
+Gauss&#8217; divergence theorem. Simply take <a class="reference internal" href="#eq-ch-poisson0-eqbyparts"><span class="std std-ref">(5)</span></a> as
+the formula to be used.</td></tr>
+</tbody>
+</table>
+<p>Another feature of variational formulations is that
+the test function <span class="math">\(v\)</span> is required to vanish on the parts of
+the boundary where the solution <span class="math">\(u\)</span> is known (the book <a class="reference internal" href="._ftut1007.html#ref10" id="id2">[Ref10]</a> explains in detail why this requirement is necessary).
+In the present
+problem, this means that <span class="math">\(v=0\)</span> on the whole boundary <span class="math">\(\partial\Omega\)</span>
+(strangely enough, <span class="math">\(v=0\)</span> is a requirement in the mathematical formulation,
+but we cannot see any track of that in the FEniCS program, see
+<a class="reference internal" href="._ftut1007.html#ref10" id="id3">[Ref10]</a> for detailed explanations).
 The second term on the right-hand side of
 <a class="reference internal" href="#eq-ch-poisson0-eqbyparts"><span class="std std-ref">(5)</span></a> therefore vanishes. From
 <a class="reference internal" href="#eq-ch-poisson0-multbyv"><span class="std std-ref">(4)</span></a> and <a class="reference internal" href="#eq-ch-poisson0-eqbyparts"><span class="std std-ref">(5)</span></a> it
@@ -256,7 +296,7 @@ Find <span class="math">\(u \in V\)</span> such that</p>
 problem defined as</p>
 <div class="math">
 \[\begin{split}\begin{align*}
-     V      &amp;= \{v \in H^1(\Omega) : v = u_0 \mbox{ on } \partial\Omega\}, \\
+     V      &amp;= \{v \in H^1(\Omega) : v = u_{_\mathrm{D}} \mbox{ on } \partial\Omega\}, \\
     \hat{V} &amp;= \{v \in H^1(\Omega) : v = 0 \mbox{ on } \partial\Omega\}{\thinspace .}
 \end{align*}\end{split}\]</div>
 <p>In short, <span class="math">\(H^1(\Omega)\)</span> is the mathematically well-known Sobolev space
@@ -342,18 +382,18 @@ degree and type).</li>
 </div>
 <div class="section" id="choosing-a-test-problem">
 <span id="ch-poisson0-testproblem"></span><h3>Choosing a test problem<a class="headerlink" href="#choosing-a-test-problem" title="Permalink to this headline">¶</a></h3>
-<p>The Poisson equation <a class="reference internal" href="#eq-ftut-poisson1"><span class="std std-ref">(1)</span></a> has so far featured a general
-domain <span class="math">\(\Omega\)</span> and general functions <span class="math">\(u_{_\mathrm{D}}\)</span> and <span class="math">\(f\)</span>. For our first
-implementation, we must decide on specific choices of <span class="math">\(\Omega\)</span>, <span class="math">\(u_{_\mathrm{D}}\)</span>,
-and <span class="math">\(f\)</span>.  It will be wise to construct a specific problem where we can
-easily check that the computed solution is correct. Solutions that are
-lower-order polynomials are primary candidates. Standard finite
-element function spaces of degree <span class="math">\(r\)</span> will exactly reproduce
-polynomials of degree <span class="math">\(r\)</span>. And piecewise linear elements (<span class="math">\(r=1\)</span>) are
-able to exactly reproduce a quadratic polynomial on a uniformly
-partitioned mesh. This important result can be used to verify our
-implementation. We just manufacture some quadratic function in 2D as
-the exact solution, say</p>
+<p>The Poisson equation <a class="reference internal" href="#eq-ftut-poisson1"><span class="std std-ref">(1)</span></a> has so far featured a
+general domain <span class="math">\(\Omega\)</span> and general functions <span class="math">\(u_{_\mathrm{D}}\)</span> for the boundary
+conditions and <span class="math">\(f\)</span> for the right-hand side. Our first implementation
+require us to decide on specific choices of <span class="math">\(\Omega\)</span>, <span class="math">\(u_{_\mathrm{D}}\)</span>, and <span class="math">\(f\)</span>.
+It will be wise to construct a problem where we can easily check that
+the computed solution is correct. Solutions that are lower-order
+polynomials are primary candidates. Standard finite element function
+spaces of degree <span class="math">\(r\)</span> will exactly reproduce polynomials of degree
+<span class="math">\(r\)</span>. And piecewise linear elements (<span class="math">\(r=1\)</span>) are able to exactly
+reproduce a quadratic polynomial on a uniformly partitioned mesh. This
+important result can be used to verify our implementation. We just
+manufacture some quadratic function in 2D as the exact solution, say</p>
 <div class="math" id="eq-ch-poisson0-impl-uex">
 \[\tag{12}
 \
@@ -490,7 +530,7 @@ norm will be printed. Since we know that our approximate solution
 should reproduced the exact solution to within machine precision, this
 error should be small, something on the order of <span class="math">\(10^{-15}\)</span>.</p>
 <p>[<strong>AL 1</strong>: Add text here discussing what to expect in terms of plotting.  Perhaps we have seamless notebook plotting working soon...]</p>
-<div class="figure" id="id5">
+<div class="figure" id="id8">
 <span id="ch-poisson0-2d-fig-ex1-u"></span><a class="reference internal image-reference" href="_images/ex1_u.png"><img alt="_images/ex1_u.png" src="_images/ex1_u.png" style="width: 600px;" /></a>
 <p class="caption"><span class="caption-text"><em>Plot of the solution in the first FEniCS example</em></span></p>
 </div>
@@ -579,7 +619,7 @@ argument is the degree of the basis functions of the element. The type
 of element is here &#8220;P&#8221;, implying the standard Lagrange family of
 elements. You may also use <code class="docutils literal"><span class="pre">'Lagrange'</span></code> to specify this type of
 element. FEniCS supports all simplex element families and the notation
-defined in the <a class="reference external" href="http://femtable.org">Periodic Table of the Finite Elements</a> <a class="reference internal" href="._ftut1007.html#ref21" id="id1">[Ref21]</a>.</p>
+defined in the <a class="reference external" href="http://femtable.org">Periodic Table of the Finite Elements</a> <a class="reference internal" href="._ftut1007.html#ref22" id="id4">[Ref22]</a>.</p>
 <p id="index-11">The third argument <code class="docutils literal"><span class="pre">1</span></code> specifies the degree of the finite element.  In
 this case, the standard <span class="math">\(\mathsf{P}_1\)</span> linear Lagrange element, which
 is a triangle with nodes at the three vertices. Some finite element
@@ -760,7 +800,7 @@ is a key strength of FEniCS: the formulas in the variational
 formulation translate directly to very similar Python code, a feature
 that makes it easy to specify and solve complicated PDE problems.  The
 language used to express weak forms is called UFL (Unified Form
-Language) <a class="reference internal" href="._ftut1007.html#ref22" id="id2">[Ref22]</a> <a class="reference internal" href="._ftut1007.html#ref01" id="id3">[Ref01]</a> and is an integral part of FEniCS.</p>
+Language) <a class="reference internal" href="._ftut1007.html#ref23" id="id5">[Ref23]</a> <a class="reference internal" href="._ftut1007.html#ref01" id="id6">[Ref01]</a> and is an integral part of FEniCS.</p>
 </div>
 <div class="section" id="forming-and-solving-the-linear-system">
 <h3>Forming and solving the linear system<a class="headerlink" href="#forming-and-solving-the-linear-system" title="Permalink to this headline">¶</a></h3>
@@ -826,7 +866,7 @@ of <span class="math">\(u(x,y)\)</span> is then shown.  You can save the figure 
 Export Scene...</strong> and choosing a suitable filename. For more
 information about how to install and use Paraview, see the
 <code class="docutils literal"><span class="pre">http://www.paraview.org/</span></code>.</p>
-<div class="figure" id="id6">
+<div class="figure" id="id9">
 <a class="reference internal image-reference" href="_images/poisson0_paraview.png"><img alt="_images/poisson0_paraview.png" src="_images/poisson0_paraview.png" style="width: 800px;" /></a>
 <p class="caption"><span class="caption-text">Visualization of test problem in ParaView, with contour lines added in the right plot</span></p>
 </div>
@@ -1080,7 +1120,7 @@ as well as dump the fields to file in VTK format:</p>
 </pre></div>
 </div>
 <p>Figure <a class="reference internal" href="#ch-poisson0-membrane-fig"><span class="std std-ref">Load (left) and resulting deflection (right) of a circular membrane</span></a> shows the result of the <code class="docutils literal"><span class="pre">plot</span></code> commands.</p>
-<div class="figure" id="id7">
+<div class="figure" id="id10">
 <span id="ch-poisson0-membrane-fig"></span><a class="reference internal image-reference" href="_images/membrane_fenics_viz.png"><img alt="_images/membrane_fenics_viz.png" src="_images/membrane_fenics_viz.png" style="width: 800px;" /></a>
 <p class="caption"><span class="caption-text"><em>Load (left) and resulting deflection (right) of a circular membrane</em></span></p>
 </div>
@@ -1102,13 +1142,17 @@ at these points:</p>
 <span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">y</span><span class="p">,</span> <span class="mi">100</span><span class="o">*</span><span class="n">w_line</span><span class="p">,</span> <span class="s1">&#39;r-&#39;</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="n">p_line</span><span class="p">,</span> <span class="s1">&#39;b--&#39;</span><span class="p">)</span> <span class="c1"># magnify w</span>
 <span class="n">plt</span><span class="o">.</span><span class="n">legend</span><span class="p">([</span><span class="s1">&#39;100 x deflection&#39;</span><span class="p">,</span> <span class="s1">&#39;load&#39;</span><span class="p">],</span> <span class="n">loc</span><span class="o">=</span><span class="s1">&#39;upper left&#39;</span><span class="p">)</span>
 <span class="n">plt</span><span class="o">.</span><span class="n">xlabel</span><span class="p">(</span><span class="s1">&#39;y&#39;</span><span class="p">);</span>  <span class="n">plt</span><span class="o">.</span><span class="n">ylabel</span><span class="p">(</span><span class="s1">&#39;$p$ and $100u$&#39;</span><span class="p">)</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">savefig</span><span class="p">(</span><span class="s1">&#39;tmp1.pdf&#39;</span><span class="p">);</span>  <span class="n">plt</span><span class="o">.</span><span class="n">savefig</span><span class="p">(</span><span class="s1">&#39;tmp1.png&#39;</span><span class="p">)</span>
+
+<span class="c1"># Should be at the end</span>
+<span class="n">interactive</span><span class="p">()</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
 </pre></div>
 </div>
-<p>(Remember a <code class="docutils literal"><span class="pre">plt.show()</span></code> at the end to show the plot on the screen.)
-The resulting curve plot appears in Figure <a class="reference internal" href="#ch-poisson0-membrane-fig2"><span class="std std-ref">Comparison of membrane load and deflection</span></a>.
+<p>The resulting curve plot appears in Figure <a class="reference internal" href="#ch-poisson0-membrane-fig2"><span class="std std-ref">Comparison of membrane load and deflection</span></a>.
 It is seen how the localized input (<span class="math">\(p\)</span>) is heavily damped and smoothened in
 the output (<span class="math">\(w\)</span>). This reflects a typical property of the Poisson equation.</p>
-<div class="figure" id="id8">
+<div class="figure" id="id11">
 <span id="ch-poisson0-membrane-fig2"></span><a class="reference internal image-reference" href="_images/membrane_curveplot.png"><img alt="_images/membrane_curveplot.png" src="_images/membrane_curveplot.png" style="width: 500px;" /></a>
 <p class="caption"><span class="caption-text"><em>Comparison of membrane load and deflection</em></span></p>
 </div>
@@ -1191,11 +1235,11 @@ the figure. The height of the surface is very low, so go to the
 a <em>Scale Factor</em> of 20 and re-click <strong>Apply</strong>. Figure <a class="reference internal" href="#ftut-paraview-figwp"><span class="std std-ref">Default visualizations in ParaView: deflection (left, middle) and pressure load (right)</span></a>
 (right) shows the result.
 to lift the surface by a factor of 20.</div></blockquote>
-<div class="figure" id="id9">
+<div class="figure" id="id12">
 <span id="ftut-paraview-figwp"></span><a class="reference internal image-reference" href="_images/paraview_membrane3b.png"><img alt="_images/paraview_membrane3b.png" src="_images/paraview_membrane3b.png" style="width: 800px;" /></a>
 <p class="caption"><span class="caption-text"><em>Default visualizations in ParaView: deflection (left, middle) and pressure load (right)</em></span></p>
 </div>
-<div class="figure" id="id10">
+<div class="figure" id="id13">
 <span id="ftut-paraview-figwp2"></span><a class="reference internal image-reference" href="_images/paraview_membrane2_3D.png"><img alt="_images/paraview_membrane2_3D.png" src="_images/paraview_membrane2_3D.png" style="width: 800px;" /></a>
 <p class="caption"><span class="caption-text"><em>Use of Warp By Scalar filter to create lifted surfaces (with different vertical scales!) in ParaView: load (left) and deflection (right)</em></span></p>
 </div>
@@ -1204,7 +1248,7 @@ to lift the surface by a factor of 20.</div></blockquote>
 get them translated to Python code. This allows you automate the
 visualization process. You can also make curve plots along lines through
 the domain, etc.</p>
-<p>For more information, we refer to The ParaView Guide <a class="reference internal" href="._ftut1007.html#ref23" id="id4">[Ref23]</a>
+<p>For more information, we refer to The ParaView Guide <a class="reference internal" href="._ftut1007.html#ref24" id="id7">[Ref24]</a>
 (free PDF available) and to the <a class="reference external" href="http://www.paraview.org/Wiki/The_ParaView_Tutorial">ParaView tutorial</a> as well as
 an <a class="reference external" href="https://vimeo.com/34037236">instruction video</a>.</p>
 </div>
@@ -1261,9 +1305,9 @@ is therefore to use <code class="docutils literal"><span class="pre">pdftk</span
 keyword arguments to <code class="docutils literal"><span class="pre">plot</span></code>. The values must be <code class="docutils literal"><span class="pre">float</span></code> objects. These
 arguments are important to keep fixed for animations in time-dependent
 problems.</p>
-<div class="figure" id="id11">
+<div class="figure" id="id14">
 <span id="ch-poisson0-2d-fig1"></span><a class="reference internal image-reference" href="_images/membrane_deflection.png"><img alt="_images/membrane_deflection.png" src="_images/membrane_deflection.png" style="width: 480px;" /></a>
-<p class="caption"><span class="caption-text"><em>Plot of the deflection of a membrane</em></span></p>
+<p class="caption"><span class="caption-text"><em>Plot of the deflection of a membrane using the built-in visualization tool</em></span></p>
 </div>
 </div>
 <div class="section" id="exercise-1-visualize-a-solution-in-a-cube">

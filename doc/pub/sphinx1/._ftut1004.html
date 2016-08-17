@@ -273,7 +273,10 @@ where <span class="math">\((x_j,y_j)\)</span> are the coordinates of node number
 these two strategies as computing the initial condition by either
 projection or interpolation. Both operations are easy to
 compute in FEniCS through one statement, using either the <code class="docutils literal"><span class="pre">project</span></code> or
-<code class="docutils literal"><span class="pre">interpolate</span></code> function.</p>
+<code class="docutils literal"><span class="pre">interpolate</span></code> function. The most common choice is <code class="docutils literal"><span class="pre">project</span></code>, which computes an
+approximation to <span class="math">\(u_0\)</span>, but in some
+applications where we want to verify the code by reproducing exact solutions,
+one must use <code class="docutils literal"><span class="pre">interpolate</span></code> (and we use such a test problem!).</p>
 <p>In summary, we thus need to solve the following sequence of variational
 problems to compute the finite element solution to the heat equation:
 find <span class="math">\(u^0\in V\)</span> such that <span class="math">\(a_0(u^0,v)=L_0(v)\)</span> holds for all <span class="math">\(v\in\hat V\)</span>,
@@ -868,7 +871,7 @@ know very well that automated procedures may fail in nonlinear
 problems, and that it is often necessary to have much better manual
 control of the solution process than what we have in the current
 case. Therefore, we return to this problem in the chapter
-&#8220;Implementing solvers for nonlinear PDEs&#8221;: &#8220;&#8221; <a class="reference internal" href="._ftut1007.html#ref24" id="id1">[Ref24]</a>
+&#8220;Implementing solvers for nonlinear PDEs&#8221;: &#8220;&#8221; <a class="reference internal" href="._ftut1007.html#ref25" id="id1">[Ref25]</a>
 and show how we can implement our
 own solution algorithms for nonlinear equations and also how we can
 steer the parameters in the automated Newton method used above. You
@@ -977,7 +980,7 @@ a(u,v) = \int_\Omega\sigma(u) :\varepsilon(v) {\, \mathrm{d}x},\]</div>
 <div class="math">
 \[\varepsilon(v) = \frac{1}{2}\left(\nabla v + (\nabla v)^{\top}\right){\thinspace .}\]</div>
 <p>The formulation <a class="reference internal" href="#eq-ftut-elast-varform-sigma-inner-eps"><span class="std std-ref">(44)</span></a> is what naturally
-arises from minimization of elastic potential energy is a more
+arises from minimization of elastic potential energy and is a more
 popular formulation than <a class="reference internal" href="#eq-ftut-elast-varform-sigma-inner-gradv"><span class="std std-ref">(41)</span></a>.</p>
 </div>
 <div class="section" id="a-simple-fenics-implementation-3">
@@ -1130,17 +1133,19 @@ term <span class="math">\(\mu\nabla^2 u\sim \mu U/L^2\)</span> in the PDE.</p>
 \varrho gL^2/\mu\)</span>). However, in elasticity, this leads us to
 displacements of the size of the geometry, which makes plots look very
 strange. We therefore want the characteristic displacement to be a
-small fraction of the characteristic length of the geometry.
-Actually, for a clamped beam, one has a deflection formula which gives
-<span class="math">\(U = \frac{3}{2}\varrho gL^2\delta^2/E\)</span>, where <span class="math">\(\delta = L/W\)</span> is a
-parameter reflecting how slender the beam is.  Thus, the dimensionless
-parameter <span class="math">\(\delta\)</span> is very important in the problem (as expected,
-since <span class="math">\(\delta\gg 1\)</span> is what gives beam theory!).  Taking <span class="math">\(E\)</span> to be of
-the same order as <span class="math">\(\mu\)</span>, which is common for a lot of materials, we
-realize that <span class="math">\(\gamma \sim \delta^{-2}\)</span>.  Experiments with the code to
-find a displacement that &#8220;looks right&#8221; in plots of the deformed
-geometry, we arrive at <span class="math">\(\gamma = 0.4\delta^{-2}\)</span> as an appropriate
-choice.</p>
+small fraction of the characteristic length of the geometry.  This can
+be achieved by choosing <span class="math">\(U\)</span> equal to the maximum deflection of a
+clamped beam, for which there actually exists an formula: <span class="math">\(U =
+\frac{3}{2}\varrho gL^2\delta^2/E\)</span>, where <span class="math">\(\delta = L/W\)</span> is a
+parameter reflecting how slender the beam is, and <span class="math">\(E\)</span> is the modulus
+of elasticity.  Thus, the dimensionless parameter <span class="math">\(\delta\)</span> is very
+important in the problem (as expected, since <span class="math">\(\delta\gg 1\)</span> is what
+gives beam theory!).  Taking <span class="math">\(E\)</span> to be of the same order as <span class="math">\(\mu\)</span>,
+which is common for a lot of materials, we realize that <span class="math">\(\gamma \sim
+\delta^{-2}\)</span> is an appropriate choice.  Doing experiments with the
+code to find a displacement that &#8220;looks right&#8221; in plots of the
+deformed geometry, points to <span class="math">\(\gamma = 0.4\delta^{-2}\)</span> as our final
+choice of <span class="math">\(\gamma\)</span>.</p>
 <p>The simulation code implements the problem with dimensions and
 physical parameters <span class="math">\(\lambda\)</span>, <span class="math">\(\mu\)</span>, <span class="math">\(\varrho\)</span>, <span class="math">\(g\)</span>, <span class="math">\(L\)</span>, and <span class="math">\(W\)</span>.
 However, we can easily reuse this code for a scaled problem: just set
@@ -1165,7 +1170,10 @@ and vector-valued variables. We shall touch a number of FEniCS topics,
 many of them quite advanced, so the exposition has the flavor of being
 a teaser of what can be easily achieved in FEniCS, while later
 chapters will dive into more detail with the most fundamental new
-topics.</p>
+topics touched upon here. Do not expect to understand every detail of
+this section - the point is rather to show how a quite complex PDE
+problem is broken down to an implementation that still can be defended
+to be carried out in minutes rather than hours or days.</p>
 <div class="section" id="pde-problem-4">
 <h3>PDE problem<a class="headerlink" href="#pde-problem-4" title="Permalink to this headline">¶</a></h3>
 <p>The incompressible Navier-Stokes equations are a system of equations
@@ -1193,8 +1201,10 @@ equation <a class="reference internal" href="#eq-ftut1-ns-momentum"><span class=
 equation <a class="reference internal" href="#eq-ftut-elast-varform-equilibrium"><span class="std std-ref">(36)</span></a>. The difference is the
 two additional terms <span class="math">\(\varrho(\dot{u} + u \cdot \nabla u)\)</span> and the different
 expression for the stress tensor. The two extra terms express the
-acceleration <span class="math">\(\rho \ddot{x}\)</span> balanced by the force <span class="math">\(F = f +
-\nabla\cdot\sigma\)</span> per unit volume in Newton&#8217;s second law of motion.</p>
+acceleration balanced by the force <span class="math">\(F = f +
+\nabla\cdot\sigma\)</span> per unit volume in Newton&#8217;s second law of motion.
+However, the differences from the elasticity are big enough to call for
+a much more complicated solution procedure.</p>
 </div>
 <div class="section" id="variational-formulation-4">
 <span id="ftut1-ns-varform"></span><h3>Variational formulation<a class="headerlink" href="#variational-formulation-4" title="Permalink to this headline">¶</a></h3>
@@ -1212,10 +1222,10 @@ known as a <em>splitting method</em>. The idea is to
 consider the two equations <a class="reference internal" href="#eq-ftut1-ns-momentum"><span class="std std-ref">(45)</span></a> and
 <a class="reference internal" href="#eq-ftut1-ns-continuity"><span class="std std-ref">(46)</span></a> separately. There exist many splitting
 strategies for the incompressible Navier-Stokes equations. One of the
-oldest is the method proposed by Chorin <a class="reference internal" href="._ftut1007.html#ref25" id="id2">[Ref25]</a> and
-Temam <a class="reference internal" href="._ftut1007.html#ref26" id="id3">[Ref26]</a>, often referred to as <em>Chorin&#8217;s method</em>. We will
+oldest is the method proposed by Chorin <a class="reference internal" href="._ftut1007.html#ref26" id="id2">[Ref26]</a> and
+Temam <a class="reference internal" href="._ftut1007.html#ref27" id="id3">[Ref27]</a>, often referred to as <em>Chorin&#8217;s method</em>. We will
 use a modified version of Chorin&#8217;s method, the so-called incremental
-pressure correction scheme (IPCS) due to <a class="reference internal" href="._ftut1007.html#ref27" id="id4">[Ref27]</a> which gives
+pressure correction scheme (IPCS) due to <a class="reference internal" href="._ftut1006.html#ref28" id="id4">[Ref28]</a> which gives
 improved accuracy compared to the original scheme at little extra
 cost.</p>
 <p>[<strong>hpl 16</strong>: I changed the sampling point in time to <span class="math">\(n+1/2\)</span> instead of <span class="math">\(n-1/2\)</span> because the former gives the same type as formulas as we use elsewhere in time-dependent problems (<span class="math">\(n+1\)</span> is the new level, <span class="math">\(n\)</span>, <span class="math">\(n-1\)</span> etc are old levels) and it fits the naming convention that we agreed upon.  This is also widely used in the FDM/FEM/FVM literature. Backward Euler for the heat equation is the only example where one often applies <span class="math">\(n\)</span> and <span class="math">\(n-1\)</span>, if the theta scheme is not mentioned.]</p>
@@ -1232,13 +1242,16 @@ The variational problem for this first step is:</p>
 {\langle \rho(u^{\star, v \rangle} - u^{n}) / {\Delta t}}
           + {\langle \rho u^{n, v \rangle} \cdot \nabla u^{n}}
           + \nonumber\]</div>
+<div class="math">
+\[ {\langle \sigma(u^{n+\frac{1, \epsilon(v) \rangle}{2}}, p^{n})}
++ {\langle p^{n, v \rangle} n}_{\partial\Omega}
+- \nonumber\]</div>
 <div class="math" id="eq-auto10">
 \[\tag{49}
-{\langle \sigma(u^{n+\frac{1, \epsilon(v) \rangle}{2}}, p^{n})}
-          + {\langle p^{n, v \rangle} n}_{\partial\Omega}
-          - {\langle \mu \nabla u^{n+\frac{1, v \rangle}{2}}\cdot n}_{\partial\Omega}
+{\langle \mu \nabla u^{n+\frac{1, v \rangle}{2}}\cdot n}_{\partial\Omega}
           = {\langle \rho f^{n+1, v \rangle}}\]</div>
-<p>This notation requires some explanation. First, we use the short-hand
+<p>This notation, suitable for problems with many terms in the variational
+formulations, requires some explanation. First, we use the short-hand
 notation</p>
 <div class="math">
 \[{\langle v, w \rangle} = \int_{\Omega} vw {\, \mathrm{d}x}, \quad
@@ -1260,7 +1273,7 @@ the section <a class="reference internal" href="#ftut-elast"><span class="std st
 <p>where <span class="math">\(T = \sigma\cdot n\)</span> is the boundary traction. If we solve a
 problem with a free boundary, we can take <span class="math">\(T = 0\)</span> on the
 boundary. However, if we compute the flow through a channel or a pipe
-and want to model e flow that continues into an &#8220;imaginary channel&#8221; at
+and want to model flow that continues into an &#8220;imaginary channel&#8221; at
 the outflow, we need to treat this term with some care. The assumption
 we then make is that the derivative of the velocity in the direction
 of the channel is zero at the outflow, corresponding to a flow that is
@@ -1361,7 +1374,7 @@ resulting in the variational problem <a class="reference internal" href="#eq-ftu
       {\langle u^{\star, v \rangle}} - {\Delta t}{\langle \nabla(p^n-p^{n-1, v \rangle})}.\]</div>
 <p>In summary, we may thus solve the incompressible Navier-Stokes
 equations efficiently by solving a sequence of three linear variational
-problems (steps 1, 2, 3) in each time step.</p>
+problems in each time step.</p>
 </div>
 <div class="section" id="a-simple-fenics-implementation-4">
 <h3>A simple FEniCS implementation<a class="headerlink" href="#a-simple-fenics-implementation-4" title="Permalink to this headline">¶</a></h3>
@@ -1389,11 +1402,11 @@ H^2/\nu\)</span> in the equations results in the scaled Navier-Stokes equations
 \nabla\cdot u &amp;= 0{\thinspace .}
 \end{align*}\end{split}\]</div>
 <p>Here, Re is the Reynolds number <span class="math">\(\rho UH/\mu\)</span>. Because of the time and
-pressure scale, which are different from convection-dominated fluid flow,
-the Reynolds number is associated with the convective term and not the
-viscosity term. Note that the last term in the first
-equation is zero, but we included this term as it arises naturally
-from the original <span class="math">\(\nabla\cdot\sigma\)</span> term.</p>
+pressure scale, which are different from convection-dominated fluid
+flow, the Reynolds number is associated with the convective term and
+not the viscosity term. Note that the last term in the first equation
+is zero, but we included this term as it arises naturally from the
+original <span class="math">\(\nabla\cdot\sigma\)</span> term.</p>
 <p>The exact solution is derived by assuming <span class="math">\(u=(u_x(x,y,z),0,0)\)</span>, with
 the <span class="math">\(x\)</span> axis pointing along the channel. Since <span class="math">\(\nabla\cdot u=0\)</span>, <span class="math">\(u\)</span>
 cannot depend on <span class="math">\(x\)</span>. The physics of channel flow is also
@@ -1402,29 +1415,30 @@ two-dimensional so we can omit the <span class="math">\(z\)</span> coordinate (m
 governing equations gives <span class="math">\(u_x''(y) = \partial p/\partial x\)</span>.
 Differentiating this equation with respect to <span class="math">\(x\)</span> shows that <span class="math">\(\partial
 p/\partial x\)</span> is a constant, here called <span class="math">\(-\beta\)</span>. This is the driving
-force of the flow and can be specified as a known parameter in the problem.
-Integrating
-<span class="math">\(u_x''(y)=-\beta\)</span> over the width of the channel, <span class="math">\([0,1]\)</span>, and
-requiring <span class="math">\(u=0\)</span> at the channel walls, results in <span class="math">\(u_x=\frac{1}{2}\beta
-y(1-y)\)</span>. The characteristic inlet flow in the channel, <span class="math">\(U\)</span>, can be
-taken as the maximum inflow at <span class="math">\(x=1/2\)</span>, implying that <span class="math">\(\beta = 8\)</span>.
-The length of the channel, <span class="math">\(L/H\)</span> in the scaled model, has no impact on
-the result, so for simplicity we just compute on the unit square.  The
-pressure can then be set to <span class="math">\(p=0\)</span> at the outlet <span class="math">\(x=1\)</span>, giving
-<span class="math">\(p(x)=8(1-x)\)</span> and <span class="math">\(u_x=4y(1-y)\)</span>.</p>
-<p>The boundary conditions can be set as <span class="math">\(p=1\)</span> on <span class="math">\(x=0\)</span>, <span class="math">\(p=0\)</span> on
-<span class="math">\(x=1\)</span> and <span class="math">\(u=0\)</span> on the walls <span class="math">\(y=0,1\)</span>. This defines the pressure
-drop and should result in unit maximum velocity at the inlet and outlet
-and a parabolic velocity profile without further specifications.
-Note that it is only meaningful to solve the Navier-Stokes equations in
-2D or 3D geometries, although the underlying mathematical problem
-collapses to two 1D problems, one for <span class="math">\(u_x(y)\)</span> and one for <span class="math">\(p(x)\)</span>.</p>
-<p>The scaled model is not so easy to simulate using a standard Navier-Stokes
-solver with dimensions. However, one can argue that the convection term
-is zero, so the Re coefficient in front of this term in the scaled PDEs
-is not important and can be set to unity. In that case, setting
-<span class="math">\(\rho = \mu = 1\)</span>
-in the original Navier-Stokes equations resembles the scaled model.</p>
+force of the flow and can be specified as a known parameter in the
+problem.  Integrating <span class="math">\(u_x''(y)=-\beta\)</span> over the width of the channel,
+<span class="math">\([0,1]\)</span>, and requiring <span class="math">\(u=0\)</span> at the channel walls, results in
+<span class="math">\(u_x=\frac{1}{2}\beta y(1-y)\)</span>. The characteristic inlet flow in the
+channel, <span class="math">\(U\)</span>, can be taken as the maximum inflow at <span class="math">\(x=1/2\)</span>, implying
+that <span class="math">\(\beta = 8\)</span>.  The length of the channel, <span class="math">\(L/H\)</span> in the scaled
+model, has no impact on the result, so for simplicity we just compute
+on the unit square.  Mathematically, the pressure must be prescribed
+at a point, but since <span class="math">\(p\)</span> does not depend on <span class="math">\(y\)</span>, we can set <span class="math">\(p\)</span> to a
+known value, e.g. zero, along the outlet boundary <span class="math">\(x=1\)</span>.  The result
+is <span class="math">\(p(x)=8(1-x)\)</span> and <span class="math">\(u_x=4y(1-y)\)</span>.</p>
+<p>The boundary conditions can be set as <span class="math">\(p=1\)</span> on <span class="math">\(x=0\)</span>, <span class="math">\(p=0\)</span> on <span class="math">\(x=1\)</span>
+and <span class="math">\(u=0\)</span> on the walls <span class="math">\(y=0,1\)</span>. This defines the pressure drop and
+should result in unit maximum velocity at the inlet and outlet and a
+parabolic velocity profile without further specifications.  Note that
+it is only meaningful to solve the Navier-Stokes equations in 2D or 3D
+geometries, although the underlying mathematical problem collapses to
+two 1D problems, one for <span class="math">\(u_x(y)\)</span> and one for <span class="math">\(p(x)\)</span>.</p>
+<p>The scaled model is not so easy to simulate using a standard
+Navier-Stokes solver with dimensions. However, one can argue that the
+convection term is zero, so the Re coefficient in front of this term
+in the scaled PDEs is not important and can be set to unity. In that
+case, setting <span class="math">\(\rho = \mu = 1\)</span> in the original Navier-Stokes equations
+resembles the scaled model.</p>
 </div>
 <div class="section" id="fenics-implementation-5">
 <h4>FEniCS implementation<a class="headerlink" href="#fenics-implementation-5" title="Permalink to this headline">¶</a></h4>
@@ -1530,19 +1544,15 @@ problem. We start with some constants:</p>
 <span class="n">rho</span> <span class="o">=</span> <span class="n">Constant</span><span class="p">(</span><span class="n">rho</span><span class="p">)</span>
 </pre></div>
 </div>
-<p>This expression for <code class="docutils literal"><span class="pre">F1</span></code> is very similar to the mathematical definition
-<a class="reference internal" href="#eq-ftut1-ipcs1"><span class="std std-ref">(48)</span></a>. Since the variational problem contains a mix of
+<p>The next step now is to set up the variational form for the first step
+<a class="reference internal" href="#eq-ftut1-ipcs1"><span class="std std-ref">(48)</span></a> in the solution process.
+Since the variational problem contains a mix of
 known and unknown quantities we have introduced a naming convention to
 be used throughout the book: <code class="docutils literal"><span class="pre">u</span></code> is the unknown (mathematically <span class="math">\(u^{n+1}\)</span>)
 as a trial function in the variational form, <code class="docutils literal"><span class="pre">u_</span></code> is the most recently
 computed approximation to <code class="docutils literal"><span class="pre">u</span></code> (<span class="math">\(u^{n+1}\)</span> available as a finite element
 FEniCS <code class="docutils literal"><span class="pre">Function</span></code> object), <code class="docutils literal"><span class="pre">u_n</span></code> is <span class="math">\(u^n\)</span>, and the same convention
 goes for <code class="docutils literal"><span class="pre">p</span></code>. <code class="docutils literal"><span class="pre">p_</span></code>, and <code class="docutils literal"><span class="pre">p_n</span></code>.</p>
-<p>In the definition of the variational problem, we take advantage of the
-Python programming language to define our own operators <code class="docutils literal"><span class="pre">sigma</span></code> and
-<code class="docutils literal"><span class="pre">epsilon</span></code>. Using Python this way makes it easy to extend the
-mathematical language of FEniCS with special operators and
-constitutive laws:</p>
 <div class="highlight-python"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">epsilon</span><span class="p">(</span><span class="n">u</span><span class="p">):</span>
     <span class="k">return</span> <span class="n">sym</span><span class="p">(</span><span class="n">nabla_grad</span><span class="p">(</span><span class="n">u</span><span class="p">))</span>
 
@@ -1560,9 +1570,16 @@ constitutive laws:</p>
 <span class="n">L1</span> <span class="o">=</span> <span class="n">rhs</span><span class="p">(</span><span class="n">F1</span><span class="p">)</span>
 </pre></div>
 </div>
-<p>Note that FEniCS can sort out the (matrix) <span class="math">\(a(u,v)\)</span> and
+<p>Note that we, in the definition of the variational problem,
+take advantage of the
+Python programming language to define our own operators <code class="docutils literal"><span class="pre">sigma</span></code> and
+<code class="docutils literal"><span class="pre">epsilon</span></code>. Using Python this way makes it easy to extend the
+mathematical language of FEniCS with special operators and
+constitutive laws.</p>
+<p>Also note that FEniCS can sort out the (matrix) <span class="math">\(a(u,v)\)</span> and
 (right-hand side) <span class="math">\(L(v)\)</span> forms by the <code class="docutils literal"><span class="pre">lhs</span></code>
-and <code class="docutils literal"><span class="pre">rhs</span></code> functions.</p>
+and <code class="docutils literal"><span class="pre">rhs</span></code> functions. This is particularly convenient in longer and
+more complicated variational forms.</p>
 <p>The splitting scheme requires the solution of a sequence of three
 variational problems in each time step. We have previously used the
 built-in FEniCS function <code class="docutils literal"><span class="pre">solve</span></code> to solve variational problems. Under
@@ -1591,9 +1608,17 @@ assemble them once and for all outside of the time-stepping loop:</p>
 <p>Within the time-stepping loop, we may then assemble only the
 right-hand side vectors, apply boundary conditions, and call the solve
 function as here for the first of the three steps:</p>
-<div class="highlight-python"><div class="highlight"><pre><span></span><span class="n">b1</span> <span class="o">=</span> <span class="n">assemble</span><span class="p">(</span><span class="n">L1</span><span class="p">)</span>
-<span class="p">[</span><span class="n">bc</span><span class="o">.</span><span class="n">apply</span><span class="p">(</span><span class="n">b1</span><span class="p">)</span> <span class="k">for</span> <span class="n">bc</span> <span class="ow">in</span> <span class="n">bcu</span><span class="p">]</span>
-<span class="n">solve</span><span class="p">(</span><span class="n">A1</span><span class="p">,</span> <span class="n">u1</span><span class="o">.</span><span class="n">vector</span><span class="p">(),</span> <span class="n">b1</span><span class="p">)</span>
+<div class="highlight-python"><div class="highlight"><pre><span></span><span class="c1"># Time-stepping</span>
+<span class="n">t</span> <span class="o">=</span> <span class="mi">0</span>
+<span class="k">for</span> <span class="n">n</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">num_steps</span><span class="p">):</span>
+
+    <span class="c1"># Update current time</span>
+    <span class="n">t</span> <span class="o">+=</span> <span class="n">dt</span>
+
+    <span class="c1"># Step 1: Tentative velocity step</span>
+    <span class="n">b1</span> <span class="o">=</span> <span class="n">assemble</span><span class="p">(</span><span class="n">L1</span><span class="p">)</span>
+    <span class="p">[</span><span class="n">bc</span><span class="o">.</span><span class="n">apply</span><span class="p">(</span><span class="n">b1</span><span class="p">)</span> <span class="k">for</span> <span class="n">bc</span> <span class="ow">in</span> <span class="n">bcu</span><span class="p">]</span>
+    <span class="n">solve</span><span class="p">(</span><span class="n">A1</span><span class="p">,</span> <span class="n">u_</span><span class="o">.</span><span class="n">vector</span><span class="p">(),</span> <span class="n">b1</span><span class="p">)</span>
 </pre></div>
 </div>
 <p>Notice the Python <em>list comprehension</em> <code class="docutils literal"><span class="pre">[bc.apply(b1)</span> <span class="pre">for</span> <span class="pre">bc</span> <span class="pre">in</span> <span class="pre">bcu]</span></code>
@@ -1602,21 +1627,20 @@ and compact way to construct a loop that applies
 all boundary conditions in a single line. Also, the code works if
 we add more Dirichlet boundary conditions in the future.</p>
 <p>Finally, let us look at an important detail in how we use parameters
-such as the time step <code class="docutils literal"><span class="pre">dt</span></code> and viscosity <code class="docutils literal"><span class="pre">mu</span></code> in the
-definition of our variational problems. Since we might want to change
-these later, for example if we want to experiment with smaller or
-larger time steps, we wrap these using a FEniCS <code class="docutils literal"><span class="pre">Constant</span></code>:</p>
+such as the time step <code class="docutils literal"><span class="pre">dt</span></code> in the definition of our variational
+problems. Since we might want to change these later, for example if we
+want to experiment with smaller or larger time steps, we wrap these
+using a FEniCS <code class="docutils literal"><span class="pre">Constant</span></code>:</p>
 <div class="highlight-python"><div class="highlight"><pre><span></span><span class="n">k</span> <span class="o">=</span> <span class="n">Constant</span><span class="p">(</span><span class="n">dt</span><span class="p">)</span>
-<span class="n">mu</span> <span class="o">=</span> <span class="n">Constant</span><span class="p">(</span><span class="n">mu</span><span class="p">)</span>
 </pre></div>
 </div>
 <p>The assembly of matrices and vectors in FEniCS is based on code
 generation. This means that whenever we change a variational problem,
 FEniCS will have to generate new code, which may take a little
 time. New code will also be generated when a float value for the time
-step or viscosity is changed. By wrapping these parameters using
-<code class="docutils literal"><span class="pre">Constant</span></code>, FEniCS will treat these parameters as generic constants and
-not specific numerical values, which prevents repeated code
+step is changed. By wrapping this parameter using
+<code class="docutils literal"><span class="pre">Constant</span></code>, FEniCS will treat the parameter as a generic constant and
+not a specific numerical value, which prevents repeated code
 generation. In the case of the time step, we choose a new name <code class="docutils literal"><span class="pre">k</span></code>
 instead of <code class="docutils literal"><span class="pre">dt</span></code> for the <code class="docutils literal"><span class="pre">Constant</span></code> since we also want to use the
 variable <code class="docutils literal"><span class="pre">dt</span></code> as a Python float as part of the time-stepping.</p>
@@ -1706,7 +1730,7 @@ follows:</p>
 
 <span class="c1"># Time-stepping</span>
 <span class="n">t</span> <span class="o">=</span> <span class="mi">0</span>
-<span class="k">for</span> <span class="n">n</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="n">num_steps</span><span class="p">):</span>
+<span class="k">for</span> <span class="n">n</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">num_steps</span><span class="p">):</span>
 
     <span class="c1"># Update current time</span>
     <span class="n">t</span> <span class="o">+=</span> <span class="n">dt</span>
@@ -1944,7 +1968,8 @@ specified as</p>
 <div class="math">
 \[u(x, y, t) = \left(1.5 \cdot \frac{4y(1-y)}{0.41^2}, 0\right),\]</div>
 <p>which has a maximum magnitude of <span class="math">\(1.5\)</span> at <span class="math">\(y = 0.41/2\)</span>. We do not
-scale anything in this benchmark.</p>
+scale anything in this benchmark since exact parameters in the case
+we want to simulate are known.</p>
 <div class="figure" id="id7">
 <span id="ftut1-navier-stokes-cylinder-geometry"></span><a class="reference internal image-reference" href="_images/navier_stokes_cylinder_geometry.png"><img alt="_images/navier_stokes_cylinder_geometry.png" src="_images/navier_stokes_cylinder_geometry.png" style="width: 600px;" /></a>
 <p class="caption"><span class="caption-text"><em>Geometry for the flow past a cylinder test problem. Notice the slightly perturbed and unsymmetric geometry</em></span></p>
@@ -1995,7 +2020,8 @@ boundaries are specified as follows:</p>
 </div>
 <p>The last line may seem cryptic before you catch the idea: we want to pick
 out all boundary points (<code class="docutils literal"><span class="pre">on_boundary</span></code>) that also lie within the 2D
-domain <span class="math">\([0.1,0.3]\times [0.1,0.3]\)</span>, see Figure <a class="reference internal" href="#ftut1-navier-stokes-cylinder-geometry"><span class="std std-ref">Geometry for the flow past a cylinder test problem. Notice the slightly perturbed and unsymmetric geometry</span></a>.</p>
+domain <span class="math">\([0.1,0.3]\times [0.1,0.3]\)</span>, see Figure <a class="reference internal" href="#ftut1-navier-stokes-cylinder-geometry"><span class="std std-ref">Geometry for the flow past a cylinder test problem. Notice the slightly perturbed and unsymmetric geometry</span></a>. The only possible points are then the points on the
+circular boundary!</p>
 <p>[<strong>AL 26</strong>: We set <span class="math">\(p = 0\)</span> at the outflow. This seems to be necessary, but we should really not need to specify the pressure at all.]
 [<strong>hpl 27</strong>: Need to specify the pressure at one point, mathematically.]</p>
 <span class="target" id="index-5"></span><span class="target" id="index-6"></span><p id="index-7">In addition to these essential changes, we will make a number of small

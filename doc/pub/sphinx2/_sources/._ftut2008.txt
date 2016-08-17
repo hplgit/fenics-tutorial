@@ -1,582 +1,513 @@
 .. !split
 
-.. _ftut:trouble:
+More old stuff
+%%%%%%%%%%%%%%
 
-Troubleshooting
-%%%%%%%%%%%%%%%
+Solving Neumann problems
+========================
 
-.. index:: troubleshooting
+Could have a section here with pure Neumann problems and different
+methods for handling that case:
 
-[**hpl 13**: We don't have pages for this, but the document can appear as additional material on the web.]
+ * Fixing the value at a point.
 
-Compilation Problems
-====================
+ * Integral constraint: vanishing average value of :math:`u` for instance.
 
-.. index:: compilation problems
+ * Others.
 
-Expressions and variational forms in a FEniCS program need to be
-compiled to C++ and linked with libraries if the expressions or forms
-have been modified since last time they were compiled.  The tool
-Instant, which is part of the FEniCS software suite, is used for
-compiling and linking C++ code so that it can be used with Python.
+Applications: Potential theory in fluid flow. Always pure Neumann
+problems and (most likely) a headache for teachers how to code demos.
 
-Sometimes the compilation fails. You can see from the
-series of error messages which statement in the Python program that
-led to a compilation problem. Make sure to scroll back and identify
-whether the problematic line is associated with an expression,
-variational form, or the solve step.
+.. _ftut:prepro:
 
-The final line in the output of error messages points to a log file
-from the compilation where one can examine the error messages from the
-compiler. It is usually the last lines of this log file that are of
-interest. Occasionally, the compiler's message can quickly lead to an
-understanding of the problem.
-A more fruitful approach is normally to examine the below list
-of common compilation problems and their remedies.
-
-Problems with the Instant cache
--------------------------------
-
-Instant remembers information about previous compilations and versions
-of your program. Sometimes removal of this information can solve
-the problem. Just run
-
-.. code-block:: text
-
-    instant-clean
-
-in a terminal window whenever you encounter a compilation problem.
-
-Syntax errors in expressions
-----------------------------
-
-If the compilation problem arises from line with an ``Expression``
-object, examine the syntax of the expression carefully.  You may also
-want to examine the log file, pointed to in the last line in the
-output of error messages. The compiler's message about the syntax
-problem may lead you to a solution.
-
-Some common problems are
-
- 1. using ``a**b`` for exponentiation (illegal in C++) instead of ``pow(a, b)``,
-
- 2. forgetting that the spatial coordinates are denoted by a vector ``x``,
-
- 3. forgetting that the :math:`x`, :math:`y`, and :math:`z` coordinates in space correspond
-    to ``x[0]``, ``x[1]``, and ``x[2]``, respectively.
-
-Failure to initialize parameters in the expressions lead to a
-compilation error where this problem is explicitly pointed out.
-
-Example
-~~~~~~~
-
-The implementation
-
-.. code-block:: python
-
-    u_exact = Expression(
-        'x[1] <= 0.5? 2*x[1]*p_1/(p_0 + p_1) : '
-        '((2*x[1]-1)p_0 + p_1)/(p_0 + p_1)',
-        p_0=p_values[0], p_1=p_values[1])
-
-fails with compilation error
-
-.. code-block:: text
-
-    RuntimeError: In instant.recompile: The module did not compile with
-    command 'make VERBOSE=1', see '/some/path/.../compile.log'
-
-Looking up the ``compile.log`` file and searching for ``error``, we see
-the following message from the C++ compiler:
-
-.. code-block:: text
-
-    error: expected ‘)’ before ‘p_0’
-       values[0] = x[1] <= 0.5? 2*x[1]*p_1/(p_0 + p_1) :
-       ((2*x[1]-1)p_0 + p_1)/(p_0 + p_1);
-                  ^
-
-Now we realize that a ``*`` symbol is missing between ``)`` and ``p_0``.
-
-An integral without a domain is now illegal
--------------------------------------------
-
-This error message from UFL (``ufl.log.UFLException``) often points to
-a factor in a variational form that is 0. The factor should be
-``Constant(0)``.
-
-Problems with SymPy and ``diff`` expressions
---------------------------------------------
-
-If you work with FEniCS and SymPy in the same program, be aware
-that ``from fenics import *`` imports a lot of symbols that you also
-have in ``sympy``, so you have to do ``import sympy as sym``. However,
-it is easy to write something like ``p*diff(u,x)`` meaning differentiation
-of the symbolic expression ``u``, but a pure ``diff`` is then the ``diff``
-object from ``fenics``, not from ``sympy``. The right statement is
-``p*sym.diff(u,x)``. (Error messages arising from this example
-can be quite difficult to interpret).
-
-Problems in the solve step
---------------------------
-
-Sometimes the problem lies in the solve step where a variational form
-is turned into a system of algebraic equations.
-The error message *Unable to extract all indicies* points to a problem with the
-variational form. Common errors include
-
- 1. missing either the ``TrialFunction`` or the ``TestFunction`` object,
-
- 2. no terms without ``TrialFunction`` objects.
-
- 3. mathematically invalid operations in the variational form.
-
-The first problem implies that one cannot make a matrix system or
-system of nonlinear algebraic equations out of the variational form.
-The second problem means that there is no "right-hand side" terms in the PDE
-with known quantities. Sometimes this is seemingly the case mathematically
-because the "right-hand side" is zero. Variational forms must represent this
-case as ``Constant(0)*v*dx`` where ``v`` is a ``TestFunction`` object.
-An example of the third problem is to take the ``inner`` product of
-a scalar and a vector (causing in this particular case
-the error message to be "Shape mismatch").
-
-The message *Unable to extract common cell; missing cell definition in
-form or expression* will typically arise from a term in the form where
-a test function (holding mesh and cell information) is missing.
-For example, a zero right-hand side ``Constant(0)*dx`` will generate
-this error.
-
-Unable to convert object to a UFL form
---------------------------------------
-
-One common reason for the above error message is that a form is
-written without being multiplied by ``dx`` or ``ds``.
-
-UFL reports that a numpy array cannot be converted to any UFL type
-------------------------------------------------------------------
-
-One reason may be that there are mathematical functions like ``sin`` and
-``exp`` operating on ``numpy`` arrays. The problem is that
-the
-
-.. code-block:: python
-
-    from fenics import *
-
-statement imports
-``sin``, ``cos``,
-and similar mathematical functions from UFL and these are aimed at
-taking ``Function`` or ``TrialFunction``
-objects as arguments and not ``numpy`` arrays.
-The remedy is to use prefix mathematical functions aimed at
-``numpy`` arrays with ``numpy``, or ``np`` if ``numpy`` is imported as ``np``:
-``numpy.exp`` or ``np.exp``, for instance.
-Normally, boundary conditions and analytical solutions are represented
-by ``Expression`` objects and then this problem does not arise.
-The problem usually arises when pure Python functions with, e.g., analytical
-solutions are introduced for, e.g., plotting.
-
-All programs fail to compile
-----------------------------
-
-When encountering a compilation problem where the Instant log file says
-something about missing double quote in an ``Expression``, try compiling
-a previously working program. If that program faces the same problem,
-reboot Ubuntu and try again.  If the problem persists, try running the
-Update Manager (because unfinished updates can cause compiler
-problems), reboot and try again.
-
-Problems with Expression Objects
-================================
-
-There seems to be some bug in an Expression object
---------------------------------------------------
-
-Run the command ``instant-clean`` to ensure that everything is
-(re)compiled.  Check the formulas in string expressions carefully, and
-make sure that divisions do not lead to integer division (i.e., at
-least one of the operands in a division must be a floating-point
-variable).
-
-Segmentation fault when using an Expression object
---------------------------------------------------
-
-One reason may be that the point vector ``x`` has indices out of
-bounds, e.g., that you access ``x[2]`` but the mesh is only a 2D mesh.
-Also recall that the components of ``x`` are ``x[0]``, ``x[1]``, etc.
-Accessing ``x[2]``  as the "y" coordinate is a common error.
-
-Other Problems
-==============
-
-Very strange error message involving a ``mesh`` variable
---------------------------------------------------------
-
-If you encounter a really strange error message, and the statement
-in question involves a variable with name ``mesh``, check if this
-is really your mesh variable. When doing ``from fenics import *``, you
-get a ``mesh`` variable, which is actually a module, and sending
-this module to functions creates a ``TypeError``. Substitute with
-the actual name of your mesh object.
-
-One should also note other names that get imported by ``from fenics import *``:
-``e``, ``f``, ``i``, ``j``, ``k``, ``l``, ``p``, ``q``, ``r``, ``s``. It is easy to use such
-variables without initializing them, and strange error message arises
-(since the mentioned names are UFL ``Index`` objects).
-
-The plot disappears quickly from the screen
--------------------------------------------
-
-.. index:: plotting problems
-
-You have forgotten to insert ``interactive()`` as the last statement in
-the program.
-
-Only parts of the program are executed
---------------------------------------
-
-Check if a call to ``interactive()`` appears in the middle of the program.
-The computations are halted by this call and not continued before
-you press ``q`` in a plot window. Most people thus prefer to
-have ``interactive()`` as the last statement.
-
-Error in the definition of the boundary
----------------------------------------
-
-Consider this code and error message:
-
-.. code-block:: python
-
-    class DirichletBoundary(SubDomain):  # define the Dirichlet boundary
-        def inside(self, x, on_boundary):
-            return on_boundary and abs(x) < 1E-14
-    
-    bc = DirichletBC(V, u0, xleft_boundary)
-    
-    Error: ValueError: The truth value of an array with more than
-    one element is ambiguous. Use a.any() or a.all()
-
-The reason for this error message
-is that ``x`` is a point vector, not just a number.
-In the ``inside`` function one must work with the
-components of ``x``: ``x[0]``, ``x[1]``, etc.
-
-The solver in a nonlinear problems does not converge
-----------------------------------------------------
-
-There can be many reasons for this common problem:
-
- 1. The form (variational formulation) is not consistent with the
-    PDE(s).
-
- 2. The boundary conditions in a Newton method are wrong. The
-    correction vector must have vanishing essential conditions where
-    the complete solution has zero or non-zero values.
-
- 3. The initial guess for the solution is not appropriate. In some
-    problems, a simple function equal to 0 just leads to a zero
-    solution or a divergent solver. Try 1 as initial guess, or
-    (better) try to identify a linear problem that can be used to
-    compute an appropriate initial guess, see the section :ref:`ftut:nonlinear:Newton:algebraic`.
-
-How To Debug a FEniCS Program?
+Transforming hypercube domains
 ==============================
 
-.. A true case study with a few bugs would be really helpful here.
+The uniform hypercube domains produced by functions like
+``UnitIntervalMesh``, ``UnitSquareMesh``, ``UnitCubeMesh``, ``IntervalMesh``,
+``RectangleMesh``, and ``BoxMesh`` can with simple mathematical means
+be transformed to other shapes, or coordinates can be stretched
+to provide a better resolution.
 
-.. 1. Linear problem.
+.. index:: mesh transformations
 
-.. 2. Nonlinear problem.
+.. index:: coordinate stretching
 
-.. 3. Time-dependent problem.
+.. index:: coordinate transformations
 
-.. 4. Time-dependent nonlinear problem.
+Coordinate stretching
+---------------------
 
-Here is an action list you may follow.
+A mesh that is denser toward a boundary is often desired to increase
+accuracy in that region. Given a mesh with uniformly spaced
+coordinates :math:`x_0,\ldots,x_{M-1}` in :math:`[a,b]`, the coordinate transformation
+:math:`\xi = (x-a)/(b-a)` maps :math:`x` onto :math:`\xi\in [0,1]`. A new mapping
+:math:`\eta = \xi^s`, for some :math:`s>1`, stretches the mesh toward :math:`\xi=0` (:math:`x=a`),
+while :math:`\eta = \xi^{1/s}` makes a stretching toward :math:`\xi=1` (:math:`x=b`).
+Mapping the :math:`\eta\in[0,1]` coordinates back to :math:`[a,b]` gives new,
+stretched :math:`x` coordinates,
 
-**Step 1.**
-Examine the weak form and its implementation carefully.
-Check that all terms are multiplied by ``dx`` or ``ds``, and that the
-terms do not vanish; check that at least one term has both a
-``TrialFunction`` and a ``TestFunction`` (term with unknown); and check
-that at least one term has no ``TrialFunction`` (known term).
+.. _Eq:_auto26:
 
-**Step 2.**
-Check that Dirichlet boundary conditions are set correctly.
+.. math::
+
+    \tag{41}
+    \bar x = a + (b-a)\left({x-a\over b-a}\right)^s
+        
+        
+
+toward :math:`x=a`, or
+
+.. _Eq:_auto27:
+
+.. math::
+
+    \tag{42}
+    \bar x = a + (b-a)\left({x-a\over b-a}\right)^{1/s}
+        
+        
+
+toward :math:`x=b`. Figure :ref:`ftut:mesh:transform:cyl:fig1` shows the
+effect of making a rectangular mesh denser toward :math:`x=0` (prior to
+the coordinate transformation below).
+
+Rectangle to hollow circle mapping
+----------------------------------
+
+One way of creating more complex geometries is to transform the
+vertex coordinates in a rectangular mesh according to some formula.
+Say we want to create a part of a hollow cylinder of :math:`\Theta` degrees,
+with inner radius :math:`a` and outer radius :math:`b`. A standard mapping from polar
+coordinates to Cartesian coordinates can be used to generate the
+hollow cylinder. Given a rectangle in :math:`(\bar x, \bar y)` space such that
+:math:`a\leq \bar x\leq b` and :math:`0\leq \bar y\leq 1`, the mapping
+
+.. math::
+        
+        \hat x = \bar x\cos (\Theta \bar y),\quad \hat y = \bar x\sin (\Theta \bar y),
+        
+
+takes a point in the rectangular :math:`(\bar x,\bar y)`
+geometry and maps it to a point
+:math:`(\hat x, \hat y)` in a hollow cylinder.
+
+The corresponding Python code for first stretching the mesh and
+then mapping it onto a hollow cylinder looks as follows:
 
 .. code-block:: python
 
-    # bcs is list of DirichletBC objects
-    for bc in bcs:
-    bc_dict = bc.get_boundary_values()
-        for dof in bc_dict:
-            print('dof %d: value=%s' % (dof, bc_dict[dof]))
-
-See also an expanded version of this snippet in the ``solvers_bc``
-``ft08_poisson_vc.py`` file located in the directory ``poisson``.
-
-A next step in the debugging, if these values are wrong, is to
-call the functions that define the boundary parts. For example,
-
-.. code-block:: python
-
-    for coor in mesh.coordinates():
-        if my_boundary_function(coor, True):
-            print('%s is on the boundary' % coor)
+    Theta = pi/2
+    a, b = 1, 5.0
+    nr = 10  # divisions in r direction
+    nt = 20  # divisions in theta direction
+    mesh = RectangleMesh(a, 0, b, 1, nr, nt, 'crossed')
     
-    # or, in case of a SubDomain subclass my_subdomain_object,
-    for coor in mesh.coordinates():
-        if my_subdomain_object.inside(coor, True):
-            print('%s is on the boundary' % coor)
+    # First make a denser mesh towards r=a
+    x = mesh.coordinates()[:,0]
+    y = mesh.coordinates()[:,1]
+    s = 1.3
+    
+    def denser(x, y):
+        return [a + (b-a)*((x-a)/(b-a))**s, y]
+    
+    x_bar, y_bar = denser(x, y)
+    xy_bar_coor = numpy.array([x_bar, y_bar]).transpose()
+    mesh.coordinates()[:] = xy_bar_coor
+    plot(mesh, title='stretched mesh')
+    
+    def cylinder(r, s):
+        return [r*numpy.cos(Theta*s), r*numpy.sin(Theta*s)]
+    
+    x_hat, y_hat = cylinder(x_bar, y_bar)
+    xy_hat_coor = numpy.array([x_hat, y_hat]).transpose()
+    mesh.coordinates()[:] = xy_hat_coor
+    plot(mesh, title='hollow cylinder')
+    interactive()
 
-You may compute points along a line and plot the solution along
-this line (see the ``prog['membrane'].py`` example). You may also print
-out the Dirichlet values as shown in the ``prog['heat'].py`` and
-``prog['poisson_vc'].py`` files.
+The result of calling ``denser`` and ``cylinder`` above is a list of two
+vectors, with the :math:`x` and :math:`y` coordinates, respectively.
+Turning this list into a ``numpy`` array object results in a :math:`2\times M`
+array, :math:`M` being the number of vertices in the mesh. However,
+``mesh.coordinates()`` is by a convention an :math:`M\times 2` array so we
+need to take the transpose. The resulting mesh is displayed
+in Figure :ref:`ftut:mesh:transform:cyl:fig1`.
 
-**Step 4.**
-Switching to a simple set of coefficients and boundary conditions,
-such that the solution becomes simple too,
-but still obeys the same PDE, may help since it is then easier to
-examine numerical values in the solution array.
+.. _ftut:mesh:transform:cyl:fig1:
 
-**Step 5.**
-Formulate a corresponding 1D problem. Often this can be
-done by just running the problem with a 1D mesh. Doing hand calculations
-of element matrices and vectors, and comparing the assembled system
-from these hand calculations with the assembled system from the
-FEniCS program can uncover bugs. For nonlinear problems, or problems
-with variable coefficients, it is usually wise to choose simple
-coefficients so that the problem becomes effectively linear and the
-hand calculations are doable.
+.. figure:: hollow_cylinder.png
+   :width: 480
 
-To-do list
-==========
+   *Hollow cylinder generated by mapping a rectangular mesh, stretched toward the left side*
 
-AL list
--------
+Setting boundary conditions in meshes created from mappings like the one
+illustrated above is most conveniently done by using a mesh function
+to mark parts of the boundary. The marking is easiest to perform
+before the mesh is mapped since one can then conceptually work with
+the sides in a pure rectangle.
 
- * Title?: Writing State-of-the-Art Finite Element Solvers in Minutes
-   (HPL: Yes - let's have this for a while)
+.. Stretch coordinates according to Mikael.
 
- * Title: "Writing... in minutes" sounds more like a good subtitle
-   than an actual title. We already have a good subtitle in "The
-   FEniCS tutorial" so let's try to find a more "serious" main title.
-   (HPL: What about switching?)
+.. Use refine uniformly and adaptively (adaptive poisson demo, use just
 
- * Title?: Introduction to Finite Element Programming
+.. grad u for example)
 
- * Add 2nd author
+.. Check ../../dielectric/python/demo.py og MeshEditor!
 
- * Rewrite abstract to reflect new title and non-initial state of book
+.. Use refine og move.
 
- * Rename and expand Chapter 5: Boundary conditions, markers and subdomains
-   (many and confusing ways to do this, ``MeshFunctions``, ``MeshData``, etc)
-   (HPL: This is important and confusing, but very much needed early on)
+.. CHeck Netgen examples in the source, 2D.
 
- * DONE: Add chapter on installation (difficult, still in flux)
+.. Transfinite mappings? Laplace?
 
- * Installation chapter should be number 0
+Encyclopedia stuff
+==================
 
- * Remove capitalization of sections in Chapter 8
-
- * Add new chapter: "Advanced example: Linear elasticity"
-   (HPL: do this first - important for many courses)
-
- * Add new chapter: "Advanced example: Hyperelasticity"
-
- * Add new chapter: "Advanced example: Incompressible Navier-Stokes"
-
- * Place these chapters near end of book so progression becomes:
-
-    * Installation
-
-    * Fundamentals (3 chapters: Fundamentals, Time-dependent, Nonlinear)
-
-    * Misc technical chapters (boundary conditions, geometries etc)
-      (HPL: Think we need these things before time-dependent, or maybe
-      split the very simplest things from time-dependent (1st example)
-      and nonlinear (``solve(F==0, ...)``) and place in fundamentals?)
-
-    * Advanced examples (using previously discussed techniques)
-
- * Add chapter on performance and profiling? HPL: Yes!
-
- * Move source code links to ``http://fenisproject.org/tutorial`` (we can
-   set up a cron job to copy files from ``hplgit``)
-
- * Number examples sequentially, something like
-
-    * ``fenics_tutorial_01_poisson_first.py``
-
-    * ``fenics_tutorial_05_poisson_nonlinear.py``
-
-   Hierarchic structure becomes complicated, better with flat structure
-   (HPL: These filenames are too long, giving too long lines in the text
-   and the need for lots of rewrites. We have an automated scheme to
-   assign new filenames to the logical files that we use for the text.
-   Right now the names are ``ft01_poisson.py``.)
-
- * Add command ``fenics-version``
-
- * DONE: Use dot and grad in Poisson example (not ``inner`` and ``nabla_grad``)
-
- * Use new notation ``'P'`` instead of ``'Lagrange'`` in ``FunctionSpace``. HPL: Done.
-   (HPL: Not yet documented in ``FunctionSpace`` ;-)
-
- * DONE: Use ``from fenics import *``
-
- * Fix copyright footer so we avoid the linebreak. HPL: Fixed. This and similar adjustments in the latex file is easily done by auto editing in ``make.sh``.
-
- * How does doconce handle - and ---? HPL: Like latex. Just use ndash if you want. ndash and mdash are ignored in other formats than latex and html where there is no support for this. Just introduce ndash where you like, as in Navier - Stokes.
-
- * When to use :math:`{\thinspace .}` and when to use . ? HPL: Springer had a rule with thinspace. I don't know if it applies to the brief series, but it became a habit of mine since other styles demanded it.
-
- * When to specify floats as 2 or 2.0? HPL: In code? Anytime there is
-   a danger of integer division.
-
- * When do talk about a function ``foo`` or ``foo()``. HPL: If parameters in any
-   way are considered important, include them, otherwise just the function
-   name. (Need to know info.)
-
- * varproblem reads: find ... or varproblem reads: Find ...?
-   HPL: I use lower case after colon, even if full sentence - that's more usual
-   in English I was told than our Scandinavian style.
-
- * Need to include example of mixed problems (systems) in book 1.
-   HPL: Agree.
-
- * Consistency check for mesh size: 16 x 16 good choice overall?
-   HPL: Depends. If we have exact numerical solution, a very coarse mesh
-   suffices, otherwise we should have at least two meshes and report
-   the error fraction. But 16 x 16 sounds reasonable as numbers in the
-   demo programs.
-
- * Add little box in all examples listing what new features are
-   explained for the particular example.
-   HPL: Good idea!
-
- * Should all code files be included in the text?
-   HPL: No, we run out of space. Can do it in the beginning. Later, the
-   codes also grow in size, and I think codes that span two pages or more
-   give a "boring" look in the book. People won't read it...
-   Instead we use the mako construction to link to the repo file.
-   It has nice syntax highlighting, comes up in a separate window if you
-   want, and can be downloaded. Maybe we need to explain "raw" the first
-   time we link to a github file?
-
- * Possible extra appendix chapters (but we don't seem to have enough
-   space):
-   List of finite element spaces + picture of Periodic Table,
-   List of UFL operators,
-   List of variational forms for common PDE,
-   Notation and conventions for simplices,
-   List of most useful FEniCS classes and most useful member functions: Mesh, FunctionSpace, VectorFunctionSpace, DirichletBC, etc.
-
-HPL list
+Glossary
 --------
 
-Remember: cannot exceed 150 pages (as reported at the end of ``ftut.log``).
-Solutions to exercises will not appear in the printed book. If we run
-out of pages, we can also remove the exercises by putting if-else
-constructs around them. There will be one short printed tutorial and
-then extended e-versions with exercises (and optionally solution) on our
-github web site.
+.. index:: self
 
-Regarding layout, we must use ``svmono.cls`` for the printed book, but
-are allowed to use gray background in code boxes and lmodern instead
-of Courier for monospace font. Springer's official ebook has exactly
-the same layout. For all other versions on our github
-web site, we can choose whatever layout we want.
+.. index:: FEniCS
 
- * ``mshr`` must align subdomains with cell facets!! Important feature.
+.. index:: DOLFIN
 
- * Demonstrate that meshes and mesh functions can be stored in XML files.
+.. index:: Viper
 
- * Programs are now flat demos. Educate the reader with
-   better software engineering habits: functions, classes, unit tests.
-   Avoid copy-and-edit flat programs implied by today's collection. (HPL)
+.. index:: UFL
 
- * Find successful exercises from various tutorials (AL) and add as
-   exercises in the book (HPL/AL). Exercises are key for learning
-   software so having them (in an extended version?) sends an important
-   signal about their relevance.
+.. index:: class
 
- * According to the ``plot`` doc string, it should be easy to
-   plot the element a la ``plot(u.function_space().ufl_element())`` but I
-   did not get this to work. Not crucial, but plotting the element is a
-   nice feature :-)
+.. index:: instance
 
- * Comment regarding FEniCS demos: The documented demos mention a lot
-   of packages: DOLFIN, FFC, Fiat, ... Make sure the reader of the tutorial
-   does not get lost in the jungle of packages and make sure the names are
-   explained somewhere in the text
-   such that the tutorial is a good background for
-   understanding every demo in every detail.
+.. index:: method (class)
 
- * Introduce ``near(x, x0, eps``)` earlier? Not used until it got the ``eps``
-   argument, but is more readable. Important to understand the
-   underlying problem with rounding which is more explicit when doing
-   ``abs(x-x0) < eps``.
+.. index:: attribute (class)
 
- * Can we change the value of ``DOLFIN_EPS``? ``imort fenics; fenics.DOLFIN_EPS=...`` will work, but then all modules in the simulator must do ``import fenics``. Note that its value is very strict, e.g., ``10.1+10.2`` has rounding :math:`3.5 10^{-15}`, so ``DOLFIN_EPS`` is strictly for scaled problems only, where all variables are in :math:`[0,1]`.
+Below we explain some key terms used in this tutorial.
 
-HPL questions
--------------
+  FEniCS: name of a software suite composed of many individual software
+          components (see ``fenicsproject.org``). Some components are DOLFIN and
+	  Viper, explicitly referred to in this tutorial. Others are
+          FFC and FIAT, heavily used by the programs appearing in this tutorial,
+          but never explicitly used from the programs.
 
-Iterative linear solvers info
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  DOLFIN: a FEniCS component, more precisely a C++ library, with
+          a Python interface, for performing important actions in finite element
+          programs. DOLFIN makes use of many other FEniCS components and
+          many external software packages.
 
-We can get this printed out on the screen, but is there any method to
-extract this text inside the program, such that we can see how many
-Krylov iterations we do etc.? Any way for Python to capture the standard
-output stream in C++?
+  Viper:  a FEniCS component for quick visualization of finite element
+          meshes and solutions.
 
-Easy to write a script that post-processes
-the output, but we have to wait until the simulator has terminated, or
-we can pipe to a script ``process.py`` that treats the output in some
-desired way (could append some into to a file and that is reopened
-by the simulator):
+  UFL:    a FEniCS component implementing the *unified form language*
+          for specifying finite element forms in FEniCS programs.
+          The definition of the forms, typically called ``a`` and ``L`` in
+          this tutorial, must have legal UFL syntax. The same applies to
+          the definition of functionals.
+
+  Class (Python): a programming construction for creating objects
+          containing a set of variables and functions. Most
+          types of FEniCS objects are defined through the class concept.
+
+  Instance (Python): an object of a particular type, where the type is
+          implemented as a class. For instance,
+          ``mesh = UnitIntervalMesh(10)`` creates
+          an instance of class ``UnitIntervalMesh``, which is reached by the
+          name ``mesh``. (Class ``UnitIntervalMesh`` is actually just
+          an interface to a corresponding C++ class in the DOLFIN C++ library.)
+
+  Class method (Python): a function in a class, reached by dot
+          notation: ``instance_name.method_name``
+
+  argument ``self`` (Python): required first parameter in class methods,
+         representing a particular object of the class.
+         Used in method definitions, but never in calls to a method.
+         For example, if ``method(self, x)`` is the definition of
+         ``method`` in a class ``Y``, ``method`` is called as
+         ``y.method(x)``, where ``y`` is an instance of class ``Y``.
+         In a call like ``y.method(x)``, ``method`` is invoked with
+         ``self=y``.
+
+  Class attribute (Python): a variable in a class, reached by
+         dot notation: ``instance_name.attribute_name``
+
+Overview of objects and functions
+---------------------------------
+
+Most classes in FEniCS have an explanation of the purpose and usage
+that can be seen by using the general documentation command
+``pydoc`` for Python objects. You can type
+
+.. index:: pydoc
 
 .. code-block:: text
 
-    Terminal> python mysolver.py | process.py
+    pydoc fenics.X
 
-where the simplest ``process.py`` is
+to look up documentation of a Python class ``X`` from the DOLFIN
+library (``X`` can be ``UnitSquareMesh``, ``Function``,
+``Viper``, etc.). Below is an overview of the most important classes
+and functions
+in FEniCS programs, in the order they typically appear within programs.
+
+``UnitSquareMesh(nx, ny)``: generate mesh over the unit square
+:math:`[0,1]\times [0,1]` using ``nx`` divisions in :math:`x` direction and
+``ny`` divisions in :math:`y` direction. Each of the ``nx*ny`` squares
+are divided into two cells of triangular shape.
+
+``UnitIntervalMesh``, ``UnitCubeMesh``, ``UnitCircleMesh``, ``UnitSphere``,
+``IntervalMesh``, ``RectangleMesh``, and ``BoxMesh``: generate mesh over
+domains of simple geometric shape, see the section :ref:`ftut:prepro`.
+
+``FunctionSpace(mesh, element_type, degree)``:
+a function space defined over a mesh, with a given element type
+(e.g., ``'Lagrange'`` or ``'DG'``), with basis functions as polynomials of
+a specified degree.
+
+``Expression(formula, p1=v1, p2=v2, ...)``:
+a scalar- or vector-valued function, given as a
+mathematical expression ``formula`` (string) written in C++ syntax.
+The spatial coordinates in the expression are named
+``x[0]``, ``x[1]``, and ``x[2]``, while time and other
+physical parameters can be represented as symbols ``p1``, ``p2``,
+etc., with corresponding values ``v1``, ``v2``, etc., initialized
+through keyword arguments. These parameters become attributes,
+whose values can be modified when desired.
+
+``Function(V)``: a scalar- or vector-valued finite element field in
+the function space ``V``. If ``V`` is a ``FunctionSpace`` object,
+``Function(V)`` becomes a scalar field, and with ``V`` as a
+``VectorFunctionSpace`` object, ``Function(V)`` becomes a
+vector field.
+
+``SubDomain``: class for defining a subdomain, either a part of the
+boundary, an internal boundary, or a part of the domain.
+The programmer must subclass ``SubDomain`` and implement the
+``inside(self, x, on_boundary)`` function
+(see the section :ref:`ch:poisson0:impl`) for telling whether a
+point ``x`` is inside the subdomain or not.
+
+``Mesh``: class for representing a finite element mesh, consisting of
+cells, vertices, and optionally faces, edges, and facets.
+
+``MeshFunction``: tool for marking parts of the domain or the boundary.
+Used for variable coefficients ("material properties" or for
+boundary conditions.
+
+``DirichletBC(V, value, where)``: specification of Dirichlet (essential)
+boundary conditions via a function space ``V``, a function
+``value(x)`` for computing the value of the condition at a point ``x``,
+and a specification ``where`` of the boundary, either as a
+``SubDomain`` subclass instance, a plain function, or as a
+``MeshFunction`` instance.
+In the latter case, a 4th argument is provided to describe which subdomain
+number that describes the relevant boundary.
+
+``TestFunction(V)``: define a test function on a space ``V`` to be used
+in a variational form.
+
+``TrialFunction(V)``: define a trial function on a space ``V`` to be used
+in a variational form to represent the unknown in a finite element problem.
+
+``assemble(X)``: assemble a matrix, a right-hand side, or a functional,
+given a from ``X`` written with UFL syntax.
+
+``assemble_system(a, L, bcs)``: assemble the matrix and the right-hand
+side from a bilinear (``a``) and linear (``L``) form written with UFL
+syntax. The ``bcs`` parameter holds one or more ``DirichletBC`` objects.
+
+``LinearVariationalProblem(a, L, u, bcs)``: define a variational problem,
+given a bilinear (``a``) and linear (``L``) form, written with UFL
+syntax, and one or more ``DirichletBC`` objects stored in ``bcs``.
+
+``LinearVariationalSolver(problem)``: create solver object for a linear
+variational problem object (``problem``).
+
+``solve(A, U, b)``: solve a linear system with ``A`` as coefficient
+matrix (``Matrix`` object), ``U`` as unknown (``Vector`` object),
+and ``b`` as right-hand side (``Vector`` object).
+Usually, ``U = u.vector()``, where
+``u`` is a ``Function`` object representing the unknown finite
+element function of the problem, while
+``A`` and ``b`` are computed by calls to ``assemble``
+or ``assemble_system``.
+
+``plot(q)``: quick visualization of a mesh, function, or mesh function
+``q``, using a built-in, VTK-based component in FEniCS.
+
+``interpolate(func, V)``: interpolate a formula or finite
+element function ``func`` onto the function space ``V``.
+
+``project(func, V)``: project a formula or finite element function ``func``
+onto the function space ``V``.
+
+Handy methods in key FEniCS objects
+-----------------------------------
+
+.. index:: pydoc
+
+In general,
+``pydoc fenics.X`` shows the documentation of any name ``X``
+and lists all the methods (i.e.g, functions in the class) that
+can be called. Below, we list just a few, but very useful, methods
+in the most central FEniCS classes.
+
+Mesh
+~~~~
+
+Let ``mesh`` be a ``Mesh`` object.
+
+  * ``mesh.coordinates()`` returns an array of the coordinates of
+     the vertices in the mesh.
+
+  * ``mesh.num_cells()`` returns the number of cells (triangles)
+    in the mesh,
+
+  * ``mesh.num_vertices()`` returns the number of vertices in
+    the mesh (with our choice of linear Lagrange elements this equals the
+    number of nodes, ``len(u_array)``, or dimension of the space ``V.dim()``),
+
+  * ``mesh.cells()`` returns the vertex numbers of the vertices in
+    each cell as a ``numpy`` array with shape
+    (*number of cells*, *number of vertices in a cell*),
+
+  * ``mesh.hmin()`` returns the minimum cell diameter ("smallest cell"),
+
+  * ``mesh.hmax()`` returns the maximum cell diameter ("largest cell").
+
+  * ``mesh.topology().dim()`` returns the number of physical dimensions of
+    the mesh.
+
+Writing ``print(mesh)`` dumps a short, pretty-print description
+of the mesh (``print(mesh)`` actually displays the result of ``str(mesh)``,
+which defines the pretty print):
+
+.. code-block:: text
+
+    <Mesh of topological dimension 2 (triangles) with
+    16 vertices and 18 cells, ordered>
+
+Function space
+~~~~~~~~~~~~~~
+
+Let ``V`` be a ``FunctionSpace`` object.
+
+ * ``V.mesh()`` returns the associated mesh.
+
+ * ``V.dim()`` returns the dimension (number of degrees of freedom).
+
+ * ``V.ufl_element()`` returns the associated finite element.
+
+Function
+~~~~~~~~
+
+Let ``u`` be a ``Function`` object.
+
+ * ``u.function_space()`` returns the associated function space.
+
+ * ``u.vector()`` returns the vector object of degrees of freedom.
+
+ * ``u.vector().array()`` returns a copy of the degrees of freedom
+   in a ``numpy`` array.
+
+.. _ftut:Epetra:
+
+Using a backend-specific solver
+-------------------------------
+
+
+.. warning::
+    The linear algebra backends in FEniCS have recently changed. This
+    section is not yet up-to-date.
+
+
+
+
+.. index:: down-casting matrices and vectors
+
+.. index:: PETSc
+
+The linear algebra backend determines the specific data structures
+that are used in the ``Matrix`` and ``Vector`` classes. For example, with
+the PETSc backend, ``Matrix`` encapsulates a PETSc matrix storage
+structure, and ``Vector`` encapsulates a PETSc vector storage structure.
+Sometimes one wants to perform operations directly on (say) the
+underlying PETSc objects. These can be fetched by
 
 .. code-block:: python
 
-    import sys, time
-    t0 = time.clock()
-    while True:
-        line = sys.stdin.readline()
-        if not line:
-            break
-        t1 = time.clock()
-        print 'after %g seconds: %s' % (t1-t0, line.rstrip())
-    print 'END'
+    A_PETSc =
+    down_cast(A).mat() b_PETSc = down_cast(b).vec() U_PETSc =
+    down_cast(u.vector()).vec()
 
-Bibliography
-============
+Here, ``u`` is a ``Function``, ``A`` is a
+``Matrix``, and ``b`` is a ``Vector``.  The same syntax applies if we want
+to fetch the underlying Epetra, uBLAS, or MTL4 matrices and vectors.
 
-.. [Ref1]
-   **H. P. Langtangen and A. Logg**. *The FEniCS Tutorial - Writing State-of-the-art Finite Element Solvers in Minutes*,
-   Springer,
-   2016.
+.. ../../../la/trilinos/python/demo.py
 
-.. [Ref2]
-   **H. P. Langtangen and G. K. Pedersen**. *Scaling of Differential Equations*,
-   *Simula Springer Brief Series*,
-   Springer,
-   2016,
-   `http://tinyurl.com/qfjgxmf/web <http://tinyurl.com/qfjgxmf/web>`_.
+.. index:: Trilinos
 
-.. [Ref3]
-   **H. P. Langtangen**. *A Primer on Scientific Programming With Python*,
-   fifth edition,
-   *Texts in Computational Science and Engineering*,
-   Springer,
-   2016.
+.. index:: Epetra
+
+Sometimes one wants to implement tailored solution algorithms, using
+special features of the underlying numerical packages.  Here is an
+example where we create an ML preconditioned Conjugate Gradient solver
+by programming with Trilinos-specific objects directly.  Given a
+linear system :math:`AU=b`, represented by a ``Matrix`` object ``A``, and two
+``Vector`` objects ``U`` and ``b`` in a Python program, the purpose is to
+set up a solver using the Aztec Conjugate Gradient method from
+Trilinos' Aztec library and combine that solver with the algebraic
+multigrid preconditioner ML from the ML library in Trilinos. Since the
+various parts of Trilinos are mirrored in Python through the
+PyTrilinos package, we can operate directly on Trilinos-specific
+objects.
+
+.. code-block:: python
+
+    try:
+        from PyTrilinos import Epetra, AztecOO, TriUtils, ML
+    except:
+        print('''You Need to have PyTrilinos with
+    Epetra, AztecOO, TriUtils and ML installed
+    for this demo to run''')
+        exit()
+    
+    from fenics import *
+    
+    if not has_la_backend('Epetra'):
+        print('Warning: Dolfin is not compiled with Trilinos')
+        exit()
+    
+    parameters['linear_algebra_backend'] = 'Epetra'
+    
+    # create matrix A and vector b in the usual way
+    # u is a Function
+    
+    # Fetch underlying Epetra objects
+    A_epetra = down_cast(A).mat()
+    b_epetra = down_cast(b).vec()
+    U_epetra = down_cast(u.vector()).vec()
+    
+    # Sets up the parameters for ML using a python dictionary
+    ML_param = {"max levels"        : 3,
+                "output"            : 10,
+                "smoother: type"    : "ML symmetric Gauss-Seidel",
+                "aggregation: type" : "Uncoupled",
+                "ML validate parameter list" : False
+    }
+    
+    # Create the preconditioner
+    prec = ML.MultiLevelPreconditioner(A_epetra, False)
+    prec.SetParameterList(ML_param)
+    prec.ComputePreconditioner()
+    
+    # Create solver and solve system
+    solver = AztecOO.AztecOO(A_epetra, U_epetra, b_epetra)
+    solver.SetPrecOperator(prec)
+    solver.SetAztecOption(AztecOO.AZ_solver, AztecOO.AZ_cg)
+    solver.SetAztecOption(AztecOO.AZ_output, 16)
+    solver.Iterate(MaxIters=1550, Tolerance=1e-5)
+    
+    plot(u)
 
