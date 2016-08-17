@@ -87,14 +87,19 @@ perform only two steps:
 label{ftut:poisson1:bvp}
 idx{Poisson's equation}
 
-Let us start by writing a ``Hello, World!'' program. In the world of
-PDEs, this must be a program that solves the Poisson equation:
+Most books on a programming language starts with a ``Hello, World!''
+program. That is, one is curious about how a very fundamental task is
+expressed in the language, and writing a text to the screen can be
+such a task. In the world of *finite element methods for PDEs*, the
+most fundamental task must be to solve the Poisson equation. Our
+counterpart to the classical ``Hello, World!''  program therefore
+solves
 
 !bt
 \begin{align}
 - \nabla^2 u(\x) &= f(\x),\quad \x\mbox{ in } \Omega,
 label{ftut:poisson1}\\
-u(\x) &= u_0(\x),\quad \x\mbox{ on } \partial \Omega\tp label{ch:poisson0:bc}
+u(\x) &= \ub(\x),\quad \x\mbox{ on } \partial \Omega\tp label{ch:poisson0:bc}
 \end{align}
 !et
 Here, $u = u(\x)$ is the unknown function, $f = f(\x)$ is a
@@ -137,9 +142,20 @@ following steps:
     visualize the results.
 
 We shall now go through steps 2--4 in detail. The key feature of
-FEniCS is that steps 3 and 4 result in fairly short code, while most
-other software frameworks for PDEs require much more code and more
-technically difficult programming.
+FEniCS is that steps 3 and 4 result in fairly short code, while a
+similar program in most other software frameworks for PDEs require
+much more code and more technically difficult programming.
+
+!bnotice What makes FEniCS attractive?
+Although
+many frameworks has a really elegant ``Hello, World!'' example on the
+Poisson equation, FEniCS is to our knownledge the only framework where
+the code stays compact and nice, very close to the mathematical
+formulation, also when the complexity increases with, e.g., systems of
+PDEs and mixed finite elements for computing on massievely
+high-performance parallel platforms.
+!enotice
+
 
 ===== Finite element variational formulation =====
 label{ch:poisson0:varform}
@@ -149,10 +165,13 @@ FEniCS is based on the finite element method, which is a general and
 efficient mathematical machinery for numerical solution of PDEs. The
 starting point for the finite element methods is a PDE expressed in
 *variational form*. Readers who are not familiar with variational
-problems will get a brief introduction to the topic in this tutorial,
+problems will get a very brief introduction to the topic in this tutorial,
 but getting and reading a proper book on the finite element method in
 addition is encouraged. Section ref{ftut:fembooks} contains a list of
-some suitable books.
+some suitable books. Experience shows that you can work with FEniCS as
+a tool to solve your PDEs even without thorough knowledge of the finite
+element method as long as you get somebody to help you with formulating
+the PDE as a variational problem.
 
 idx{test function}
 idx{trial function}
@@ -176,8 +195,16 @@ by the test function $v$ and integrate over $\Omega$:
 label{ch:poisson0:multbyv}
  -\int_\Omega (\nabla^2 u)v \dx = \int_\Omega fv \dx\tp \end{equation}
 !et
-We then apply integration by parts to the integrand with
-second-order derivatives. We find that
+A common rule when we derive variational formulations is that we try
+to keep the order of the derivatives of $u$ and $v$
+as low as possible (this will enlarge the collection of finite elements
+that can be used in the problem). Here, where we
+have a second-order spatial derivative of $u$, which can be transformed
+to a first-derivative of $u$ and $v$ and we apply the technique of
+"integration by parts": "https://en.wikipedia.org/wiki/Integration_by_parts".
+A Laplace term will always be subject to integration
+by parts[^itgparts].
+The formula reads
 
 !bt
 \begin{equation}
@@ -189,9 +216,20 @@ label{ch:poisson0:eqbyparts}
 !et
 where $\frac{\partial u}{\partial n} = \nabla u \cdot n$ is the
 derivative of $u$ in the outward normal direction $n$ on the
-boundary. The test function $v$ is required to vanish on the parts of
-the boundary where the solution $u$ is known, which in the present
-problem implies that $v=0$ on the whole boundary $\partial\Omega$.
+boundary.
+
+[^itgparts]: Integration by parts in more than one space dimension is based on
+Gauss' divergence theorem. Simply take (ref{ch:poisson0:eqbyparts}) as
+the formula to be used.
+
+Another feature of variational formulations is that
+the test function $v$ is required to vanish on the parts of
+the boundary where the solution $u$ is known (the book cite{Langtangen_Mardal_FEM_2016} explains in detail why this requirement is necessary).
+In the present
+problem, this means that $v=0$ on the whole boundary $\partial\Omega$
+(strangely enough, $v=0$ is a requirement in the mathematical formulation,
+but we cannot see any track of that in the FEniCS program, see
+cite{Langtangen_Mardal_FEM_2016} for detailed explanations).
 The second term on the right-hand side of
 (ref{ch:poisson0:eqbyparts}) therefore vanishes. From
 (ref{ch:poisson0:multbyv}) and (ref{ch:poisson0:eqbyparts}) it
@@ -228,7 +266,7 @@ problem defined as
 
 !bt
 \begin{align*}
-     V      &= \{v \in H^1(\Omega) : v = u_0 \mbox{ on } \partial\Omega\}, \\
+     V      &= \{v \in H^1(\Omega) : v = \ub \mbox{ on } \partial\Omega\}, \\
     \hat{V} &= \{v \in H^1(\Omega) : v = 0 \mbox{ on } \partial\Omega\}\tp
 \end{align*}
 !et
@@ -277,7 +315,7 @@ variational problems like (ref{ch:poisson0:vard})!
 #the well-known linear triangular element with three nodes implies that
 #$\hat V_h$ and $V_h$ are the spaces of all piecewise linear functions
 #over a mesh of triangles, where the functions in $\hat V_h$ are zero
-#on the boundary and those in $V_h$ equal $u_0$ on the boundary.
+#on the boundary and those in $V_h$ equal $\ub$ on the boundary.
 
 !bwarning What we mean by the notation $u$ and $V$
 The mathematics literature on variational problems writes $u_h$ for
@@ -343,18 +381,18 @@ perform only two steps:
 ===== Choosing a test problem =====
 label{ch:poisson0:testproblem}
 
-The Poisson equation (ref{ftut:poisson1}) has so far featured a general
-domain $\Omega$ and general functions $\ub$ and $f$. For our first
-implementation, we must decide on specific choices of $\Omega$, $\ub$,
-and $f$.  It will be wise to construct a specific problem where we can
-easily check that the computed solution is correct. Solutions that are
-lower-order polynomials are primary candidates. Standard finite
-element function spaces of degree $r$ will exactly reproduce
-polynomials of degree $r$. And piecewise linear elements ($r=1$) are
-able to exactly reproduce a quadratic polynomial on a uniformly
-partitioned mesh. This important result can be used to verify our
-implementation. We just manufacture some quadratic function in 2D as
-the exact solution, say
+The Poisson equation (ref{ftut:poisson1}) has so far featured a
+general domain $\Omega$ and general functions $\ub$ for the boundary
+conditions and $f$ for the right-hand side. Our first implementation
+require us to decide on specific choices of $\Omega$, $\ub$, and $f$.
+It will be wise to construct a problem where we can easily check that
+the computed solution is correct. Solutions that are lower-order
+polynomials are primary candidates. Standard finite element function
+spaces of degree $r$ will exactly reproduce polynomials of degree
+$r$. And piecewise linear elements ($r=1$) are able to exactly
+reproduce a quadratic polynomial on a uniformly partitioned mesh. This
+important result can be used to verify our implementation. We just
+manufacture some quadratic function in 2D as the exact solution, say
 
 !bt
 \begin{equation}

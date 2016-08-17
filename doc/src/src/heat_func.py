@@ -69,7 +69,7 @@ def mark_boundaries_in_hypercube(
 
 
 def solver(
-    rho, c, p, f, r, s, u0, T, L,       # physical parameters
+    rho, c, kappa, f, r, s, u0, T, L,   # physical parameters
     dt, divisions, degree=1, theta=1,   # numerical parameters
     user_action=None,                   # callback function
     u0_project=False,                   # project/interpolate u0
@@ -79,7 +79,7 @@ def solver(
     avoid_b_assembly=False,             # use trick for b
     debug=False):
     """
-    Solve heat PDE: rho*c*du/dt = div(alpha*grad(u)) + f
+    Solve heat PDE: rho*c*du/dt = div(kappa*grad(u)) + f
     in a box-shaped domain [0,L[0]]x[0,L[1]]x[0,L[2]] with
     partitioning given by divisions.
     If BC is 'Dirichlet': u = r[i] on boundaary i, else if BC
@@ -92,7 +92,7 @@ def solver(
     assert len(divisions) == len(L)
     d = len(L)  # No of space dimensions
     assert len(r) == 2*d
-    for obj in p, f, s:
+    for obj in kappa, f, s:
         assert isinstance(obj, (Expression, Constant))
     if user_action is not None: assert callable(user_action)
     for obj in u0_project, A_is_const, avoid_b_assembly, debug:
@@ -147,7 +147,7 @@ def solver(
     # before error computation, wrong variable name bc prevented updating
     # of Dirichlet conditions
     def D(u):
-        return p*dot(grad(u), grad(v))*dx
+        return kappa*dot(grad(u), grad(v))*dx
 
     def B(u, i):
         return r[i]*(u-s)*v*ds(i)
@@ -311,52 +311,51 @@ def verify(
     x, y, z, t = sym.symbols('x[0] x[1] x[2] t')
 
     if d == 1:  # 1D test problem
-        p = 1
+        kappa = 1
         s = 1
         rho = c = 1
         # Fit f, r[i]
-        f = rho*c*sym.diff(u, t) - sym.diff(p*sym.diff(u, x), x)
+        f = rho*c*sym.diff(u, t) - sym.diff(kappa*sym.diff(u, x), x)
         f = sym.simplify(f)
         # Boundary conditions: r = -p*(du/dn)/(u-s)
         r = [None]*(2*d)
-        r[0] = (+p*sym.diff(u, x)/(u-s)).subs(x, 0)
-        r[1] = (-p*sym.diff(u, x)/(u-s)).subs(x, 1)
+        r[0] = (+kappa*sym.diff(u, x)/(u-s)).subs(x, 0)
+        r[1] = (-kappa*sym.diff(u, x)/(u-s)).subs(x, 1)
 
     elif d == 2:  # 2D
-        p = 1
+        kappa = 1
         s = 2
         rho = c = 1
         f = rho*c*sym.diff(u, t) \
-            - sym.diff(p*sym.diff(u, x), x) \
-            - sym.diff(p*sym.diff(u, y), y)
+            - sym.diff(kappa*sym.diff(u, x), x) \
+            - sym.diff(kappa*sym.diff(u, y), y)
         f = sym.simplify(f)           # fitted source term
         # For Robin boundary conditions: r = -p*(du/dn)/(u-s)
         r = [None]*(2*d)
-        r[0] = (+p*sym.diff(u, x)/(u-s)).subs(x, 0)
-        r[1] = (-p*sym.diff(u, x)/(u-s)).subs(x, 1)
-        r[2] = (+p*sym.diff(u, y)/(u-s)).subs(y, 0)
-        r[3] = (-p*sym.diff(u, y)/(u-s)).subs(y, 1)
+        r[0] = (+kappa*sym.diff(u, x)/(u-s)).subs(x, 0)
+        r[1] = (-kappa*sym.diff(u, x)/(u-s)).subs(x, 1)
+        r[2] = (+kappa*sym.diff(u, y)/(u-s)).subs(y, 0)
+        r[3] = (-kappa*sym.diff(u, y)/(u-s)).subs(y, 1)
 
     elif d == 3:  # 3D
-        p = 1
+        p = kappa
         s = 2
         rho = c = 1
         f = rho*c*sym.diff(u, t) \
-            - sym.diff(p*sym.diff(u, x), x) \
-            - sym.diff(p*sym.diff(u, y), y) \
-            - sym.diff(p*sym.diff(u, z), z)
+            - sym.diff(kappa*sym.diff(u, x), x) \
+            - sym.diff(kappa*sym.diff(u, y), y) \
+            - sym.diff(kappa*sym.diff(u, z), z)
         f = sym.simplify(f)           # fitted source term
         # For Robin boundary conditions: r = -p*(du/dn)/(u-s)
         r = [None]*(2*d)
-        r[0] = (+p*sym.diff(u, x)/(u-s)).subs(x, 0)
-        r[1] = (-p*sym.diff(u, x)/(u-s)).subs(x, 1)
-        r[2] = (+p*sym.diff(u, y)/(u-s)).subs(y, 0)
-        r[3] = (-p*sym.diff(u, y)/(u-s)).subs(y, 1)
-        r[4] = (+p*sym.diff(u, z)/(u-s)).subs(z, 0)
-        r[5] = (-p*sym.diff(u, z)/(u-s)).subs(z, 1)
+        r[0] = (+kappa*sym.diff(u, x)/(u-s)).subs(x, 0)
+        r[1] = (-kappa*sym.diff(u, x)/(u-s)).subs(x, 1)
+        r[2] = (+kappa*sym.diff(u, y)/(u-s)).subs(y, 0)
+        r[3] = (-kappa*sym.diff(u, y)/(u-s)).subs(y, 1)
+        r[4] = (+kappa*sym.diff(u, z)/(u-s)).subs(z, 0)
+        r[5] = (-kappa*sym.diff(u, z)/(u-s)).subs(z, 1)
 
-    for i in range(len(r)):
-        r[i] = sym.simplify(r[i])
+    r = [sym.simplify(r[i]) for i in range(len(r))]
     print('f:', f, 'r:', r)
 
     # Convert symbolic expressions to Expression or Constant
@@ -364,15 +363,14 @@ def verify(
     rho = Constant(rho)
     c = Constant(c)
     f = Expression(sym.printing.ccode(f), t=0)
-    p = Expression(sym.printing.ccode(p))
+    kappa = Expression(sym.printing.ccode(kappa))
     u_exact = Expression(sym.printing.ccode(u), t=0)
 
     if BC == 'Dirichlet':
-        for i in range(len(r)):
-            r[i] = u_exact
+        r = [u_exact for i in range(len(r))]
     elif BC == 'Robin':
-        for i in range(len(r)):
-            r[i] = Expression(sym.printing.ccode(r[i]), t=0)
+        r = [Expression(sym.printing.ccode(r[i]), t=0)
+             for i in range(len(r))]
 
     def print_error(t, u, timestep):
         """user_action function: print max error at dofs."""
@@ -387,27 +385,21 @@ def verify(
         if expect_exact_sol:
             assert error < error_tol, error
 
-    if A_is_const is None:
-        A_is_const = BC == 'Dirichlet'
-    if lumped_mass:
-        assert A_is_const
     # Match dt to N to keep dt/(2*d*dx**q) const,
     # q=1 for theta=0.5 else q=2
     dx = 1./N
     q = 1 if theta == 0.5 else 2
     dt = (0.05/(2*d*0.5**q))*2*d*dx**q
-    print('dx=%g, dt=%g (p=1)' % (dx, dt))
+    print('dx=%g, dt=%g (kappa=1)' % (dx, dt))
     T = 5*dt  # always 5 steps
-    if d == 1:
-        divisions = (N,)
-        L = (1,)
-    elif d == 2:
-        divisions = (N, N)
-        L = (1, 1)
-    elif d == 3:
-        divisions = (N, N, N)
-        L = (1, 1, 1)
-    solver(rho, c, p, f, r, s, u_exact, T, L,
+    divisions = [N]*d
+    L = [1]*d
+    if A_is_const is None:
+        A_is_const = BC == 'Dirichlet'
+    if lumped_mass:
+        assert A_is_const
+
+    solver(rho, c, kappa, f, r, s, u_exact, T, L,
            dt, divisions, degree=degree, theta=theta,
            user_action=print_error,
            u0_project=False, BC=BC, A_is_const=A_is_const,
@@ -485,7 +477,7 @@ def animate_sine_spike(m=2):
 
     # Diffusion of a sin^8 spike, scaled homogeneous PDE
     u0 = Expression('pow(sin(pi*x[0])*sin(pi*x[1]), m)', m=m)
-    c = rho = p = Constant(1)
+    c = rho = kappa = Constant(1)
     f = Constant(0)
     dt = 0.0005
     T = 20*dt
@@ -518,7 +510,7 @@ def animate_sine_spike(m=2):
         vtkfile << (u, float(t))  # store time-dep Function
 
     solver(
-        rho, c, p, f, r, s, u0, T, L,
+        rho, c, kappa, f, r, s, u0, T, L,
         dt, divisions, degree=1, theta=0.5,
         user_action=animate,
         u0_project=False,
@@ -534,7 +526,7 @@ def welding(gamma=1, delta=70, beta=10, num_rotations=2, Nu=1):
     # Define physical parameters and boundary conditions
     u0 = Constant(0)
     rho = c = Constant(1)
-    p = Constant(1.0/gamma)
+    kappa = Constant(1.0/gamma)
     BC = 'Robin'
     Nu = 1
     r = [Constant(Nu) for i in range(2*d)]
@@ -608,7 +600,7 @@ def welding(gamma=1, delta=70, beta=10, num_rotations=2, Nu=1):
     divisions = (40, 40, 4)
     L = (1, 1, 0.05)
     solver(
-        rho, c, p, f, r, s, u0, T, L,
+        rho, c, kappa, f, r, s, u0, T, L,
         dt, divisions, degree=1,
         theta=1,  # some oscillations in the beginning with theta=0.5
         user_action=ProcessResults(),

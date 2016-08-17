@@ -94,8 +94,8 @@ more accurate backward difference formula utilizing a third time
 level).
 
 The corresponding variational formulation for :math:`u^{n+1}` is derived by
-multiplying the time-discrete PDE (:ref:`ch:diffusion:opt:PDEthetar1`)
-or (:ref:`ch:diffusion:opt:PDEthetar2`) by a test function :math:`v\in\hat V`
+multiplying the time-discrete PDE :ref:`(1) <Eq:ch:diffusion:opt:num:thetar1>`
+or :ref:`(2) <Eq:ch:diffusion:opt:num:thetar2>` by a test function :math:`v\in\hat V`
 and integrating over the spatial domain :math:`\Omega`. Terms with
 second-order derivatives are integrated by parts. We can express the
 integration by parts as
@@ -712,34 +712,6 @@ code needed in FEniCS ``Expression`` objects.
                u0_project=False, BC=BC, A_is_const=A_is_const,
                lumped_mass=lumped_mass,
                avoid_b_assembly=avoid_b_assembly, debug=debug)
-    
-    def test_efficiency():
-        """
-        Measure the efficiency of various versions of a Forward
-        Euler method: lumped coefficient matrix without any assembly,
-        consistent coefficient matrix but no assembly, initial assembly
-        of coefficient matrix and assembly of right-hand side,
-        and full assembly at each time level.
-        Gain: a factor of 6, 4, 2, and 1.
-        """
-        x, y, z, t = sym.symbols('x[0] x[1] x[2] t')
-    
-        # 2D efficiency test: N=180, same gain
-        # 3D efficiency test
-        u = 1 + x**2 + y + z**2 + 3*t
-        # Lumped 0.14
-        verify(u, d=3, degree=1, BC='Dirichlet', N=30, theta=0,
-               lumped_mass=True, avoid_b_assembly=True, error_tol=1E-11)
-        # No assembly of A and b, just matrix-vector operations 0.22
-        verify(u, d=3, degree=1, BC='Dirichlet', N=30, theta=0,
-               lumped_mass=False, avoid_b_assembly=True, error_tol=1E-10)
-        # Initial assembly of A, assembly of b at each time level 0.42
-        verify(u, d=3, degree=1, BC='Dirichlet', N=30, theta=0,
-               lumped_mass=False, avoid_b_assembly=False, error_tol=1E-10)
-        # Aseembly of A and b the normal way 0.86
-        verify(u, d=3, degree=1, BC='Dirichlet', N=30, theta=0,
-               lumped_mass=False, avoid_b_assembly=False, A_is_const=False,
-               error_tol=1E-10)
 
 With the ``verify`` function we can easily construct a range of unit tests.
 For example, one test function might look as
@@ -773,7 +745,8 @@ For example, one test function might look as
 
 Recall that ``verify`` performs the right ``assert`` only if the numerical
 solution is without approximation errors. Robin conditions may lead to
-exact solutions in 1D, but this is not true in 2D. There, we get
+exact solutions in 1D, but this is not so easy in 2D and 3D.
+In higher dimensions, we normally get
 a varying :math:`r`, depending on the manufactured solution, which destroys
 the exact computation of derivatives. An extension of ``verify`` is
 necessary such that we measure convergence rates when ``expect_exact_sol``
@@ -1542,22 +1515,75 @@ accuracy for less smooth solutions of the diffusion equations,
 as provided by a lumped mass matrix, may often be more important.
 
 Application: diffusion of a spike
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+---------------------------------
 
 Just to demonstrate how to use the ``solver`` function in an application,
-we consider pure diffusion of a spike
+we consider pure diffusion of a spike in a domain :math:`[0,L]\times [0,L]`:
 
 .. math::
-         u_0(x,y) = sin^8(\pi x)\sin^8(\pi y),
+         u_0(x,y) = T_0 + A\sin^m(\pi\frac{x}{L})\sin^m(\pi\frac{y}{L}),
 
-with boundary conditions :math:`u=0`. We solve the homogeneous, constant-coefficient,
-scaled diffusion equation,
-so :math:`p=c=\varrho =1`, :math:`f=0`. Moreover, :math:`r` is a list of ``Constant(0)`` objects for
-the Dirichlet conditions (length 4, one ``Constant(0)`` for each side of
-the 2D domain). In this case, :math:`s` is a just a dummy variable but needs to
-be of type ``Expression`` or ``Constant``, so we choose ``Constant(0)``.
-The domain :math:`[0,1]\times[0,1]` is divided into a :math:`60\times 60` partitioning
-with P1 elements.
+for some parameters :math:`T_0`, :math:`A`, and :math:`m`. The latter governs the thickness
+of the spike.
+It is convenient to scale the problem by introducing
+
+.. math::
+         \bar u = \frac{u-T_0}{A},\quad \bar x=\frac{x}{L},\quad \bar y
+        = \frac{y}{L},\quad \bar t = \frac{p t}{L^2\varrho c},
+
+resulting in the homogeneous, constant-coefficient, scaled diffusion equation
+(now dropping bars over scaled quantities)
+
+.. math::
+         \frac{\partial u}{\partial t} = \nabla^2 u{\thinspace .}
+
+The Robin boundary condition with surrounding temperature :math:`T_0` becomes
+
+.. math::
+         -\frac{\partial u}{\partial n} = \mathrm{Nu}\,u,
+
+with the Nusselt number :math:`\mathrm{Nu}=Lr/p` as a dimensionless variable.
+
+
+.. admonition:: Partial verification
+
+   With :math:`\mathrm{Nu}=0` and insulated boundaries one can integrate the
+   PDE over the spatial domain and obtain :math:`\frac{\partial}{\partial t}\int_\Omega
+   u{\, \mathrm{d}x} = 0` (the :math:`\nabla^2 u` term is converted to a surface integral
+   involving :math:`\partial u/partial n`).
+   That is, the integral under the solution remains constant in time.
+   We can use this result as a partial verification at each time level
+   in the ``user_action`` function. The integral is easily calculated in
+   FEniCS by ``assemble(u*dx)``.
+
+
+
+
+Observe that running the solver with :math:`p=c=\varrho =1`, :math:`f=0`, :math:`s=0`,
+:math:`r=\mathrm{Nu}` (on each side of the square domain), and
+:math:`u(x,y,0)=\sin^8(\pi x)\sin^8(\pi y)` solves the scaled problem.  The
+scaled domain :math:`[0,1]\times[0,1]` is divided into a :math:`60\times 60`
+partitioning with P1 elements.
+
+The integral of :math:`u` for a thin (:math:`m=8`) and a thick (:math:`m=2`) spike is
+
+.. code-block:: text
+
+    Terminal> isympy
+    In [1]: m=2
+    
+    In [2]: integrate(sin(pi*x)**m*sin(pi*y)**m, (x,0,1), (y,0,1))
+    Out[2]: 1/4
+    
+    In [3]: m=8
+    
+    In [4]: integrate(sin(pi*x)**m*sin(pi*y)**m, (x,0,1), (y,0,1))
+    Out[4]: 1225/16384
+    
+
+(The SymPy interactive shell, ``isympy``, is a convenient symbolic calculator
+that predefines ``x`` and ``y`` as
+symbols and automatically performs ``from sympy import *``.)
 
 We want to animate the solution using the FEniCS built-in ``plot`` command.
 The necessary actions must be done in the ``user_action`` function, here
@@ -1567,20 +1593,24 @@ The application code reads
 
 .. code-block:: python
 
-    def animate_sine_spike():
+    def animate_sine_spike(m=2):
         import numpy as np, time
     
         # Diffusion of a sin^8 spike, scaled homogeneous PDE
-        u0 = Expression('pow(sin(pi*x[0])*sin(pi*x[1]), 8)')
+        u0 = Expression('pow(sin(pi*x[0])*sin(pi*x[1]), m)', m=m)
         c = rho = p = Constant(1)
         f = Constant(0)
-        r = [Constant(0) for i in range(2*2)] # Dirichlet conditions u=0
-        s = Constant(0)                       # dummy, not used
         dt = 0.0005
         T = 20*dt
         L = [1, 1]
         divisions = (60, 60)
         u_range = [0, 1]
+    
+        # Neumann conditions (insulated boundary)
+        BC = 'Robin'
+        Nu = 0
+        r = [Constant(Nu) for i in range(4)]   # Scaled Robin cond
+        s = Constant(0)  # dummy, not used
     
         vtkfile = File('diffusion.pvd')
     
@@ -1592,19 +1622,22 @@ The application code reads
                            range_max=float(u_range[1]))  # must be float
             else:
                 plt.plot(u)
+                # Integral of u should remain constant
+                u_integral = {2: 1./4, 8: 1225./16384}
+                if m in u_integral:
+                    assert abs(assemble(u*dx) - u_integral[m]) < 1E-12
             print('t=%g' % t)
             time.sleep(0.5)           # pause between frames
             vtkfile << (u, float(t))  # store time-dep Function
     
         solver(
             rho, c, p, f, r, s, u0, T, L,
-            dt, divisions, degree=1, theta=1,
+            dt, divisions, degree=1, theta=0.5,
             user_action=animate,
             u0_project=False,
             lumped_mass=False,
-            BC='Dirichlet',
-            A_is_const=True,
-            avoid_b_assembly=True)
+            BC=BC)
+            #avoid_b_assembly=True does not yet work with Robin cond.
 
 A little trick is needed in the ``animate`` function. To fix the
 color scale throughout the animation, we must initially provide the
@@ -1615,6 +1648,13 @@ variable. The solution is to let it be a global variable ``plt``
 (or one could implement ``animate`` via a class that has ``plt`` as an
 attribute and the callback function as method, usually ``__call__``).
 
+The animation shows that the thick spike raises the values at the
+boundaries with time, and we can see the solution approaches a
+constant (1/4), while the thin spike (:math:`m=8`) just diffusions and
+vanishes with minor impact on the boundary values (these values are to
+end up at 0.075 as :math:`t\rightarrow\infty`, but this is hardly visible in
+the plot).
+
 .. ===== Methods of lines and ODE solvers =====
 
 .. _ch:diffusion:welding:
@@ -1623,15 +1663,14 @@ A welding example with post processing and animation
 ====================================================
 
 The focus so far in this tutorial has been on producing the solution
-of PDE problems. [**hpl 8**: This is book 2, it depends on how things end up in the previous chapter.] For scientific investigations, the primary work is
-often with post processing results: computing quantities derived from
-the solution and inspecting these with visualization or data analysis tools.
-This is the focus of the present section.
-To ease the programming, we shall make use of a convenient tool, ``cbcpost``,
-for post processing, saving data to file(s), and animating solutions.
-We recommend to use
-``cbcpost`` in all time-dependent FEniCS solvers, but it also has a lot
-to offer in stationary problems too.
+of PDE problems. [**hpl 8**: This is book 2, it depends on how things end up in the previous chapter.] For scientific investigations, the primary
+work is often with post processing results: computing quantities
+derived from the solution and inspecting these with visualization or
+data analysis tools.  This is the focus of the present section.  To
+ease the programming, we shall make use of a convenient tool,
+``cbcpost``, for post processing, saving data to file(s), and animating
+solutions.  We recommend to use ``cbcpost`` in all time-dependent FEniCS
+solvers.
 
 To explain the usage of ``cbcpost`` for storage and plotting, we address
 a real physical application: welding of a plate, where a moving heat
@@ -1744,27 +1783,42 @@ Heat transfer due to a moving welding source
 Let us solve a diffusion problem taken from welding.  A moving
 welding equipment acts as a moving heat source at the top of a thin
 metal plate.  The question is how the heat from the equipment spreads
-out in the material that is being welded. We use the standard heat
-equation, treat the material as two dimensional, and do not take phase
+out in the material that is being exposed to the external heat source.
+We use the standard heat
+equation and do not take phase
 transitions into account.  The governing PDE is then
 
 .. math::
-         \varrho c \frac{\partial u}{\partial t} = \kappa\nabla^2 u + f,
+         \varrho c \frac{\partial u}{\partial t} = p\nabla^2 u + f,
 
 where :math:`u` is temperature, :math:`\varrho` is the density of the material,
-:math:`c` is the heat capacity at constant volume, :math:`\kappa` is the heat
+:math:`c` is the heat capacity at constant volume, :math:`p` is the heat
 conduction coefficient, and :math:`f` models the heat source from the
-welding equipment. The domain is :math:`\Omega = [0,L]\times [0,L]`.  An
-additional major simplification is that we set :math:`u=U_s` at the
-boundary, where :math:`U_s` is the temperature of the surroundings (a Robin
-condition, modeling cooling at the boundary would be more accurate,
-but then we should also consider cooling in the third dimension as
-well).  The initial condition reads :math:`u=U_s`.
+welding equipment. The domain is :math:`\Omega = [0,L]\times [0,L]\times [0,L_z]`.
+The plate is thin, meaning that :math:`L_z\ll L`. The relevant boundary
+condition is a cooling law; that is, a Robin condition
+
+.. math::
+         -p\frac{\partial u}{\partial n} = r(u-s),
+
+on the entire boundary. Here, :math:`r` is the heat transfer coefficient at
+the boundary and :math:`s` is the surrounding temperature.
+The natural initial condition is :math:`u=s`. Note that when the plate is thin,
+one might be tempted to use a 2D model, but this implies the assumption of
+:math:`\partial u/\partial z =0`, which again means insulated boundaries at the
+top and bottom surfaces of the plate. This is not physically relevant as we
+know there will be quite some heat loss from the surfaces of the plate.
+We must therefore have a cooling condition in these surfaces, which implies
+:math:`\partial u/\partial z \neq0` and hence a 3D problem. (Nevertheless, one
+could integrate over the thickness and develop a 2D model that takes the
+heat loss at the surfaces into account - the PDE will then get an extra
+:math:`r(u-s)` term and turn into a reaction-diffusion equation.)
 
 A welding source is moving and very localized in space.  The
 localization can be modeled by a peak-shaped Gaussian function.  The
 movement is taken to be a circle with radius :math:`R` about a point
-:math:`(x_0,y_0)`. An appropriate :math:`f` is
+:math:`(x_0,y_0,L_z)`. The velocity of the equipment is constant. A possible
+form of :math:`f` is
 
 .. math::
          f(x,y,t) = A\exp{\left(-\frac{1}{2\sigma^2}
@@ -1773,7 +1827,10 @@ movement is taken to be a circle with radius :math:`R` about a point
 
 The parameter :math:`A` is the strength of the heat source, and :math:`\sigma` is
 the "standard deviation" (i.e., a measure of the width) of the Gaussian
-function.
+function. This source is equally strong throughout the thickness of
+the material. We could easily multiply by some function modeling decay
+of the source in :math:`z` direction as we move away from the top surface where
+the welding equipment is applied.
 
 .. _ch:diffusion:welding:scaling:
 
@@ -1781,18 +1838,21 @@ Scaling of the welding problem
 ------------------------------
 
 There are 10 physical parameters in the problem: :math:`L`, :math:`\varrho`, :math:`c`,
-:math:`\kappa`, :math:`A`, :math:`x_0`, :math:`y_0`, :math:`R`, :math:`\omega`, :math:`\sigma`.  Scaling can
+:math:`p`, :math:`A`, :math:`x_0`, :math:`y_0`, :math:`R`, :math:`\omega`, :math:`\sigma`.  Scaling can
 dramatically reduce the number of parameters and also introduce new
 parameters that are much easier to assign numerical values when doing
-numerical experiments. We therefore scale the problem. As length
-scale, we choose :math:`L` so the scaled domain becomes the unit square. As
+numerical experiments. In the present application, we end up with essentially
+one interesting parameter to vary in the scaled problem!
+As length
+scale, we choose :math:`L` so the scaled domain becomes :math:`[0,1]\times [0,1]\times
+[0,\Delta]`, where :math:`\Delta = L_z/L` is a small dimensionless parameter. As
 time scale and characteristic size of :math:`u`, we just introduce :math:`t_c` ad
 :math:`u_c`.  This means that we introduce scaled variables
 
 .. math::
         
         \bar x = \frac{x}{L},\quad \bar y = \frac{y}{L},\quad \bar t =\frac{t}{t_c},
-        \quad\bar u = \frac{u-U_s}{u_c}{\thinspace .}
+        \quad\bar u = \frac{u-s}{u_c}{\thinspace .}
         
 
 The scaled form of :math:`f` is naturally :math:`\bar f = f/A`, since this makes
@@ -1802,7 +1862,8 @@ also be scaled:
 .. math::
         \begin{align*}
         \bar f &= \exp{\left(-\frac{1}{2\sigma^2}
-        \left({\bar xL -(L \bar x_0 + L\bar R\cos\omega t_c t)}\right)^2 -\frac{1}{2\sigma^2}
+        \left({\bar xL -(L \bar x_0 + L\bar R\cos\omega t_c t)}\right)^2 -
+        \frac{1}{2\sigma^2}
         \left({L \bar y-(L\bar y0 + L\bar R\sin\omega t_c t)}\right)^2\right)}\\ 
         &= \exp{\left(-\frac{1}{2}\frac{L^2}{\sigma^2}
         \left(x -(\bar x_0 + \bar R\cos\omega t_c \bar t)\right)^2 -
@@ -1825,23 +1886,22 @@ of the domain:
 .. math::
          (\bar x_0,\bar y_0) = (\frac{1}{2},\frac{1}{2}){\thinspace .}
 
-The time scale
-in diffusion problems is usually related to the "speed of the
-diffusion", but in this problem it is more natural to base the time
-scale on the movement of the heat source, which suggests setting
+The time scale in diffusion problems is usually related to the "speed
+of diffusion", but in this problem it is more natural to base the
+time scale on the movement of the heat source, which suggests setting
 :math:`t_c = 1/\omega`.
 
 Inserting the new scaled variables in the PDE leads to
 
 .. math::
          \frac{\partial \bar u}{\partial\bar t} =
-        \frac{\kappa}{\omega\varrho c L^2}\bar\nabla^2\bar u +
+        \frac{p}{\omega\varrho c L^2}\bar\nabla^2\bar u +
         \frac{A}{\omega u_c\varrho c}\bar f(\bar x,\bar y,\bar t){\thinspace .}
 
 The first coefficient is a dimensionless number,
 
 .. math::
-         \gamma = \frac{\kappa}{\omega\varrho c L^2},
+         \gamma = \frac{p}{\omega\varrho c L^2},
 
 while the second coefficient can be used to determine :math:`u_c` by demanding
 the source term to balance the time derivative term,
@@ -1869,12 +1929,15 @@ tuned from experiments to give :math:`\bar u` a typically size of unity.
 Looking at :math:`\gamma`, we see that it can be written
 
 .. math::
-         \gamma = \frac{1/\omega}{\varrho c L^2/\kappa},
+         \gamma = \frac{1/\omega}{\varrho c L^2/p},
 
 which is the ratio of the time scale for the heat source and the
 time scale for diffusion. Multiplying by :math:`R/R` gives another
 interpretation: :math:`\gamma` is the ratio of the speed of diffusion and
-the speed of the heat source.
+the speed of the heat source. In welding, the speed of the heat
+source is very much larger than the speed of heat conduction.
+
+[**hpl 9**: This is vol II and we have done scaling many times, so we perhaps don't need more selling points. We had some in the introduction to this section.]
 
 
 .. admonition:: The benefits of scaling
@@ -1887,7 +1950,7 @@ the speed of the heat source.
    actually left with only one interesting parameter to adjust: :math:`\gamma`.
    It is so much easier to assign this parameter a value (speed of
    diffusion versus speed of heat source) than to set :math:`\varrho`, :math:`c`, and
-   :math:`\kappa` for some chosen material, and then determine relevant values for
+   :math:`p` for some chosen material, and then determine relevant values for
    :math:`A`, :math:`L`, etc. There are no approximations in the scaling procedure;
    it just dramatically simplifies numerical simulations.
    The book [Ref2]_ gives a comprehensive treatment
@@ -1901,33 +1964,56 @@ the speed of the heat source.
 A function-based solver
 -----------------------
 
-We can use the ``solver_minimize_assembly`` function to solve the
-welding problem. The application code just declares the problem-dependent
-parameters and calls the solver function:
+We can use the ``solver`` function from the section :ref:`ch:diffusion:opt` to
+solve the welding problem. The application code just declares the
+problem-dependent parameters and calls the solver function:
 
 .. code-block:: python
 
-    def application_welding(gamma=1, delta=1, beta=10, num_rotations=2):
+    def welding(gamma=1, delta=70, beta=10, num_rotations=2, Nu=1):
         """Circular moving heat source for simulating welding."""
+        d = 3  # number of space dim
         from math import pi, sin, cos
-        u_b = Constant(0)
-        I = Constant(0)
+        # Define physical parameters and boundary conditions
+        u0 = Constant(0)
+        rho = c = Constant(1)
+        p = Constant(1.0/gamma)
+        BC = 'Robin'
+        Nu = 1
+        r = [Constant(Nu) for i in range(2*d)]
+        s = Constant(0)
+    
+        # Define welding source
         R = 0.2
         f = Expression(
-            'delta*exp(-0.5*pow(beta,2)*(pow(x[0]-(0.5+R*cos(t)),2) + '
-                                        'pow(x[1]-(0.5+R*sin(t)),2)))',
-            delta=delta, beta=beta, R=R, t=0)
-        # Simulate to rotations with the equipment
+            'delta*exp(-b*(pow(x[0]-(0.5+R*cos(t)),2) + '
+            'pow(x[1]-(0.5+R*sin(t)),2)))',
+            delta=delta, b=0.5*beta**2, R=R, t=0)
         omega = 1.0      # Scaled angular velocity
         P = 2*pi/omega   # One period of rotation
-        T = 2*P          # Total simulation time
+        T = num_rotations*P
         dt = P/40        # 40 steps per rotation
-        Nx = Ny = 60
-        solver_minimize_assembly(
-            gamma, f, u_b, I, dt, T, (Nx, Ny), (1, 1), degree=1,
-            user_action=ProcessResults(), I_project=False)
+    
+        divisions = (40, 40, 4)
+        L = (1, 1, 0.05)
+    
+        solver(
+            rho, c, p, f, r, s, u0, T, L,
+            dt, divisions, degree=1, theta=0.5,
+            user_action=ProcessResults(),
+            u0_project=False,
+            lumped_mass=False,
+            BC=BC,
+            A_is_const=False,
+            avoid_b_assembly=False)
 
-The remaining task is to write the user action callback function to
+Note that our efficiency enhancements in the ``solver`` function do
+not incorporate contributions from Robin conditions, so we cannot
+take advantage here of the fact that the coefficient matrix is constant
+and that assembly can be completely avoided.
+
+The remaining task is to write the user action callback function
+(class ``ProcessResults``) to
 process the solution at teach time step. We want to make use of
 ``cbcpost`` for storage and plotting.  Since we need the post processor
 variable, called ``pp`` in the section :ref:`ch:diffusion:welding:cbcpost`,
@@ -1943,6 +2029,9 @@ response, so we register both fields for storage and plotting:
     class ProcessResults(object):
         def __init__(self):
             """Define fields to be stored/plotted."""
+            # Dump temperature solution to std FEniCS file temp.h5
+            self.timeseries_T = TimeSeries(mpi_comm_world(), 'temp')
+            # Also dump temperature and source to cbcpost files
             self.pp = post.PostProcessor(
                 dict(casedir='Results', clean_casedir=True))
             self.pp.add_field(
@@ -1969,6 +2058,7 @@ response, so we register both fields for storage and plotting:
         def __call__(self, t, T, timestep):
             """Store T and f to file (cbcpost and VTK)."""
             T.rename('T', 'solution')
+            self.timeseries_T.store(T.vector(), t)
             f_Function = interpolate(f, T.function_space())
             f_Function.rename('f', 'welding equipment')
             self.pp.update_all(
@@ -1978,9 +2068,16 @@ response, so we register both fields for storage and plotting:
             self.vtkfile_T << (T, float(t))
             self.vtkfile_f << (f_Function, float(t))
 
-We took the opportunity to also
-store the ``u`` and ``f`` functions to VTK files, although this is really
-not necessary since ParaView or VisIt can read XDMF files.
+We took the opportunity to store the results in various ways, not only
+using ``cbcpost`` tools. The basic functionality in FEniCS for storing
+time series of ``Function`` objects in files is called ``TimeSeries``
+(the storage format is HDF5). Other solvers can easily read a field
+at a specified point of time from a ``TimeSeries`` object. We therefore
+make such an object in the class and dump the solution to this file
+each time the callback function is called. We also store the solution
+and the heat source in VTK files, although this is really
+not necessary since ParaView or VisIt can read XDMF files that ``cbcpost``
+produces.
 
 Note that the use of ``cbcpost`` is usually very dependent on the
 problem at hand, so it does not make sense to include ``cbcpost`` code
@@ -1990,9 +2087,11 @@ user action function.
 Getting an animation on the screen with the built-in plotting tool is
 a matter of running the welding example:
 
+[**hpl 10**: The welding source velocity is much larger than the diffusion velocity. Are the :math:`\gamma` values compatible with this?]
+
 .. code-block:: python
 
-    >>> from heat_func import application_welding as a
+    >>> from heat_func import welding as a
     >>> a(gamma=10, delta=700)
 
 (We introduced the synonym ``a`` to save some typing.)
@@ -2005,33 +2104,109 @@ Or you can run this as a command in the terminal:
     a(gamma=10, delta=700)'
 
 Since we have fixed the color scale of the temperature to have values
-in :math:`[0,1.1]`, we must adjust :math:`\delta` appropriately to :math:`\gamma`.  For
-example, running :math:`\gamma=40` reveals, from the output in the terminal,
-that the maximum temperature is about 0.25, and consequently we do not
-see much. For any given :math:`\gamma`, run the problem with :math:`\delta=1` (and
-say ``num_rotations=0.2`` to make a quick simulation), and rerun with
-:math:`\delta` as one over the maximum temperature.  Here we get an
-approximate :math:`\delta = 66.7\gamma` for :math:`\gamma \leq 0.1`. Try running
-:math:`\gamma=0.01` and :math:`\delta=1` to observe some more significant heat
-transfer away from the welding equipment. With :math:`\gamma =0.001` there
-is significant heat build-up, but for so small :math:`\gamma` we should
-re-scale the problem and use the diffusion time scale as time scale.
+in :math:`[0,1.1]`, we must adjust :math:`\delta` appropriately to :math:`\gamma`. To this end,
+it is important that we monitor the maximum :math:`u` value printed in the
+terminal window. We find that for :math:`\gamma=30`, a value :math:`\delta=15`
+gives :math:`u` close to unity. Actually, we must have :math:`\gamma=2000` for :math:`\delta=1`
+to give maximum values of :math:`u` close to unity. The values of :math:`\delta` indicates
+that the scaling is "right" for large :math:`\gamma` values - for small :math:`\gamma`
+we need a very large :math:`\delta`, pointing to the fact that the characteristic
+temperature in the scaling is not correct (one would then use a time scale
+based on heat conductivity and not the movement of the welding equipment).
 
 In ParaView, load ``Results/Temperature/Temperature.xdmf`` as file,
 click **Apply**, then the play button for animation. If the animation is
 not correct, repeat the procedure. Thereafter, split the layout in
 two, choose **3D View**, load ``Results/Heat source/Heat_source.xmdf``,
 click **Apply**, and run the animation. The two plots are synchronized
-in time.
+in time. The plots and movies below were made in Paraview.
+
+.. _ch:diffusion:welding:fig1:
+
+.. figure:: welding3D.png
+   :width: 800
+
+   *Heat source (upper left) and temperature distributions for :math:`\gamma=0.1` (upper right), :math:`\gamma=1` (lower left), and :math:`\gamma=30` (lower right), after two rotations*
+
+.. _ch:diffusion:welding:fig2:
+
+.. figure:: welding_gamma2000_temp.png
+   :width: 500
+
+   *The temperature field for :math:`\gamma=2000` after two rotations*
 
 .. raw:: html
         
         <div>
         <video  loop controls width='640' height='365' preload='none'>
-            <source src='mov/welding_gamma1.ogg'  type='video/ogg;  codecs="theora, vorbis"'>
+            <source src='mov/welding/welding_gamma1_2D.ogg'  type='video/ogg;  codecs="theora, vorbis"'>
         </video>
         </div>
-        <p><em>Welding example with :math:`\gamma=1`.</em></p>
+        <p><em>:math:`\gamma=1`, 2D view.</em></p>
+        
+        <!-- Issue warning if in a Safari browser -->
+        <script language="javascript">
+        if (!!(window.safari)) {
+          document.write("<div style=\"width: 95%%; padding: 10px; border: 1px solid #100; border-radius: 4px;\"><p><font color=\"red\">The above movie will not play in Safari - use Chrome, Firefox, or Opera.</font></p></div>")}
+        </script>
+        
+
+.. raw:: html
+        
+        <div>
+        <video  loop controls width='640' height='365' preload='none'>
+            <source src='mov/welding/welding_gamma01_3D.ogg'  type='video/ogg;  codecs="theora, vorbis"'>
+        </video>
+        </div>
+        <p><em>:math:`\gamma=0.1`.</em></p>
+        
+        <!-- Issue warning if in a Safari browser -->
+        <script language="javascript">
+        if (!!(window.safari)) {
+          document.write("<div style=\"width: 95%%; padding: 10px; border: 1px solid #100; border-radius: 4px;\"><p><font color=\"red\">The above movie will not play in Safari - use Chrome, Firefox, or Opera.</font></p></div>")}
+        </script>
+        
+
+.. raw:: html
+        
+        <div>
+        <video  loop controls width='640' height='365' preload='none'>
+            <source src='mov/welding/welding_gamma1_3D.ogg'  type='video/ogg;  codecs="theora, vorbis"'>
+        </video>
+        </div>
+        <p><em>:math:`\gamma=1`.</em></p>
+        
+        <!-- Issue warning if in a Safari browser -->
+        <script language="javascript">
+        if (!!(window.safari)) {
+          document.write("<div style=\"width: 95%%; padding: 10px; border: 1px solid #100; border-radius: 4px;\"><p><font color=\"red\">The above movie will not play in Safari - use Chrome, Firefox, or Opera.</font></p></div>")}
+        </script>
+        
+
+.. raw:: html
+        
+        <div>
+        <video  loop controls width='640' height='365' preload='none'>
+            <source src='mov/welding/welding_gamma30_3D.ogg'  type='video/ogg;  codecs="theora, vorbis"'>
+        </video>
+        </div>
+        <p><em>:math:`\gamma=30`.</em></p>
+        
+        <!-- Issue warning if in a Safari browser -->
+        <script language="javascript">
+        if (!!(window.safari)) {
+          document.write("<div style=\"width: 95%%; padding: 10px; border: 1px solid #100; border-radius: 4px;\"><p><font color=\"red\">The above movie will not play in Safari - use Chrome, Firefox, or Opera.</font></p></div>")}
+        </script>
+        
+
+.. raw:: html
+        
+        <div>
+        <video  loop controls width='640' height='365' preload='none'>
+            <source src='mov/welding/welding_gamma2000_3D.ogg'  type='video/ogg;  codecs="theora, vorbis"'>
+        </video>
+        </div>
+        <p><em>:math:`\gamma=2000`.</em></p>
         
         <!-- Issue warning if in a Safari browser -->
         <script language="javascript">
