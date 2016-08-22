@@ -33,12 +33,12 @@ mesh = UnitSquareMesh(8, 8)
 V = FunctionSpace(mesh, 'P', 1)
 
 # Define boundary condition
-u_b = Expression(u_code, degree=2)
+u_D = Expression(u_code, degree=2)
 
 def boundary(x, on_boundary):
     return on_boundary
 
-bc = DirichletBC(V, u_b, boundary)
+bc = DirichletBC(V, u_D, boundary)
 
 # Define variational problem
 u = Function(V) # not TrialFunction!
@@ -51,10 +51,10 @@ solve(F == 0, u, bc)
 
 # Plot solution
 u.rename('u', 'solution')
-#plot(u)
+plot(u)
 
 # Compute error at vertices
-u_e = interpolate(u_b, V)
+u_e = interpolate(u_D, V)
 import numpy as np
 error = np.abs(u_e.vector().array() - u.vector().array()).max()
 print('error = %.3g' % error)
