@@ -31,7 +31,7 @@ f = Constant(-6.0)
 a = dot(grad(u), grad(v))*dx
 L = f*v*dx
 
-# Solve variational problem
+# Compute solution
 u = Function(V)
 solve(a == L, u, bc)
 

@@ -55,7 +55,7 @@ for n in xrange(num_steps):
     t += dt
     u_D.t = t # update for bc
 
-    # Solve variational problem
+    # Compute solution
     solve(a == L, u, bc)
 
     # Compute error at vertices

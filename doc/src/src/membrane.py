@@ -37,7 +37,7 @@ v = TestFunction(V)
 a = dot(grad(w), grad(v))*dx
 L = p*v*dx
 
-# Solve variational problem
+# Compute solution
 w = Function(V)
 solve(a == L, w, bc)
 
