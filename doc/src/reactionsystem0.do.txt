@@ -18,16 +18,13 @@ the next. However, one of the strengths with FEniCS is the ease by
 which one can instead define variational problems that couple several
 PDEs into one compound system. In this section, we will look at how to use
 FEniCS to write solvers for such systems of coupled PDEs.
-The goal is to demonstrate how easy it is to deal with fully implicit,
+The goal is to demonstrate how easy it is to implement fully implicit,
 also known as monolithic, solvers in FEniCS.
 
 ===== PDE problem =====
 
 Our model problem is the following system of
 advection--diffusion--reaction equations:
-
-[hpl: I replaced $\beta$ by $w$ since $w$ was used everywhere after
-a page...]
 
 !bt
 \begin{align}
@@ -90,25 +87,19 @@ solution of the incompressible Navier--Stokes equations around a
 cylinder from the previous section.  In summary, we will thus be
 solving the following coupled system of nonlinear PDEs:
 
-[hpl: I used full time derivatives, not the dot notation, of two reasons:
-1) it is used elsewhere in the tutorial, and 2) it is not used much in
-continuum mechanics systems unless time is the only variable. It is not
-much used in the PDE world either compared to the full notation, so for
-the reader to feel more at home, I suggest to use to most familiar notation.]
-
 !bt
 \begin{align}
   label{ftut1:reactionsystem:full}
-  \varrho(\frac{\partial w}{\partial t} +
-  w \cdot \nabla w) &= \nabla\cdot\sigma(w, p) + f, \\
-  \nabla \cdot u &= 0, \\
+  \varrho\left(\frac{\partial w}{\partial t} +
+  w \cdot \nabla w\right) &= \nabla\cdot\sigma(w, p) + f, \\
+  \nabla \cdot w &= 0, \\
   \frac{\partial u_1}{\partial t} +
   w \cdot \nabla u_1 - \nabla\cdot(\epsilon\nabla u_1)
     &= f_1 - K u_1 u_2, \\
   \frac{\partial u_2}{\partial t} +
   w \cdot \nabla u_2 - \nabla\cdot(\epsilon\nabla u_2)
     &= f_2 - K u_1 u_2, \\
-  \frac{partial u_3}{\partial t} +
+  \frac{\partial u_3}{\partial t} +
   w \cdot \nabla u_3 - \nabla\cdot(\epsilon\nabla u_3)
     &= f_3 + K u_1 u_2 - K u_3.
 \end{align}
@@ -129,40 +120,19 @@ solutions from time-dependent PDE problems.
 
 ===== Variational formulation =====
 
-[hpl: Variational formulation of systems of PDEs is not well explained in
-the literature. Different methods are used, while in FEniCS it is best to
-think of a scalar/inner product of the vector PDE and a vector trial function.
-Also, we need to do the time discretization. Here it is relatively easy
-to use the $\theta$ rule, but one must be very consistent to evaluate each
-term at $t_{n+\theta}$. This is difficult for the reader, I think, and it is
-explained in detail later in the chapter on the heat equation, so I suggest
-using just the Backward Euler method for maximum simplicity and emphasis on
-the programming here. A full $\theta$ rule increases the cognitive load
-without giving much stronger tools at hand -- and $\theta=1$ was used anyway
-in the program...]
-
 We obtain the variational formulation of our system by multiplying
 each equation by a test function, integrating the second-order terms
 $-\nabla\cdot(\epsilon\nabla u_i)$ by parts, and summing up the
 equations. When working with FEniCS it is convenient to think of the
 PDE system as a vector of equations. The test functions are collected in
 a vector too, and the variational formulation is the inner product of
-the vector PDE and the vector trial function.
+the vector PDE and the vector test function.
 
-We also need introduce some discretization in time. The simplest idea is
-to use a finite difference that goes backward in time:
-
-!bt
-\[ \frac{\partial}{\partial t} u_1(x,t_{n+1}) \approx
-\frac{u_1(x,t_{n+1}-u(x,t_n}{\Delta t},\]
-!et
-where $\Delta t =t_{n+1}-t_n$ is the time step. Assuming quantities at time
-level $n$ to be known, we are left with $u_1(x,t_{n+1})$ as unknown function
-to be computed. To fully understand this reasoning, the reader needs some
-basic knowledge about finite differences.
-
-Let $v_1$, $v_2$, and $v_3$ be the test functions, or the components of
-the trial vector function. The inner product results in
+We also need introduce some discretization in time. We will use the
+backward Euler method as before when we solved the heat equation and
+approximate the time derivatives by $(u_i^{n+1}-u_i^n) / \dt$. Let
+$v_1$, $v_2$, and $v_3$ be the test functions, or the components of
+the test vector function. The inner product results in
 
 !bt
 \begin{align}
@@ -173,34 +143,18 @@ the trial vector function. The inner product results in
   + & \int_{\Omega} (\dt^{-1} (u_2^{n+1} - u_2^n) v_2
   + w \cdot \nabla u^{n+1}_2 \, v_2
   + \epsilon \nabla u^{n+1}_2 \cdot \nabla v_2) \dx \\
-  + & \int_{\Omega} \dt^{-1} (u_3^{n+1} - u_3^n) (v_3
+  + & \int_{\Omega} (\dt^{-1} (u_3^{n+1} - u_3^n) v_3
   + w \cdot \nabla u^{n+1}_3 \, v_3
   + \epsilon \nabla u^{n+1}_3 \cdot \nabla v_3) \dx \\
-  & \quad + \int_{\Omega} (f_1 v_1 + f_2 v_2 + f_3 v_3) \dx \\
-  & \quad + \int_{\Omega} (K u^{n+1}_1 u^{n+1}_2 v_1 + K u^{n+1}_1 u^{n+1}_2 v_2
-  - K u^{n+1}_1 u^{n+1}_2 v_3 + K u^{n+1}_3 v_3) \dx = 0.
+  - & \int_{\Omega} (f_1 v_1 + f_2 v_2 + f_3 v_3) \dx \\
+  - & \int_{\Omega} (-K u^{n+1}_1 u^{n+1}_2 v_1 - K u^{n+1}_1
+  u^{n+1}_2 v_2 + K u^{n+1}_1 u^{n+1}_2 v_3 - K u^{n+1}_3 v_3) \dx = 0.
 \end{align}
 !et
 For this problem it is natural to assume homogeneous Neumann boundary
 conditions on the entire boundary for $u_1$, $u_2$, and $u_3$; that
 is, $\partial u_i/\partial n = 0$ for $i = 1, 2, 3$. This means that
 the boundary terms vanish when we integrate by parts.
-
-[hpl: Old comment, but expains why I simplified.
-If you use $\theta=1$ anyway, I would simplify already here. The
-problem is that you need to consistently evaluate the other terms
-(including the reaction and $w$ terms) also at the weighted time point
-$\theta t_n + (1-\theta)t_{n+1}$, and besides giving very long
-formulas, this brings up some nontrivial FEniCS issues that I now deal
-with in detail in the time-dependent solver chapter in volume II -- in
-a simpler context.  It is very easy to make mistakes here as the code
-works and converges, but Crank-Nicolson/midpoint method does not give
-increased convergence rate.
-It may work here as you have a stationary velocity field etc., but the
-$\theta$ rule is a tricky thing that when generalized from this example
-easily goes wrong, unless we really emphasize the $\theta$ weighting of
-all terms. The example is complicated enough for the FEniCS beginnner...]
-
 
 ===== FEniCS implementation =====
 
@@ -209,7 +163,7 @@ save the mesh to file in the Navier--Stokes example and can now easily
 read it back from file:
 
 !bc pycod
-mesh = Mesh('channel.xml.gz')
+mesh = Mesh(cylinder.xml.gz')
 !ec
 The mesh is stored in the native FEniCS XML format (with additional
 gzipping to decrease the file size).
@@ -224,12 +178,10 @@ W = VectorFunctionSpace(mesh, 'P', 2)
 !ec
 It is important that this space is exactly the same as the space we
 used for the velocity field in the Navier--Stokes solver. To read the
-values for the velocity field, we use a `TimeSeries`
-
-[AL: Check if we can remove `mpi_comm_world`]
+values for the velocity field, we use a `TimeSeries`:
 
 !bc pycod
-timeseries_w = TimeSeries(mpi_comm_world(), 'navier_stokes/velocity')
+timeseries_w = TimeSeries('navier_stokes_cylinder/velocity')
 !ec
 This will initialize the object `timeseries_w` which we will call
 later in the time-stepping loop to retrieve values from the
@@ -259,7 +211,7 @@ P1 = FiniteElement('P', 'triangle', 1)
 TH = P2 * P1
 !ec
 This syntax works great for two elements, but for three or more
-elements we meet a subtle issue of how the Python interpreter handles
+elements we meet a subtle issue in how the Python interpreter handles
 the `*` operator. For the reaction system, we create the mixed element
 by `element = MixedElement([P1, P1, P1])` and one would be tempted to
 write
@@ -280,13 +232,9 @@ element:
 element = VectorElement('P', 'triangle', 1, dim=3)
 V = FunctionSpace(mesh, element)
 !ec
-or we can even write
-
-!bc pycod
-V = VectorFunctionSpace(mesh, 'P', 1, dim=3)
-!ec
-if that is found simpler.
 !ewarning
+
+[AL: Remove comment on `VectorFunctionSpace` since it risks being removed in future version for consistency.]
 
 Once the space has been created, we need to define our test functions
 and finite element functions. Test functions for a mixed function
@@ -307,31 +255,19 @@ u = Function(V)
 u_1, u_2, u_3 = split(u)
 !ec
 These functions will be used to represent the unknowns $u_1$, $u_2$, and $u_3$
-and the new time level $n+1$. The corresponding values at the previous
+at the new time level $n+1$. The corresponding values at the previous
 time level $n$ are denoted by `u_n1`, `u_n2`, and `u_n3` in our program.
-(Any value
-in between may be obtained by interpolation, for instance by a weight
-$\theta$:
-
-!bc pycod
-U_1 = (1 - Constant(theta))*u_n1 + Constant(theta)*u_1
-!ec
-with similar expressions for the other components. We shall use a
-simple Backward Euler scheme in time in this computational example and
-hence only make use of `u_1` in the variational formulation. For a
-potentially more accurate centered finite difference scheme, however, we could
-make use of `U_1` and $\theta=\frac{1}{2}$.)
 
 When now all functions and test functions have been defined, we can
 express the nonlinear variational problem
 (ref{ftu1:reactionsystem:varproblem}):
 
 !bc pycod
-F = ((u_1 - u_p1) / k)*v_1*dx + dot(w, grad(u_1))*v_1*dx \
+F = ((u_1 - u_n1) / k)*v_1*dx + dot(w, grad(u_1))*v_1*dx \
   + eps*dot(grad(u_1), grad(v_1))*dx + K*u_1*u_2*v_1*dx  \
-  + ((u_2 - u_p2) / k)*v_2*dx + dot(w, grad(u_2))*v_2*dx \
+  + ((u_2 - u_n2) / k)*v_2*dx + dot(w, grad(u_2))*v_2*dx \
   + eps*dot(grad(u_2), grad(v_2))*dx + K*u_1*u_2*v_2*dx  \
-  + ((u_3 - u_p3) / k)*v_3*dx + dot(w, grad(u_3))*v_3*dx \
+  + ((u_3 - u_n3) / k)*v_3*dx + dot(w, grad(u_3))*v_3*dx \
   + eps*dot(grad(u_3), grad(v_3))*dx - K*u_1*u_2*v_3*dx + K*u_3*v_3*dx \
   - f_1*v_1*dx - f_2*v_2*dx - f_3*v_3*dx
 !ec
@@ -343,9 +279,9 @@ in each time step by a call to the `solve` function:
 t = 0
 for n in xrange(num_steps):
     t += dt
-    timeseries_w.retrieve(w.vector(), t - (1.0 - theta)*dt)
+    timeseries_w.retrieve(w.vector(), t)
     solve(F == 0, u)
-    u_p.assign(u)
+    u_n.assign(u)
 !ec
 In each time step, we first read the current value for the velocity
 field from the time series we have previously stored. We then solve
@@ -372,11 +308,11 @@ plotting or postprocessing.
 
 In our example, we did not need to worry about setting an initial
 condition, since we start with $u_1 = u_2 = u_3 = 0$. This happens
-automatically in the code when we set `u_p = Function(V)`. This
+automatically in the code when we set `u_n = Function(V)`. This
 creates a `Function` for the whole system and all degrees of freedom
 are set to zero.
 
-If we wanted to set initial conditions for the components of the
+If we want to set initial conditions for the components of the
 system separately, the easiest solution is to define the initial
 conditions as a vector-valued `Expression` and then
 project this to the `Function` representing the whole system. For
@@ -384,7 +320,7 @@ example,
 
 !bc pycod
 u_0 = Expression(('sin(x[0])', 'cos(x[0]*x[1])', 'exp(x[1])'), degree=1)
-u_p = project(u_0, V)
+u_n = project(u_0, V)
 !ec
 This defines $u_1$, $u_2$, and $u_2$ to be the projections of $\sin
 x$, $\cos (xy)$, and $\exp(y)$, respectively.
@@ -400,8 +336,8 @@ that $u_2$ should be equal to $xy$ on the boundary defined by
 `boundary`, we do
 
 !bc
-u_b = Expression('x[0]*x[1]', degree=1)
-bc = DirichletBC(V.sub(1), u_b, boundary)
+u_D = Expression('x[0]*x[1]', degree=1)
+bc = DirichletBC(V.sub(1), u_D, boundary)
 !ec
 The object `bc` or a list of such objects containing different
 boundary conditions, can then be passed to the `solve` function as usual.

@@ -98,10 +98,6 @@ A3 = assemble(a3)
 [bc.apply(A1) for bc in bcu]
 [bc.apply(A2) for bc in bcp]
 
-# Save mesh to file for later
-File('channel.xml.gz') << mesh
-exit(0)
-
 # Create VTK files for visualization output
 vtkfile_u = File('navier_stokes_cylinder/velocity.pvd')
 vtkfile_p = File('navier_stokes_cylinder/pressure.pvd')
