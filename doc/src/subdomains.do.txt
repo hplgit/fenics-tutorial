@@ -42,9 +42,6 @@ Let $\GD$ and $\GN$ denote the parts of the boundary $\partial\Omega$
 where the Dirichlet and Neumann conditions apply, respectively.  The
 complete boundary-value problem can be written as
 
-[AL: Fixed alignment of in, on etc here. Needs to be done in other
-places too, using `{alignat}{2}`.]
-
 !bt
 \begin{alignat}{2}
     - \nabla^2 u &= f \quad&&\mbox{in } \Omega,  \\
@@ -65,7 +62,7 @@ g &= \left\lbrace\begin{array}{ll}
 \ub &= 1 + x^2 + 2y^2\tp
 \end{align*}
 !et
-For ease of programming we may introduce a $g$ function defined over the whole
+For ease of programming, we may introduce a $g$ function defined over the whole
 of $\Omega$ such that $g$ takes on the right values at $y=0$ and
 $y=1$. One possible extension is
 
@@ -138,9 +135,11 @@ only two are necessary.
 The first adjustment can be coded as
 
 !bc pycod
+tol = 1E-14
+
 def boundary_D(x, on_boundary):
     if on_boundary:
-        if x[0] == 0 or x[0] == 1:
+        if near(x[0], 0, tol) or near(x[0], 1, tol):
             return True
         else:
             return False
@@ -151,73 +150,10 @@ A more compact implementation reads
 
 !bc pycod
 def boundary_D(x, on_boundary):
-    return on_boundary and (x[0] == 0 or x[0] == 1)
+    return on_boundary and (near(x[0], 0, tol) or near(x[0], 1, tol))
 !ec
-
-!bwarning Never use `==` for comparing real numbers!
-A comparison like `x[0] == 1` should never be used if `x[0]` is a real
-number, because rounding errors in `x[0]` may make the test fail even
-when it is mathematically correct. Consider
-
-!bc pycod
->>> 0.1 + 0.2 == 0.3
-False
->>> 0.1 + 0.2
-0.30000000000000004
-!ec
-
-Comparison of real numbers needs to be made with tolerances! The
-values of the tolerances depend on the size of the numbers involved in
-arithmetic operations:
-
-!bc pycod
->>> abs(0.1+0.2 - 0.3)
-5.551115123125783e-17
->>> abs(1.1+1.2 - 2.3)
-0.0
->>> abs(10.1+10.2 - 20.3)
-3.552713678800501e-15
->>> abs(100.1+100.2 - 200.3)
-0.0
->>> abs(1000.1+1000.2 - 2000.3)
-2.2737367544323206e-13
->>> abs(10000.1+10000.2 - 20000.3)
-3.637978807091713e-12
-!ec
-For numbers of unit size, tolerances as low as $3\cdot 10^{-16}$ can be used
-(in fact, this tolerance is known as the constant `DOLFIN_EPS` in FEniCS).
-Otherwise, an appropriate scaled tolerance must be used.
-
-Here is a better way to test if `x[0] == 1`:
-
-!bc pycod
-tol = 1E-14
-if abs(x[0] - 1) < tol:
-    ...
-!ec
-!ewarning
 
 idx{`near`}
-
-A modified version of the boundary definition using a tolerance
-instead of exact comparison can easily be implemented as follows:
-
-!bc pycod
-def boundary_D(x, on_boundary):
-    tol = 1E-14
-    return on_boundary and (abs(x[0]) < tol or abs(x[0] - 1) < tol)
-!ec
-This function can be written a bit more elegantly using the `near`
-function in FEniCS:
-
-!bc pycod
-def boundary_D(x, on_boundary):
-    tol = 1E-14
-    return on_boundary and (near(x[0], 0, tol) or near(x[1], 1, tol))
-!ec
-
-[AL: Use 1E-14 or 1e-14? Need to be consistent throughout the book.]
-[hpl: I suggest capital 1E-14.]
 
 The second adjustment of our program concerns the definition of `L`,
 which needs to include the Neumann condition:
@@ -229,6 +165,12 @@ L = f*v*dx - g*v*ds
 The `ds` variable implies a boundary integral, while `dx`
 implies an integral over the domain $\Omega$.
 No other modifications are necessary.
+
+Note that the integration `*ds` is carried out over the entire
+boundary, including the Dirichlet boundary. However, since the test
+function `v` vanishes on the Dirichlet boundary (as a result
+specifying a `DirichletBC`), the integral will only include the
+contribution from the Neumann boundary.
 
 ======= Setting multiple Dirichlet conditions =======
 label{ch:poisson0:multiple:Dirichlet}
