@@ -28,7 +28,7 @@ def solver(
     # Define variational problem
     u = TrialFunction(V)
     v = TestFunction(V)
-    a = dot(kappa*grad(u), grad(v))*dx
+    a = kappa*dot(grad(u), grad(v))*dx
     L = f*v*dx
 
     # Compute solution
@@ -74,7 +74,7 @@ def solver_objects(
     # Define variational problem
     u = TrialFunction(V)
     v = TestFunction(V)
-    a = dot(kappa*grad(u), grad(v))*dx
+    a = kappa*dot(grad(u), grad(v))*dx
     L = f*v*dx
 
     # Compute solution
@@ -569,10 +569,10 @@ def solver_bc(
 
     # Collect Dirichlet conditions
     bcs = []
-    for n in boundary_conditions:
-        if 'Dirichlet' in boundary_conditions[n]:
-            bc = DirichletBC(V, boundary_conditions[n]['Dirichlet'],
-                             boundary_markers, n))
+    for i in boundary_conditions:
+        if 'Dirichlet' in boundary_conditions[i]:
+            bc = DirichletBC(V, boundary_conditions[i]['Dirichlet'],
+                             boundary_markers, i))
             bcs.append(bc)
 
     if debug:
@@ -588,8 +588,8 @@ def solver_bc(
         if V.ufl_element().degree() == 1:  # P1 elements
             d2v = dof_to_vertex_map(V)
             coor = mesh.coordinates()
-        for n, bc in enumerate(bcs):
-            print('Dirichlet condition %d' % n)
+        for i, bc in enumerate(bcs):
+            print('Dirichlet condition %d' % i)
             boundary_values = bc.get_boundary_values()
             for dof in boundary_values:
                 print('   dof %2d: u=%g' % (dof, boundary_values[dof]))
@@ -603,27 +603,27 @@ def solver_bc(
 
     # Collect Neumann integrals
     integrals_N = []
-    for n in boundary_conditions:
-        if 'Neumann' in boundary_conditions[n]:
-            if boundary_conditions[n]['Neumann'] != 0:
-                g = boundary_conditions[n]['Neumann']
-                integrals_N.append(g*v*ds(n))
+    for i in boundary_conditions:
+        if 'Neumann' in boundary_conditions[i]:
+            if boundary_conditions[i]['Neumann'] != 0:
+                g = boundary_conditions[i]['Neumann']
+                integrals_N.append(g*v*ds(i))
 
     # Collect Robin integrals
     integrals_R_a = []
     integrals_R_L = []
-    for n in boundary_conditions:
-        if 'Robin' in boundary_conditions[n]:
-            r, s = boundary_conditions[n]['Robin']
-            integrals_R_a.append(r*u*v*ds(n))
-            integrals_R_L.append(r*s*v*ds(n))
+    for i in boundary_conditions:
+        if 'Robin' in boundary_conditions[i]:
+            r, s = boundary_conditions[i]['Robin']
+            integrals_R_a.append(r*u*v*ds(i))
+            integrals_R_L.append(r*s*v*ds(i))
 
     # Simpler Robin integrals
     integrals_R = []
-    for n in boundary_conditions:
-        if 'Robin' in boundary_conditions[n]:
-            r, s = boundary_conditions[n]['Robin']
-            integrals_R.append(r*(u-s)*v*ds(n))
+    for i in boundary_conditions:
+        if 'Robin' in boundary_conditions[i]:
+            r, s = boundary_conditions[i]['Robin']
+            integrals_R.append(r*(u - s)*v*ds(n))
 
     # Define variational problem, solver_bc
     a = kappa*dot(grad(u), grad(v))*dx + sum(integrals_R_a)
