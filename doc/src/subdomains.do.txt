@@ -122,7 +122,7 @@ L(v) &= \int_{\Omega} fv \dx -
 ===== FEniCS implementation =====
 
 How does the Neumann condition impact the implementation?  Let us
-revisit our previous implementation `${prog["poisson"]}.py`, from
+revisit our previous implementation `${prog["poisson"]}.py` from
 ref[Section ref{ch:poisson0:impl}][ in cite{ftut1}][the section
 "FEniCS implementation": "" in cite{ftut1}] and examine which changes
 we need to make to incorporate the Neumann condition. It turns out that
@@ -175,9 +175,9 @@ contribution from the Neumann boundary.
 ======= Setting multiple Dirichlet conditions =======
 label{ch:poisson0:multiple:Dirichlet}
 
-In the previous section, we used a single functions $\ub(x,y)$ for
+In the previous section, we used a single function $\ub(x,y)$ for
 setting Dirichlet conditions at two parts of the boundary.  Often it
-is more practical to use multiple functions, one for subdomain of the
+is more practical to use multiple functions, one for each subdomain of the
 boundary. Let us return to the case from Section ref{ch:poisson0:DN}
 and redefine the problem in terms of two Dirichlet conditions:
 
@@ -202,7 +202,7 @@ u_L = Expression('1 + 2*x[1]*x[1]')
 
 def boundary_L(x, on_boundary):
     tol = 1E-14
-    return on_boundary and abs(x[0]) < tol
+    return on_boundary and near(x[0], 0, tol)
 
 bc_L = DirichletBC(V, u_L, boundary_L)
 !ec
@@ -214,7 +214,7 @@ u_R = Expression('2 + 2*x[1]*x[1]')
 
 def boundary_R(x, on_boundary):
     tol = 1E-14
-    return on_boundary and abs(x[0] - 1) < tol
+    return on_boundary and near(x[0], 1, tol)
 
 bc_R = DirichletBC(V, u_R, boundary_R)
 !ec
@@ -225,14 +225,10 @@ we can pass to the `solve` function to compute the solution:
 bcs = [bc_L, bc_R]
 ...
 solve(a == L, u, bcs)
-# or
-problem = LinearVariationalProblem(a, L, u, bcs)
-solver  = LinearVariationalSolver(problem)
-solver.solve()
 !ec
 
 Note that for boundary values that do not depend on $x$ or $y$, we
-might replace the `Expression` objects `Constant` objects.
+might replace the `Expression` objects by `Constant` objects.
 
 # #ifdef EXTRA
 # We come to this in a minute with internal subdomains...
@@ -250,14 +246,14 @@ takes this form in its class version:
 class LeftBoundary(SubDomain):
     def inside(self, x, on_boundary):
         tol = 1E-14   # tolerance for coordinate comparisons
-        return on_boundary and abs(x[0]) < tol
+        return on_boundary and near(x[0], 0, tol)
 
 left_boundary = LeftBoundary()
 Gamma_0 = DirichletBC(V, u_L, left_boundary)
 !ec
 # #endif
 
-======= Working with subdomains =======
+======= Defining subdomains for different materials =======
 label{ftut:possion:2D:2mat:impl}
 
 idx{heterogeneous media}
@@ -298,11 +294,11 @@ $\Omega_0$. An alternative interpretation is flow in porous media with
 two geological layers, where the layers' ability to transport the
 fluid differ.
 
-===== Expression objects with if test =====
+===== Using expressions to define subdomains =====
 
 The simplest way of implementing a variable coefficient $k$ is to
 define an `Expression` object where we return the appropriate $k$
-value depending on the position in space.  Since we need some testing
+value depending on the position in space. Since we need some testing
 on the coordinates, the most straightforward approach is to define a
 subclass of `Expression`, where we can use a full Python method
 instead of just a C++ string formula for specifying a function.  The
@@ -321,12 +317,12 @@ class K(Expression):
         else:
             value[0] = self.k1
 
-# Initialize
+# Initialize k
 k = K()
 k.set_k_values(1, 0.01)
 !ec
 The `eval` method gives great flexibility in defining functions, but a
-downside is that C++ calls up `eval` in Python for each node `x`,
+downside is that FEniCS will call `eval` in Python for each node `x`,
 which is a slow process.
 
 An alternative method is to use a C++ string expression as we have
@@ -348,7 +344,7 @@ use a more general technique, as we will see next.
 
 idx{boundary specification (class)}
 
-===== Mesh functions =====
+===== Using mesh functions to define subdomains =====
 
 We now address how to specify the subdomains $\Omega_0$ and $\Omega_1$
 using a more general technique. This technique involves the use of two
@@ -359,7 +355,7 @@ boundary $x = 0$:
 !bc pycod
 def boundary(x, on_boundary):
     tol = 1E-14
-    return on_boundary and abs(x[0]) < tol
+    return on_boundary and near(x[0], 0, tol)
 !ec
 This boundary definition is actually a shortcut to the more general
 FEniCS concept `SubDomain`. A `SubDomain` is a class which defines a
@@ -372,7 +368,7 @@ specify the boundary $x = 0$ as a `SubDomain`:
 class Boundary(SubDomain):
     def inside(self, x, on_boundary):
         tol = 1E-14
-        return on_boundary and abs(x[0]) < tol
+        return on_boundary and near(x[0], 0, tol)
 
 boundary = Boundary()
 bc = DirichletBC(V, Constant(0), boundary)
@@ -431,7 +427,7 @@ dimension.
 Since we need to define subdomains of $\Omega$ in the present example,
 we make use of a `CellFunction`. The constructor
 is fed with two arguments: 1) the type of value: `'int'` for integers,
-`'size_t'` for positive (unsigned) integers, `'double'` for real
+`'size_t'` for non-negative (unsigned) integers, `'double'` for real
 numbers, and `'bool'` for logical values; 2) a `Mesh` object.
 Alternatively, the constructor can take just a filename and initialize
 the `CellFunction` from data in a file.
@@ -453,8 +449,8 @@ subdomain:
 !bc
 # Mark subdomains with numbers 0 and 1
 subdomain0 = Omega0()
-subdomain0.mark(materials, 0)
 subdomain1 = Omega1()
+subdomain0.mark(materials, 0)
 subdomain1.mark(materials, 1)
 !ec
 
@@ -509,30 +505,40 @@ make use of the member function `eval_cell` in place of the regular
 addition `cell` argument which we can use to check on which cell we are
 currently evaluating the function.
 
+Since we make use of geometric tests to define the two `SubDomains`
+for $\Omega_0$ and $\Omega_1$, the `MeshFunction` method may seem like
+an unnecessary complication of the simple method using an
+`Expression` with an if-test. However, in general the definition of
+subdomains may be available as a `MeshFunction` (from a data file),
+perhaps generated as part of the mesh generation process, and not as a
+simple geometric test. In such cases the method demonstrated here is
+the recommended way to define subdomains.
+
 idx{`CompiledSubDomain`}
 
-===== Vectorized version of subdomain definitions =====
+# AL: Nice trickery but this seems like an unnecessary complication
+#===== Vectorized version of subdomain definitions =====
+#
+#To speed up this code, we can vectorize the expressions:
+#
+#!bc pycod
+#materials = CellFunction('size_t', mesh)
+#materials.set_all(0)  # "the rest"
+#for m, subdomain in enumerate(subdomains[1:], 1):
+#    subdomain.mark(materials, m)
+#
+#kappa_values = kappa
+#V0 = FunctionSpace(mesh, 'DG', 0)
+#kappa  = Function(V0)
+#help = np.asarray(materials.array(), dtype=np.int32)
+#kappa.vector()[:] = np.choose(help, kappa_values)
+#!ec
+#The `help` array is required since `choose` cannot work with
+#`materials.array()` because this array has elements of
+#type `uint32`. We must therefore transform this array to an array
+#`help` with standard `int32` integers.
 
-To speed up this code, we can vectorize the expressions:
-
-!bc pycod
-materials = CellFunction('size_t', mesh)
-materials.set_all(0)  # "the rest"
-for m, subdomain in enumerate(subdomains[1:], 1):
-    subdomain.mark(materials, m)
-
-kappa_values = kappa
-V0 = FunctionSpace(mesh, 'DG', 0)
-kappa  = Function(V0)
-help = np.asarray(materials.array(), dtype=np.int32)
-kappa.vector()[:] = np.choose(help, kappa_values)
-!ec
-The `help` array is required since `choose` cannot work with
-`materials.array()` because this array has elements of
-type `uint32`. We must therefore transform this array to an array
-`help` with standard `int32` integers.
-
-===== C++ strings for subdomain definitions =====
+===== Using C++ code snippets to define subdomains =====
 
 The `SubDomain` and `Expression` Python classes are very convenient,
 but their use leads to function calls from C++ to Python for each node
@@ -543,14 +549,13 @@ Instead of writing the `SubDomain` subclass in Python, we may instead use
 the `CompiledSubDomain` tool in FEniCS to specify the subdomain in C++
 code and thereby speed up our code. Consider
 the definition of the classes `Omega0` and `Omega1` above in Python. The
-key strings that define these subdomain can be expressed in C++ syntax
+key strings that define these subdomains can be expressed in C++ syntax
 and fed to `CompiledSubDomain` as follows:
 
 !bc pycod
-tol = 1E-14  # Tolerance for coordinate comparisons
-
-subdomain0 = CompiledSubDomain('x[1] <= 0.5 + tol', tol=1E-14)
-subdomain1 = CompiledSubDomain('x[1] >= 0.5 - tol', tol=1E-14)
+tol = 1E-14
+subdomain0 = CompiledSubDomain('x[1] <= 0.5 + tol', tol=tol)
+subdomain1 = CompiledSubDomain('x[1] >= 0.5 - tol', tol=tol)
 !ec
 As seen, one can have parameters in the strings and specify their
 values by keyword arguments.
@@ -558,11 +563,11 @@ The resulting objects, `subdomain0` and `subdomain1`, can be used
 as ordinary `SubDomain` objects.
 
 Compiled subdomain strings can be applied for specifying boundaries as
-well, e.g.,
+well:
 
 !bc pycod
-boundary_R = CompiledSubDomain('on_boundary && abs(x[0] - 1) < tol',
-                                tol=1E-14)
+boundary_R = CompiledSubDomain('on_boundary && near(x[0], 1, tol)',
+                               tol=1E-14)
 !ec
 
 It is also possible to feed the C++ string (without parameters)
@@ -570,7 +575,7 @@ directly as the third argument to `DirichletBC` without explicitly
 constructing a `CompiledSubDomain` object:
 
 !bc pycod
-bc1 = DirichletBC(V, value, 'on_boundary && abs(x[0] - 1) < tol')
+bc1 = DirichletBC(V, value, 'on_boundary && near(x[0], 1, tol)')
 !ec
 
 Python `Expression` classes may also be redefined using C++ for more
@@ -595,12 +600,13 @@ public:
       values[0] = k1;
   }
 
-  std::shared_ptr<MeshFunction<std::size_t> > materials;
+  std::shared_ptr<MeshFunction<std::size_t>> materials;
   double k0;
   double k1;
 
 };
 """
+
 k = Expression(cppcode=cppcode, degree=0)
 k.materials = materials
 k.k0 = k0
@@ -851,7 +857,7 @@ generation.  In our case, the $x=0$ boundary can be marked by
 class BoundaryX0(SubDomain):
     tol = 1e-14
     def inside(self, x, on_boundary):
-        return on_boundary and abs(x[0]) < tol
+        return on_boundary and near(x[0], 0, tol)
 
 bx0 = BoundaryX0()
 bx0.mark(boundary_markers, 0)
