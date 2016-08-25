@@ -679,7 +679,7 @@ def application_bc_test():
     variables = [Expression(var, degree=2) for var in variables]
 
     # Extract variables
-    [u_e, u_00, u_01, f, g, r, s] = variables
+    u_e, u_00, u_01, f, g, r, s = variables
 
     # Define boundary conditions
     boundary_conditions = {0: {'Dirichlet': u_00},   # x=0

@@ -974,18 +974,21 @@ The complete code for this example can be found in the function
 
 ===== Test problem =====
 
-Let us continue to use $\uex=1+x^2+2y^2$ as the exact solution, and
-set $p=1$ and $f=-6$. Our domain is the unit square, and
-we assign Dirichlet conditions at $x=0$ and $x=1$, a Neumann condition
-at $y=1$, and a Robin condition at $y=0$. With the given $\uex$, we
-realize that the Neumann condition is $4y$ (which means $4$ at
-$y=1$), while the Robin
-condition can be selected in many ways. Since $\partial u/\partial
-n=-\partial u/\partial y=0$ at $y=0$, we can select $s=u$ and specify
-$r \neq 0$ arbitrarily in the Robin condition.
+We will use the same exact solution $\uex=1+x^2+2y^2$ as in Chapter
+ref{ch:fundamentals}, and thus take $\kappa=1$ and $f=-6$. Our domain
+is the unit square, and we assign Dirichlet conditions at $x=0$ and
+$x=1$, a Neumann condition at $y=1$, and a Robin condition at
+$y=0$. With the given $\uex$, we realize that the Neumann condition is
+$-\partial u / \partial n = - \partial u / \partial y = 4y = 4$, while
+the Robin condition can be selected in many ways. Since $\partial
+u/\partial n=-\partial u/\partial y=0$ at $y=0$, we can select $s=u$
+and specify $r \neq 0$ arbitrarily in the Robin condition. We will set
+$r = 1000$ and $s = u$.
 
 The boundary parts are thus $\GD^0$: $x=0$, $\GD^1$: $x=1$,
 $\GR^0$: $y=0$, and $\GN^0$: $y=1$.
+
+[AL: Somewhat confusing that we have a global numbering of the boundary parts and we also have a local numbering of the boundary parts for each type of boundary condition.]
 
 When implementing this test problem, and especially other test
 problems with more complicated expressions, it is advantageous to use
@@ -993,6 +996,8 @@ symbolic computing. Below we define the exact solution as a `sympy`
 expression and derive other functions from their mathematical
 definitions.  Then we turn these expressions into C/C++ code, which
 can be fed into `Expression` objects.
+
+[AL: Why does the spacing (newlines) disappear in the display of this code? It seems to be there in `poisson_vc.py`.]
 
 @@@CODE-4 src/poisson_vc.py fromto: # Define manufactured solution in sympy and derive f, g, etc@# Compute solution
 This simple test problem is turned into a real unit test for different
@@ -1006,7 +1011,7 @@ helpful debugging output is to run through all vertex coordinates and
 check if the `SubDomain.inside` method marks the vertex as on the
 boundary. Another useful printout is to list which degrees of freedom
 that are subject to Dirichlet conditions, and for first-order Lagrange
-(P1) elements, add the corresponding vertex coordinate to the
+($\mathsf{P}_1$) elements, add the corresponding vertex coordinate to the
 output.
 
 @@@CODE-4 src/poisson_vc.py fromto: if debug:@# Define trial and test functions
@@ -1031,7 +1036,7 @@ static current $J = 1\,\mathrm{A}$ is flowing and we want to compute
 the magnetic field $B$ in the iron cylinder, the copper wires, and the
 surrounding vacuum.
 
-FIGURE:[fig/magnetostatics_geometry, width=600 frac=0.7] Cross-section of an iron cylinder with copper wires wound around the cylinder, here with $n = 8$ windings. label{ftut1:fig:magnetostatics:geometry}
+FIGURE:[fig/magnetostatics_geometry, width=600 frac=0.7] Cross-section of an iron cylinder with copper wires wound around the cylinder, here with $n = 8$ windings. The inner circles are cross-sections of the copper wire coming up (``north'') and the outer circles are cross-sections of the copper wire going down into the plane (``south''). label{ftut1:fig:magnetostatics:geometry}
 
 First, we simplify the problem to a 2D problem. We can do this by
 assuming that the cylinder extends far along the $z$-axis and as a
@@ -1093,7 +1098,7 @@ set of circles (copper wire cross-sections) and to $-1\,\mathrm{A}$ in
 the exterior set of circles in Figure ref{ftut1:fig:magnetostatics:geometry}.
 
 Once the magnetic vector potential has been computed, we can
-computed the magnetic field $B = B(x, y)$ by
+compute the magnetic field $B = B(x, y)$ by
 
 !bt
 \begin{align}
@@ -1105,9 +1110,9 @@ computed the magnetic field $B = B(x, y)$ by
 
 ===== Variational formulation =====
 
-The variational problem is derived as before by multiplying with a test
-function $v$ and integrating by parts. Since the boundary integral
-vanishes due to the Dirichlet condition, we obtain
+The variational problem is derived as before by multiplying the PDE
+with a test function $v$ and integrating by parts. Since the boundary
+integral vanishes due to the Dirichlet condition, we obtain
 
 !bt
 \begin{equation}
@@ -1127,7 +1132,7 @@ or, in other words, $a(A_z, v) = L(v)$ with
 ===== FEniCS implementation =====
 
 The first step is to generate a mesh for the geometry described in
-Figure ref{ftut1:fig:magnetostatics:geometry}. We let $a$ and $b$ the
+Figure ref{ftut1:fig:magnetostatics:geometry}. We let $a$ and $b$ be the
 inner and outer radii of the iron cylinder and let $c_1$ and $c_2$
 be the radii of the two concentric distributions of copper wire
 cross-sections. Furthermore, we let $r$ be the radius of a copper
@@ -1138,6 +1143,8 @@ Python programming:
 
 [hpl: Student wrote that
 I don’t really understand this naming, current-carrying wires don’t have north and south poles? For me at least inside and outside iron cylinder makes much more sense to talk about than north/south.]
+
+[AL: Explaining text added to figure so I think this should be ok now.]
 
 !bc pycod
 # Define geometry for background
@@ -1184,7 +1191,7 @@ The mesh generated with `mshr` will contain information about the
 subdomains we have defined. To use this information in the definition of
 our variational problem and subdomain-dependent parameters, we will need to
 create a `MeshFunction` that marks the subdomains. This can be easily
-created by a call to the member function `mesh.domains`, which holds
+created by a call to the member function `mesh.domains()`, which holds
 the subdomain data generated by `mshr`:
 
 !bc pycod
@@ -1243,7 +1250,7 @@ field:
 W = VectorFunctionSpace(mesh, 'P', 1)
 B = project(as_vector((A_z.dx(1), -A_z.dx(0))), W)
 !ec
-We use `as_vector` to interpret the tuple
+We use `as_vector()` to interpret the tuple
 `(A_z.dx(1), -A_z.dx(0))` as a vector. The resulting plots of the
 magnetic vector potential and magnetic field are shown in Figures
 ref{ftut1:fig:magnetostatics:potential} and
