@@ -20,16 +20,18 @@ lambda_ = beta
 g = gamma
 
 # Create mesh and define function space
-mesh = BoxMesh(Point(0,0,0), Point(L,W,W), 10, 3, 3)
+mesh = BoxMesh(Point(0, 0, 0), Point(L, W, W), 10, 3, 3)
 V = VectorFunctionSpace(mesh, 'P', 1)
 
 # Define boundary conditions
 tol = 1E-14
 
 def clamped_boundary(x, on_boundary):
-    return on_boundary and (x[0] < tol)
+    return on_boundary and x[0] < tol
 
-bc = DirichletBC(V, Constant((0,0,0)), clamped_boundary)
+bc = DirichletBC(V, Constant((0, 0, 0)), clamped_boundary)
+
+# Define strain and stress
 
 def epsilon(u):
     return 0.5*(nabla_grad(u) + nabla_grad(u).T)
@@ -42,47 +44,37 @@ def sigma(u):
 u = TrialFunction(V)
 d = u.geometric_dimension()  # no of space dim
 v = TestFunction(V)
-f = Constant((0,0,rho*g))
-T = Constant((0,0,0))
+f = Constant((0, 0, rho*g))
+T = Constant((0, 0, 0))
 a = inner(sigma(u), epsilon(v))*dx
-L = -dot(f, v)*dx + dot(T, v)*ds
+L = dot(f, v)*dx + dot(T, v)*ds
 
 # Compute solution
 u = Function(V)
 solve(a == L, u, bc)
 
-# Plot solution and mesh
+# Plot solution
 plot(u, title='Displacement', mode='displacement')
 
+# Plot stress
 s = sigma(u) - (1./3)*tr(sigma(u))*Identity(d)  # deviatoric stress
 von_Mises = sqrt(3./2*inner(s, s))
-
 V = FunctionSpace(mesh, 'P', 1)
 von_Mises = project(von_Mises, V)
 plot(von_Mises, title='Stress intensity')
-u_magnitude = sqrt(dot(u,u))
+
+# Compute magnitude of displacement
+u_magnitude = sqrt(dot(u, u))
 u_magnitude = project(u_magnitude, V)
 plot(u_magnitude, 'Displacement magnitude')
 print('min/max u:', u_magnitude.vector().array().min(),
       u_magnitude.vector().array().max())
 
-# Dump solution to file in VTK format
-file = File("elasticity.pvd")
-file << u
-file << von_Mises
-file << u_magnitude
-
-# Find max error
-#u0_Function = interpolate(u0, V)         # exact solution
-#u0_array = u0_Function.vector().array()  # dof values
-#import numpy as np
-#max_error = np.abs(u0_array - u.vector().array()).max()
-#print('max error:', max_error)
-
-#grad, eps:        -3.04536573498e-06 0.120769911819
-#grad, grad:       -3.04536573498e-06 0.120769911819
-#nabla_grad, grad: -3.04536573498e-06 0.120769911819
-#nabla_grad, eps:  same
+# Save solution to file in VTK format
+vtkfile = File("elasticity.pvd")
+vtkfile << u
+vtkfile << von_Mises
+vtkfile << u_magnitude
 
 # Hold plot
 interactive()

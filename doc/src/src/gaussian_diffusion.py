@@ -24,17 +24,17 @@ bc = DirichletBC(V, Constant(0), boundary)
 # Define initial value
 u_0 = Expression('exp(-a*pow(x[0],2) - a*pow(x[1],2))',
                  degree=2, a=5)
-u_p = interpolate(u_0, V)
-u_p.rename('u', 'initial value')
+u_n = interpolate(u_0, V)
+u_n.rename('u', 'initial value')
 vtkfile = File('gaussian_diffusion.pvd')
-vtkfile << (u_p, 0.0)
+vtkfile << (u_n, 0.0)
 
 # Define variational problem
 u = TrialFunction(V)
 v = TestFunction(V)
 f = Constant(0)
 
-F = u*v*dx + dt*dot(grad(u), grad(v))*dx - (u_p + dt*f)*v*dx
+F = u*v*dx + dt*dot(grad(u), grad(v))*dx - (u_n + dt*f)*v*dx
 a, L = lhs(F), rhs(F)
 
 # Compute solution
@@ -55,4 +55,4 @@ for n in xrange(num_steps):
     time.sleep(0.3)
 
     # Update previous solution
-    u_p.assign(u)
+    u_n.assign(u)

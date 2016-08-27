@@ -35,15 +35,15 @@ def boundary(x, on_boundary):
 bc = DirichletBC(V, u_D, boundary)
 
 # Define initial value
-u_p = interpolate(u_D, V)
-#u_p = project(u_D, V)
+u_n = interpolate(u_D, V)
+#u_n = project(u_D, V)
 
 # Define variational problem
 u = TrialFunction(V)
 v = TestFunction(V)
 f = Constant(beta - 2 - 2*alpha)
 
-F = u*v*dx + dt*dot(grad(u), grad(v))*dx - (u_p + dt*f)*v*dx
+F = u*v*dx + dt*dot(grad(u), grad(v))*dx - (u_n + dt*f)*v*dx
 a, L = lhs(F), rhs(F)
 
 # Time-stepping
@@ -55,7 +55,7 @@ for n in xrange(num_steps):
     t += dt
     u_D.t = t # update for bc
 
-    # Solve variational problem
+    # Compute solution
     solve(a == L, u, bc)
 
     # Compute error at vertices
@@ -64,4 +64,4 @@ for n in xrange(num_steps):
     print('t = %.2f: error = %.3g' % (t, error))
 
     # Update previous solution
-    u_p.assign(u)
+    u_n.assign(u)

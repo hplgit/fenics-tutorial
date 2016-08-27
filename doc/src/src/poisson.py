@@ -31,7 +31,7 @@ f = Constant(-6.0)
 a = dot(grad(u), grad(v))*dx
 L = f*v*dx
 
-# Solve variational problem
+# Compute solution
 u = Function(V)
 solve(a == L, u, bc)
 
@@ -49,7 +49,7 @@ error_L2 = errornorm(u_D, u, 'L2')
 
 # Compute maximum error at vertices
 vertex_values_u_D = u_D.compute_vertex_values(mesh)
-vertex_values_u  = u.compute_vertex_values(mesh)
+vertex_values_u = u.compute_vertex_values(mesh)
 import numpy as np
 error_max = np.max(np.abs(vertex_values_u_D - vertex_values_u))
 
