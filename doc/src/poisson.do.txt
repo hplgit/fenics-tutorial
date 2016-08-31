@@ -2,12 +2,17 @@
 label{ch:poisson}
 
 !bquote
-This chapter goes through common improvements of the codes presented
-in Chapter ref{ch:fundamentals}. In particular, we show how to
-
- * write general solver functions
- * utilize iterative solvers with preconditioners for solving linear systems
- * compute derived quantities (e.g., flux at a part of the boundary)
+The FEniCS programs we have written so far have been designed as flat
+Python scripts. This works well for solving simple demo
+problems. However, when you build a solver for an advanced
+application, you will quickly find the need for more structured
+programming. In particular, you may want to reuse your solver to solve
+a large number of problems where you vary the boundary conditions, the
+domain, and coefficients such as material parameters. In this chapter,
+we will see how to write general solver functions to improve the
+usability of FEniCS programs. We will also discuss how to
+utilize iterative solvers with preconditioners for solving linear
+systems and how to compute derived quantities, such as, e.g., the flux on a part of the boundary.
 !equote
 
 ======= Refactoring the Poisson solver =======
@@ -48,34 +53,34 @@ elsewhere.
 
 We parameterize `solver` by $f$, $\ub$, and the resolution of the
 mesh. Since it is so trivial to use higher-order finite element
-functions by changing the third argument to `FunctionSpace`, we let
-also the polynomial degree of the finite element function space
-be an argument to `solver`.
+functions by changing the third argument to `FunctionSpace`, we
+also add the polynomial degree of the finite element function space
+as an argument to `solver`.
 
-@@@CODE src/poisson_func.py fromto: from fenics import@def test_solver
+@@@CODE src/poisson_func.py fromto: from fenics import@def run_solver
 
-The remaining tasks of our initial program, such calling the `solve`
+The remaining tasks of our initial program, such as calling the `solve`
 function with problem-specific parameters and plotting,
 can be placed in a separate function. Here we choose to put this code
-in a function named `demo_test`:
+in a function named `run_solver`:
 
-@@@CODE src/poisson_func.py fromto: def demo_test@if __name
+@@@CODE src/poisson_func.py fromto: def run_solver@def test_solver
 
 The solution can now be computed, plotted, and saved to file by
-simply calling the `demo_test` function.
+simply calling the `run_solver` function.
 
 ===== Writing the solver as a Python module =====
 
 The refactored code is put in a file "`${prog['poisson_func']}.py`":
 "${src_url}/poisson/${prog['poisson_func']}.py". We should make sure
 that such a file can be imported (and hence reused) in other programs.
-Then all statements in the main program that are not inside functions
-should appear within a test `if __name__ == '__main__':`. This test is
-true if the file is executed as a program, but false if the file is
-imported.  If we want to run this file in the same way as we can run
-`${prog['poisson_func']}.py`, the main program is simply a call to
-`demo_test()` followed by a call `interactive()` to hold the
-plot:
+This means that all statements in the main program that are not inside
+functions should appear within a test `if __name__ ==
+'__main__':`. This test is true if the file is executed as a program,
+but false if the file is imported.  If we want to run this file in the
+same way as we can run `${prog['poisson_func']}.py`, the main program
+is simply a call to `run_solver()` followed by a call `interactive()`
+to hold the plot:
 
 @@@CODE src/poisson_func.py fromto: if __name@
 
@@ -90,47 +95,43 @@ that the code still works. To this end, we shall adopt *unit testing*,
 meaning that we create a mathematical test and corresponding software
 that can run all our tests automatically and check that all tests
 pass.  Python has several tools for unit testing. Two very popular
-ones are `pytest` and `nose`. These are almost identical and very easy
+ones are pytest and nose. These are almost identical and very easy
 to use.  More classical unit testing with test classes is offered by
-the built-in tool `unittest`, but here we are going to use `pytest`
-(or `nose`) since that will result in shorter and clearer code.
+the built-in module `unittest`, but here we are going to use pytest
+(or nose) since that will result in shorter and clearer code.
 
 Mathematically, our unit test is that the finite element solution of
-our problem when $f=-6$ equals the exact solution $u=\ub=1+x^2+2y^2$.
-We have already created code that finds the maximum error in the
-numerical solution. Because of rounding errors, we cannot demand this
-maximum error to be zero, but we have to use a tolerance, which
+our problem when $f=-6$ equals the exact solution $u=\ub=1+x^2+2y^2$
+at the vertices of the mesh.
+We have already created a code that finds the error at the vertices for
+our numerical solution. Because of rounding errors, we cannot demand this
+error to be zero, but we have to use a tolerance, which
 depends to the number of elements and the degrees of the polynomials
-in the finite element basis functions.  If we want to test that the
+in the finite element basis functions. If we want to test that the
 `solver` function works for meshes up to $2\times(20\times 20)$
-elements and cubic Lagrange elements, $10^{-11}$ is an appropriate
+elements and cubic Lagrange elements, $10^{-10}$ is an appropriate
 tolerance for testing that the maximum error vanishes (see ref[Section
 ref{ch:poisson0:impl:dissect}][ in cite{ftut1}][the section
 "Dissection of the program": "" in cite{ftut1}]).
 
-[AL: Changed to `pytest` and `nose` here (in computer font). Change
-back if not appropriate.]
-[hpl: Changed back as pytest and nose are standard phrasings on the net.]
-
-Only three statements are necessary to carry out the unit
-test. However, we shall embed these statements a special way in our
-code so that they are recognized by `pytest` and `nose`. The simple
+To make our test case work together with pytest and nose, we have to
+make a couple of small adjustments to our program. The simple
 rule is that each test must be placed in a function that
 
  * has a name starting with `test_`,
- * has no arguments,
+ * has no arguments, and
  * implements a test expressed as `assert success, msg`.
 
 Regarding the last point, `success` is a boolean expression that is
 `False` if the test fails, and in that case the string `msg` is
 written to the screen. When the test fails, `assert` raises an
-`AssertionError` exception in Python, otherwise the statement runs
+`AssertionError` exception in Python, and otherwise runs
 silently. The `msg` string is optional, so `assert success` is the
 minimal test. In our case, we will write `assert max_error < tol`,
-where `tol` is the tolerance ($10^{-11}$) mentioned above.
+where `tol` is the tolerance mentioned above.
 
 A proper *test function* for implementing this unit test in the
-`pytest` or `nose` testing frameworks has the following form. Note
+pytest or nose testing frameworks has the following form. Note
 that we perform the test for different mesh resolutions and degrees of
 finite elements.
 
@@ -138,10 +139,11 @@ finite elements.
 To run the test, we type the following command:
 
 !bc sys
-Terminal> py.test -s -v ${prog['poisson_func']}.py
+Terminal> py.test ${prog['poisson_func']}.py
 !ec
 This will run all functions `test_*()` (currently only the
 `test_solver` function) found in the file and report the results.
+For more verbose output, add the flags `-s -v`.
 
 We shall make it a habit in the following test to encapsulate numerical test
 problems in unit tests as done above, and we strongly encourage the
@@ -513,7 +515,7 @@ we need code that is close to what we have in `test_solver`.
 
 @@@CODE exer/poisson_fsin_func.py fromto: from poisson_func import@
 The unit test is embedded in a proper test function `test_solver` for
-the `pytest` or `nose` testing frameworks. Visualization of the
+the pytest or nose testing frameworks. Visualization of the
 solution is encapsulated in the `application` function. Since we need
 `u_e`, `u_b`, and `f` in two functions, we place the definitions in a
 function `data` to avoid copies of these expressions.
