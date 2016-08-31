@@ -10,7 +10,7 @@ def solver(
     rel_tol=1E-3,           # Relative tolerance in Krylov solver
     max_iter=1000,          # Max no of iterations in Krylov solver
     log_level=PROGRESS,     # Amount of solver output
-    dump_parameters=False,  # Write out parameter database?
+    print_parameters=False, # Write out parameter database?
     ):
     """
     Solve -Laplace(u)=f on [0,1]x[0,1] with 2*Nx*Ny Lagrange
@@ -42,7 +42,7 @@ def solver(
         prm['maximum_iterations'] = max_iter
         print(parameters['linear_algebra_backend'])
         set_log_level(log_level)
-        if dump_parameters:
+        if print_parameters:
             info(parameters, True)
         solver_parameters = {'linear_solver': 'gmres',
                              'preconditioner': 'ilu'}

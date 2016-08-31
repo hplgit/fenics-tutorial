@@ -388,7 +388,7 @@ Sparse LU decomposition (Gaussian elimination) is used by default to
 solve linear systems of equations in FEniCS programs.  This is a very
 robust and simple method. It is the recommended method for systems
 with up to a few thousand unknowns and may hence be the method of
-choice in many 2D and smaller 3D problems. However, sparse LU
+choice for many 2D and smaller 3D problems. However, sparse LU
 decomposition becomes slow and one quickly runs out of memory for
 larger problems. For large problems, we instead need to use *iterative
 methods* which are faster and require much less memory. We will now
@@ -432,28 +432,34 @@ depend on the choice of linear algebra package. FEniCS interfaces
 several linear algebra packages, called *linear algebra backends* in
 FEniCS terminology. PETSc is the default choice if FEniCS is compiled
 with PETSc. If PETSc is not available, then FEniCS falls back to using
-the Eigen backend.
+the Eigen backend. The linear algebra backend in FEniCS can be set
+using the following command:
 
 !bc pycod
 parameters['linear_algebra_backend'] = backendname
 !ec
 where `backendname` is a string. To see which linear algebra backends
 are available, you can call the FEniCS function
-`list_linear_algebra_backends()`.
+`list_linear_algebra_backends()`. Similarly, one may check which
+linear algebra backend is currently being used by the following
+command:
 
-[AL: Note that currently only PETSc and Eigen are available and Epetra
-is on its way back in.]
-[hpl: OK, you have the overview here.]
+!bc pycod
+print parameters['linear_algebra_backend']
+
+# Alternative syntax for Python 3
+print(parameters['linear_algebra_backend'])
+!ec
 
 idx{`parameters` database}
 idx{`info` function}
 
 === Setting solver parameters ===
 
-We will normally like to control the tolerance in the stopping
+We will normally want to control the tolerance in the stopping
 criterion and the maximum number of iterations when running an
 iterative method. Such parameters can be controlled at both a *global*
-and *local* level. We will start by looking at how to set global
+and a *local* level. We will start by looking at how to set global
 parameters. For more advanced programs, one may want to use a number
 of different linear solvers and set different tolerances and other
 parameters. Then it becomes important to control the parameters at a
@@ -503,17 +509,17 @@ defined in an XML file. To generate such a file from the current set
 of parameters in a program, run
 
 !bc pycod
-File('dolfin_parameters.xml') << parameters
+File('fenics_parameters.xml') << parameters
 !ec
-If a `dolfin_parameters.xml` file is found in the directory where a
+If a `fenics_parameters.xml` file is found in the directory where a
 FEniCS program is run, this file is read and used to initialize the
 `parameters` object. Otherwise, the file
-`.config/fenics/dolfin_parameters.xml` in the user's home directory is
-read, if it exists.  Another alternative is to load the XML (with any
+`.config/fenics/fenics_parameters.xml` in the user's home directory is
+read, if it exists.  Another alternative is to load the XML file (with any
 name) manually in the program:
 
 !bc pycod
-File('dolfin_parameters.xml') >> parameters
+File('fenics_parameters.xml') >> parameters
 !ec
 The XML file can also be in gzip'ed form with the extension `.xml.gz`.
 
@@ -547,7 +553,7 @@ def solver(
         prm['maximum_iterations'] = max_iter
         print(parameters['linear_algebra_backend'])
         set_log_level(log_level)
-        if dump_parameters:
+        if print_parameters:
             info(parameters, True)
         solver_parameters = {'linear_solver': 'gmres',
                              'preconditioner': 'ilu'}
@@ -645,7 +651,7 @@ certain objects that are thrown away after the solution has been
 computed, and it may be practical or efficient to *reuse* those
 objects.
 
-In this section, we will look an alternative interface to solving
+In this section, we will look at an alternative interface to solving
 linear variational problems in FEniCS, which may be preferable in
 many situations compared to the high-level `solve` function interface.
 This interface uses the two classes `LinearVariationalProblem` and
@@ -655,7 +661,7 @@ This interface uses the two classes `LinearVariationalProblem` and
 !bc pycod
 u = Function(V)
 problem = LinearVariationalProblem(a, L, u, bc)
-solver  = LinearVariationalSolver(problem)
+solver = LinearVariationalSolver(problem)
 solver.solve()
 !ec
 
@@ -695,7 +701,8 @@ As we saw already in Section ref{ftut1:NS}, linear variational
 problems can be assembled explicitly in FEniCS into matrices and
 vectors using the `assemble` function. This allows even more
 fine-grained control of the solution process compared to using the
-high-level `solve` function or using the class
+high-level `solve` function or using the classes
+`LinearVariationalProblem` and
 `LinearVariationalSolver`. We will now look more closely into how to
 use the `assemble` function and how to combine this with low-level
 calls for solving the assembled linear systems.
@@ -765,9 +772,11 @@ boundary values. When we have multiple Dirichlet conditions stored in
 a list `bcs`, we must apply each condition in `bcs` to the system:
 
 !bc pycod
-# bcs is a list of DirichletBC objects
 for bc in bcs:
     bc.apply(A, b)
+
+# Alternative syntax using list comprehension
+[bc.apply(A, b) for bc in bcs]
 !ec
 
 idx{`assemble_system`}
@@ -781,9 +790,9 @@ A, b = assemble_system(a, L, bcs)
 !ec
 The `assemble_system` function is preferable to the combination of
 `assemble` and `bc.apply` when the linear system is symmetric, since
-`assembly_system` will incorporate the boundary conditions in a
+`assemble_system` will incorporate the boundary conditions in a
 symmetric way. Even if the matrix `A` that comes out of the call to
-`assemble` for a symmetric bilinear form `a`, the call to `bc.apply`
+`assemble` is symmetric (for a symmetric bilinear form `a`), the call to `bc.apply`
 will break the symmetry.
 
 #That is, for each degree of freedom
@@ -805,7 +814,7 @@ programmed using different interfaces in FEniCS---the high-level
 `solve` function, the class `LinearVariationalSolve`, and the
 low-level `assemble` function---linear systems can also be programmed
 using different interfaces in FEniCS. The high-level interface to
-solving a linear system in FEniCS also named `solve`:
+solving a linear system in FEniCS is also named `solve`:
 
 !bc pycod
 solve(A, U, b)
@@ -867,7 +876,7 @@ idx{random start vector (linear systems)}
 
 The choice of start vector for the iterations in a linear solver is
 often important. By default, the values of `u` and thus the vector `U
-= u.vector()` will be initialized to zero. If instead wanted to
+= u.vector()` will be initialized to zero. If we instead wanted to
 initialize `U` with random numbers in the interval $[-100,100]$ this
 can be done as follows:
 
@@ -886,7 +895,10 @@ Using a nonzero initial guess can be particularly important for
 time-dependent problems or when solving a linear system as part of a
 nonlinear iteration, since then the previous solution vector `U` will
 often be a good initial guess for the solution in the next time step
-or iteration.
+or iteration. In this case, the values in the vector `U` will
+naturally be initialized with the previous solution vector (if we just
+used it to solve a linear system), so the only extra step necessary is
+to set the parameter `nonzero_initial_guess` to `True`.
 
 # In other problems, we may divide the variational
 # problem and linear system into different terms, say $A=M + {\dt} K$,
@@ -1142,7 +1154,7 @@ A call like `u.vector().array()` returns a *copy* of the data in
 
 idx{`${prog["poisson_iter"]}.py`}
 
-All the code in this subsection can be found in the file
+All the code in this can be found in the file
 `${prog["poisson_iter"]}.py` (Poission solver with use of iterative
 methods).
 
