@@ -175,19 +175,18 @@ def compare_exact_and_numerical_solution(Nx, Ny, degree=1):
     print('numerical error at %s: %g' % (center, error))
 
 def normalize_solution(u):
-    """Normalize u: return u divided by max(|u|)."""
-    dofs = u.vector().array()
-    u_max = np.abs(dofs).max()
-    dofs /= u_max
-    u.vector()[:] = dofs
-    u.vector().set_local(dofs) # alternative
-    return u
+    """Normalize solution by dividing by max(|u|)."""
+    nodal_values = u.vector().array()
+    u_max = np.abs(nodal_values).max()
+    nodal_values /= u_max
+    u.vector()[:] = nodal_values
+    #u.vector().set_local(dofs) # alternative
 
 def test_normalize_solution():
     u_D = Expression('1 + x[0]*x[0] + 2*x[1]*x[1]')
     f = Constant(-6.0)
     u = solver(f, u_D, 4, 2, 1, linear_solver='direct')
-    u = normalize_solution(u)
+    normalize_solution(u)
     computed = u.vector().array().max()
     expected = 1.0
     assert abs(expected - computed) < 1E-15

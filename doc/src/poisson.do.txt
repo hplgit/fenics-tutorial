@@ -163,214 +163,6 @@ Note that `py.test` needs the `-s` option to show printout
 from the test functions.
 !enotice
 
-===== Examining the degrees of freedom =====
-label{ch:poisson0:verify1}
-
-[AL: Important section, but maybe it fits better somewhere else since
-it does not specifically deal with code structuring.]
-[hpl: Agree, it has been moved around...and it is pretty basic and should
-appear early (not volume II).]
-
-We have seen how to grab the degrees of freedom array from a
-finite element function `u`:
-
-!bc pycod
-dofs = u.vector().array()
-!ec
-
-For a finite function from a standard continuous piecewise linear
-function space ($\mathsf{P}_1$ Lagrange elements), these values will
-be the same as the values we get by the following statement:
-
-!bc pycod
-vertex_values = u.compute_vertex_values(mesh)
-!ec
-Both `dofs` and `vertex_values` will be `numpy` arrays and they will
-be of the same length and contain the same values, but with possibly
-different ordering. The array `vertex_values` will have the same
-ordering as the vertices of the mesh, while `dofs` will be ordered in
-a way that (nearly) minimizes the bandwidth of the system matrix and
-thus improves the efficiency of linear solvers.
-
-A fundamental question is: What are the
-coordinates of vertex `i` whose value is `dofs[i]`? To answer this
-question, we need to understand how to get our hands on the
-coordinates, and in particular, the numbering of degrees of freedom
-and the numbering of vertices in the mesh.
-
-The function `mesh.coordinates()` returns the coordinates of the
-vertices as a `numpy` array with shape $(M,d$), $M$ being the number
-of vertices in the mesh and $d$ being the number of space dimensions:
-
-!bc pyshell
->>> from fenics import *
->>>
->>> mesh = UnitSquareMesh(2, 2)
->>> coordinates = mesh.coordinates()
->>> coordinates
-array([[ 0. ,  0. ],
-       [ 0.5,  0. ],
-       [ 1. ,  0. ],
-       [ 0. ,  0.5],
-       [ 0.5,  0.5],
-       [ 1. ,  0.5],
-       [ 0. ,  1. ],
-       [ 0.5,  1. ],
-       [ 1. ,  1. ]])
-!ec
-We see from this output that for this particular mesh, the vertices
-are first numbered along $y=0$
-with increasing $x$ coordinate, then along $y=0.5$, and so on.
-
-Next we compute a function `u` on this mesh. Let's take $u=x+y$:
-
-!bc pyshell
->>> V = FunctionSpace(mesh, 'P', 1)
->>> u = interpolate(Expression('x[0] + x[1]'), V)
->>> plot(u, interactive=True)
->>> dofs = u.vector().array()
->>> dofs
-array([ 1. ,  0.5,  1.5,  0. ,  1. ,  2. ,  0.5,  1.5,  1. ])
-!ec
-We observe that `dofs[0]` is *not* the value of $x+y$ at vertex number 0,
-since this vertex has coordinates $x=y=0$. The numbering of the
-degrees of freedom $U_1,\ldots,U_{N}$ is obviously not the same as the
-numbering of the vertices.
-
-In the plot window, we may take a closer look at the function `u` and
-the vertex numbering. We type `w` to turn on wireframe instead of
-a fully  colored surface, `m` to show the mesh, and then `v` to show the
-numbering of the vertices.
-
-FIGURE: [fig/vertex_numbering, width=500 frac=0.8]
-
-idx{compute vertex values}
-idx{vertex values}
-
-Let's instead examine the values we get by calling
-`u.compute_vertex_values()`:
-
-!bc pyshell
->>> vertex_values = u.compute_vertex_values()
->>> for i, x in enumerate(coordinates):
-...     print('vertex %d: vertex_values[%d] = %g\tu(%s) = %g' %
-...           (i, i, vertex_values[i], x, u(x)))
-vertex 0: vertex_values[0] = 0  	u([ 0.  0.]) = 8.46545e-16
-vertex 1: vertex_values[1] = 0.5	u([ 0.5  0. ]) = 0.5
-vertex 2: vertex_values[2] = 1          u([ 1.  0.]) = 1
-vertex 3: vertex_values[3] = 0.5	u([ 0.   0.5]) = 0.5
-vertex 4: vertex_values[4] = 1          u([ 0.5  0.5]) = 1
-vertex 5: vertex_values[5] = 1.5	u([ 1.   0.5]) = 1.5
-vertex 6: vertex_values[6] = 1          u([ 0.  1.]) = 1
-vertex 7: vertex_values[7] = 1.5	u([ 0.5  1. ]) = 1.5
-vertex 8: vertex_values[8] = 2          u([ 1.  1.]) = 2
-!ec
-
-idx{vertex to dof map}
-idx{dof to vertex map}
-
-We can ask FEniCS to give us the mapping from vertices to degrees of
-freedom for a certain function space $V$:
-
-!bc pycod
-v2d = vertex_to_dof_map(V)
-!ec
-Now, `dofs[v2d[i]]` will give us the value of the degree of freedom in
-`u` corresponding to vertex `i` (`v2d[i]`). In particular, `dofs[v2d]`
-is an array with all the elements in the same (vertex numbered) order
-as `coordinates`.  The inverse map, from degrees of freedom number to
-vertex number is given by `dof_to_vertex_map(V)`, so
-`coordinates[dof_to_vertex_map(V)]` results in an array of all the
-coordinates in the same order as the degrees of freedom.
-
-For Lagrange elements of degree larger than 1, there are degrees of
-freedom (nodes) that do not correspond to vertices. For these
-elements, we may still ask FEniCS to compute the vertex values by
-calling `u.compute_vertex_values(mesh)`, and we can get the degrees of
-freedom by calling `u.vector().array()`. To get the coordinates
-associated with all degrees of freedom, we need to iterate over the
-elements of the mesh and ask FEniCS to return the coordinates and dofs
-associated with each cell. This information is stored in the
-`FiniteElement` and `DofMap` object of a `FunctionSpace`. The
-following code illustrates how to iterate over all elements of a mesh and
-print the degrees of freedom and coordinates associated with the
-element.
-
-!bc pycod
-element = V.element()
-dofmap = V.dofmap()
-for cell in cells(mesh):
-    print(element.tabulate_dof_coordinates(cell))
-    print(dofmap.cell_dofs(cell.index()))
-!ec
-
-#@@@CODE src/poisson_iter.py fromto: def compare_exact@def normalize
-#As expected, the error is either identically zero or about $10^{-15}$ or
-#$10^{-16}$.
-
-!bwarning Cheap vs expensive function evaluation
-Given a `Function` object `u`, we can evaluate its values in various
-ways:
-
- o `u(x)` for an arbitrary point `x`
- o `u.vector().array()[i]` for degree of freedom number `i`
- o `u.compute_vertex_values()[i]` at vertex number `i`
-
-The first method, though very flexible, is in general expensive
-while the other two are very efficient (but limited to certain points).
-!ewarning
-
-To demonstrate the use of point evaluations of `Function` objects, we
-write out the computed `u` at the center point of the domain and
-compare it with the exact solution:
-
-!bc pycod
-center = (0.5, 0.5)
-error = u_D(center) - u(center)
-print('Error at %s: %g' % (center, error))
-!ec
-Trying on a $2\times(3\times 3)$ mesh, the output from the
-previous snippet becomes
-
-!bc dat
-Error at (0.5, 0.5): -0.0833333
-!ec
-The discrepancy is due to the fact that the center point is not a node
-in this particular mesh, but a point in the interior of a cell, and
-`u` varies linearly over the cell while `u_D` is a quadratic
-function. When the center point is a node, as in a $2\times(2\times
-2)$ or $2\times(4\times 4)$ mesh, the error is of the order
-$10^{-15}$.
-
-We have seen how to extract the nodal values in a `numpy` array.
-If desired, we can adjust the nodal values too. Say we want to
-normalize the solution such that $\max_j |U_j| = 1$. Then we
-must divide all $U_j$ values
-by $\max_j |U_j|$. The following function performs the task:
-
-@@@CODE src/poisson_iter.py fromto: def normalize@def test_normalize
-That is, we manipulate `dofs` as desired, and then we insert this
-array into `u`'s `Vector` object.  The `/=` operator implies an
-in-place modification of the object on the left-hand side: all
-elements of the array `dofs` are divided by the value `u_max`.
-Alternatively, one could write `dofs = dofs / u_max`, which
-implies creating a new array on the right-hand side and assigning this
-array to the name `dofs`.
-
-!bwarning Be careful when manipulating degrees of freedom
-A call like `u.vector().array()` returns a *copy* of the data in
-`u.vector()`. One must therefore never perform assignments like
-`u.vector.array()[:] = ...`, but instead extract the `numpy` array
-(i.e., a copy), manipulate it, and insert it back with `u.vector()[:]
-= ` or use `u.set_local(...)`.
-!ewarning
-
-idx{`${prog["poisson_iter"]}.py`}
-
-All the code in this subsection can be found in the file
-`${prog["poisson_iter"]}.py` (Poission solver with use of iterative
-methods).
-
 ===== Parameterizing the number of space dimensions =====
 label{ch:poisson0:nD}
 idx{dimension-independent code}
@@ -417,13 +209,12 @@ is equivalent to
 mesh = UnitSquareMesh(divisions[0], divisions[1])
 !ec
 
-Replacing the `Nx` and `Ny` parameters by `divisions` and calling the
-function `UnitHyperCube` to create the mesh are the two modifications
-that we need in any of the previously shown `solver` functions to turn
-them into solvers for $d$-dimensional problems. Note that
-`UnitHyperCube` is a *function* and not a *class* but we have named it
-with *CamelCase* to make it look like a class so that our programs
-look similar to using the standard FEniCS mesh classes:
+The `solver` function from `${prog["poisson_func"]}.py` may be
+modified to solve $d$-dimensional problems by replacing the `Nx` and
+`Ny` parameters by `divisions`, and calling the function
+`UnitHyperCube` to create the mesh. Note that `UnitHyperCube` is a
+*function* and not a *class*, but we have named it with *CamelCase* to
+make it look like a class:
 
 !bc pycod
 mesh = UnitHyperCube(divisions)
@@ -1152,6 +943,209 @@ the eigenvalues of large, sparse matrices of the type encountered in
 PDE problems (see `demo/documented/eigenvalue` in the FEniCS source
 code tree for a demo).
 
+===== Examining the degrees of freedom =====
+label{ch:poisson0:verify1}
+
+We have seen before how to grab the degrees of freedom array from a
+finite element function `u`:
+
+!bc pycod
+nodal_values = u.vector().array()
+!ec
+
+For a finite element function from a standard continuous piecewise linear
+function space ($\mathsf{P}_1$ Lagrange elements), these values will
+be the same as the values we get by the following statement:
+
+!bc pycod
+vertex_values = u.compute_vertex_values(mesh)
+!ec
+Both `nodal_values` and `vertex_values` will be `numpy` arrays and they will
+be of the same length and contain the same values, but with possibly
+different ordering. The array `vertex_values` will have the same
+ordering as the vertices of the mesh, while `nodal_values` will be ordered in
+a way that (nearly) minimizes the bandwidth of the system matrix and
+thus improves the efficiency of linear solvers.
+
+A fundamental question is: What are the
+coordinates of the vertex whose value is `nodal_values[i]`? To answer this
+question, we need to understand how to get our hands on the
+coordinates, and in particular, the numbering of degrees of freedom
+and the numbering of vertices in the mesh.
+
+The function `mesh.coordinates()` returns the coordinates of the
+vertices as a `numpy` array with shape $(M,d$), $M$ being the number
+of vertices in the mesh and $d$ being the number of space dimensions:
+
+!bc pyshell
+>>> from fenics import *
+>>>
+>>> mesh = UnitSquareMesh(2, 2)
+>>> coordinates = mesh.coordinates()
+>>> coordinates
+array([[ 0. ,  0. ],
+       [ 0.5,  0. ],
+       [ 1. ,  0. ],
+       [ 0. ,  0.5],
+       [ 0.5,  0.5],
+       [ 1. ,  0.5],
+       [ 0. ,  1. ],
+       [ 0.5,  1. ],
+       [ 1. ,  1. ]])
+!ec
+We see from this output that for this particular mesh, the vertices
+are first numbered along $y=0$
+with increasing $x$ coordinate, then along $y=0.5$, and so on.
+
+Next we compute a function `u` on this mesh. Let's take $u=x+y$:
+
+!bc pyshell
+>>> V = FunctionSpace(mesh, 'P', 1)
+>>> u = interpolate(Expression('x[0] + x[1]'), V)
+>>> plot(u, interactive=True)
+>>> nodal_values = u.vector().array()
+>>> nodal_values
+array([ 1. ,  0.5,  1.5,  0. ,  1. ,  2. ,  0.5,  1.5,  1. ])
+!ec
+We observe that `nodal_values[0]` is *not* the value of $x+y$ at
+vertex number 0, since this vertex has coordinates $x=y=0$. The
+numbering of the nodal values (degrees of freedom) $U_1,\ldots,U_{N}$
+is obviously not the same as the numbering of the vertices.
+
+Note that we may examine the vertex numbering in the plot window. We
+type `w` to turn on wireframe instead of a fully colored surface, `m`
+to show the mesh, and then `v` to show the numbering of the vertices.
+
+FIGURE: [fig/vertex_numbering, width=500 frac=0.8]
+
+idx{compute vertex values}
+idx{vertex values}
+
+Let's instead examine the values we get by calling
+`u.compute_vertex_values()`:
+
+!bc pyshell
+>>> vertex_values = u.compute_vertex_values()
+>>> for i, x in enumerate(coordinates):
+...     print('vertex %d: vertex_values[%d] = %g\tu(%s) = %g' %
+...           (i, i, vertex_values[i], x, u(x)))
+vertex 0: vertex_values[0] = 0  	u([ 0.  0.]) = 8.46545e-16
+vertex 1: vertex_values[1] = 0.5	u([ 0.5  0. ]) = 0.5
+vertex 2: vertex_values[2] = 1          u([ 1.  0.]) = 1
+vertex 3: vertex_values[3] = 0.5	u([ 0.   0.5]) = 0.5
+vertex 4: vertex_values[4] = 1          u([ 0.5  0.5]) = 1
+vertex 5: vertex_values[5] = 1.5	u([ 1.   0.5]) = 1.5
+vertex 6: vertex_values[6] = 1          u([ 0.  1.]) = 1
+vertex 7: vertex_values[7] = 1.5	u([ 0.5  1. ]) = 1.5
+vertex 8: vertex_values[8] = 2          u([ 1.  1.]) = 2
+!ec
+
+idx{vertex to dof map}
+idx{dof to vertex map}
+
+We can ask FEniCS to give us the mapping from vertices to degrees of
+freedom for a certain function space $V$:
+
+!bc pycod
+v2d = vertex_to_dof_map(V)
+!ec
+Now, `nodal_values[v2d[i]]` will give us the value of the degree of freedom in
+`u` corresponding to vertex `i` (`v2d[i]`). In particular, `nodal_values[v2d]`
+is an array with all the elements in the same (vertex numbered) order
+as `coordinates`. The inverse map, from degrees of freedom number to
+vertex number is given by `dof_to_vertex_map(V)`. This means that
+we may call
+`coordinates[dof_to_vertex_map(V)]` to get an array of all the
+coordinates in the same order as the degrees of freedom. Note that
+these mappings are only available in FEniCS for $\mathsf{P}_1$ elements.
+
+For Lagrange elements of degree larger than 1, there are degrees of
+freedom (nodes) that do not correspond to vertices. For these
+elements, we may get the vertex values by
+calling `u.compute_vertex_values(mesh)`, and we can get the degrees of
+freedom by calling `u.vector().array()`. To get the coordinates
+associated with all degrees of freedom, we need to iterate over the
+elements of the mesh and ask FEniCS to return the coordinates and dofs
+associated with each cell. This information is stored in the
+`FiniteElement` and `DofMap` object of a `FunctionSpace`. The
+following code illustrates how to iterate over all elements of a mesh and
+print the degrees of freedom and coordinates associated with the
+element.
+
+!bc pycod
+element = V.element()
+dofmap = V.dofmap()
+for cell in cells(mesh):
+    print(element.tabulate_dof_coordinates(cell))
+    print(dofmap.cell_dofs(cell.index()))
+!ec
+
+#@@@CODE src/poisson_iter.py fromto: def compare_exact@def normalize
+#As expected, the error is either identically zero or about $10^{-15}$ or
+#$10^{-16}$.
+
+!bwarning Cheap vs expensive function evaluation
+Given a `Function` object `u`, we can evaluate its values in various
+ways:
+
+ o `u(x)` for an arbitrary point `x`
+ o `u.vector().array()[i]` for degree of freedom number `i`
+ o `u.compute_vertex_values()[i]` at vertex number `i`
+
+The first method, though very flexible, is in general expensive
+while the other two are very efficient (but limited to certain points).
+!ewarning
+
+To demonstrate the use of point evaluation of `Function` objects, we
+write out the computed `u` at the center point of the domain and
+compare it with the exact solution:
+
+!bc pycod
+center = (0.5, 0.5)
+error = u_D(center) - u(center)
+print('Error at %s: %g' % (center, error))
+!ec
+For a $2\times(3\times 3)$ mesh, the output from the
+previous snippet becomes
+
+!bc dat
+Error at (0.5, 0.5): -0.0833333
+!ec
+The discrepancy is due to the fact that the center point is not a node
+in this particular mesh, but a point in the interior of a cell, and
+`u` varies linearly over the cell while `u_D` is a quadratic
+function. When the center point is a node, as in a $2\times(2\times
+2)$ or $2\times(4\times 4)$ mesh, the error is of the order
+$10^{-15}$.
+
+We have seen how to extract the nodal values in a `numpy` array.
+If desired, we can adjust the nodal values too. Say we want to
+normalize the solution such that $\max_j |U_j| = 1$. Then we
+must divide all $U_j$ values
+by $\max_j |U_j|$. The following function performs the task:
+
+@@@CODE src/poisson_iter.py fromto: def normalize@def test_normalize
+The `/=` operator implies an
+in-place modification of the object on the left-hand side: all
+elements of the array `nodal_values` are divided by the value `u_max`.
+Alternatively, we could do `nodal_values = nodal_values / u_max`, which
+implies creating a new array on the right-hand side and assigning this
+array to the name `nodal_values`.
+
+!bwarning Be careful when manipulating degrees of freedom
+A call like `u.vector().array()` returns a *copy* of the data in
+`u.vector()`. One must therefore never perform assignments like
+`u.vector.array()[:] = ...`, but instead extract the `numpy` array
+(i.e., a copy), manipulate it, and insert it back with `u.vector()[:]
+= ` or use `u.set_local(...)`.
+!ewarning
+
+idx{`${prog["poisson_iter"]}.py`}
+
+All the code in this subsection can be found in the file
+`${prog["poisson_iter"]}.py` (Poission solver with use of iterative
+methods).
+
 ======= Postprocessing computations =======
 label{ftut:possion:2D:varcoeff}
 idx{Poisson's equation with variable coefficient}
@@ -1331,12 +1325,6 @@ idx{degrees of freedom array (vector field)}
 For data analysis of the nodal values of the flux field we can
 grab the underlying `numpy` arrays (which demands a `deepcopy=True`
 in the split of `flux`):
-
-[AL: Suggest we use `_dofs` instead of `_array` everywhere. Have made
-similar changes in previous chapters before.]
-[hpl: OK! But found quite some `u_array` in the very first Poisson
-example. Should we keep the name there and `dofs` everywhere else,
-after the difference in numbering is explained? Sounds consistent to me.]
 
 !bc pycod
 flux_x_dofs = flux_x.vector().dofs()
