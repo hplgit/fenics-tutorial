@@ -9,6 +9,8 @@ class PoissonSolver(object):
 
     def solve(self, linear_solver='direct'):
         Dirichlet_cond = self.problem.Dirichlet_conditions()
+        self.mesh, degree = self.problem.mesh_degree()
+        self.V = V = FunctionSpace(self.mesh, 'P', degree)
         if isinstance(Dirichlet_cond, (Expression)):
             # Just one Expression for Dirichlet conditions on
             # the entire boundary
@@ -49,14 +51,12 @@ class PoissonSolver(object):
         return self.u
 
     def define_variational_problem(self):
-        self.mesh, degree = self.problem.mesh_degree()
-        self.V = V = FunctionSpace(self.mesh, 'P', degree)
-
+        V = self.V
         u = TrialFunction(V)
         v = TestFunction(V)
-        p = self.problem.p_coeff()
+        kappa = self.problem.kappa_coeff()
         f = self.problem.f_rhs()
-        F = dot(p*grad(u), grad(v))*dx
+        F = dot(kappa*grad(u), grad(v))*dx
         F -= f*v*dx
         F -= sum([g*v*ds_
                   for g, ds_ in self.problem.Neumann_conditions()])
@@ -71,12 +71,12 @@ class PoissonSolver(object):
             print('b:\n', b.array())
 
     def flux(self):
-        """Compute and return flux -p*grad(u)."""
+        """Compute and return flux -kappa*grad(u)."""
         mesh = self.u.function_space().mesh()
         degree = self.u.ufl_element().degree()
         V_g = VectorFunctionSpace(mesh, 'P', degree)
-        p = self.problem.p_coeff()
-        self.flux_u = project(-p*grad(self.u), V_g)
+        kappa = self.problem.kappa_coeff()
+        self.flux_u = project(-kappa*grad(self.u), V_g)
         self.flux_u.rename('flux(u)', 'continuous flux field')
         return self.flux_u
 
@@ -98,7 +98,7 @@ class PoissonProblem(object):
         """Return mesh, degree."""
         raise NotImplementedError('Must implement mesh!')
 
-    def p_coeff(self):
+    def kappa_coeff(self):
         return Constant(1.0)
 
     def f_rhs(self):
@@ -120,13 +120,13 @@ class PoissonProblem(object):
 
 class Problem1(PoissonProblem):
     """
-    -div(p*grad(u)=f on the unit square.
+    -div(kappa*grad(u)=f on the unit square.
     General Dirichlet, Neumann, or Robin condition along each
-    side. Can have multiple subdomains with p constant in
+    side. Can have multiple subdomains with kappa constant in
     each subdomain.
     """
     def __init__(self, Nx, Ny):
-        """Initialize mesh, boundary parts, and p."""
+        """Initialize mesh, boundary parts, and kappa."""
         self.mesh = UnitSquareMesh(Nx, Ny)
 
         tol = 1E-14
@@ -173,16 +173,17 @@ class Problem1(PoissonProblem):
         subdomain = Rectangle()
         subdomain.mark(self.materials, 1)
         self.V0 = FunctionSpace(self.mesh, 'DG', 0)
-        self.p = Function(self.V0)
+        self.kappa = Function(self.V0)
+        # Vectorized computations of dofs for kappa
         help = np.asarray(self.materials.array(), dtype=np.int32)
-        p_values = [1, 1E-3]
-        self.p.vector()[:] = np.choose(help, p_values)
+        kappa_values = [1, 1E-3]
+        self.kappa.vector()[:] = np.choose(help, kappa_values)
 
     def mesh_degree(self):
         return self.mesh, 2
 
-    def p_coeff(self):
-        return self.p
+    def kappa_coeff(self):
+        return self.kappa
 
     def f_rhs(self):
         return Constant(0)
