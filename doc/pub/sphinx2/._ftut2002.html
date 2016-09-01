@@ -131,7 +131,8 @@
       
   <div class="section" id="pde-solver-design-and-coding-practices">
 <span id="ch-classes"></span><h1>PDE solver design and coding practices<a class="headerlink" href="#pde-solver-design-and-coding-practices" title="Permalink to this headline">¶</a></h1>
-<p>In the very beginning of this tutorial <a class="reference internal" href="._ftut2009.html#ref1" id="id1">[Ref1]</a> we focused on how
+<blockquote>
+<div>In the very beginning of this tutorial <a class="reference internal" href="._ftut2009.html#ref1" id="id1">[Ref1]</a> we focused on how
 to quickly put together solvers for a number of different PDEs. FEniCS
 makes it simple and straightforward to write the commands needed to
 set up a variational problem, define domains and boundary
@@ -144,7 +145,7 @@ different domains, boundary conditions and other parameters. In this
 chapter, we look at how to structure FEniCS Python code to create
 flexible, reusable, and efficient PDE solvers. The key concept is to
 use Python classes and develop effective an Application Programming
-Interface (API) in terms of methods and their arguments.</p>
+Interface (API) in terms of class methods (functions) and their arguments.</div></blockquote>
 <div class="section" id="refactoring-a-poisson-solver-in-terms-of-classes">
 <span id="ch-poisson0-refactor-class"></span><h2>Refactoring a Poisson solver in terms of classes<a class="headerlink" href="#refactoring-a-poisson-solver-in-terms-of-classes" title="Permalink to this headline">¶</a></h2>
 <p>A FEniCS solver for a PDE can be implemented in a general way, but the
@@ -172,16 +173,17 @@ the <code class="docutils literal"><span class="pre">solver</span></code> functi
 <span id="ch-poisson0-refactor-class-solver"></span><h3>The solver class<a class="headerlink" href="#the-solver-class-1" title="Permalink to this headline">¶</a></h3>
 <p>The solver class will need problem information and for this purpose
 call up the methods in a problem class. For example, the solver gets
-the <span class="math">\(f\)</span> and <span class="math">\(p\)</span> functions in the PDE problem by calling
-<code class="docutils literal"><span class="pre">problem.f_rhs()</span></code> and <code class="docutils literal"><span class="pre">problem.p_coeff()</span></code>. The mesh object and the
+the <span class="math">\(f\)</span> and <span class="math">\(\kappa\)</span> functions in the PDE problem by calling
+the class methods
+<code class="docutils literal"><span class="pre">problem.f_rhs()</span></code> and <code class="docutils literal"><span class="pre">problem.kappa_coeff()</span></code>. The mesh object and the
 polynomial degree of the elements are supposed to be returned from
 <code class="docutils literal"><span class="pre">problem.mesh_degree()</span></code>. Furthermore, the problem class defines the
 boundary conditions in the problem as lists of minimal information
 from which the solver can build proper data structures.</p>
 <p>The solver class is a wrapping of the previous <code class="docutils literal"><span class="pre">solver_bc</span></code> and <code class="docutils literal"><span class="pre">flux</span></code>
 functions as methods in a class, but some of the code for handling
-boundary conditions in <code class="docutils literal"><span class="pre">solver_bc</span></code> is now delegated to the user in
-the problem class.</p>
+boundary conditions, previously inside the solver,
+is now delegated to the user in the problem class.</p>
 <div class="highlight-python"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">fenics</span> <span class="kn">import</span> <span class="o">*</span>
 <span class="kn">import</span> <span class="nn">numpy</span> <span class="kn">as</span> <span class="nn">np</span>
 
@@ -192,6 +194,8 @@ the problem class.</p>
 
     <span class="k">def</span> <span class="nf">solve</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">linear_solver</span><span class="o">=</span><span class="s1">&#39;direct&#39;</span><span class="p">):</span>
         <span class="n">Dirichlet_cond</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">problem</span><span class="o">.</span><span class="n">Dirichlet_conditions</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">mesh</span><span class="p">,</span> <span class="n">degree</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">problem</span><span class="o">.</span><span class="n">mesh_degree</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">V</span> <span class="o">=</span> <span class="n">V</span> <span class="o">=</span> <span class="n">FunctionSpace</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">mesh</span><span class="p">,</span> <span class="s1">&#39;P&#39;</span><span class="p">,</span> <span class="n">degree</span><span class="p">)</span>
         <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">Dirichlet_cond</span><span class="p">,</span> <span class="p">(</span><span class="n">Expression</span><span class="p">)):</span>
             <span class="c1"># Just one Expression for Dirichlet conditions on</span>
             <span class="c1"># the entire boundary</span>
@@ -232,14 +236,12 @@ the problem class.</p>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">u</span>
 
     <span class="k">def</span> <span class="nf">define_variational_problem</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">mesh</span><span class="p">,</span> <span class="n">degree</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">problem</span><span class="o">.</span><span class="n">mesh_degree</span><span class="p">()</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">V</span> <span class="o">=</span> <span class="n">V</span> <span class="o">=</span> <span class="n">FunctionSpace</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">mesh</span><span class="p">,</span> <span class="s1">&#39;P&#39;</span><span class="p">,</span> <span class="n">degree</span><span class="p">)</span>
-
+        <span class="n">V</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">V</span>
         <span class="n">u</span> <span class="o">=</span> <span class="n">TrialFunction</span><span class="p">(</span><span class="n">V</span><span class="p">)</span>
         <span class="n">v</span> <span class="o">=</span> <span class="n">TestFunction</span><span class="p">(</span><span class="n">V</span><span class="p">)</span>
-        <span class="n">p</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">problem</span><span class="o">.</span><span class="n">p_coeff</span><span class="p">()</span>
+        <span class="n">kappa</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">problem</span><span class="o">.</span><span class="n">kappa_coeff</span><span class="p">()</span>
         <span class="n">f</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">problem</span><span class="o">.</span><span class="n">f_rhs</span><span class="p">()</span>
-        <span class="n">F</span> <span class="o">=</span> <span class="n">dot</span><span class="p">(</span><span class="n">p</span><span class="o">*</span><span class="n">grad</span><span class="p">(</span><span class="n">u</span><span class="p">),</span> <span class="n">grad</span><span class="p">(</span><span class="n">v</span><span class="p">))</span><span class="o">*</span><span class="n">dx</span>
+        <span class="n">F</span> <span class="o">=</span> <span class="n">dot</span><span class="p">(</span><span class="n">kappa</span><span class="o">*</span><span class="n">grad</span><span class="p">(</span><span class="n">u</span><span class="p">),</span> <span class="n">grad</span><span class="p">(</span><span class="n">v</span><span class="p">))</span><span class="o">*</span><span class="n">dx</span>
         <span class="n">F</span> <span class="o">-=</span> <span class="n">f</span><span class="o">*</span><span class="n">v</span><span class="o">*</span><span class="n">dx</span>
         <span class="n">F</span> <span class="o">-=</span> <span class="nb">sum</span><span class="p">([</span><span class="n">g</span><span class="o">*</span><span class="n">v</span><span class="o">*</span><span class="n">ds_</span>
                   <span class="k">for</span> <span class="n">g</span><span class="p">,</span> <span class="n">ds_</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">problem</span><span class="o">.</span><span class="n">Neumann_conditions</span><span class="p">()])</span>
@@ -254,12 +256,12 @@ the problem class.</p>
             <span class="k">print</span><span class="p">(</span><span class="s1">&#39;b:</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">,</span> <span class="n">b</span><span class="o">.</span><span class="n">array</span><span class="p">())</span>
 
     <span class="k">def</span> <span class="nf">flux</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-        <span class="sd">&quot;&quot;&quot;Compute and return flux -p*grad(u).&quot;&quot;&quot;</span>
+        <span class="sd">&quot;&quot;&quot;Compute and return flux -kappa*grad(u).&quot;&quot;&quot;</span>
         <span class="n">mesh</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">u</span><span class="o">.</span><span class="n">function_space</span><span class="p">()</span><span class="o">.</span><span class="n">mesh</span><span class="p">()</span>
         <span class="n">degree</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">u</span><span class="o">.</span><span class="n">ufl_element</span><span class="p">()</span><span class="o">.</span><span class="n">degree</span><span class="p">()</span>
         <span class="n">V_g</span> <span class="o">=</span> <span class="n">VectorFunctionSpace</span><span class="p">(</span><span class="n">mesh</span><span class="p">,</span> <span class="s1">&#39;P&#39;</span><span class="p">,</span> <span class="n">degree</span><span class="p">)</span>
-        <span class="n">p</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">problem</span><span class="o">.</span><span class="n">p_coeff</span><span class="p">()</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">flux_u</span> <span class="o">=</span> <span class="n">project</span><span class="p">(</span><span class="o">-</span><span class="n">p</span><span class="o">*</span><span class="n">grad</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">u</span><span class="p">),</span> <span class="n">V_g</span><span class="p">)</span>
+        <span class="n">kappa</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">problem</span><span class="o">.</span><span class="n">kappa_coeff</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">flux_u</span> <span class="o">=</span> <span class="n">project</span><span class="p">(</span><span class="o">-</span><span class="n">kappa</span><span class="o">*</span><span class="n">grad</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">u</span><span class="p">),</span> <span class="n">V_g</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">flux_u</span><span class="o">.</span><span class="n">rename</span><span class="p">(</span><span class="s1">&#39;flux(u)&#39;</span><span class="p">,</span> <span class="s1">&#39;continuous flux field&#39;</span><span class="p">)</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">flux_u</span>
 
@@ -281,7 +283,7 @@ the problem class.</p>
         <span class="sd">&quot;&quot;&quot;Return mesh, degree.&quot;&quot;&quot;</span>
         <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">(</span><span class="s1">&#39;Must implement mesh!&#39;</span><span class="p">)</span>
 
-    <span class="k">def</span> <span class="nf">p_coeff</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">kappa_coeff</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="k">return</span> <span class="n">Constant</span><span class="p">(</span><span class="mf">1.0</span><span class="p">)</span>
 
     <span class="k">def</span> <span class="nf">f_rhs</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
@@ -301,16 +303,20 @@ the problem class.</p>
         <span class="k">return</span> <span class="p">[]</span>
 </pre></div>
 </div>
-<p>Note that this is a general Poisson problem solver that works in any number
+<p>Note that this is a general Poisson solver that works in any number
 of space dimensions and with any mesh and composition of boundary conditions!</p>
 <div class="admonition-tip-be-careful-with-the-mesh-variable admonition">
 <p class="first admonition-title">Tip: Be careful with the <code class="docutils literal"><span class="pre">mesh</span></code> variable</p>
-<p class="last">In classes, one often stores the mesh in <code class="docutils literal"><span class="pre">self.mesh</span></code>. When you need
+<p>In classes, one often stores the mesh in <code class="docutils literal"><span class="pre">self.mesh</span></code>. When you need
 the mesh, it is easy to write just <code class="docutils literal"><span class="pre">mesh</span></code>, but this gives rise to
 peculiar error messages, since <code class="docutils literal"><span class="pre">mesh</span></code> is a Python module imported
 by <code class="docutils literal"><span class="pre">from</span> <span class="pre">fenics</span> <span class="pre">import</span> <span class="pre">*</span></code> and already available as a name in your file.
 When encountering strange error messages in statements containing a
 variable <code class="docutils literal"><span class="pre">mesh</span></code>, make sure you use <code class="docutils literal"><span class="pre">self.mesh</span></code>.</p>
+<p class="last">Many will instead recommend to avoid the <code class="docutils literal"><span class="pre">from</span> <span class="pre">fenics</span> <span class="pre">import</span> <span class="pre">*</span></code>
+statement and instead do <code class="docutils literal"><span class="pre">import</span> <span class="pre">fenics</span></code> and prefix all FEniCS
+objects by <code class="docutils literal"><span class="pre">fenics</span></code>. This is the good programming habit in a
+Python library that employs the <code class="docutils literal"><span class="pre">fenics</span></code> package.</p>
 </div>
 </div>
 <div class="section" id="a-problem-class">
@@ -359,13 +365,13 @@ and on <span class="math">\(y=0\)</span> and <span class="math">\(y=1\)</span> w
 <span class="math">\(u=0\)</span>, respectively.</p>
 <div class="highlight-python"><div class="highlight"><pre><span></span><span class="k">class</span> <span class="nc">Problem1</span><span class="p">(</span><span class="n">PoissonProblem</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">    -div(p*grad(u)=f on the unit square.</span>
+<span class="sd">    -div(kappa*grad(u)=f on the unit square.</span>
 <span class="sd">    General Dirichlet, Neumann, or Robin condition along each</span>
-<span class="sd">    side. Can have multiple subdomains with p constant in</span>
+<span class="sd">    side. Can have multiple subdomains with kappa constant in</span>
 <span class="sd">    each subdomain.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">Nx</span><span class="p">,</span> <span class="n">Ny</span><span class="p">):</span>
-        <span class="sd">&quot;&quot;&quot;Initialize mesh, boundary parts, and p.&quot;&quot;&quot;</span>
+        <span class="sd">&quot;&quot;&quot;Initialize mesh, boundary parts, and kappa.&quot;&quot;&quot;</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">mesh</span> <span class="o">=</span> <span class="n">UnitSquareMesh</span><span class="p">(</span><span class="n">Nx</span><span class="p">,</span> <span class="n">Ny</span><span class="p">)</span>
 
         <span class="n">tol</span> <span class="o">=</span> <span class="mf">1E-14</span>
@@ -412,16 +418,17 @@ and on <span class="math">\(y=0\)</span> and <span class="math">\(y=1\)</span> w
         <span class="n">subdomain</span> <span class="o">=</span> <span class="n">Rectangle</span><span class="p">()</span>
         <span class="n">subdomain</span><span class="o">.</span><span class="n">mark</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">materials</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">V0</span> <span class="o">=</span> <span class="n">FunctionSpace</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">mesh</span><span class="p">,</span> <span class="s1">&#39;DG&#39;</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">p</span> <span class="o">=</span> <span class="n">Function</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">V0</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">kappa</span> <span class="o">=</span> <span class="n">Function</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">V0</span><span class="p">)</span>
+        <span class="c1"># Vectorized computations of dofs for kappa</span>
         <span class="n">help</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">materials</span><span class="o">.</span><span class="n">array</span><span class="p">(),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">int32</span><span class="p">)</span>
-        <span class="n">p_values</span> <span class="o">=</span> <span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mf">1E-3</span><span class="p">]</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">p</span><span class="o">.</span><span class="n">vector</span><span class="p">()[:]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">choose</span><span class="p">(</span><span class="n">help</span><span class="p">,</span> <span class="n">p_values</span><span class="p">)</span>
+        <span class="n">kappa_values</span> <span class="o">=</span> <span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mf">1E-3</span><span class="p">]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">kappa</span><span class="o">.</span><span class="n">vector</span><span class="p">()[:]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">choose</span><span class="p">(</span><span class="n">help</span><span class="p">,</span> <span class="n">kappa_values</span><span class="p">)</span>
 
     <span class="k">def</span> <span class="nf">mesh_degree</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">mesh</span><span class="p">,</span> <span class="mi">2</span>
 
-    <span class="k">def</span> <span class="nf">p_coeff</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">p</span>
+    <span class="k">def</span> <span class="nf">kappa_coeff</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">kappa</span>
 
     <span class="k">def</span> <span class="nf">f_rhs</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="k">return</span> <span class="n">Constant</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
@@ -448,43 +455,12 @@ and on <span class="math">\(y=0\)</span> and <span class="math">\(y=1\)</span> w
     <span class="n">vtkfile</span> <span class="o">=</span> <span class="n">File</span><span class="p">(</span><span class="s1">&#39;poisson.pvd&#39;</span><span class="p">)</span>
     <span class="n">vtkfile</span> <span class="o">&lt;&lt;</span> <span class="n">u</span>
     <span class="n">interactive</span><span class="p">()</span>
-
-<span class="k">class</span> <span class="nc">TestProblemExact</span><span class="p">(</span><span class="n">PoissonProblem</span><span class="p">):</span>
-    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">Nx</span><span class="p">,</span> <span class="n">Ny</span><span class="p">):</span>
-        <span class="sd">&quot;&quot;&quot;Initialize mesh, boundary parts, and p.&quot;&quot;&quot;</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">mesh</span> <span class="o">=</span> <span class="n">UnitSquareMesh</span><span class="p">(</span><span class="n">Nx</span><span class="p">,</span> <span class="n">Ny</span><span class="p">)</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">u_D</span> <span class="o">=</span> <span class="n">Expression</span><span class="p">(</span><span class="s1">&#39;1 + x[0]*x[0] + 2*x[1]*x[1]&#39;</span><span class="p">)</span>
-
-    <span class="k">def</span> <span class="nf">mesh_degree</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">mesh</span><span class="p">,</span> <span class="mi">1</span>
-
-    <span class="k">def</span> <span class="nf">f_rhs</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-        <span class="k">return</span> <span class="n">Constant</span><span class="p">(</span><span class="o">-</span><span class="mf">6.0</span><span class="p">)</span>
-
-    <span class="k">def</span> <span class="nf">Dirichlet_conditions</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">u_D</span>
-
-
-<span class="k">def</span> <span class="nf">test_PoissonSolver</span><span class="p">():</span>
-    <span class="sd">&quot;&quot;&quot;Recover numerial solution to &quot;machine precision&quot;.&quot;&quot;&quot;</span>
-    <span class="n">problem</span> <span class="o">=</span> <span class="n">TestProblemExact</span><span class="p">(</span><span class="n">Nx</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">Ny</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
-    <span class="n">problem</span><span class="o">.</span><span class="n">solve</span><span class="p">(</span><span class="n">linear_solver</span><span class="o">=</span><span class="s1">&#39;direct&#39;</span><span class="p">)</span>
-    <span class="n">u</span> <span class="o">=</span> <span class="n">problem</span><span class="o">.</span><span class="n">solution</span><span class="p">()</span>
-    <span class="n">u_e</span> <span class="o">=</span> <span class="n">interpolate</span><span class="p">(</span><span class="n">problem</span><span class="o">.</span><span class="n">u_D</span><span class="p">,</span> <span class="n">u</span><span class="o">.</span><span class="n">function_space</span><span class="p">())</span>
-    <span class="n">max_error</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">u_e</span><span class="o">.</span><span class="n">vector</span><span class="p">()</span><span class="o">.</span><span class="n">array</span><span class="p">()</span> <span class="o">-</span>
-                       <span class="n">u</span><span class="o">.</span><span class="n">vector</span><span class="p">()</span><span class="o">.</span><span class="n">array</span><span class="p">())</span><span class="o">.</span><span class="n">max</span><span class="p">()</span>
-    <span class="n">tol</span> <span class="o">=</span> <span class="mf">1E-14</span>
-    <span class="k">assert</span> <span class="n">max_error</span> <span class="o">&lt;</span> <span class="n">tol</span><span class="p">,</span> <span class="s1">&#39;max error: </span><span class="si">%g</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="n">max_error</span>
-
-<span class="k">if</span> <span class="n">__name__</span> <span class="o">==</span> <span class="s1">&#39;__main__&#39;</span><span class="p">:</span>
-    <span class="c1">#demo()</span>
-    <span class="n">test_PoissonSolver</span><span class="p">()</span>
 </pre></div>
 </div>
 <p>The complete code is found in the file <code class="docutils literal"><span class="pre">ft10_poisson_class.py</span></code>.</p>
 <div class="admonition-pros-and-cons-of-solver-problem-classes-vs-solver-function admonition">
 <p class="first admonition-title">Pros and cons of solver/problem classes vs solver function</p>
-<p class="last">What are the advantages of class <code class="docutils literal"><span class="pre">Solver</span></code> and <code class="docutils literal"><span class="pre">Problem</span></code> over the
+<p>What are the advantages of class <code class="docutils literal"><span class="pre">Solver</span></code> and <code class="docutils literal"><span class="pre">Problem</span></code> over the
 function implementation treated previously?
 The primary advantage is that
 the class version works for any mesh and any composition of
@@ -494,6 +470,10 @@ each side, and a piecewise constant <span class="math">\(p\)</span> function. Th
 to supply more code in the class version, but gets greater flexibility.
 The disadvantage of the class version is that it applies the class
 concept so one needs experience with Python class programming.</p>
+<p class="last">If you solve a specific PDE problem by FEniCS and want to make your
+code available on the Internet, you are most likely better off with
+offering a class-based solution, since that code can be used with any
+mesh and is easier adapted to the user&#8217;s requirements.</p>
 </div>
 </div>
 </div>
@@ -508,23 +488,9 @@ calling the solver to solve a specific problem. However, for
 time-dependent problems a solver function that gets all its input
 through a set of arguments is less flexible than a solver class, which
 can demand its input both through arguments and through functions (in
-subclasses) provided by the user. The following text requires you to
-be familiar with class programming in Python (tailored learning
-material is Chapter 7, 9, and Appendix E in <a class="reference internal" href="._ftut2009.html#ref3" id="id5">[Ref3]</a>).</p>
-<p>When we work with a PDE project, we often want to explore a range of
-similar problems where the PDE model basically stays the same, but
-coefficients in the PDE, boundary and initial conditions, as well as
-domains change.  This means that some of our code related to solving
-the PDE is always the same, while some of our code is strongly
-dependent upon a particular application. To avoid copying code (which
-is considered evil in computer programming), we need to collect the
-common code for all problems of this type in one place and then create
-an API (application programming interface) to the code that will be
-different from application to application. To this end, we introduce a
-<em>solver class</em> that applies FEniCS to solve the PDE. It requires
-access to a <em>problem class</em> where all the application-specific details
-are defined. This problem class defines an API that the solver class
-applies for communication.</p>
+subclasses) provided by the user. The following text employs the ideas
+of a problem and solver class from the section <a class="reference internal" href="#ch-poisson0-refactor-class"><span class="std std-ref">Refactoring a Poisson solver in terms of classes</span></a>, but now generalized to a
+time-dependent problem, which brings in some more advanced aspects.</p>
 <p>The solver class will usually have a function to set up data
 structures for the variational formulation, a <code class="docutils literal"><span class="pre">step</span></code> function to
 advance the solution one time step, and a <code class="docutils literal"><span class="pre">solve</span></code> function to run the
@@ -543,7 +509,7 @@ are prepared to read the forthcoming text on solver and problem
 classes.  The exercise also points out a very common bug in that
 context. If you have problems with this exercise, we advise you to
 read more about classes in Python (e.g., Chapter 7 and 9 in
-<a class="reference internal" href="._ftut2009.html#ref3" id="id6">[Ref3]</a>), before you continue reading with the present book.</p>
+<a class="reference internal" href="._ftut2009.html#ref4" id="id5">[Ref4]</a>), before you continue reading with the present book.</p>
 <p>Somebody has made a class <code class="docutils literal"><span class="pre">Line</span></code> for straight lines <span class="math">\(y=ax+b\)</span>
 where <span class="math">\(a\)</span> and <span class="math">\(b\)</span> are meant to be defined in subclasses by the
 methods <code class="docutils literal"><span class="pre">constant</span></code> and <code class="docutils literal"><span class="pre">steepness_factor</span></code>, respectively.</p>
@@ -634,7 +600,7 @@ hard to track down.</p>
 Neumann, and Robin conditions:</p>
 <div class="math" id="eq-auto3">
 \[\tag{7}
-\varrho c{\partial u\over\partial t} = \nabla\cdot\left( p\nabla u\right)
+\varrho c{\partial u\over\partial t} = \nabla\cdot\left( \kappa\nabla u\right)
     + f(\boldsymbol{x},t)\hbox{ in }\Omega\times (0,T],\]</div>
 <div class="math" id="eq-auto4">
 \[\tag{8}
@@ -644,13 +610,13 @@ u(\boldsymbol{x},0) = I\hbox{ on }\Omega,\]</div>
 u = u_{_\mathrm{D}}(t)\hbox{ on }\Gamma_D,\]</div>
 <div class="math" id="eq-auto6">
 \[\tag{10}
--p{\partial u\over\partial n} = g\hbox{ on }\Gamma_N,\]</div>
+-\kappa{\partial u\over\partial n} = g\hbox{ on }\Gamma_N,\]</div>
 <div class="math" id="eq-auto7">
 \[\tag{11}
--p{\partial u\over\partial n} = r(u-U_s)\hbox{ on }\Gamma_R{\thinspace .}\]</div>
+-\kappa{\partial u\over\partial n} = r(u-U_s)\hbox{ on }\Gamma_R{\thinspace .}\]</div>
 <p>The spatial domain <span class="math">\(\Omega\)</span> has boundary <span class="math">\(\partial\Omega = \Gamma_D\cup
 \Gamma_N\cup\Gamma_R\)</span>. We shall assume that all coefficients <span class="math">\(\varrho\)</span>,
-<span class="math">\(c\)</span>, <span class="math">\(p\)</span> may vary in space, while <span class="math">\(f\)</span> and <span class="math">\(g\)</span> may vary in time too.
+<span class="math">\(c\)</span>, <span class="math">\(\kappa\)</span> may vary in space, while <span class="math">\(f\)</span> and <span class="math">\(g\)</span> may vary in time too.
 The coefficients <span class="math">\(r\)</span> and <span class="math">\(U_s\)</span> are assumed to depend on time only.</p>
 <p>We discretize in time by the general <span class="math">\(\theta\)</span>-rule.  For an evolution
 equation <span class="math">\(\partial P/\partial t=Q(t)\)</span>, this rule reads</p>
@@ -664,23 +630,23 @@ scheme, and <span class="math">\(\theta =0\)</span> to the Forward Euler scheme.
 <div class="math" id="eq-ch-diffusion-refactor-math-problem">
 \[\tag{12}
 \varrho c\frac{u^{n+1}-u^n}{{\Delta t}}
-    = \theta(\nabla\cdot\left( p\nabla u^{n+1}\right) + f(\boldsymbol{x},t_{n+1})) +
-    (1-\theta)(\nabla\cdot\left( p\nabla u^{n}\right) + f(\boldsymbol{x},t_{n})){\thinspace .}\]</div>
+    = \theta(\nabla\cdot\left( \kappa\nabla u^{n+1}\right) + f(\boldsymbol{x},t_{n+1})) +
+    (1-\theta)(\nabla\cdot\left( \kappa\nabla u^{n}\right) + f(\boldsymbol{x},t_{n})){\thinspace .}\]</div>
 <p>A Galerkin method for this initial-boundary value problem consists
 of multiplying <a class="reference internal" href="#eq-ch-diffusion-refactor-math-problem"><span class="std std-ref">(12)</span></a> by
 a test function <span class="math">\(v\in V\)</span>, integrate over <span class="math">\(\Omega\)</span>, and
 perform integration by parts on the second-order derivative term
-<span class="math">\(\nabla\cdot\left( p\nabla u\right)\)</span>:</p>
+<span class="math">\(\nabla\cdot\left( \kappa\nabla u\right)\)</span>:</p>
 <div class="math">
 \[\begin{split}\begin{align*}
 \int\limits_\Omega \bigl(
 v\varrho c\frac{u^{n+1}-u^n}{{\Delta t}}{\, \mathrm{d}x}
-&amp; + \theta p\nabla u^{n+1}\cdot\nabla v - v\theta f(\boldsymbol{x},t_{n+1} \\
-&amp; + (1-\theta) p\nabla u^{n}\cdot\nabla v -
+&amp; + \theta \kappa\nabla u^{n+1}\cdot\nabla v - v\theta f(\boldsymbol{x},t_{n+1} \\
+&amp; + (1-\theta) \kappa\nabla u^{n}\cdot\nabla v -
 v(1-\theta)f(\boldsymbol{x},t_{n}\bigr){\, \mathrm{d}x}\\
 &amp; - \int\limits_{\Gamma_N\cup\Gamma_R}
-\bigl(\theta p\frac{\partial u^{n+1}}{\partial n}v
-+ (1-\theta) p\frac{\partial u^{n}}{\partial n}v\bigr){\, \mathrm{d}s} = 0
+\bigl(\theta \kappa\frac{\partial u^{n+1}}{\partial n}v
++ (1-\theta) \kappa\frac{\partial u^{n}}{\partial n}v\bigr){\, \mathrm{d}s} = 0
 {\thinspace .}
 \end{align*}\end{split}\]</div>
 <p>Inserting the boundary conditions at <span class="math">\(\Gamma_N\)</span> and <span class="math">\(\Gamma_R\)</span>  gives
@@ -688,9 +654,9 @@ us</p>
 <div class="math">
 \[F(u;v) = \int\limits_\Omega \bigl(
 v\varrho c\frac{u^{n+1}-u^n}{{\Delta t}}{\, \mathrm{d}x}
-+ \theta p\nabla u^{n+1}\cdot\nabla v - v\theta f(\boldsymbol{x},t_{n+1}) \nonumber\]</div>
++ \theta \kappa\nabla u^{n+1}\cdot\nabla v - v\theta f(\boldsymbol{x},t_{n+1}) \nonumber\]</div>
 <div class="math">
-\[\quad - (1-\theta) p\nabla u^{n}\cdot\nabla v +
+\[\quad - (1-\theta) \kappa\nabla u^{n}\cdot\nabla v +
 v(1-\theta)f(\boldsymbol{x},t_{n}\bigr){\, \mathrm{d}x}\nonumber\]</div>
 <div class="math">
 \[\quad + \int\limits_{\Gamma_N}
@@ -702,15 +668,15 @@ v(1-\theta)f(\boldsymbol{x},t_{n}\bigr){\, \mathrm{d}x}\nonumber\]</div>
     \bigl(\theta r(u^{n+1} - U_s(t_{n+1}))v
     + (1-\theta) r(u^{n} - U_s(t_{n}))v\bigr){\, \mathrm{d}s}
     = 0{\thinspace .}\]</div>
-<p>Since we use <code class="docutils literal"><span class="pre">u</span></code> for the unknown <span class="math">\(u^{n+1}\)</span> in the code, and <code class="docutils literal"><span class="pre">u_1</span></code>
+<p>Since we use <code class="docutils literal"><span class="pre">u</span></code> for the unknown <span class="math">\(u^{n+1}\)</span> in the code, and <code class="docutils literal"><span class="pre">u_n</span></code>
 for <span class="math">\(u^n\)</span>, we introduce the same notation in the mathematics too:
-<span class="math">\(u\)</span> for <span class="math">\(u^{n+1}\)</span> and <span class="math">\(u_1\)</span> for <span class="math">\(u^n\)</span>,</p>
+<span class="math">\(u\)</span> for <span class="math">\(u^{n+1}\)</span> and <span class="math">\(u^n\)</span> for <span class="math">\(u^n\)</span>,</p>
 <div class="math">
 \[F(u;v) = \int\limits_\Omega \bigl(
-v\varrho c\frac{u-u_1}{{\Delta t}}{\, \mathrm{d}x}
-+ \theta p\nabla u\cdot\nabla v - v\theta f(\boldsymbol{x},t_{n+1}) \nonumber\]</div>
+v\varrho c\frac{u-u^n}{{\Delta t}}{\, \mathrm{d}x}
++ \theta \kappa\nabla u\cdot\nabla v - v\theta f(\boldsymbol{x},t_{n+1}) \nonumber\]</div>
 <div class="math">
-\[\quad - (1-\theta) p\nabla u_1\cdot\nabla v +
+\[\quad - (1-\theta) \kappa\nabla u^n\cdot\nabla v +
 v(1-\theta)f(\boldsymbol{x},t_{n}\bigr){\, \mathrm{d}x}\nonumber\]</div>
 <div class="math">
 \[\quad + \int\limits_{\Gamma_N}
@@ -720,7 +686,7 @@ v(1-\theta)f(\boldsymbol{x},t_{n}\bigr){\, \mathrm{d}x}\nonumber\]</div>
 \[\tag{14}
 \quad + \int\limits_{\Gamma_R}
     \bigl(\theta r(u - U_s(t_{n+1}))v
-    + (1-\theta) r(u_1 - U_s(t_{n}))v\bigr){\, \mathrm{d}s}
+    + (1-\theta) r(u^n - U_s(t_{n}))v\bigr){\, \mathrm{d}s}
     = 0{\thinspace .}\]</div>
 <p>The variational formulation is then: at each time level, find <span class="math">\(u\in V\)</span>
 such that <span class="math">\(F(u;v)=0\ \forall v\in V\)</span>.  We do not need to identify
@@ -973,11 +939,11 @@ follows:</p>
         <span class="n">f_1</span>    <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">problem</span><span class="o">.</span><span class="n">heat_source</span><span class="p">(</span><span class="n">t</span><span class="o">-</span><span class="n">dt</span><span class="p">)</span>
 
         <span class="n">theta</span> <span class="o">=</span> <span class="n">Constant</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">theta</span><span class="p">)</span>
-        <span class="n">u_1</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">u_1</span>  <span class="c1"># first computed in initial_condition</span>
+        <span class="n">u_n</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">u_1</span>  <span class="c1"># first computed in initial_condition</span>
 
-        <span class="n">F</span> <span class="o">=</span> <span class="n">varrho</span><span class="o">*</span><span class="n">c</span><span class="o">*</span><span class="p">(</span><span class="n">u</span> <span class="o">-</span> <span class="n">u_1</span><span class="p">)</span><span class="o">/</span><span class="n">dt</span><span class="o">*</span><span class="n">v</span>
+        <span class="n">F</span> <span class="o">=</span> <span class="n">varrho</span><span class="o">*</span><span class="n">c</span><span class="o">*</span><span class="p">(</span><span class="n">u</span> <span class="o">-</span> <span class="n">u_n</span><span class="p">)</span><span class="o">/</span><span class="n">dt</span><span class="o">*</span><span class="n">v</span>
         <span class="n">F</span> <span class="o">+=</span> <span class="n">theta</span>    <span class="o">*</span><span class="n">dot</span><span class="p">(</span><span class="n">kappa</span><span class="o">*</span><span class="n">grad</span><span class="p">(</span><span class="n">u</span><span class="p">),</span>   <span class="n">grad</span><span class="p">(</span><span class="n">v</span><span class="p">))</span>
-        <span class="n">F</span> <span class="o">+=</span> <span class="p">(</span><span class="mi">1</span><span class="o">-</span><span class="n">theta</span><span class="p">)</span><span class="o">*</span><span class="n">dot</span><span class="p">(</span><span class="n">kappa</span><span class="o">*</span><span class="n">grad</span><span class="p">(</span><span class="n">u_1</span><span class="p">),</span> <span class="n">grad</span><span class="p">(</span><span class="n">v</span><span class="p">))</span>
+        <span class="n">F</span> <span class="o">+=</span> <span class="p">(</span><span class="mi">1</span><span class="o">-</span><span class="n">theta</span><span class="p">)</span><span class="o">*</span><span class="n">dot</span><span class="p">(</span><span class="n">kappa</span><span class="o">*</span><span class="n">grad</span><span class="p">(</span><span class="n">u_n</span><span class="p">),</span> <span class="n">grad</span><span class="p">(</span><span class="n">v</span><span class="p">))</span>
         <span class="n">F</span> <span class="o">-=</span> <span class="n">theta</span><span class="o">*</span><span class="n">f</span><span class="o">*</span><span class="n">v</span> <span class="o">+</span> <span class="p">(</span><span class="mi">1</span><span class="o">-</span><span class="n">theta</span><span class="p">)</span><span class="o">*</span><span class="n">f_1</span><span class="o">*</span><span class="n">v</span>
         <span class="n">F</span> <span class="o">=</span> <span class="n">F</span><span class="o">*</span><span class="n">dx</span>
         <span class="n">F</span> <span class="o">+=</span> <span class="n">theta</span><span class="o">*</span><span class="nb">sum</span><span class="p">(</span>
@@ -1016,7 +982,7 @@ There are no heat sources.  How is the temperature development
 in the material due to such sudden heating of one end?
 Figure <a class="reference internal" href="#ch-diffusion-refactor-class-solver-fig4"><span class="std std-ref">Domain with (scaled) boundary conditions: sudden jump in  \( u \)  at the left boundary</span></a> sketches the
 situation (with a scaled variable <span class="math">\(u\)</span> that jumps from 0 to 1).</p>
-<div class="figure" id="id8">
+<div class="figure" id="id7">
 <span id="ch-diffusion-refactor-class-solver-fig4"></span><a class="reference internal image-reference" href="_images/thermal_layer1_sketch.png"><img alt="_images/thermal_layer1_sketch.png" src="_images/thermal_layer1_sketch.png" style="width: 500px;" /></a>
 <p class="caption"><span class="caption-text"><em>Domain with (scaled) boundary conditions: sudden jump in  \( u \)  at the left boundary</em></span></p>
 </div>
@@ -1231,7 +1197,7 @@ needed to compensate).  However, in this problem, we see from Figure
 <a class="reference internal" href="#ch-diffusion-refactor-class-solver-fig1"><span class="std std-ref">Development of thermal boundary layer: Crank-Nicolson (left) and Backward Euler (right) schemes</span></a> that the inaccuracy is
 only visible for the very first time steps as the boundary layer is
 thin.</p>
-<div class="figure" id="id9">
+<div class="figure" id="id8">
 <span id="ch-diffusion-refactor-class-solver-fig1"></span><a class="reference internal image-reference" href="_images/thermal_layer1.png"><img alt="_images/thermal_layer1.png" src="_images/thermal_layer1.png" style="width: 800px;" /></a>
 <p class="caption"><span class="caption-text"><em>Development of thermal boundary layer: Crank-Nicolson (left) and Backward Euler (right) schemes</em></span></p>
 </div>
@@ -1265,7 +1231,7 @@ values material properties (i.e., values of <span class="math">\(\varrho\)</span
 condition at <span class="math">\(x=1\)</span> to be &#8220;no change&#8221;, i.e., <span class="math">\(\partial u/\partial
 n=0\)</span>. Figure <a class="reference internal" href="#ch-diffusion-refactor-class-solver-fig5"><span class="std std-ref">Domain with internal subdomain and (scaled) boundary conditions</span></a> depicts the
 problem.</p>
-<div class="figure" id="id10">
+<div class="figure" id="id9">
 <span id="ch-diffusion-refactor-class-solver-fig5"></span><a class="reference internal image-reference" href="_images/thermal_layer2_sketch.png"><img alt="_images/thermal_layer2_sketch.png" src="_images/thermal_layer2_sketch.png" style="width: 500px;" /></a>
 <p class="caption"><span class="caption-text"><em>Domain with internal subdomain and (scaled) boundary conditions</em></span></p>
 </div>
@@ -1298,7 +1264,7 @@ and <span class="math">\(\bar c = c_1/c_0\)</span>, which results in a coefficie
 varying <span class="math">\(p\)</span>, which takes on the values 1 in subdomain 0 and
 <span class="math">\(\alpha\)</span> in subdomain 1. For simplicity, we just name this parameter
 <code class="docutils literal"><span class="pre">kappa_values</span></code> in the code.</p>
-<p>[<strong>hpl 8</strong>: Is this trick too tricky? Would it be clearer to let all three parameters vary?]</p>
+<p>[<strong>hpl 3</strong>: Is this trick too tricky? Would it be clearer to let all three parameters vary?]</p>
 </div>
 <div class="section" id="the-problem-class-1">
 <h4>The problem class<a class="headerlink" href="#the-problem-class-1" title="Permalink to this headline">¶</a></h4>
@@ -1396,7 +1362,7 @@ the highly conductive inner material leads to a flat temperature profile
 in this region. The start of the process is as before, but
 with an insulated boundary at <span class="math">\(x=1\)</span>, heat builds up with time.
 The limiting steady state is <span class="math">\(u=1\)</span> as <span class="math">\(t\rightarrow\infty\)</span>.</p>
-<div class="figure" id="id11">
+<div class="figure" id="id10">
 <span id="ch-diffusion-refactor-class-solver-fig2"></span><a class="reference internal image-reference" href="_images/thermal_layer2_CN20.png"><img alt="_images/thermal_layer2_CN20.png" src="_images/thermal_layer2_CN20.png" style="width: 500px;" /></a>
 <p class="caption"><span class="caption-text"><em>Development of thermal boundary layer in heterogeneous medium</em></span></p>
 </div>
@@ -1433,7 +1399,7 @@ period of 24 h.</p>
 steady state oscillatory condition is established.
 Figure <a class="reference internal" href="#ch-diffusion-refactor-class-solver-fig6"><span class="std std-ref">Domain with oscillating temperature at the boundary: unscaled (left) and scaled (left)</span></a> shows the domain and
 boundary conditions.</p>
-<div class="figure" id="id12">
+<div class="figure" id="id11">
 <span id="ch-diffusion-refactor-class-solver-fig6"></span><a class="reference internal image-reference" href="_images/thermal_layer3_scaling_sketch.png"><img alt="_images/thermal_layer3_scaling_sketch.png" src="_images/thermal_layer3_scaling_sketch.png" style="width: 800px;" /></a>
 <p class="caption"><span class="caption-text"><em>Domain with oscillating temperature at the boundary: unscaled (left) and scaled (left)</em></span></p>
 </div>
@@ -1447,7 +1413,7 @@ have <span class="math">\(\bar u\in [-1,1]\)</span>, we set</p>
 <div class="math">
 \[\bar u_B(\bar t) = \sin(wt_c\bar t){\thinspace .}\]</div>
 <p>We use a time scale based on <span class="math">\(w\)</span>, i.e., <span class="math">\(t_c=1/w\)</span>.
-Chapter 3.2.4 in <a class="reference internal" href="._ftut2009.html#ref2" id="id7">[Ref2]</a> (see <a class="reference external" href="http://hplgit.github.io/scaling-book/doc/pub/book/html/._scaling-book008.html#___sec142">ebook</a>)
+Chapter 3.2.4 in <a class="reference internal" href="._ftut2009.html#ref3" id="id6">[Ref3]</a> (see <a class="reference external" href="http://hplgit.github.io/scaling-book/doc/pub/book/html/._scaling-book008.html#___sec142">ebook</a>)
 has an in-depth
 coverage of the scaling of this problem. The challenge is that
 the temperature will oscillate close to <span class="math">\(y=1\)</span>, but the oscillations
@@ -1561,7 +1527,7 @@ range for the data. Bring up the Color Map Editor (click on <strong>Edit</strong
 the <em>Coloring</em> section in the left part of the GUI), click on the second
 icon from the top, to &#8220;rescale the custom range&#8221;, give -1 and 1
 as the data range, and click <strong>Update</strong> to bring this range into action.</p>
-<div class="figure" id="id13">
+<div class="figure" id="id12">
 <span id="ch-diffusion-refactor-class-solver-fig3"></span><a class="reference internal image-reference" href="_images/thermal_layer4.png"><img alt="_images/thermal_layer4.png" src="_images/thermal_layer4.png" style="width: 800px;" /></a>
 <p class="caption"><span class="caption-text"><em>Oscillating boundary temperature: homogeneous (left) and heterogeneous (right) medium</em></span></p>
 </div>
@@ -1634,7 +1600,7 @@ method. In addition, implement the Crank-Nicolson method where you solve</p>
 <div class="math">
 \[\frac{u^{n+1}-u^n}{{\Delta t}} = \frac{1}{2}(G(u^{n+1}) + G(u^n)){\thinspace .}\]</div>
 <p>This method also has a truncation error of order <span class="math">\({\Delta t}^2\)</span>.
-[<strong>hpl 9</strong>: Find some good test problems for comparing the performance of the schemes. What about starting Couette flow in 1D and a 2D tube with non-trivial cross section, and some adaptive strategy in time? Can find appropriate <span class="math">\(\Delta t\)</span> for visualization in different time intervals, then refine for numerical computations and then smoooth through the piecewise constant values.]</p>
+[<strong>hpl 4</strong>: Find some good test problems for comparing the performance of the schemes. What about starting Couette flow in 1D and a 2D tube with non-trivial cross section, and some adaptive strategy in time? Can find appropriate <span class="math">\(\Delta t\)</span> for visualization in different time intervals, then refine for numerical computations and then smoooth through the piecewise constant values.]</p>
 </div>
 </div>
 </div>

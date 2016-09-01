@@ -52,8 +52,6 @@ Let :math:`\Gamma_{_\mathrm{D}}` and :math:`\Gamma_{_\mathrm{N}}` denote the par
 where the Dirichlet and Neumann conditions apply, respectively.  The
 complete boundary-value problem can be written as
 
-[**AL 33**: Fixed alignment of in, on etc here. Needs to be done in other places too, using ``{alignat}{2}``.]
-
 .. _Eq:_auto19:
 
 .. math::
@@ -94,7 +92,7 @@ Again we choose :math:`u=1+x^2 + 2y^2` as the exact solution and adjust :math:`f
         u_{_\mathrm{D}} &= 1 + x^2 + 2y^2{\thinspace .}
         \end{align*}
 
-For ease of programming we may introduce a :math:`g` function defined over the whole
+For ease of programming, we may introduce a :math:`g` function defined over the whole
 of :math:`\Omega` such that :math:`g` takes on the right values at :math:`y=0` and
 :math:`y=1`. One possible extension is
 
@@ -163,11 +161,11 @@ in the standard notation :math:`a(u,v)=L(v)` is straightforward with
         \int_{\Gamma_{_\mathrm{N}}} gv {\, \mathrm{d}s}{\thinspace .}  
         
 
-FEniCS implementation          (7)
-----------------------------------
+FEniCS implementation          (12)
+-----------------------------------
 
 How does the Neumann condition impact the implementation?  Let us
-revisit our previous implementation ``ft01_poisson.py``, from
+revisit our previous implementation ``ft01_poisson.py`` from
 the section :ref:`ch:poisson0:impl` and examine which changes
 we need to make to incorporate the Neumann condition. It turns out that
 only two are necessary.
@@ -181,9 +179,11 @@ The first adjustment can be coded as
 
 .. code-block:: python
 
+    tol = 1E-14
+    
     def boundary_D(x, on_boundary):
         if on_boundary:
-            if x[0] == 0 or x[0] == 1:
+            if near(x[0], 0, tol) or near(x[0], 1, tol):
                 return True
             else:
                 return False
@@ -195,78 +195,9 @@ A more compact implementation reads
 .. code-block:: python
 
     def boundary_D(x, on_boundary):
-        return on_boundary and (x[0] == 0 or x[0] == 1)
-
-
-.. admonition:: Never use ``==`` for comparing real numbers
-
-   A comparison like ``x[0] == 1`` should never be used if ``x[0]`` is a real
-   number, because rounding errors in ``x[0]`` may make the test fail even
-   when it is mathematically correct. Consider
-   
-   .. code-block:: python
-   
-       >>> 0.1 + 0.2 == 0.3
-       False
-       >>> 0.1 + 0.2
-       0.30000000000000004
-   
-   Comparison of real numbers needs to be made with tolerances! The
-   values of the tolerances depend on the size of the numbers involved in
-   arithmetic operations:
-   
-   .. code-block:: python
-   
-       >>> abs(0.1+0.2 - 0.3)
-       5.551115123125783e-17
-       >>> abs(1.1+1.2 - 2.3)
-       0.0
-       >>> abs(10.1+10.2 - 20.3)
-       3.552713678800501e-15
-       >>> abs(100.1+100.2 - 200.3)
-       0.0
-       >>> abs(1000.1+1000.2 - 2000.3)
-       2.2737367544323206e-13
-       >>> abs(10000.1+10000.2 - 20000.3)
-       3.637978807091713e-12
-   
-   For numbers of unit size, tolerances as low as :math:`3\cdot 10^{-16}` can be used
-   (in fact, this tolerance is known as the constant ``DOLFIN_EPS`` in FEniCS).
-   Otherwise, an appropriate scaled tolerance must be used.
-   
-   Here is a better way to test if ``x[0] == 1``:
-   
-   .. code-block:: python
-   
-       tol = 1E-14
-       if abs(x[0] - 1) < tol:
-           ...
-
-
-
+        return on_boundary and (near(x[0], 0, tol) or near(x[0], 1, tol))
 
 .. index:: near
-
-A modified version of the boundary definition using a tolerance
-instead of exact comparison can easily be implemented as follows:
-
-.. code-block:: python
-
-    def boundary_D(x, on_boundary):
-        tol = 1E-14
-        return on_boundary and (abs(x[0]) < tol or abs(x[0] - 1) < tol)
-
-This function can be written a bit more elegantly using the ``near``
-function in FEniCS:
-
-.. code-block:: python
-
-    def boundary_D(x, on_boundary):
-        tol = 1E-14
-        return on_boundary and (near(x[0], 0, tol) or near(x[1], 1, tol))
-
-[**AL 34**: Use 1E-14 or 1e-14? Need to be consistent throughout the book.]
-[**hpl 35**: I suggest capital 1E-14.]
 
 The second adjustment of our program concerns the definition of ``L``,
 which needs to include the Neumann condition:
@@ -280,14 +211,20 @@ The ``ds`` variable implies a boundary integral, while ``dx``
 implies an integral over the domain :math:`\Omega`.
 No other modifications are necessary.
 
+Note that the integration ``*ds`` is carried out over the entire
+boundary, including the Dirichlet boundary. However, since the test
+function ``v`` vanishes on the Dirichlet boundary (as a result
+specifying a ``DirichletBC``), the integral will only include the
+contribution from the Neumann boundary.
+
 .. _ch:poisson0:multiple:Dirichlet:
 
 Setting multiple Dirichlet conditions
 =====================================
 
-In the previous section, we used a single functions :math:`u_{_\mathrm{D}}(x,y)` for
+In the previous section, we used a single function :math:`u_{_\mathrm{D}}(x,y)` for
 setting Dirichlet conditions at two parts of the boundary.  Often it
-is more practical to use multiple functions, one for subdomain of the
+is more practical to use multiple functions, one for each subdomain of the
 boundary. Let us return to the case from the section :ref:`ch:poisson0:DN`
 and redefine the problem in terms of two Dirichlet conditions:
 
@@ -313,7 +250,7 @@ defining the location of the boundary, and a ``DirichletBC`` object:
     
     def boundary_L(x, on_boundary):
         tol = 1E-14
-        return on_boundary and abs(x[0]) < tol
+        return on_boundary and near(x[0], 0, tol)
     
     bc_L = DirichletBC(V, u_L, boundary_L)
 
@@ -326,7 +263,7 @@ similar code snippet:
     
     def boundary_R(x, on_boundary):
         tol = 1E-14
-        return on_boundary and abs(x[0] - 1) < tol
+        return on_boundary and near(x[0], 1, tol)
     
     bc_R = DirichletBC(V, u_R, boundary_R)
 
@@ -338,18 +275,14 @@ we can pass to the ``solve`` function to compute the solution:
     bcs = [bc_L, bc_R]
     ...
     solve(a == L, u, bcs)
-    # or
-    problem = LinearVariationalProblem(a, L, u, bcs)
-    solver  = LinearVariationalSolver(problem)
-    solver.solve()
 
 Note that for boundary values that do not depend on :math:`x` or :math:`y`, we
-might replace the ``Expression`` objects ``Constant`` objects.
+might replace the ``Expression`` objects by ``Constant`` objects.
 
 .. _ftut:possion:2D:2mat:impl:
 
-Working with subdomains
-=======================
+Defining subdomains for different materials
+===========================================
 
 .. index:: heterogeneous media
 
@@ -374,10 +307,10 @@ Suppose we want to solve
 .. math::
 
     \tag{72}
-    \nabla\cdot \left\lbrack k(x,y)\nabla u(x,y)\right\rbrack = 0,
+    \nabla\cdot \left\lbrack \kappa(x,y)\nabla u(x,y)\right\rbrack = 0,
         
 
-in a domain :math:`\Omega` consisting of two subdomains where :math:`k` takes on
+in a domain :math:`\Omega` consisting of two subdomains where :math:`\kappa` takes on
 a different value in each subdomain.
 We take :math:`\Omega = [0,1]\times [0,1]` and divide it into two equal
 subdomains, as depicted in Figure :ref:`ftut:possion:2D:2mat:fig1`,
@@ -388,8 +321,8 @@ subdomains, as depicted in Figure :ref:`ftut:possion:2D:2mat:fig1`,
         \Omega_1 = [0, 1]\times (1/2,1]{\thinspace .}
         
 
-We define :math:`k(x,y)=k_0` in :math:`\Omega_0` and :math:`k(x,y)=k_1` in :math:`\Omega_1`,
-where :math:`k_0>0` and :math:`k_1>0` are given constants.
+We define :math:`\kappa(x,y)=\kappa_0` in :math:`\Omega_0` and :math:`\kappa(x,y)=\kappa_1` in :math:`\Omega_1`,
+where :math:`\kappa_0>0` and :math:`\kappa_1>0` are given constants.
 
 Physically, this problem may be viewed as a model of heat conduction,
 where the heat conduction in :math:`\Omega_1` is more efficient than in
@@ -397,12 +330,12 @@ where the heat conduction in :math:`\Omega_1` is more efficient than in
 two geological layers, where the layers' ability to transport the
 fluid differ.
 
-Expression objects with if test
--------------------------------
+Using expressions to define subdomains
+--------------------------------------
 
-The simplest way of implementing a variable coefficient :math:`k` is to
-define an ``Expression`` object where we return the appropriate :math:`k`
-value depending on the position in space.  Since we need some testing
+The simplest way of implementing a variable coefficient :math:`\kappa` is to
+define an ``Expression`` object where we return the appropriate :math:`\kappa`
+value depending on the position in space. Since we need some testing
 on the coordinates, the most straightforward approach is to define a
 subclass of ``Expression``, where we can use a full Python method
 instead of just a C++ string formula for specifying a function.  The
@@ -422,12 +355,12 @@ method that defines the function is called ``eval``:
             else:
                 value[0] = self.k1
     
-    # Initialize
+    # Initialize k
     k = K()
     k.set_k_values(1, 0.01)
 
 The ``eval`` method gives great flexibility in defining functions, but a
-downside is that C++ calls up ``eval`` in Python for each node ``x``,
+downside is that FEniCS will call ``eval`` in Python for each node ``x``,
 which is a slow process.
 
 An alternative method is to use a C++ string expression as we have
@@ -449,8 +382,8 @@ use a more general technique, as we will see next.
 
 .. index:: boundary specification (class)
 
-Mesh functions
---------------
+Using mesh functions to define subdomains
+-----------------------------------------
 
 We now address how to specify the subdomains :math:`\Omega_0` and :math:`\Omega_1`
 using a more general technique. This technique involves the use of two
@@ -462,7 +395,7 @@ boundary :math:`x = 0`:
 
     def boundary(x, on_boundary):
         tol = 1E-14
-        return on_boundary and abs(x[0]) < tol
+        return on_boundary and near(x[0], 0, tol)
 
 This boundary definition is actually a shortcut to the more general
 FEniCS concept ``SubDomain``. A ``SubDomain`` is a class which defines a
@@ -476,7 +409,7 @@ specify the boundary :math:`x = 0` as a ``SubDomain``:
     class Boundary(SubDomain):
         def inside(self, x, on_boundary):
             tol = 1E-14
-            return on_boundary and abs(x[0]) < tol
+            return on_boundary and near(x[0], 0, tol)
     
     boundary = Boundary()
     bc = DirichletBC(V, Constant(0), boundary)
@@ -523,7 +456,7 @@ subdomains. This is a little counter-intuitive, but is necessary to
 make the cells both above and below the internal boundary belong to
 either :math:`\Omega_0` or :math:`\Omega_1`.
 
-To define the variable coefficient :math:`k`, we will use a powerful tool in
+To define the variable coefficient :math:`\kappa`, we will use a powerful tool in
 FEniCS called a ``MeshFunction``. A ``MeshFunction`` is a discrete
 function that can be evaluated at a set of so-called *mesh
 entities*. A mesh entity in FEniCS is either a vertex, an edge, a
@@ -534,14 +467,14 @@ pieces of external or internal boundaries. A ``MeshFunction`` over cells
 can also be used to represent boundary markers for mesh refinement. A
 FEniCS ``MeshFunction`` is parameterized both over its data type (like
 integers or booleans) and its dimension (0 = vertex, 1 = edge
-etc). Special subclasses ``VertexFunction``, ``EdgeFunction`` etc are
+etc.). Special subclasses ``VertexFunction``, ``EdgeFunction`` etc. are
 provided for easy definition of a ``MeshFunction`` of a particular
 dimension.
 
 Since we need to define subdomains of :math:`\Omega` in the present example,
 we make use of a ``CellFunction``. The constructor
 is fed with two arguments: 1) the type of value: ``'int'`` for integers,
-``'size_t'`` for positive (unsigned) integers, ``'double'`` for real
+``'size_t'`` for non-negative (unsigned) integers, ``'double'`` for real
 numbers, and ``'bool'`` for logical values; 2) a ``Mesh`` object.
 Alternatively, the constructor can take just a filename and initialize
 the ``CellFunction`` from data in a file.
@@ -560,8 +493,8 @@ subdomain:
 
     # Mark subdomains with numbers 0 and 1
     subdomain0 = Omega0()
-    subdomain0.mark(materials, 0)
     subdomain1 = Omega1()
+    subdomain0.mark(materials, 0)
     subdomain1.mark(materials, 1)
 
 This will set the values of the mesh function ``materials`` to :math:`0` on
@@ -596,7 +529,7 @@ which can later be read back from file as follows:
     File('materials.xml.gz') >> materials
 
 Now, to use the values of the mesh function ``materials`` to define the
-variable coefficient :math:`k`, we create a FEniCS ``Expression``:
+variable coefficient :math:`\kappa`, we create a FEniCS ``Expression``:
 
 .. code-block:: python
 
@@ -620,7 +553,20 @@ make use of the member function ``eval_cell`` in place of the regular
 addition ``cell`` argument which we can use to check on which cell we are
 currently evaluating the function.
 
+Since we make use of geometric tests to define the two ``SubDomains``
+for :math:`\Omega_0` and :math:`\Omega_1`, the ``MeshFunction`` method may seem like
+an unnecessary complication of the simple method using an
+``Expression`` with an if-test. However, in general the definition of
+subdomains may be available as a ``MeshFunction`` (from a data file),
+perhaps generated as part of the mesh generation process, and not as a
+simple geometric test. In such cases the method demonstrated here is
+the recommended way to define subdomains.
+
 .. index:: CompiledSubDomain
+
+.. AL: Nice trickery but this seems like an unnecessary complication
+
+.. HPL: I think the recipe for vectorization could be in here - it is natural
 
 Vectorized version of subdomain definitions
 -------------------------------------------
@@ -645,8 +591,8 @@ The ``help`` array is required since ``choose`` cannot work with
 type ``uint32``. We must therefore transform this array to an array
 ``help`` with standard ``int32`` integers.
 
-C++ strings for subdomain definitions
--------------------------------------
+Using C++ code snippets to define subdomains
+--------------------------------------------
 
 The ``SubDomain`` and ``Expression`` Python classes are very convenient,
 but their use leads to function calls from C++ to Python for each node
@@ -657,15 +603,14 @@ Instead of writing the ``SubDomain`` subclass in Python, we may instead use
 the ``CompiledSubDomain`` tool in FEniCS to specify the subdomain in C++
 code and thereby speed up our code. Consider
 the definition of the classes ``Omega0`` and ``Omega1`` above in Python. The
-key strings that define these subdomain can be expressed in C++ syntax
+key strings that define these subdomains can be expressed in C++ syntax
 and fed to ``CompiledSubDomain`` as follows:
 
 .. code-block:: python
 
-    tol = 1E-14  # Tolerance for coordinate comparisons
-    
-    subdomain0 = CompiledSubDomain('x[1] <= 0.5 + tol', tol=1E-14)
-    subdomain1 = CompiledSubDomain('x[1] >= 0.5 - tol', tol=1E-14)
+    tol = 1E-14
+    subdomain0 = CompiledSubDomain('x[1] <= 0.5 + tol', tol=tol)
+    subdomain1 = CompiledSubDomain('x[1] >= 0.5 - tol', tol=tol)
 
 As seen, one can have parameters in the strings and specify their
 values by keyword arguments.
@@ -673,12 +618,12 @@ The resulting objects, ``subdomain0`` and ``subdomain1``, can be used
 as ordinary ``SubDomain`` objects.
 
 Compiled subdomain strings can be applied for specifying boundaries as
-well, e.g.,
+well:
 
 .. code-block:: python
 
-    boundary_R = CompiledSubDomain('on_boundary && abs(x[0] - 1) < tol',
-                                    tol=1E-14)
+    boundary_R = CompiledSubDomain('on_boundary && near(x[0], 1, tol)',
+                                   tol=1E-14)
 
 It is also possible to feed the C++ string (without parameters)
 directly as the third argument to ``DirichletBC`` without explicitly
@@ -686,11 +631,11 @@ constructing a ``CompiledSubDomain`` object:
 
 .. code-block:: python
 
-    bc1 = DirichletBC(V, value, 'on_boundary && abs(x[0] - 1) < tol')
+    bc1 = DirichletBC(V, value, 'on_boundary && near(x[0], 1, tol)')
 
 Python ``Expression`` classes may also be redefined using C++ for more
 efficient code. Consider again the definition of the class ``K`` above
-for the variable coefficient :math:`k = k(x)`. This may be redefined using a
+for the variable coefficient :math:`\kappa = \kappa(x)`. This may be redefined using a
 C++ code snippet and the keyword ``cppcode`` to the regular FEniCS
 ``Expression`` class:
 
@@ -711,12 +656,13 @@ C++ code snippet and the keyword ``cppcode`` to the regular FEniCS
           values[0] = k1;
       }
     
-      std::shared_ptr<MeshFunction<std::size_t> > materials;
+      std::shared_ptr<MeshFunction<std::size_t>> materials;
       double k0;
       double k1;
     
     };
     """
+    
     k = Expression(cppcode=cppcode, degree=0)
     k.materials = materials
     k.k0 = k0
@@ -845,7 +791,7 @@ Filename: ``Expression_efficiency``.
 
 .. _ch:poisson0:multi:bc:
 
-Setting multiple Neumann, Robin, and Dirichlet conditions
+Setting multiple Dirichlet, Neumann, and Robin conditions
 =========================================================
 
 .. index:: Dirichlet boundary conditions
@@ -865,13 +811,13 @@ where we have Dirichlet conditions. However, only the integral over
 :math:`\Gamma_{_\mathrm{N}}` will contribute since :math:`v = 0` on :math:`\Gamma_{_\mathrm{D}}` (which happens when we
 apply the Dirichlet boundary condition).
 
-From an efficiency point of view, we would ideally like to integrate
-``g*v*ds`` only over the part of the boundary where we actually have
-Neumann conditions. More importantly, in other problems one may have
-different Neumann conditions or other conditions like the Robin type
-condition. This can be handled in FEniCS by defining a ``MeshFunction``
-that marks different portions of the boundary. The same technique
-can also be used to treat multiple Dirichlet conditions.
+From an efficiency point of view, we would ideally like to compute the
+integral ``g*v*ds`` only over the part of the boundary where we actually
+have Neumann conditions. More importantly, in other problems one may
+have different Neumann conditions or other conditions like the Robin
+type condition. This can be handled in FEniCS by defining a
+``MeshFunction`` that marks different portions of the boundary. The same
+technique can also be used to treat multiple Dirichlet conditions.
 
 Three types of boundary conditions
 ----------------------------------
@@ -887,9 +833,6 @@ parts :math:`\Gamma_{_\mathrm{D}}^0`, :math:`\Gamma_{_\mathrm{D}}^1`, :math:`...
 where :math:`u_{_\mathrm{D}}^i` are prescribed functions, :math:`i=0,1,\ldots`
 On other parts, :math:`\Gamma_{_\mathrm{N}}^0`, :math:`\Gamma_{_\mathrm{N}}^1`, and so on, we have
 Neumann conditions:
-
-[**AL 36**: Inconsistent naming of coefficient: sometimes :math:`k` and sometimes :math:`p`. Suggestion: :math:`\kappa`.]
-[**hpl 37**: Agree on :math:`\kappa`.]
 
 .. math::
          -\kappa{\partial u\over\partial n} = g_{0}\hbox{ on }\Gamma_{_\mathrm{N}}^0,\quad
@@ -973,22 +916,22 @@ As usual, we multiply by a test function :math:`v` and integrate by parts:
 .. math::
         
          -\int_\Omega \nabla\cdot(\kappa\nabla u) v {\, \mathrm{d}x}
-        = \int_\Omega p\nabla u\cdot \nabla v {\, \mathrm{d}x} -
+        = \int_\Omega \kappa\nabla u\cdot \nabla v {\, \mathrm{d}x} -
         \int_{\partial\Omega}\kappa\frac{\partial u}{\partial n}v {\, \mathrm{d}s}{\thinspace .}
         
 
 On the Dirichlet part of the boundary (:math:`\Gamma_{_\mathrm{D}}^i`), the boundary integral
 vanishes since :math:`v = 0`. On the remaining part of the boundary, we
-split the boundary integral into contribution from the Neumann part
+split the boundary integral into contributions from the Neumann part
 (:math:`\Gamma_{_\mathrm{N}}^i`) and Robin part (:math:`\Gamma_{_\mathrm{R}}^i`). Inserting the boundary conditions,
 we obtain
 
 .. math::
         \begin{align*}
-        -\int_{\partial\Omega}p\frac{\partial u}{\partial n}v {\, \mathrm{d}s}
+        -\int_{\partial\Omega} \kappa\frac{\partial u}{\partial n}v {\, \mathrm{d}s}
         &=
-        -\sum_i\int_{\Gamma_{_\mathrm{N}}^i}p\frac{\partial u}{\partial n} {\, \mathrm{d}s}
-        -\sum_i\int_{\Gamma_{_\mathrm{R}}^i}p\frac{\partial u}{\partial n} {\, \mathrm{d}s}\\ 
+        -\sum_i\int_{\Gamma_{_\mathrm{N}}^i} \kappa\frac{\partial u}{\partial n} {\, \mathrm{d}s}
+        -\sum_i\int_{\Gamma_{_\mathrm{R}}^i} \kappa\frac{\partial u}{\partial n} {\, \mathrm{d}s}\\ 
         &=
         \sum_i\int_{\Gamma_{_\mathrm{N}}^i}g_i {\, \mathrm{d}s} +
         \sum_i\int_{\Gamma_{_\mathrm{R}}^i}r_i(u-s_i) {\, \mathrm{d}s}{\thinspace .}
@@ -1017,8 +960,8 @@ two parts:
 
 .. math::
         
-        \int_{\Gamma_{R,i}}r_i(u-s_i)v {\, \mathrm{d}s}
-        = \int_{\Gamma_{R,i}} r_iuv {\, \mathrm{d}s} - \int_{\Gamma_{R,i}}r_is_iv {\, \mathrm{d}s}{\thinspace .}
+        \int_{\Gamma_{_\mathrm{R}}^i}r_i(u-s_i)v {\, \mathrm{d}s}
+        = \int_{\Gamma_{_\mathrm{R}}^i} r_iuv {\, \mathrm{d}s} - \int_{\Gamma_{_\mathrm{R}}^i}r_is_iv {\, \mathrm{d}s}{\thinspace .}
         
 
 We then have
@@ -1057,24 +1000,24 @@ functions ``lhs`` and ``rhs`` to extract the bilinear and linear parts of
 Note that if we choose the solve this linear problem as a nonlinear
 problem, the Newton iteration will converge in a single iteration.
 
-FEniCS implementation          (8)
-----------------------------------
+FEniCS implementation          (13)
+-----------------------------------
 
 Let us examine how to extend our Poisson solver to handle general
 combinations of Dirichlet, Neumann, and Robin boundary conditions.
 Compared to our previous code, we must consider the following
 extensions:
 
- 1. defining markers for the different parts of the boundary,
+  * Defining markers for the different parts of the boundary.
 
- 2. splitting the boundary integral into parts using the markers.
+  * Splitting the boundary integral into parts using the markers.
 
 A general approach to the first task is to mark each of the desired
 boundary parts with markers 0, 1, 2, and so forth. Here we aim at the
 four sides of the unit square, marked with 0 (:math:`x=0`), 1 (:math:`x=1`), 2
 (:math:`y=0`), and 3 (:math:`y=1`).  The markers will be defined using a
 ``MeshFunction``, but contrary to the section :ref:`ftut:possion:2D:2mat:impl`, this is not a function over cells, but
-a function over facets of the mesh. We use a ``FacetFunction`` for
+a function over the facets of the mesh. We use a ``FacetFunction`` for
 this purpose:
 
 .. code-block:: python
@@ -1090,9 +1033,9 @@ generation.  In our case, the :math:`x=0` boundary can be marked by
 .. code-block:: python
 
     class BoundaryX0(SubDomain):
-        tol = 1e-14
+        tol = 1E-14
         def inside(self, x, on_boundary):
-            return on_boundary and abs(x[0]) < tol
+            return on_boundary and near(x[0], 0, tol)
     
     bx0 = BoundaryX0()
     bx0.mark(boundary_markers, 0)
@@ -1108,9 +1051,11 @@ the key as subdomain number and the value as a dictionary specifying
 the kind of condition as key and a function as its value.
 For example,
 
+[**AL 21**: Strange syntax highlighting in this example.]
+
 .. code-block:: text
 
-    boundary_conditions = {0: {'Dirichlet': u_b},
+    boundary_conditions = {0: {'Dirichlet': u_D},
                            1: {'Robin':     (r, s)},
                            2: {'Neumann:    g},
                            3: {'Neumann',   0}}
@@ -1133,10 +1078,10 @@ can construct this list by the following code snippet:
 .. code-block:: python
 
     bcs = []
-    for n in boundary_conditions:
-        if 'Dirichlet' in boundary_conditions[n]:
-            bc = DirichletBC(V, boundary_conditions[n]['Dirichlet'],
-                             boundary_markers, n))
+    for i in boundary_conditions:
+        if 'Dirichlet' in boundary_conditions[i]:
+            bc = DirichletBC(V, boundary_conditions[i]['Dirichlet'],
+                             boundary_markers, i))
             bcs.append(bc)
 
 A new aspect of the variational problem is the two distinct
@@ -1150,14 +1095,14 @@ The idea of multiple ``ds``-type objects generalizes to volume
 integrals too: ``dx(0)``, ``dx(1)``, etc., are used to
 integrate over subdomain 0, 1, etc.,  inside :math:`\Omega`.
 
-To express integrals over the boundary parts using ``ds(n)``, we must
-first redefine the measures ``ds`` in terms of our boundary markers:
+To express integrals over the boundary parts using ``ds(i)``, we must
+first redefine the measure ``ds`` in terms of our boundary markers:
 
 .. code-block:: python
 
     ds = Measure('ds', domain=mesh, subdomain_data=boundary_markers)
 
-Similarly, if we want integration of different parts of the domain,
+Similarly, if we want integration over different parts of the domain,
 we redefine ``dx`` as
 
 .. code-block:: python
@@ -1167,13 +1112,15 @@ we redefine ``dx`` as
 where ``domain_markers`` is a ``CellFunction`` defining subdomains in :math:`\Omega`.
 
 Suppose we have a Robin condition with values ``r`` and ``s`` on subdomain
-``R``, a Neumann condition with value ``g`` on subdomain ``N``, the
-variational form can be written
+``R``, a Neumann condition with value ``g`` on subdomain ``N``. The
+variational form can then be written
 
 .. code-block:: python
 
-    a = dot(kappa*grad(u), grad(v))*dx + r*u*v*ds(R)
+    a = kappa*dot(grad(u), grad(v))*dx + r*u*v*ds(R)
     L = f*v*dx - g*v*ds(N) + r*s*v*ds(R)
+
+[**AL 22**: Would be easier with just a list of triples: ``((0, 'Neumann', 0), (1, 'Dirichlet', u_D), ...)``. Then we could do `for (i, bc_type, bc_value) in boundary_conditions: if bc_type is 'Neumann': ...`]
 
 In our case, things get a bit more complicated since the
 information about integrals in Neumann and Robin conditions
@@ -1183,14 +1130,14 @@ all Neumann conditions by the following code snippet:
 .. code-block:: python
 
     integrals_N = []
-    for n in boundary_conditions:
-        if 'Neumann' in boundary_conditions[n]:
-            if boundary_conditions[n]['Neumann'] != 0:
-                g = boundary_conditions[n]['Neumann']
-                integrals_N.append(g*v*ds(n))
+    for i in boundary_conditions:
+        if 'Neumann' in boundary_conditions[i]:
+            if boundary_conditions[i]['Neumann'] != 0:
+                g = boundary_conditions[i]['Neumann']
+                integrals_N.append(g*v*ds(i))
 
-Applying ``sum(Nemann_integrals)`` will apply the ``+`` operator to
-the variational forms in the ``Numeann_integrals`` list and result
+Applying ``sum(integrals_N)`` will apply the ``+`` operator to
+the variational forms in the ``integrals_N`` list and result
 in the integrals we need for the right-hand side ``L`` of the
 variational form.
 
@@ -1201,11 +1148,11 @@ in lists:
 
     integrals_R_a = []
     integrals_R_L = []
-    for n in boundary_conditions:
-        if 'Robin' in boundary_conditions[n]:
-            r, s = boundary_conditions[n]['Robin']
-            integrals_R_a.append(r*u*v*ds(n))
-            integrals_R_L.append(r*s*v*ds(n))
+    for i in boundary_conditions:
+        if 'Robin' in boundary_conditions[i]:
+            r, s = boundary_conditions[i]['Robin']
+            integrals_R_a.append(r*u*v*ds(i))
+            integrals_R_L.append(r*s*v*ds(i))
 
 We are now in a position to define the ``a`` and ``L`` expressions
 in the variational formulation:
@@ -1226,17 +1173,17 @@ integrals:
 .. code-block:: python
 
     integrals_R = []
-    for n in boundary_conditions:
-        if 'Robin' in boundary_conditions[n]:
-            r, s = boundary_conditions[n]['Robin']
-            integrals_R.append(r*(u-s)*v*ds(n))
+    for i in boundary_conditions:
+        if 'Robin' in boundary_conditions[i]:
+            r, s = boundary_conditions[i]['Robin']
+            integrals_R.append(r*(u - s)*v*ds(i))
     
-    F = p*dot(grad(u), grad(v))*dx + \ 
+    F = kappa*dot(grad(u), grad(v))*dx + \ 
         sum(integrals_R) - f*v*dx + sum(integrals_N)
     a, L = lhs(F), rhs(F)
 
 This time we can more naturally define the integrals from the
-Robin condition as ``r*(u-s)*v*ds(n)``:
+Robin condition as ``r*(u - s)*v*ds(i)``:
 
 The complete code for this example can be found in the function
 ``solver_bc`` in the program ``ft08_poisson_vc.py``.
@@ -1244,18 +1191,20 @@ The complete code for this example can be found in the function
 Test problem          (4)
 -------------------------
 
-Let us continue to use :math:`{u_{\small\mbox{e}}}=1+x^2+2y^2` as the exact solution, and
-set :math:`p=1` and :math:`f=-6`. Our domain is the unit square, and
-we assign Dirichlet conditions at :math:`x=0` and :math:`x=1`, a Neumann condition
-at :math:`y=1`, and a Robin condition at :math:`y=0`. With the given :math:`{u_{\small\mbox{e}}}`, we
-realize that the Neumann condition is :math:`4y` (which means :math:`4` at
-:math:`y=1`), while the Robin
-condition can be selected in many ways. Since :math:`\partial u/\partial
-n=-\partial u/\partial y=0` at :math:`y=0`, we can select :math:`s=u` and specify
-:math:`r \neq 0` arbitrarily in the Robin condition.
+We will use the same exact solution :math:`{u_{\small\mbox{e}}}=1+x^2+2y^2` as in the chapter :ref:`ch:fundamentals`, and thus take :math:`\kappa=1` and :math:`f=-6`. Our domain
+is the unit square, and we assign Dirichlet conditions at :math:`x=0` and
+:math:`x=1`, a Neumann condition at :math:`y=1`, and a Robin condition at
+:math:`y=0`. With the given :math:`{u_{\small\mbox{e}}}`, we realize that the Neumann condition is
+:math:`-\partial u / \partial n = - \partial u / \partial y = 4y = 4`, while
+the Robin condition can be selected in many ways. Since :math:`\partial
+u/\partial n=-\partial u/\partial y=0` at :math:`y=0`, we can select :math:`s=u`
+and specify :math:`r \neq 0` arbitrarily in the Robin condition. We will set
+:math:`r = 1000` and :math:`s = u`.
 
 The boundary parts are thus :math:`\Gamma_{_\mathrm{D}}^0`: :math:`x=0`, :math:`\Gamma_{_\mathrm{D}}^1`: :math:`x=1`,
 :math:`\Gamma_{_\mathrm{R}}^0`: :math:`y=0`, and :math:`\Gamma_{_\mathrm{N}}^0`: :math:`y=1`.
+
+[**AL 23**: Somewhat confusing that we have a global numbering of the boundary parts and we also have a local numbering of the boundary parts for each type of boundary condition.]
 
 When implementing this test problem, and especially other test
 problems with more complicated expressions, it is advantageous to use
@@ -1263,6 +1212,8 @@ symbolic computing. Below we define the exact solution as a ``sympy``
 expression and derive other functions from their mathematical
 definitions.  Then we turn these expressions into C/C++ code, which
 can be fed into ``Expression`` objects.
+
+[**AL 24**: Why does the spacing (newlines) disappear in the display of this code? It seems to be there in ``poisson_vc.py``.]
 
 .. code-block:: python
 
@@ -1285,7 +1236,7 @@ can be fed into ``Expression`` objects.
     # Turn into FEniCS Expression
     variables = [Expression(var, degree=2) for var in variables]
     # Extract variables
-    [u_e, u_00, u_01, f, g, r, s] = variables
+    u_e, u_00, u_01, f, g, r, s = variables
     # Define boundary conditions
     boundary_conditions = {0: {'Dirichlet': u_00},   # x=0
                            1: {'Dirichlet': u_01},   # x=1
@@ -1304,7 +1255,7 @@ helpful debugging output is to run through all vertex coordinates and
 check if the ``SubDomain.inside`` method marks the vertex as on the
 boundary. Another useful printout is to list which degrees of freedom
 that are subject to Dirichlet conditions, and for first-order Lagrange
-(P1) elements, add the corresponding vertex coordinate to the
+(:math:`\mathsf{P}_1`) elements, add the corresponding vertex coordinate to the
 output.
 
 .. code-block:: python
@@ -1321,8 +1272,8 @@ output.
         if V.ufl_element().degree() == 1:  # P1 elements
             d2v = dof_to_vertex_map(V)
             coor = mesh.coordinates()
-        for n, bc in enumerate(bcs):
-            print('Dirichlet condition %d' % n)
+        for i, bc in enumerate(bcs):
+            print('Dirichlet condition %d' % i)
             boundary_values = bc.get_boundary_values()
             for dof in boundary_values:
                 print('   dof %2d: u=%g' % (dof, boundary_values[dof]))
@@ -1357,7 +1308,7 @@ surrounding vacuum.
 .. figure:: magnetostatics_geometry.png
    :width: 600
 
-   *Cross-section of an iron cylinder with copper wires wound around the cylinder, here with :math:`n = 8` windings*
+   *Cross-section of an iron cylinder with copper wires wound around the cylinder, here with :math:`n = 8` windings. The inner circles are cross-sections of the copper wire coming up ("north") and the outer circles are cross-sections of the copper wire going down into the plane ("south")*
 
 First, we simplify the problem to a 2D problem. We can do this by
 assuming that the cylinder extends far along the :math:`z`-axis and as a
@@ -1467,7 +1418,7 @@ set of circles (copper wire cross-sections) and to :math:`-1\,\mathrm{A}` in
 the exterior set of circles in Figure :ref:`ftut1:fig:magnetostatics:geometry`.
 
 Once the magnetic vector potential has been computed, we can
-computed the magnetic field :math:`B = B(x, y)` by
+compute the magnetic field :math:`B = B(x, y)` by
 
 .. _Eq:_auto30:
 
@@ -1483,9 +1434,9 @@ computed the magnetic field :math:`B = B(x, y)` by
 Variational formulation          (8)
 ------------------------------------
 
-The variational problem is derived as before by multiplying with a test
-function :math:`v` and integrating by parts. Since the boundary integral
-vanishes due to the Dirichlet condition, we obtain
+The variational problem is derived as before by multiplying the PDE
+with a test function :math:`v` and integrating by parts. Since the boundary
+integral vanishes due to the Dirichlet condition, we obtain
 
 .. _Eq:_auto31:
 
@@ -1517,11 +1468,11 @@ or, in other words, :math:`a(A_z, v) = L(v)` with
         
         
 
-FEniCS implementation          (9)
-----------------------------------
+FEniCS implementation          (14)
+-----------------------------------
 
 The first step is to generate a mesh for the geometry described in
-Figure :ref:`ftut1:fig:magnetostatics:geometry`. We let :math:`a` and :math:`b` the
+Figure :ref:`ftut1:fig:magnetostatics:geometry`. We let :math:`a` and :math:`b` be the
 inner and outer radii of the iron cylinder and let :math:`c_1` and :math:`c_2`
 be the radii of the two concentric distributions of copper wire
 cross-sections. Furthermore, we let :math:`r` be the radius of a copper
@@ -1530,7 +1481,9 @@ windings (giving a total of :math:`2n` copper-wire cross-sections). This
 geometry can be described easily using ``mshr`` and a little bit of
 Python programming:
 
-[**hpl 38**: Student wrote that I don’t really understand this naming, current-carrying wires don’t have north and south poles? For me at least inside and outside iron cylinder makes much more sense to talk about than north/south.]
+[**hpl 25**: Student wrote that I don’t really understand this naming, current-carrying wires don’t have north and south poles? For me at least inside and outside iron cylinder makes much more sense to talk about than north/south.]
+
+[**AL 26**: Explaining text added to figure so I think this should be ok now.]
 
 .. code-block:: python
 
@@ -1584,7 +1537,7 @@ The mesh generated with ``mshr`` will contain information about the
 subdomains we have defined. To use this information in the definition of
 our variational problem and subdomain-dependent parameters, we will need to
 create a ``MeshFunction`` that marks the subdomains. This can be easily
-created by a call to the member function ``mesh.domains``, which holds
+created by a call to the member function ``mesh.domains()``, which holds
 the subdomain data generated by ``mshr``:
 
 .. code-block:: python
@@ -1648,7 +1601,7 @@ field:
     W = VectorFunctionSpace(mesh, 'P', 1)
     B = project(as_vector((A_z.dx(1), -A_z.dx(0))), W)
 
-We use ``as_vector`` to interpret the tuple
+We use ``as_vector()`` to interpret the tuple
 ``(A_z.dx(1), -A_z.dx(0))`` as a vector. The resulting plots of the
 magnetic vector potential and magnetic field are shown in Figures
 :ref:`ftut1:fig:magnetostatics:potential` and

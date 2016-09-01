@@ -95,7 +95,7 @@ pdflatex $name
 compile --device=paper EXV=False
 cp $name.pdf fenics-tutorial${bookno}-4print.pdf
 cp $name.log fenics-tutorial${bookno}-4print.log  # save to track the no of pages!
-cp $name.dolog ${name}-4print.dolog  # for examining error messages
+cp $name.dlog ${name}-4print.dlog  # for examining error messages
 
 # PDF online ebook (exetended version with exercises etc.)
 compile --device=screen EXV=True
@@ -106,14 +106,14 @@ rm -f *._ftut*.rst
 preprocess -DFORMAT=html newcommands.p.tex > newcommands.tex
 dir=sphinx-rootdir
 system doconce format sphinx $name --encoding=utf-8 EXV=$EXV --allow_refs_to_external_docs
-cp $name.dolog ${name}-sphinx.dolog  # for examining error messages
+cp $name.dlog ${name}-sphinx.dlog  # for examining error messages
 system doconce split_rst $name.rst
 system doconce sphinx_dir dirname=${dir}${bookno} version=$version theme=fenics $name
 system python automake_sphinx.py
 
 # Make Bootstrap HTML (but enlargen the journal font)
 system doconce format html $name --encoding=utf-8 --html_style=bootswatch_journal "--html_body_style=font-size:20px;line-height:1.5" --html_code_style=inherit EXV=$EXV --allow_refs_to_external_docs
-cp $name.dolog ${name}-html.dolog  # for examining error messages
+cp $name.dlog ${name}-html.dlog  # for examining error messages
 system doconce split_html $name.html --pagination
 
 # Publish in doc/pub

@@ -124,11 +124,11 @@ the variational formulation becomes
 .. math::
 
     \tag{3}
-    F = \int_\Omega \varrho c\frac{u^{n+1} - u^n}{{\Delta t}}v{\, \mathrm{d}x} +
-        \int_\Omega \mathcal{D}(U,v) {\, \mathrm{d}x} -
-        \int_\Omega f(\theta t_{n+\theta}) v{\, \mathrm{d}x}
-        +
-        \quad \int_\Gamma \mathcal{B}(U,v){\, \mathrm{d}s}
+    F = \int\limits_\Omega \varrho c\frac{u^{n+1} - u^n}{{\Delta t}}v{\, \mathrm{d}x} +
+        \int\limits_\Omega \mathcal{D}(U,v) {\, \mathrm{d}x} -
+        \int\limits_\Omega f(t_{n+\theta}) v{\, \mathrm{d}x}
+        -
+        \quad \int\limits_\Gamma \mathcal{B}(U,v){\, \mathrm{d}s}
         
         
 
@@ -136,7 +136,7 @@ Note that we have inserted a factor :math:`\varrho c` in the time-derivative ter
 since our PDE has this factor. Also note that all terms are evaluated at
 the time point :math:`t_{n+\theta}`.
 
-We introduce a general initial condition
+We allow a general initial condition
 
 .. math::
          u(\boldsymbol{x}, 0) = u_0(\boldsymbol{x})\hbox{ in }\Omega{\thinspace .}
@@ -145,7 +145,7 @@ As boundary conditions, we assume either Dirichlet conditions on the
 entire boundary or a Robin condition
 
 .. math::
-         -p\frac{\partial u}{\partial n} = r(u-s),
+         -\kappa\frac{\partial u}{\partial n} = r(u-s),
 
 where :math:`r` is a heat transfer coefficient and :math:`s` is the surrounding
 temperature. Note that insulated boundaries are modeled by :math:`r=0`.
@@ -153,7 +153,7 @@ For the present physical problem we have
 
 .. math::
         \begin{align*}
-        \mathcal{D}(u,v) &= \nabla\cdot(p\nabla u^{n}),\\ 
+        \mathcal{D}(u,v) &= \nabla\cdot(\kappa\nabla u^{n}),\\ 
         \mathcal{B}(u,v) &= r(u-s)v{\thinspace .}
         \end{align*}
 
@@ -176,8 +176,8 @@ formulation to be coded reads
 
     \tag{4}
     F = \int_\Omega (\varrho c\frac{u^{n+1} - u^n}{{\Delta t}}v +
-         p\nabla U\cdot\nabla v  -
-         f(\theta t_{n+\theta}) v){\, \mathrm{d}x}
+         \kappa\nabla U\cdot\nabla v  -
+         f(t_{n+\theta}) v){\, \mathrm{d}x}
         + \int_\Gamma r(U-s)v{\, \mathrm{d}s}
         
         
@@ -191,8 +191,8 @@ Algorithm
 ---------
 
 Let us express the solution procedure in algorithmic form, writing :math:`u`
-for the unknown spatial function at the new time level (:math:`u^n`) and
-:math:`u_1` for the spatial solution at one earlier time level (:math:`u^{n-1}`):
+for the unknown spatial function at the new time level (:math:`u^{n+1}`) and
+:math:`u^n` for the spatial solution at one earlier time level:
 
  * mark boundary segments for prescribing boundary conditions
 
@@ -234,7 +234,9 @@ explicitly create matrices and vectors from variational
 formulations, using the ``assemble`` function.
 
 The code features a lot of changes from the ``ft03_heat.py``
-program. We shall go through each part of the above algorithm.
+program in the
+"The heat equation": "" section in [Ref1]_.
+We shall go through each part of the above algorithm.
 
 .. _ch:diffusion:opt:solver:
 
@@ -328,7 +330,7 @@ Marking the boundary
 
 We need to mark each side of our hypercube domain since we can have
 Robin or Dirichlet conditions that differ on different sides.
-We could write something straightforward as
+For a rectangular domain we could write something straightforward as
 
 .. code-block:: python
 
@@ -413,7 +415,7 @@ The use of this function in the solver function goes as follows:
 
 Recall that we *either* have Dirichlet *or* Robin conditions
 at the entire boundary. This is just a convention that we, as
-developers of the ``solver`` function, has imposed. Later, in
+developers of the ``solver`` function, have imposed. Later, in
 the chapter :ref:`ch:classes`, we leave it to the user to define the mesh
 and boundary conditions, which results in a very flexible solver, but
 a significant amount of problem-specific code on the user's side.
@@ -438,7 +440,7 @@ We start with implementing the initial condition:
         user_action(0, u_n, 0)
 
 In the variational form, we make use of some convenient constructions
-like ``U`` as the :math:`\theta` weighted averaged of :math:`u` in time and separate
+like ``U`` as the :math:`\theta` weighted average of :math:`u` in time and separate
 Python functions for various terms in the formulation:
 
 .. code-block:: python
@@ -589,24 +591,26 @@ The complete ``solver`` function is found in the file
 Verification
 ------------
 
-The first implementation of a solver of the complexity above is
-likely to suffer from programming errors or mathematical
-misunderstandings.  We must therefore carefully set up tests so that we know
-that the implementation works. As usual, we favor manufactured
-solutions that can be exactly reproduced by the numerical method. With
-variable coefficients and a lot of input data to adjust, the choice of
-manufactured solution must be flexible. We therefore feed some
-symbolic expression for :math:`u(\boldsymbol{x},t)` into a function ``verify`` and let
-this function compute the consistent source term and the coefficients
-``r[i]`` in the Robin/Dirichlet conditions. Then ``solver`` is called with
-a callback function that asserts the error to be within machine
-precision for this problem, if the manufactured solution is without
-approximation errors.
+The first implementation of a solver of the complexity above is likely
+to suffer from programming errors or mathematical misunderstandings.
+We must therefore carefully set up tests so that we know that the
+implementation works. As usual in FEniCS Tutorial Volume I
+[Ref1]_, we favor manufactured solutions that can be exactly
+reproduced by the numerical method. With variable coefficients and a
+lot of input data to adjust, the choice of manufactured solution must
+be flexible. We therefore feed some symbolic expression for :math:`u(\boldsymbol{x},t)`
+into a function ``verify`` and let this function compute the consistent
+source term and the coefficients ``r[i]`` in the Robin/Dirichlet
+conditions. Then ``solver`` is called with a callback function that
+asserts the error to be within machine precision for this problem, if
+the manufactured solution is without approximation errors.
 
 We use SymPy to do the mathematics and the code generation
 utility in SymPy to translate the symbolic expressions to C++
 code needed in FEniCS ``Expression`` objects. Setting up and running
-a test problem is done in a function
+a test problem is done in the function ``verify`` below. Note that it
+has some arguments, like ``lumped_mass``, that will be explained
+later in this chapter.
 
 .. code-block:: python
 
@@ -778,8 +782,6 @@ check these instead (i.e., when ``expect_exact_sol`` is ``False``).
 Debugging of FEniCS programs
 ----------------------------
 
-[**hpl 2**: This section is unfinished.]
-
 When the first author implemented the present ``solver`` function, the
 solution looked very nice and physically correct in visualizations,
 the numerical solutions definitely converged, but the verification
@@ -857,8 +859,11 @@ Hand calculations
 
 The mass matrix term :math:`\int\varrho c{{\Delta t}}^{-1}u^{n+1}v` leads to
 an integral over each element involving the finite element basis functions:
-:math:`\int\varrho c{{\Delta t}}^{-1}\phi_i\phi_j{\, \mathrm{d}x}`. The corresponding element matrix
-becomes (constant :math:`\varrho c`):
+
+.. math::
+         \int\varrho c{{\Delta t}}^{-1}\phi_i\phi_j{\, \mathrm{d}x}{\thinspace .}
+
+The corresponding element matrix becomes for constant :math:`\varrho c`:
 
 .. math::
         
@@ -1039,7 +1044,9 @@ costly operations in the time loop: assembly of the right-hand side
 assembly process involves work proportional to the number of degrees
 of freedom :math:`N`, while the solve operation has a work estimate of
 :math:`\mathcal{O}( N^{\alpha})`, for some :math:`\alpha\geq 1`.  Typically,
-:math:`\alpha\in [1,2]`.  As :math:`N\rightarrow\infty`, the solve operation will
+:math:`\alpha\in [1,2]` for modern iterative linear solvers with appropriate
+preconditioners. With multigrid-like preconditioning one has :math:`\alpha` very
+close to 1. As :math:`N\rightarrow\infty`, the solve operation will
 dominate for :math:`\alpha>1`, but for the values of :math:`N` typically used on
 smaller computers, the assembly step may still represent a
 considerable part of the total work at each time level. Avoiding
@@ -1145,7 +1152,7 @@ where :math:`R` is the matrix arising from the Robin condition:
 .. math::
          R_{i,j} = \int_\Gamma r\phi_i\phi_j{\, \mathrm{d}s},
 
-and :math:`g` is the associated vector,
+and :math:`g` is the associated vector with elements
 
 .. math::
          g_i = \int_\Gamma rs\phi_i{\, \mathrm{d}s}{\thinspace .}
@@ -1210,7 +1217,7 @@ The coefficient matrix associated with the complete variational form
 :ref:`(4) <Eq:ch:diffusion:opt:num:varform2>` leads to somewhat more complicated
 formulas. Just for simplicity, we
 drop this optimization when we have Robin conditions only. Ignoring the
-integral over the boundary, we get that
+integral over the boundary, we get for variable :math:`\Delta t` that
 
 .. math::
          A=\varrho c\frac{1}{{\Delta t}}M + \theta K,
@@ -1223,8 +1230,6 @@ and
 where :math:`F^{n+\theta}` is the vector of interpolated :math:`f`
 values at time :math:`t_{n+\theta} = f(\theta t_{n+1} + (1-\theta) t_n)`.
 
-[**hpl 3**: Not finished.]
-
 FEniCS implementation          (1)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -1234,7 +1239,8 @@ It is tempting to construct :math:`A` as
 
     A = rho*c*(1./dt)*M + theta*K
 
-but that statement invokes a problem: matrix arithmetics works with scalars
+but that statement invokes a problem: matrix arithmetics works with scalars,
+vectors, and matrices
 only, while ``rho``, and ``c`` are ``Constant`` objects. We therefore need to
 convert them to plain real numbers:
 
@@ -1242,7 +1248,7 @@ convert them to plain real numbers:
 
     A = float(rho)*float(c)*(1./dt)*M + theta*K
 
-Assume that we have already made the mass and stiffness matrices prior
+Assuming that we have already made the mass and stiffness matrices prior
 to the time loop,
 
 .. code-block:: python
@@ -1272,42 +1278,8 @@ boost, but experiments to be reported later show that the gain is
 about a factor of 4 compared to full assembly of :math:`A` and :math:`b` the
 usual way.
 
-Finished here. [[[
-
-The ``user_action`` function ``assert_error`` asserts equality of the
-exact and numerical solution at every time level:
-
-.. code-block:: python
-
-    def assert_error(t, u, timestep):
-        u_e = interpolate(u_b, u.function_space())
-        error= np.abs(u_e.vector().array() -
-        	          u.vector().array()).max()
-        tol = 2E-12
-        assert error < tol, 'error: %g' % error
-
-One can also use the user action callback function to visualize
-the solution:
-
-.. code-block:: python
-
-    def assert_error(t, u, timestep):
-        global p
-        if t == 0:
-            p = plot(u, title='u',
-    	         # Fix the color scale
-                     range_min=float(u_range[0]),  # must be float
-                     range_max=float(u_range[1]))  # must be float
-        else:
-            p.plot(u)
-        print('t=%g' % t)
-        time.sleep(0.5)
-
-It is key to fix the color scale to get a meaningful animation.
-
-A complete function calling up ``solver_minimize_assembly`` for
-animating the solution in two test problems is found in the
-function ``application_animate`` in
+A complete implementation for the described optimizations is
+found in the ``solver`` function in
 `ft12_heat_func.py <ft12_heat_func.py>`__.
 
 .. _ch:diffusion:opt:lumping:
@@ -1334,8 +1306,11 @@ x^2}` shows that the finite difference method, with its diagonal mass
 matrix, is more accurate than the finite element method. For :math:`\theta=0`
 it also has less strict stability properties.
 
-To be more precise with the mentioned analysis, a Fourier component
-:math:`u(x,t)=A(t)\sin(kx)` of the solution is damped by a factor :math:`A` from
+To be more precise with the mentioned analysis, we follow
+Langtangen and Mardal [Ref2]_
+and study a Fourier component
+:math:`u(x,t)=A(t)\sin(kx)` of the solution. This component
+is damped by a factor :math:`A` from
 one time step to the next (:math:`A=e^{-\alpha k^2 t}`).  It turns out that
 in a P1 finite element method or a finite difference method with
 second-order, centered spatial differences, :math:`A` depends on :math:`p=kh/2`
@@ -1353,7 +1328,7 @@ but in problems with discontinuities, it is easy to spot that reducing :math:`F`
 increases the noise.
 
 Figures :ref:`ch:diffusion:opt:lumping:fig:BE` and
-:ref:`ch:diffusion:opt:lumping:fig:CN` compares :math:`A` for a wider range of
+:ref:`ch:diffusion:opt:lumping:fig:CN` compare :math:`A` for a wider range of
 :math:`F` values for the Backward Euler and Crank-Nicolson schemes,
 respectively. Also here we clearly see that the finite element method
 leads to inferior damping properties compared to the finite difference
@@ -1396,7 +1371,7 @@ called the row-sum technique and applies well to P1 elements, but it does
 not work well with P2 and higher-order elements. For these elements, one
 should instead use a quadrature that only samples the integrands at the
 points where we have the function value degrees of freedom. This
-is not yet possible in FEniCS [**hpl 4**: Anders, right?] so lumping remains
+is not yet possible in FEniCS [**hpl 2**: Anders, right?] so lumping remains
 restricted to P1 elements as explained here.
 
 .. [#lumping] The term arose in the days where the primary application
@@ -1423,10 +1398,10 @@ It is very important that we carry out the multiplication with ``unity``
 matrix ``M``! Otherwise, the boundary conditions will not be incorporated
 in the vector ``ML``.
 
-We introduce a boolean ``lumped_mass`` in the ``solver`` function for indicating
-computations with a lumped mass matrix. Prior to the time loop we need
-to make sure we have the ``unity`` field available as well as ``M`` and ``K``
-for the mass matrix and the stiffness matrix:
+We have introduced a boolean ``lumped_mass`` in the ``solver`` function
+for indicating computations with a lumped mass matrix. Prior to the
+time loop we need to make sure we have the ``unity`` field available as
+well as ``M`` and ``K`` for the mass matrix and the stiffness matrix:
 
 .. code-block:: python
 
@@ -1470,7 +1445,7 @@ The trick is to add ``A1`` to the diagonal of ``theta*K``:
 
 Now, ``A`` is a matrix, but with a lumped mass matrix contribution.
 
-The right-hand side :math:`b=\varrho c {{\Delta t}}^{-1}Mu^n + MF^m - (1-\theta)K`
+The right-hand side :math:`b=\varrho c {{\Delta t}}^{-1}MU^n + MF^m - (1-\theta)K`
 is for a lumped mass matrix and :math:`\theta >0` computed as
 
 .. code-block:: python
@@ -1495,18 +1470,38 @@ Four methods are available for assembling the coefficient matrix :math:`A` and
 right-hand side :math:`b`:
 
 1. Full assembly of :math:`A` and :math:`b` at each time level:
-   ``lumped_mass=False``, ``avoid_b_assembly=False``, ``A_is_const=False``
+
+   * ``lumped_mass=False``
+
+   * ``avoid_b_assembly=False``
+
+   * ``A_is_const=False``
 
 2. Initial assembly of :math:`A`, full assembly of :math:`b` at each time level:
-   ``lumped_mass=False``, ``avoid_b_assembly=False``, ``A_is_const=True``
+
+   * ``lumped_mass=False``
+
+   * ``avoid_b_assembly=False``
+
+   * ``A_is_const=True``
 
 3. No assembly of :math:`A` and :math:`b` at each time level, just construction
    through matrix-vector products:
-   ``lumped_mass=False``, ``avoid_b_assembly=True``, ``A_is_const=True``
+
+   * ``lumped_mass=False``
+
+   * ``avoid_b_assembly=True``
+
+   * ``A_is_const=True``
 
 4. No assembly of :math:`A` and :math:`b` at each time level, just construction
    through matrix-vector products, but with lumped mass matrices:
-   ``lumped_mass=True``, ``avoid_b_assembly=True``, ``A_is_const=True``
+
+   * ``lumped_mass=True``,
+
+   * ``avoid_b_assembly=True``,
+
+   * ``A_is_const=True``
 
 The function ``test_efficiency`` measures the impact of the four
 optimization technique using the verification problem from
@@ -1526,7 +1521,8 @@ happen that both algorithms suffer from spending most of the time grabbing data
 from memory and not on computing (where matrix - vector arithmetics should
 involve far fewer operations than the assembly algorithm).
 The trick with manipulating the diagonal of ``A2`` is also
-more costly than tailored support for lumped mass matrices in FEniCS.
+more costly than a tailored support for lumped mass matrices in FEniCS would be
+(not available at the time of this writing).
 Anyway, a factor 6 may be important in many applications, and the increased
 accuracy for less smooth solutions of the diffusion equations,
 as provided by a lumped mass matrix, may often be more important.
@@ -1534,7 +1530,8 @@ as provided by a lumped mass matrix, may often be more important.
 Application: diffusion of a spike
 ---------------------------------
 
-Just to demonstrate how to use the ``solver`` function in an application,
+Just to demonstrate how to use the ``solver`` function in a very simple
+application,
 we consider pure diffusion of a spike in a domain :math:`[0,L]\times [0,L]`:
 
 .. math::
@@ -1562,12 +1559,12 @@ The Robin boundary condition with surrounding temperature :math:`T_0` becomes
 with the Nusselt number :math:`\mathrm{Nu}=Lr/p` as a dimensionless variable.
 
 
-.. admonition:: Partial verification
+.. admonition:: Partial verification: :math:`\int u{\, \mathrm{d}x} = \hbox{const}`
 
    With :math:`\mathrm{Nu}=0` and insulated boundaries one can integrate the
    PDE over the spatial domain and obtain :math:`\frac{\partial}{\partial t}\int_\Omega
    u{\, \mathrm{d}x} = 0` (the :math:`\nabla^2 u` term is converted to a surface integral
-   involving :math:`\partial u/partial n`).
+   involving :math:`\partial u/\partial n`).
    That is, the integral under the solution remains constant in time.
    We can use this result as a partial verification at each time level
    in the ``user_action`` function. The integral is easily calculated in
@@ -1667,7 +1664,7 @@ attribute and the callback function as method, usually ``__call__``).
 
 The animation shows that the thick spike raises the values at the
 boundaries with time, and we can see the solution approaches a
-constant (1/4), while the thin spike (:math:`m=8`) just diffusions and
+constant (1/4), while the thin spike (:math:`m=8`) just diffuses and
 vanishes with minor impact on the boundary values (these values are to
 end up at 0.075 as :math:`t\rightarrow\infty`, but this is hardly visible in
 the plot).
@@ -1680,7 +1677,7 @@ A welding example with post processing and animation
 ====================================================
 
 The focus so far in this tutorial has been on producing the solution
-of PDE problems. [**hpl 5**: This is book 2, it depends on how things end up in the previous chapter.] For scientific investigations, the primary
+of PDE problems.  For scientific investigations, however, the primary
 work is often with post processing results: computing quantities
 derived from the solution and inspecting these with visualization or
 data analysis tools.  This is the focus of the present section.  To
@@ -1820,16 +1817,19 @@ condition is a cooling law; that is, a Robin condition
 
 on the entire boundary. Here, :math:`r` is the heat transfer coefficient at
 the boundary and :math:`s` is the surrounding temperature.
-The natural initial condition is :math:`u=s`. Note that when the plate is thin,
-one might be tempted to use a 2D model, but this implies the assumption of
-:math:`\partial u/\partial z =0`, which again means insulated boundaries at the
-top and bottom surfaces of the plate. This is not physically relevant as we
-know there will be quite some heat loss from the surfaces of the plate.
-We must therefore have a cooling condition in these surfaces, which implies
-:math:`\partial u/\partial z \neq0` and hence a 3D problem. (Nevertheless, one
-could integrate over the thickness and develop a 2D model that takes the
-heat loss at the surfaces into account - the PDE will then get an extra
-:math:`r(u-s)` term and turn into a reaction-diffusion equation.)
+The natural initial condition is :math:`u=s`.
+
+Note that when the plate is thin, one might be tempted to use a 2D
+model, but this implies the assumption of :math:`\partial u/\partial z =0`,
+which again means insulated boundaries at the top and bottom surfaces
+of the plate. This is not physically relevant as we know there will be
+quite some heat loss from the surfaces of the plate.  We must
+therefore have a cooling condition in these surfaces, which implies
+:math:`\partial u/\partial z \neq0` and hence a 3D problem. (Nevertheless,
+one could integrate over the thickness and develop a 2D model that
+takes the heat loss at the surfaces into account - the PDE will then
+get an extra :math:`r(u-s)` term and turn into a reaction-diffusion
+equation.)
 
 A welding source is moving and very localized in space.  The
 localization can be modeled by a peak-shaped Gaussian function.  The
@@ -1954,8 +1954,6 @@ interpretation: :math:`\gamma` is the ratio of the speed of diffusion and
 the speed of the heat source. In welding, the speed of the heat
 source is very much larger than the speed of heat conduction.
 
-[**hpl 6**: This is vol II and we have done scaling many times, so we perhaps don't need more selling points. We had some in the introduction to this section.]
-
 
 .. admonition:: The benefits of scaling
 
@@ -1970,7 +1968,7 @@ source is very much larger than the speed of heat conduction.
    :math:`p` for some chosen material, and then determine relevant values for
    :math:`A`, :math:`L`, etc. There are no approximations in the scaling procedure;
    it just dramatically simplifies numerical simulations.
-   The book [Ref2]_ gives a comprehensive treatment
+   The book [Ref3]_ gives a comprehensive treatment
    of scaling.
 
 
@@ -2104,8 +2102,6 @@ user action function.
 Getting an animation on the screen with the built-in plotting tool is
 a matter of running the welding example:
 
-[**hpl 7**: The welding source velocity is much larger than the diffusion velocity. Are the :math:`\gamma` values compatible with this?]
-
 .. code-block:: python
 
     >>> from heat_func import welding as a
@@ -2136,7 +2132,7 @@ click **Apply**, then the play button for animation. If the animation is
 not correct, repeat the procedure. Thereafter, split the layout in
 two, choose **3D View**, load ``Results/Heat source/Heat_source.xmdf``,
 click **Apply**, and run the animation. The two plots are synchronized
-in time. The plots and movies below were made in Paraview.
+in time. The plots and movies below were made in ParaView.
 
 .. _ch:diffusion:welding:fig1:
 

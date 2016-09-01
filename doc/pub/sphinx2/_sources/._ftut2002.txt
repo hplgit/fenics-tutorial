@@ -5,20 +5,25 @@
 PDE solver design and coding practices
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-In the very beginning of this tutorial [Ref1]_ we focused on how
-to quickly put together solvers for a number of different PDEs. FEniCS
-makes it simple and straightforward to write the commands needed to
-set up a variational problem, define domains and boundary
-conditions. In the last chapter of [Ref1]_ and the first of the
-present volume, we wrapped such flat programs in functions for
-increased flexibility and easy testing.  However, for a real
-application you will likely want to be able to reuse the code you
-write for a particular PDE to solve multiple different problems with
-different domains, boundary conditions and other parameters. In this
-chapter, we look at how to structure FEniCS Python code to create
-flexible, reusable, and efficient PDE solvers. The key concept is to
-use Python classes and develop effective an Application Programming
-Interface (API) in terms of methods and their arguments.
+
+..
+
+    In the very beginning of this tutorial [Ref1]_ we focused on how
+    to quickly put together solvers for a number of different PDEs. FEniCS
+    makes it simple and straightforward to write the commands needed to
+    set up a variational problem, define domains and boundary
+    conditions. In the last chapter of [Ref1]_ and the first of the
+    present volume, we wrapped such flat programs in functions for
+    increased flexibility and easy testing.  However, for a real
+    application you will likely want to be able to reuse the code you
+    write for a particular PDE to solve multiple different problems with
+    different domains, boundary conditions and other parameters. In this
+    chapter, we look at how to structure FEniCS Python code to create
+    flexible, reusable, and efficient PDE solvers. The key concept is to
+    use Python classes and develop effective an Application Programming
+    Interface (API) in terms of class methods (functions) and their arguments.
+
+
 
 .. _ch:poisson0:refactor:class:
 
@@ -55,8 +60,9 @@ The solver class          (1)
 
 The solver class will need problem information and for this purpose
 call up the methods in a problem class. For example, the solver gets
-the :math:`f` and :math:`p` functions in the PDE problem by calling
-``problem.f_rhs()`` and ``problem.p_coeff()``. The mesh object and the
+the :math:`f` and :math:`\kappa` functions in the PDE problem by calling
+the class methods
+``problem.f_rhs()`` and ``problem.kappa_coeff()``. The mesh object and the
 polynomial degree of the elements are supposed to be returned from
 ``problem.mesh_degree()``. Furthermore, the problem class defines the
 boundary conditions in the problem as lists of minimal information
@@ -64,8 +70,8 @@ from which the solver can build proper data structures.
 
 The solver class is a wrapping of the previous ``solver_bc`` and ``flux``
 functions as methods in a class, but some of the code for handling
-boundary conditions in ``solver_bc`` is now delegated to the user in
-the problem class.
+boundary conditions, previously inside the solver,
+is now delegated to the user in the problem class.
 
 .. code-block:: python
 
@@ -79,6 +85,8 @@ the problem class.
     
         def solve(self, linear_solver='direct'):
             Dirichlet_cond = self.problem.Dirichlet_conditions()
+            self.mesh, degree = self.problem.mesh_degree()
+            self.V = V = FunctionSpace(self.mesh, 'P', degree)
             if isinstance(Dirichlet_cond, (Expression)):
                 # Just one Expression for Dirichlet conditions on
                 # the entire boundary
@@ -119,14 +127,12 @@ the problem class.
             return self.u
     
         def define_variational_problem(self):
-            self.mesh, degree = self.problem.mesh_degree()
-            self.V = V = FunctionSpace(self.mesh, 'P', degree)
-    
+            V = self.V
             u = TrialFunction(V)
             v = TestFunction(V)
-            p = self.problem.p_coeff()
+            kappa = self.problem.kappa_coeff()
             f = self.problem.f_rhs()
-            F = dot(p*grad(u), grad(v))*dx
+            F = dot(kappa*grad(u), grad(v))*dx
             F -= f*v*dx
             F -= sum([g*v*ds_
                       for g, ds_ in self.problem.Neumann_conditions()])
@@ -141,12 +147,12 @@ the problem class.
                 print('b:\n', b.array())
     
         def flux(self):
-            """Compute and return flux -p*grad(u)."""
+            """Compute and return flux -kappa*grad(u)."""
             mesh = self.u.function_space().mesh()
             degree = self.u.ufl_element().degree()
             V_g = VectorFunctionSpace(mesh, 'P', degree)
-            p = self.problem.p_coeff()
-            self.flux_u = project(-p*grad(self.u), V_g)
+            kappa = self.problem.kappa_coeff()
+            self.flux_u = project(-kappa*grad(self.u), V_g)
             self.flux_u.rename('flux(u)', 'continuous flux field')
             return self.flux_u
     
@@ -168,7 +174,7 @@ the problem class.
             """Return mesh, degree."""
             raise NotImplementedError('Must implement mesh!')
     
-        def p_coeff(self):
+        def kappa_coeff(self):
             return Constant(1.0)
     
         def f_rhs(self):
@@ -187,7 +193,7 @@ the problem class.
             """Return list of (r,u,ds(n)) triplets."""
             return []
 
-Note that this is a general Poisson problem solver that works in any number
+Note that this is a general Poisson solver that works in any number
 of space dimensions and with any mesh and composition of boundary conditions!
 
 
@@ -199,6 +205,11 @@ of space dimensions and with any mesh and composition of boundary conditions!
    by ``from fenics import *`` and already available as a name in your file.
    When encountering strange error messages in statements containing a
    variable ``mesh``, make sure you use ``self.mesh``.
+   
+   Many will instead recommend to avoid the ``from fenics import *``
+   statement and instead do ``import fenics`` and prefix all FEniCS
+   objects by ``fenics``. This is the good programming habit in a
+   Python library that employs the ``fenics`` package.
 
 
 
@@ -261,13 +272,13 @@ and on :math:`y=0` and :math:`y=1` we have the Dirichlet conditions :math:`u=1` 
 
     class Problem1(PoissonProblem):
         """
-        -div(p*grad(u)=f on the unit square.
+        -div(kappa*grad(u)=f on the unit square.
         General Dirichlet, Neumann, or Robin condition along each
-        side. Can have multiple subdomains with p constant in
+        side. Can have multiple subdomains with kappa constant in
         each subdomain.
         """
         def __init__(self, Nx, Ny):
-            """Initialize mesh, boundary parts, and p."""
+            """Initialize mesh, boundary parts, and kappa."""
             self.mesh = UnitSquareMesh(Nx, Ny)
     
             tol = 1E-14
@@ -314,16 +325,17 @@ and on :math:`y=0` and :math:`y=1` we have the Dirichlet conditions :math:`u=1` 
             subdomain = Rectangle()
             subdomain.mark(self.materials, 1)
             self.V0 = FunctionSpace(self.mesh, 'DG', 0)
-            self.p = Function(self.V0)
+            self.kappa = Function(self.V0)
+            # Vectorized computations of dofs for kappa
             help = np.asarray(self.materials.array(), dtype=np.int32)
-            p_values = [1, 1E-3]
-            self.p.vector()[:] = np.choose(help, p_values)
+            kappa_values = [1, 1E-3]
+            self.kappa.vector()[:] = np.choose(help, kappa_values)
     
         def mesh_degree(self):
             return self.mesh, 2
     
-        def p_coeff(self):
-            return self.p
+        def kappa_coeff(self):
+            return self.kappa
     
         def f_rhs(self):
             return Constant(0)
@@ -352,37 +364,6 @@ A specific problem can be solved by
         vtkfile = File('poisson.pvd')
         vtkfile << u
         interactive()
-    
-    class TestProblemExact(PoissonProblem):
-        def __init__(self, Nx, Ny):
-            """Initialize mesh, boundary parts, and p."""
-            self.mesh = UnitSquareMesh(Nx, Ny)
-            self.u_D = Expression('1 + x[0]*x[0] + 2*x[1]*x[1]')
-    
-        def mesh_degree(self):
-            return self.mesh, 1
-    
-        def f_rhs(self):
-            return Constant(-6.0)
-    
-        def Dirichlet_conditions(self):
-            return self.u_D
-    
-    
-    def test_PoissonSolver():
-        """Recover numerial solution to "machine precision"."""
-        problem = TestProblemExact(Nx=2, Ny=2)
-        problem.solve(linear_solver='direct')
-        u = problem.solution()
-        u_e = interpolate(problem.u_D, u.function_space())
-        max_error = np.abs(u_e.vector().array() -
-                           u.vector().array()).max()
-        tol = 1E-14
-        assert max_error < tol, 'max error: %g' % max_error
-    
-    if __name__ == '__main__':
-        #demo()
-        test_PoissonSolver()
 
 The complete code is found in the file ``ft10_poisson_class.py``.
 
@@ -399,6 +380,11 @@ The complete code is found in the file ``ft10_poisson_class.py``.
    to supply more code in the class version, but gets greater flexibility.
    The disadvantage of the class version is that it applies the class
    concept so one needs experience with Python class programming.
+   
+   If you solve a specific PDE problem by FEniCS and want to make your
+   code available on the Internet, you are most likely better off with
+   offering a class-based solution, since that code can be used with any
+   mesh and is easier adapted to the user's requirements.
 
 
 
@@ -417,24 +403,37 @@ calling the solver to solve a specific problem. However, for
 time-dependent problems a solver function that gets all its input
 through a set of arguments is less flexible than a solver class, which
 can demand its input both through arguments and through functions (in
-subclasses) provided by the user. The following text requires you to
-be familiar with class programming in Python (tailored learning
-material is Chapter 7, 9, and Appendix E in [Ref3]_).
+subclasses) provided by the user. The following text employs the ideas
+of a problem and solver class from the section :ref:`ch:poisson0:refactor:class`, but now generalized to a
+time-dependent problem, which brings in some more advanced aspects.
 
-When we work with a PDE project, we often want to explore a range of
-similar problems where the PDE model basically stays the same, but
-coefficients in the PDE, boundary and initial conditions, as well as
-domains change.  This means that some of our code related to solving
-the PDE is always the same, while some of our code is strongly
-dependent upon a particular application. To avoid copying code (which
-is considered evil in computer programming), we need to collect the
-common code for all problems of this type in one place and then create
-an API (application programming interface) to the code that will be
-different from application to application. To this end, we introduce a
-*solver class* that applies FEniCS to solve the PDE. It requires
-access to a *problem class* where all the application-specific details
-are defined. This problem class defines an API that the solver class
-applies for communication.
+.. When we work with a PDE project, we often want to explore a range of
+
+.. similar problems where the PDE model basically stays the same, but
+
+.. coefficients in the PDE, boundary and initial conditions, as well as
+
+.. domains change.  This means that some of our code related to solving
+
+.. the PDE is always the same, while some of our code is strongly
+
+.. dependent upon a particular application. To avoid copying code (which
+
+.. is considered evil in computer programming), we need to collect the
+
+.. common code for all problems of this type in one place and then create
+
+.. an API (application programming interface) to the code that will be
+
+.. different from application to application. To this end, we introduce a
+
+.. *solver class* that applies FEniCS to solve the PDE. It requires
+
+.. access to a *problem class* where all the application-specific details
+
+.. are defined. This problem class defines an API that the solver class
+
+.. applies for communication.
 
 The solver class will usually have a function to set up data
 structures for the variational formulation, a ``step`` function to
@@ -458,7 +457,7 @@ are prepared to read the forthcoming text on solver and problem
 classes.  The exercise also points out a very common bug in that
 context. If you have problems with this exercise, we advise you to
 read more about classes in Python (e.g., Chapter 7 and 9 in
-[Ref3]_), before you continue reading with the present book.
+[Ref4]_), before you continue reading with the present book.
 
 Somebody has made a class ``Line`` for straight lines :math:`y=ax+b`
 where :math:`a` and :math:`b` are meant to be defined in subclasses by the
@@ -589,7 +588,7 @@ Neumann, and Robin conditions:
 .. math::
 
     \tag{7}
-    \varrho c{\partial u\over\partial t} = \nabla\cdot\left( p\nabla u\right)
+    \varrho c{\partial u\over\partial t} = \nabla\cdot\left( \kappa\nabla u\right)
         + f(\boldsymbol{x},t)\hbox{ in }\Omega\times (0,T],
         
         
@@ -617,7 +616,7 @@ Neumann, and Robin conditions:
 .. math::
 
     \tag{10}
-    -p{\partial u\over\partial n} = g\hbox{ on }\Gamma_N,
+    -\kappa{\partial u\over\partial n} = g\hbox{ on }\Gamma_N,
         
         
 
@@ -626,13 +625,13 @@ Neumann, and Robin conditions:
 .. math::
 
     \tag{11}
-    -p{\partial u\over\partial n} = r(u-U_s)\hbox{ on }\Gamma_R{\thinspace .}
+    -\kappa{\partial u\over\partial n} = r(u-U_s)\hbox{ on }\Gamma_R{\thinspace .}
         
         
 
 The spatial domain :math:`\Omega` has boundary :math:`\partial\Omega = \Gamma_D\cup
 \Gamma_N\cup\Gamma_R`. We shall assume that all coefficients :math:`\varrho`,
-:math:`c`, :math:`p` may vary in space, while :math:`f` and :math:`g` may vary in time too.
+:math:`c`, :math:`\kappa` may vary in space, while :math:`f` and :math:`g` may vary in time too.
 The coefficients :math:`r` and :math:`U_s` are assumed to depend on time only.
 
 We discretize in time by the general :math:`\theta`-rule.  For an evolution
@@ -656,8 +655,8 @@ Introducing the :math:`\theta`-rule in our PDE results in
 
     \tag{12}
     \varrho c\frac{u^{n+1}-u^n}{{\Delta t}}
-        = \theta(\nabla\cdot\left( p\nabla u^{n+1}\right) + f(\boldsymbol{x},t_{n+1})) +
-        (1-\theta)(\nabla\cdot\left( p\nabla u^{n}\right) + f(\boldsymbol{x},t_{n})){\thinspace .}
+        = \theta(\nabla\cdot\left( \kappa\nabla u^{n+1}\right) + f(\boldsymbol{x},t_{n+1})) +
+        (1-\theta)(\nabla\cdot\left( \kappa\nabla u^{n}\right) + f(\boldsymbol{x},t_{n})){\thinspace .}
         
         
 
@@ -665,18 +664,18 @@ A Galerkin method for this initial-boundary value problem consists
 of multiplying :ref:`(12) <Eq:ch:diffusion:refactor:math:problem>` by
 a test function :math:`v\in V`, integrate over :math:`\Omega`, and
 perform integration by parts on the second-order derivative term
-:math:`\nabla\cdot\left( p\nabla u\right)`:
+:math:`\nabla\cdot\left( \kappa\nabla u\right)`:
 
 .. math::
         \begin{align*}
         \int\limits_\Omega \bigl(
         v\varrho c\frac{u^{n+1}-u^n}{{\Delta t}}{\, \mathrm{d}x}
-        & + \theta p\nabla u^{n+1}\cdot\nabla v - v\theta f(\boldsymbol{x},t_{n+1} \\ 
-        & + (1-\theta) p\nabla u^{n}\cdot\nabla v -
+        & + \theta \kappa\nabla u^{n+1}\cdot\nabla v - v\theta f(\boldsymbol{x},t_{n+1} \\ 
+        & + (1-\theta) \kappa\nabla u^{n}\cdot\nabla v -
         v(1-\theta)f(\boldsymbol{x},t_{n}\bigr){\, \mathrm{d}x}\\ 
         & - \int\limits_{\Gamma_N\cup\Gamma_R}
-        \bigl(\theta p\frac{\partial u^{n+1}}{\partial n}v
-        + (1-\theta) p\frac{\partial u^{n}}{\partial n}v\bigr){\, \mathrm{d}s} = 0
+        \bigl(\theta \kappa\frac{\partial u^{n+1}}{\partial n}v
+        + (1-\theta) \kappa\frac{\partial u^{n}}{\partial n}v\bigr){\, \mathrm{d}s} = 0
         {\thinspace .}
         \end{align*}
 
@@ -687,12 +686,12 @@ us
         
         F(u;v) = \int\limits_\Omega \bigl(
         v\varrho c\frac{u^{n+1}-u^n}{{\Delta t}}{\, \mathrm{d}x}
-        + \theta p\nabla u^{n+1}\cdot\nabla v - v\theta f(\boldsymbol{x},t_{n+1}) \nonumber
+        + \theta \kappa\nabla u^{n+1}\cdot\nabla v - v\theta f(\boldsymbol{x},t_{n+1}) \nonumber
         
 
 .. math::
           
-        \quad - (1-\theta) p\nabla u^{n}\cdot\nabla v +
+        \quad - (1-\theta) \kappa\nabla u^{n}\cdot\nabla v +
         v(1-\theta)f(\boldsymbol{x},t_{n}\bigr){\, \mathrm{d}x}\nonumber
         
 
@@ -715,20 +714,20 @@ us
         
         
 
-Since we use ``u`` for the unknown :math:`u^{n+1}` in the code, and ``u_1``
+Since we use ``u`` for the unknown :math:`u^{n+1}` in the code, and ``u_n``
 for :math:`u^n`, we introduce the same notation in the mathematics too:
-:math:`u` for :math:`u^{n+1}` and :math:`u_1` for :math:`u^n`,
+:math:`u` for :math:`u^{n+1}` and :math:`u^n` for :math:`u^n`,
 
 .. math::
         
         F(u;v) = \int\limits_\Omega \bigl(
-        v\varrho c\frac{u-u_1}{{\Delta t}}{\, \mathrm{d}x}
-        + \theta p\nabla u\cdot\nabla v - v\theta f(\boldsymbol{x},t_{n+1}) \nonumber
+        v\varrho c\frac{u-u^n}{{\Delta t}}{\, \mathrm{d}x}
+        + \theta \kappa\nabla u\cdot\nabla v - v\theta f(\boldsymbol{x},t_{n+1}) \nonumber
         
 
 .. math::
           
-        \quad - (1-\theta) p\nabla u_1\cdot\nabla v +
+        \quad - (1-\theta) \kappa\nabla u^n\cdot\nabla v +
         v(1-\theta)f(\boldsymbol{x},t_{n}\bigr){\, \mathrm{d}x}\nonumber
         
 
@@ -746,7 +745,7 @@ for :math:`u^n`, we introduce the same notation in the mathematics too:
     \tag{14}
     \quad + \int\limits_{\Gamma_R}
         \bigl(\theta r(u - U_s(t_{n+1}))v
-        + (1-\theta) r(u_1 - U_s(t_{n}))v\bigr){\, \mathrm{d}s}
+        + (1-\theta) r(u^n - U_s(t_{n}))v\bigr){\, \mathrm{d}s}
         = 0{\thinspace .}
         
         
@@ -1019,11 +1018,11 @@ follows:
             f_1    = self.problem.heat_source(t-dt)
     
             theta = Constant(self.theta)
-            u_1 = self.u_1  # first computed in initial_condition
+            u_n = self.u_1  # first computed in initial_condition
     
-            F = varrho*c*(u - u_1)/dt*v
+            F = varrho*c*(u - u_n)/dt*v
             F += theta    *dot(kappa*grad(u),   grad(v))
-            F += (1-theta)*dot(kappa*grad(u_1), grad(v))
+            F += (1-theta)*dot(kappa*grad(u_n), grad(v))
             F -= theta*f*v + (1-theta)*f_1*v
             F = F*dx
             F += theta*sum(
@@ -1419,7 +1418,7 @@ varying :math:`p`, which takes on the values 1 in subdomain 0 and
 :math:`\alpha` in subdomain 1. For simplicity, we just name this parameter
 ``kappa_values`` in the code.
 
-[**hpl 8**: Is this trick too tricky? Would it be clearer to let all three parameters vary?]
+[**hpl 3**: Is this trick too tricky? Would it be clearer to let all three parameters vary?]
 
 The problem class          (1)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -1595,7 +1594,7 @@ The scaled boundary condition is then
          \bar u_B(\bar t) = \sin(wt_c\bar t){\thinspace .}
 
 We use a time scale based on :math:`w`, i.e., :math:`t_c=1/w`.
-Chapter 3.2.4 in [Ref2]_ (see `ebook <http://hplgit.github.io/scaling-book/doc/pub/book/html/._scaling-book008.html#___sec142>`__)
+Chapter 3.2.4 in [Ref3]_ (see `ebook <http://hplgit.github.io/scaling-book/doc/pub/book/html/._scaling-book008.html#___sec142>`__)
 has an in-depth
 coverage of the scaling of this problem. The challenge is that
 the temperature will oscillate close to :math:`y=1`, but the oscillations
@@ -1819,7 +1818,7 @@ by
          \frac{u^{n+1}-u^n}{{\Delta t}} = \frac{1}{2}(G(u^{n+1}) + G(u^n)){\thinspace .}
 
 This method also has a truncation error of order :math:`{\Delta t}^2`.
-[**hpl 9**: Find some good test problems for comparing the performance of the schemes. What about starting Couette flow in 1D and a 2D tube with non-trivial cross section, and some adaptive strategy in time? Can find appropriate :math:`\Delta t` for visualization in different time intervals, then refine for numerical computations and then smoooth through the piecewise constant values.]
+[**hpl 4**: Find some good test problems for comparing the performance of the schemes. What about starting Couette flow in 1D and a 2D tube with non-trivial cross section, and some adaptive strategy in time? Can find appropriate :math:`\Delta t` for visualization in different time intervals, then refine for numerical computations and then smoooth through the piecewise constant values.]
 
 .. --- end exercise ---
 

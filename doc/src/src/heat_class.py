@@ -91,11 +91,11 @@ class DiffusionSolver(object):
         f_1    = self.problem.heat_source(t-dt)
 
         theta = Constant(self.theta)
-        u_1 = self.u_1  # first computed in initial_condition
+        u_n = self.u_1  # first computed in initial_condition
 
-        F = varrho*c*(u - u_1)/dt*v
+        F = varrho*c*(u - u_n)/dt*v
         F += theta    *dot(kappa*grad(u),   grad(v))
-        F += (1-theta)*dot(kappa*grad(u_1), grad(v))
+        F += (1-theta)*dot(kappa*grad(u_n), grad(v))
         F -= theta*f*v + (1-theta)*f_1*v
         F = F*dx
         F += theta*sum(
