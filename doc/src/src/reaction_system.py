@@ -77,7 +77,7 @@ set_log_level(PROGRESS)
 
 # Time-stepping
 t = 0
-for n in xrange(num_steps):
+for n in range(num_steps):
 
     # Update current time
     t += dt
