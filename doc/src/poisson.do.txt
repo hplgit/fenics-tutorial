@@ -1791,21 +1791,14 @@ idx{`scitools`}
 Many readers have extensive experience with visualization and data
 analysis of 1D, 2D, and 3D scalar and vector fields on *uniform,
 structured meshes*, while FEniCS solvers exclusively work with
-*unstructured* meshes.  The collection of software and mathematical
-techniques for investigating scalar and vector fields on structured
-meshes is much broader than for the unstructured ones, so when
-finite element computations actually take place on a uniform,
-structured mesh, it is advantageous to extract the results in data
-structures based on a structured mesh assumption. The present section
-shows how that can be done in a FEniCS context. It allows, for example, standard
-techniques in MATLAB or NumPy to be used to analyze your finite element
-FEniCS computations.
-#FEniCS users who apply FEniCS primarily for verifying their own tailored codes
-#will make use of such techniques.
+*unstructured* meshes. Since it can many times be practical to
+work with structured data, we discuss in this section how to
+extract structured data for finite element solutions computed with
+FEniCS.
 
 idx{`BoxField`}
 
-A necessary first step is to transform our `mesh` object to an object
+A necessary first step is to transform our `Mesh` object to an object
 representing a rectangle with equally-shaped *rectangular* cells.  The
 second step is to transform the one-dimensional array of nodal values
 to a two-dimensional array holding the values at the corners of the
@@ -1815,18 +1808,27 @@ cells in the $y$ direction.  This transformation is in principle
 straightforward, yet it frequently leads to obscure indexing errors,
 so using software tools to ease the work is advantageous.
 
-In the directory `src/modules`, associated with this booklet, we have
-included a Python module `BoxField` that can take a finite element
-function `u` computed by a FEniCS software and represent it on a
-structured box-shaped mesh and assign or extract values by
-multi-dimensional indexing: `[i]` in 1D, `[i,j]` in 2D, and `[i,j,k]`
-in 3D. Given a finite element function `u`, the following function
-returns a `BoxField` object that represents `u` on a structured mesh:
+In the directory `src/modules`, associated with this book, we have
+included the Python module `BoxField` that provides utilities for
+working with structured mesh data in FEniCS. Given a finite element
+function `u`, the following function returns a `BoxField` object that
+represents `u` on a structured mesh:
+
+[AL: Would be better for the interpolation to take place inside `BoxField` so that an extra wrapper layer is not needed.]
+
+[AL: Suggestion: Rename the module to `boxfield`.]
+
+[AL: Suggestion: Create a class/function inside the module that is named `BoxField`.]
+
+[AL: Suggestion: Make that function detect what needs to be done so in place of the code below we can just do `u_box = BoxField(u, divisions)`.]
 
 @@@CODE src/poisson_vc.py fromto: def structured_mesh@def demo_structured_mesh
-Note that we can only turn functions on meshes with P1 elements into
+
+[AL: Comment below needs to be modified if interpolation to P1 is included in `BoxField`.]
+
+Note that we can only turn functions on meshes with $\mathsf{P}_1$ elements into
 `BoxField` objects, so if `u` is based on another element type, we first
-interpolate the scalar field onto a mesh with P1 elements. Also note
+interpolate the scalar field onto a mesh with $\mathsf{P}_1$ elements. Also note
 that to use the
 function, we need to know the divisions into cells in the various
 spatial directions (`divisions`).
@@ -1845,6 +1847,8 @@ The `u_box` object contains several useful data structures:
    `u_box.values[i,j]` holds `u` at the mesh point with coordinates <linebreak>
    `(u_box.grid.coor[X], u_box.grid.coor[Y])`
 
+[AL: Is something missing in the last line above? The `i` and `j` indices?]
+
 === Iterating over points and values ===
 
 Let us go back to the `solver` function in the
@@ -1857,39 +1861,40 @@ write out the coordinates and function values at all mesh points:
 u = solver(p, f, u_b, nx, ny, 1, linear_solver='direct')
 u_box = structured_mesh(u, (nx, ny))
 u_ = u_box.values       # numpy array
-X = 0;  Y = 1           # for indexing in x and y direction
 
-# Iterate over 2D mesh points (i,j)
 print('u_ is defined on a structured mesh with %s points' %
       str(u_.shape))
+
+# Iterate over 2D mesh points (i,j)
 for j in range(u_.shape[1]):
     for i in range(u_.shape[0]):
-        print('u[%d,%d]=u(%g,%g)=%g' %
+        print('u[%d, %d] = u(%g, %g) = %g' %
               (i, j,
                u_box.grid.coor[X][i], u_box.grid.coor[X][j],
                u_[i,j]))
 !ec
 
-=== Finite difference approximations ===
+=== Computing finite difference approximations ===
 
-Note that with `u_`, we can easily express finite difference approximation
-of derivatives:
+Using the multidimensional array `u_ = u_box.values`, we can easily
+express finite difference approximations of derivatives:
 
 !bc pycod
 x = u_box.grid.coor[X]
 dx = x[1] - x[0]
-u_xx = (u_[i-1,j] - 2*u_[i,j] + u_[i+1,j])/dx**2
+u_xx = (u_[i - 1, j] - 2*u_[i, j] + u_[i + 1, j]) / dx**2
 !ec
 
 idx{surface plot (structured mesh)}
 
-=== Surface plot ===
+=== Making surface plots ===
 
-The ability to access a finite element field in the way one can access
-a finite difference-type of field is handy in many occasions, including
-visualization and data analysis.
-With Matplotlib we can create a surface plot, see
+The ability to access a finite element field as structured data
+is handy in many occasions, e.g., for visualization and data analysis.
+Using Matplotlib, we can create a surface plot, as shown in
 Figure ref{ftut:structviz:fig1} (upper left):
+
+[AL: matplotlib interface for 3D plotting is extremely ugly: fig, plt, ax, gca]
 
 !bc pycod
 import matplotlib.pyplot as plt
@@ -1910,7 +1915,7 @@ FIGURE: [fig/poisson_vc_structmesh2, width=800 frac=1] Various plots of the solu
 
 idx{contour plot}
 
-=== Contour plot ===
+=== Making contour plots ===
 
 A contour plot can also be made by Matplotlib:
 
@@ -1926,24 +1931,25 @@ plt.title('Contour plot of solution')
 The result appears in Figure ref{ftut:structviz:fig1} (upper right).
 
 
-=== Curve plot through the mesh ===
+=== Making curve plots through the domain ===
 
-A handy feature of `BoxField` objects is the ability to give a start
-point in the grid and a direction, and then extract the field and
-corresponding coordinates along the nearest line of mesh points. In 3D fields
-one can also extract data in a plane.  Say we want to plot $u$ along
+A handy feature of `BoxField` objects is the ability to give a starting
+point in the domain and a direction, and then extract the field and
+corresponding coordinates along the nearest line of mesh points. For 3D fields
+one can also extract data in a plane. Say we want to plot $u$ along
 the line $y=0.4$. The mesh points, `x`, and the $u$ values
-along this line, `u_val`, are extracted by
+along this line, `u_val`, can be extracted by
 
 !bc pycod
 start = (0, 0.4)
-X = 0
 x, u_val, y_fixed, snapped = u_box.gridline(start, direction=X)
 !ec
 The variable `snapped` is true if the line had to be snapped onto a
 gridline and in that case `y_fixed` holds the snapped
 (altered) $y$ value. To avoid interpolation in the structured mesh,
 `snapped` is in fact *always* true.
+
+[AL: I don't understand this part. Why return a value that is always true?]
 
 A comparison of the numerical and exact solution along the line
 $y=0.5$ (snapped from $y=0.4$) is made by the following code:
@@ -1962,21 +1968,22 @@ plt.xlabel('x');  plt.ylabel('u')
 !ec
 See Figure ref{ftut:structviz:fig1} (lower left) for the resulting curve plot.
 
-=== Curve plot of the flux ===
+=== Making curve plots of the flux ===
 
 Let us also compare the numerical and
-exact flux $-p\partial u/\partial x$ along the same line as above:
+exact flux $-\kappa\partial u/\partial x$ along the same line as above:
 
 !bc pycod
 flux_u = flux(u, p)
 flux_u_x, flux_u_y = flux_u.split(deepcopy=True)
 
 # Plot the numerical and exact flux along the same line
-flux2_x = flux_u_x if flux_u_x.ufl_element().degree() == 1 \
-          else interpolate(flux_x,
-               FunctionSpace(u.function_space().mesh(),
-                             'P', 1))
-flux_u_x_box = structured_mesh(flux_u_x, (nx,ny))
+if flux_u_x.ufl_element().degree() == 1:
+   flux2_x = flux_u_x
+else:
+   V1 = FunctionSpace(u.function_space().mesh(), 'P', 1)
+   flux2_x = interpolate(flux_x, V)
+flux_u_x_box = structured_mesh(flux_u_x, (nx, ny))
 x, flux_u_val, y_fixed, snapped = \
    flux_u_x_box.gridline(start, direction=X)
 y = y_fixed
@@ -1986,10 +1993,11 @@ plt.plot(x, flux_u_val, 'r-')
 plt.plot(x, flux_u_x_exact(x, y_fixed), 'bo')
 plt.legend(['P1 elements', 'exact'], loc='upper right')
 plt.title('Flux along line y=%g' % y_fixed)
-plt.xlabel('x');  plt.ylabel('u')
+plt.xlabel('x')
+plt.ylabel('u')
 !ec
 The second `plt.plot` command
-requires a Python function `flux_u_x_exact(x,y)` to be
+requires a function `flux_u_x_exact(x,y)` to be
 available for the exact flux expression.
 
 Note that Matplotlib is one choice of plotting package. With the unified
@@ -2007,9 +2015,9 @@ a test problem with prescribed solution $\uex = H(x)H(y)$, where
 !bt
 \[ H(x) = e^{-16(x-\frac{1}{2})^2}\sin(3\pi x)\tp\]
 !et
-We just fit a function $f(x,y)$ in the PDE (can choose $p=1$),
-and notice that $u=0$ along the
-boundary of the unit square. Although it is easy to carry out the
+The corresponding right-hand side $f$ is obtained by inserting the exact
+solution into the PDE and differentiating as before.
+Although it is easy to carry out the
 differentiation of $f$ by hand and hardcode the resulting expressions
 in an `Expression` object, a more reliable habit is to use Python's
 symbolic computing engine, SymPy, to perform mathematics and
@@ -2023,6 +2031,7 @@ We start out with defining the exact solution in `sympy`:
 !bc pycod
 from sympy import exp, sin, pi  # for use in math formulas
 import sympy as sym
+
 H = lambda x: exp(-16*(x-0.5)**2)*sin(3*pi*x)
 x, y = sym.symbols('x[0], x[1]')
 u = H(x)*H(y)
@@ -2047,7 +2056,6 @@ the symbol `M_PI` for $\pi$ in C/C++ by `pi` (or `DOLFIN_PI`):
 u_c = u_c.replace('M_PI', 'pi')
 u_b = Expression(u_c)
 !ec
-
 Thereafter, we can progress with the computation of
 $f = -\nabla\cdot(\kappa\nabla u)$:
 
@@ -2093,3 +2101,5 @@ difficult in visualization packages utilizing unstructured grids, as
 hitting exactly then nodes when sampling a function along a line
 through the grid might be non-trivial.
 # #endif
+
+[AL: The book ends sort of abruptly. Is it possible to say something more at the end?]
