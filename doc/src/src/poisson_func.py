@@ -1,7 +1,17 @@
 """
-Solve -Laplace(u) = f on the unit square
-with u = u_D on the boundary.
+FEniCS tutorial demo program: Poisson equation with Dirichlet conditions.
+Test problem is chosen to give an exact solution at all nodes of the mesh.
+
+  -Laplace(u) = f   in the unit square
+            u = u_D  on the boundary
+
+  u = 1 + x^2 + 2y^2 = u_D
+  f = -6
+
+This is an extended version of the demo program poisson.py which
+encapsulates the solver as a Python function.
 """
+
 from __future__ import print_function
 from fenics import *
 
@@ -33,35 +43,8 @@ def solver(f, u_D, Nx, Ny, degree=1):
 
     return u
 
-def test_solver():
-    """Reproduce u = 1 + x^2 + 2y^2 to "machine precision"."""
-
-    # Set up parameters for testing
-    tol = 1E-11
-    u_D = Expression('1 + x[0]*x[0] + 2*x[1]*x[1]')
-    f = Constant(-6.0)
-
-    # Iterate over mesh sizes and degrees
-    for Nx, Ny in [(3,3), (3,5), (5,3), (20,20)]:
-        for degree in 1, 2, 3:
-            print('Solving on a 2 x (%d x %d) mesh with P%d elements.'
-                  % (Nx, Ny, degree))
-
-            # Compute solution
-            u = solver(f, u_D, Nx, Ny, degree)
-
-            # Compute maximum error at vertices
-            vertex_values_u_D = u_D.compute_vertex_values(mesh)
-            vertex_values_u  = u.compute_vertex_values(mesh)
-            import numpy as np
-            error_max = np.max(np.abs(vertex_values_u_D - vertex_values_u))
-
-            # Check maximum error
-            msg = 'error_max = %g' % error_max
-            assert max_error < tol, msg
-
-def demo_test():
-    """Compute and post-process solution"""
+def run_solver():
+    "Run solver to compute and post-process solution"
 
     # Set up problem parameters and call solver
     u_D = Expression('1 + x[0]*x[0] + 2*x[1]*x[1]')
@@ -71,12 +54,42 @@ def demo_test():
     # Plot solution
     u.rename('u', 'u')
     plot(u)
-    plot(mesh)
 
     # Save solution to file in VTK format
     vtkfile = File('poisson.pvd')
     vtkfile << u
 
+def test_solver():
+    "Test solver by reproducing u = 1 + x^2 + 2y^2"
+
+    # Set up parameters for testing
+    tol = 1E-10
+    u_D = Expression('1 + x[0]*x[0] + 2*x[1]*x[1]')
+    f = Constant(-6.0)
+
+    # Iterate over mesh sizes and degrees
+    for Nx, Ny in [(3, 3), (3, 5), (5, 3), (20, 20)]:
+        for degree in 1, 2, 3:
+            print('Solving on a 2 x (%d x %d) mesh with P%d elements.'
+                  % (Nx, Ny, degree))
+
+            # Compute solution
+            u = solver(f, u_D, Nx, Ny, degree)
+
+            # Extract the mesh
+            mesh = u.function_space().mesh()
+
+            # Compute maximum error at vertices
+            vertex_values_u_D = u_D.compute_vertex_values(mesh)
+            vertex_values_u  = u.compute_vertex_values(mesh)
+            import numpy as np
+            error_max = np.max(np.abs(vertex_values_u_D - \
+                                      vertex_values_u))
+
+            # Check maximum error
+            msg = 'error_max = %g' % error_max
+            assert error_max < tol, msg
+
 if __name__ == '__main__':
-    application_test()
+    run_solver()
     interactive()

@@ -10,7 +10,7 @@ def solver(
     rel_tol=1E-3,           # Relative tolerance in Krylov solver
     max_iter=1000,          # Max no of iterations in Krylov solver
     log_level=PROGRESS,     # Amount of solver output
-    dump_parameters=False,  # Write out parameter database?
+    print_parameters=False, # Write out parameter database?
     ):
     """
     Solve -Laplace(u)=f on [0,1]x[0,1] with 2*Nx*Ny Lagrange
@@ -42,7 +42,7 @@ def solver(
         prm['maximum_iterations'] = max_iter
         print(parameters['linear_algebra_backend'])
         set_log_level(log_level)
-        if dump_parameters:
+        if print_parameters:
             info(parameters, True)
         solver_parameters = {'linear_solver': 'gmres',
                              'preconditioner': 'ilu'}
@@ -175,19 +175,18 @@ def compare_exact_and_numerical_solution(Nx, Ny, degree=1):
     print('numerical error at %s: %g' % (center, error))
 
 def normalize_solution(u):
-    """Normalize u: return u divided by max(|u|)."""
-    dofs = u.vector().array()
-    u_max = np.abs(dofs).max()
-    dofs /= u_max
-    u.vector()[:] = dofs
-    u.vector().set_local(dofs) # alternative
-    return u
+    """Normalize solution by dividing by max(|u|)."""
+    nodal_values = u.vector().array()
+    u_max = np.abs(nodal_values).max()
+    nodal_values /= u_max
+    u.vector()[:] = nodal_values
+    #u.vector().set_local(dofs) # alternative
 
 def test_normalize_solution():
     u_D = Expression('1 + x[0]*x[0] + 2*x[1]*x[1]')
     f = Constant(-6.0)
     u = solver(f, u_D, 4, 2, 1, linear_solver='direct')
-    u = normalize_solution(u)
+    normalize_solution(u)
     computed = u.vector().array().max()
     expected = 1.0
     assert abs(expected - computed) < 1E-15

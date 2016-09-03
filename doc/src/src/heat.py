@@ -49,7 +49,7 @@ a, L = lhs(F), rhs(F)
 # Time-stepping
 u = Function(V)
 t = 0
-for n in xrange(num_steps):
+for n in range(num_steps):
 
     # Update current time
     t += dt

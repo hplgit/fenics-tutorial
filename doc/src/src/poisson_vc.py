@@ -241,7 +241,7 @@ def demo_test_flux(Nx=6, Ny=4):
         xv = coor.T[0]
         yv = coor.T[1]
 
-def compute_errors(u, u_exact):
+def compute_errors(u_exact, u):
     """Compute various measures of the error u - u_exact, where
     u is a finite element Function and u_exact is an Expression."""
 
@@ -303,39 +303,38 @@ def compute_errors(u, u_exact):
 
     return errors
 
-def convergence_rate(u_exact, f, u_D, kappa, degrees):
+def convergence_rate(u_exact, f, u_D, kappa):
     """
     Compute convergence rates for various error norms for a
-    sequence of meshes with Nx=Ny=b and P1, P2, ...,
-    Pdegrees elements. Return rates for two consecutive meshes:
-    rates[degree][error_type] = r0, r1, r2, ...
+    sequence of meshes and elements.
     """
 
-    h = {}  # Discretization parameter, h[degree][experiment]
-    E = {}  # Error measure(s), E[degree][experiment][error_type]
-    P_degrees = 1,2,3,4
-    num_meshes = 5
+    h = {}  # discretization parameter: h[degree][level]
+    E = {}  # error measure(s): E[degree][level][error_type]
+    degrees = 1, 2, 3, 4
+    num_levels = 5
 
-    # Perform experiments with meshes and element types
-    for degree in P_degrees:
-        n = 4   # Coarsest mesh division
+    # Iterate over degrees and mesh refinement levels
+    for degree in degrees:
+        n = 4  # coarsest mesh division
         h[degree] = []
         E[degree] = []
-        for i in range(num_meshes):
+        for i in range(num_levels):
             n *= 2
-            h[degree].append(1.0/n)
+            h[degree].append(1.0 / n)
             u = solver(kappa, f, u_D, n, n, degree,
                        linear_solver='direct')
-            errors = compute_errors(u, u_exact)
+            errors = compute_errors(u_exact, u)
             E[degree].append(errors)
-            print('2*(%dx%d) P%d mesh, %d unknowns, E1=%g' %
+            print('2 x (%d x %d) P%d mesh, %d unknowns, E1=%g' %
                   (n, n, degree, u.function_space().dim(),
                    errors['u - u_exact']))
-    # Convergence rates
+
+    # Compute convergence rates
     from math import log as ln  # log is a fenics name too
     error_types = list(E[1][0].keys())
     rates = {}
-    for degree in P_degrees:
+    for degree in degrees:
         rates[degree] = {}
         for error_type in sorted(error_types):
             rates[degree][error_type] = []
@@ -344,6 +343,7 @@ def convergence_rate(u_exact, f, u_D, kappa, degrees):
                 Eim1 = E[degree][i-1][error_type]
                 r = ln(Ei/Eim1)/ln(h[degree][i]/h[degree][i-1])
                 rates[degree][error_type].append(round(r,2))
+
     return rates
 
 def convergence_rate_sin():
