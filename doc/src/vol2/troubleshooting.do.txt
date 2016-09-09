@@ -1,0 +1,313 @@
+========= Troubleshooting =========
+label{ftut:trouble}
+idx{troubleshooting}
+
+[hpl: We don't have pages for this, but the document can appear as
+additional material on the web.]
+
+======= Compilation Problems =======
+idx{compilation problems}
+
+Expressions and variational forms in a FEniCS program need to be
+compiled to C++ and linked with libraries if the expressions or forms
+have been modified since last time they were compiled.  The tool
+Instant, which is part of the FEniCS software suite, is used for
+compiling and linking C++ code so that it can be used with Python.
+
+Sometimes the compilation fails. You can see from the
+series of error messages which statement in the Python program that
+led to a compilation problem. Make sure to scroll back and identify
+whether the problematic line is associated with an expression,
+variational form, or the solve step.
+
+The final line in the output of error messages points to a log file
+from the compilation where one can examine the error messages from the
+compiler. It is usually the last lines of this log file that are of
+interest. Occasionally, the compiler's message can quickly lead to an
+understanding of the problem.
+A more fruitful approach is normally to examine the below list
+of common compilation problems and their remedies.
+
+===== Problems with the Instant cache =====
+
+Instant remembers information about previous compilations and versions
+of your program. Sometimes removal of this information can solve
+the problem. Just run
+
+!bc sys
+instant-clean
+!ec
+in a terminal window whenever you encounter a compilation problem.
+
+===== Syntax errors in expressions =====
+
+If the compilation problem arises from line with an `Expression`
+object, examine the syntax of the expression carefully.  You may also
+want to examine the log file, pointed to in the last line in the
+output of error messages. The compiler's message about the syntax
+problem may lead you to a solution.
+
+Some common problems are
+
+  o using `a**b` for exponentiation (illegal in C++) instead of `pow(a, b)`,
+  o forgetting that the spatial coordinates are denoted by a vector `x`,
+  o forgetting that the $x$, $y$, and $z$ coordinates in space correspond
+    to `x[0]`, `x[1]`, and `x[2]`, respectively.
+
+Failure to initialize parameters in the expressions lead to a
+compilation error where this problem is explicitly pointed out.
+
+=== Example ===
+
+The implementation
+
+!bc pycod
+u_exact = Expression(
+    'x[1] <= 0.5? 2*x[1]*p_1/(p_0 + p_1) : '
+    '((2*x[1]-1)p_0 + p_1)/(p_0 + p_1)',
+    p_0=p_values[0], p_1=p_values[1])
+!ec
+fails with compilation error
+
+!bc
+RuntimeError: In instant.recompile: The module did not compile with
+command 'make VERBOSE=1', see '/some/path/.../compile.log'
+!ec
+Looking up the `compile.log` file and searching for `error`, we see
+the following message from the C++ compiler:
+
+!bc
+error: expected ‘)’ before ‘p_0’
+   values[0] = x[1] <= 0.5? 2*x[1]*p_1/(p_0 + p_1) :
+   ((2*x[1]-1)p_0 + p_1)/(p_0 + p_1);
+              ^
+!ec
+Now we realize that a `*` symbol is missing between `)` and `p_0`.
+
+===== An integral without a domain is now illegal =====
+
+This error message from UFL (`ufl.log.UFLException`) often points to
+a factor in a variational form that is 0. The factor should be
+`Constant(0)`.
+
+===== Problems with SymPy and `diff` expressions =====
+
+If you work with FEniCS and SymPy in the same program, be aware
+that `from fenics import *` imports a lot of symbols that you also
+have in `sympy`, so you have to do `import sympy as sym`. However,
+it is easy to write something like `p*diff(u,x)` meaning differentiation
+of the symbolic expression `u`, but a pure `diff` is then the `diff`
+object from `fenics`, not from `sympy`. The right statement is
+`p*sym.diff(u,x)`. (Error messages arising from this example
+can be quite difficult to interpret).
+
+===== Problems in the solve step =====
+
+Sometimes the problem lies in the solve step where a variational form
+is turned into a system of algebraic equations.
+The error message *Unable to extract all indicies* points to a problem with the
+variational form. Common errors include
+
+  o missing either the `TrialFunction` or the `TestFunction` object,
+  o no terms without `TrialFunction` objects.
+  o mathematically invalid operations in the variational form.
+
+The first problem implies that one cannot make a matrix system or
+system of nonlinear algebraic equations out of the variational form.
+The second problem means that there is no "right-hand side" terms in the PDE
+with known quantities. Sometimes this is seemingly the case mathematically
+because the "right-hand side" is zero. Variational forms must represent this
+case as `Constant(0)*v*dx` where `v` is a `TestFunction` object.
+An example of the third problem is to take the `inner` product of
+a scalar and a vector (causing in this particular case
+the error message to be "Shape mismatch").
+
+The message *Unable to extract common cell; missing cell definition in
+form or expression* will typically arise from a term in the form where
+a test function (holding mesh and cell information) is missing.
+For example, a zero right-hand side `Constant(0)*dx` will generate
+this error.
+
+===== Unable to convert object to a UFL form =====
+
+One common reason for the above error message is that a form is
+written without being multiplied by `dx` or `ds`.
+
+===== UFL reports that a numpy array cannot be converted to any UFL type =====
+
+One reason may be that there are mathematical functions like `sin` and
+`exp` operating on `numpy` arrays. The problem is that
+the
+
+!bc pycod
+from fenics import *
+!ec
+statement imports
+`sin`, `cos`,
+and similar mathematical functions from UFL and these are aimed at
+taking `Function` or `TrialFunction`
+objects as arguments and not `numpy` arrays.
+The remedy is to use prefix mathematical functions aimed at
+`numpy` arrays with `numpy`, or `np` if `numpy` is imported as `np`:
+`numpy.exp` or `np.exp`, for instance.
+Normally, boundary conditions and analytical solutions are represented
+by `Expression` objects and then this problem does not arise.
+The problem usually arises when pure Python functions with, e.g., analytical
+solutions are introduced for, e.g., plotting.
+
+
+===== All programs fail to compile =====
+
+When encountering a compilation problem where the Instant log file says
+something about missing double quote in an `Expression`, try compiling
+a previously working program. If that program faces the same problem,
+reboot Ubuntu and try again.  If the problem persists, try running the
+Update Manager (because unfinished updates can cause compiler
+problems), reboot and try again.
+
+======= Problems with Expression Objects =======
+
+===== There seems to be some bug in an Expression object =====
+
+Run the command `instant-clean` to ensure that everything is
+(re)compiled.  Check the formulas in string expressions carefully, and
+make sure that divisions do not lead to integer division (i.e., at
+least one of the operands in a division must be a floating-point
+variable).
+
+===== Segmentation fault when using an Expression object =====
+
+One reason may be that the point vector `x` has indices out of
+bounds, e.g., that you access `x[2]` but the mesh is only a 2D mesh.
+Also recall that the components of `x` are `x[0]`, `x[1]`, etc.
+Accessing `x[2]`  as the `y` coordinate is a common error!
+
+
+======= Other Problems =======
+
+===== Very strange error message involving a `mesh` variable =====
+
+If you encounter a really strange error message, and the statement
+in question involves a variable with name `mesh`, check if this
+is really your mesh variable. When doing `from fenics import *`, you
+get a `mesh` variable, which is actually a module, and sending
+this module to functions creates a `TypeError`. Substitute with
+the actual name of your mesh object.
+
+One should also note other names that get imported by `from fenics import *`:
+`e`, `f`, `i`, `j`, `k`, `l`, `p`, `q`, `r`, `s`. It is easy to use such
+variables without initializing them, and strange error message arises
+(since the mentioned names are UFL `Index` objects).
+
+===== The plot disappears quickly from the screen =====
+
+idx{plotting problems}
+
+You have forgotten to insert `interactive()` as the last statement in
+the program.
+
+
+===== Only parts of the program are executed =====
+
+Check if a call to `interactive()` appears in the middle of the program.
+The computations are halted by this call and not continued before
+you press `q` in a plot window. Most people thus prefer to
+have `interactive()` as the last statement.
+
+===== Error in the definition of the boundary =====
+
+Consider this code and error message:
+
+!bc pycod
+class DirichletBoundary(SubDomain):  # define the Dirichlet boundary
+    def inside(self, x, on_boundary):
+        return on_boundary and abs(x) < 1E-14
+
+bc = DirichletBC(V, u0, xleft_boundary)
+
+Error: ValueError: The truth value of an array with more than
+one element is ambiguous. Use a.any() or a.all()
+!ec
+The reason for this error message
+is that `x` is a point vector, not just a number.
+In the `inside` function one must work with the
+components of `x`: `x[0]`, `x[1]`, etc.
+
+===== The solver in a nonlinear problems does not converge =====
+
+There can be many reasons for this common problem:
+
+  o The form (variational formulation) is not consistent with the
+    PDE(s).
+  o The boundary conditions in a Newton method are wrong. The
+    correction vector must have vanishing essential conditions where
+    the complete solution has zero or non-zero values.
+  o The initial guess for the solution is not appropriate. In some
+    problems, a simple function equal to 0 just leads to a zero
+    solution or a divergent solver. Try 1 as initial guess, or
+    (better) try to identify a linear problem that can be used to
+    compute an appropriate initial guess, see Section
+    ref{ftut:nonlinear:Newton:algebraic}.
+
+======= How to debug a FEniCS program? =======
+
+# A true case study with a few bugs would be really helpful here.
+# 1. Linear problem.
+# 2. Nonlinear problem.
+# 3. Time-dependent problem.
+# 4. Time-dependent nonlinear problem.
+
+Here is an action list you may follow.
+
+__Step 1.__ Examine the weak form and its implementation carefully.
+Check that all terms are multiplied by `dx` or `ds`, and that the
+terms do not vanish; check that at least one term has both a
+`TrialFunction` and a `TestFunction` (term with unknown); and check
+that at least one term has no `TrialFunction` (known term).
+
+__Step 2.__ Check that Dirichlet boundary conditions are set correctly.
+
+!bc pycod
+# bcs is list of DirichletBC objects
+for bc in bcs:
+bc_dict = bc.get_boundary_values()
+    for dof in bc_dict:
+        print('dof %d: value=%s' % (dof, bc_dict[dof]))
+!ec
+See also an expanded version of this snippet in the `solvers_bc`
+`${prog["poisson_vc"]}.py` file located in the directory `poisson`.
+
+A next step in the debugging, if these values are wrong, is to
+call the functions that define the boundary parts. For example,
+
+!bc pycod
+for coor in mesh.coordinates():
+    if my_boundary_function(coor, True):
+        print('%s is on the boundary' % coor)
+
+# or, in case of a SubDomain subclass my_subdomain_object,
+for coor in mesh.coordinates():
+    if my_subdomain_object.inside(coor, True):
+        print('%s is on the boundary' % coor)
+!ec
+You may compute points along a line and plot the solution along
+this line (see the `prog['membrane'].py` example). You may also print
+out the Dirichlet values as shown in the `prog['heat'].py` and
+`prog['poisson_vc'].py` files.
+
+__Step 4.__ Switching to a simple set of coefficients and boundary conditions,
+such that the solution becomes simple too,
+but still obeys the same PDE, may help since it is then easier to
+examine numerical values in the solution array.
+
+__Step 5.__ Formulate a corresponding 1D problem. Often this can be
+done by just running the problem with a 1D mesh. Doing hand calculations
+of element matrices and vectors, and comparing the assembled system
+from these hand calculations with the assembled system from the
+FEniCS program can uncover bugs. For nonlinear problems, or problems
+with variable coefficients, it is usually wise to choose simple
+coefficients so that the problem becomes effectively linear and the
+hand calculations are doable.
+
+# #ifdef EXTRA
+# #endif

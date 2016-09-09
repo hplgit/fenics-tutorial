@@ -1,0 +1,857 @@
+========= Implementing solvers for nonlinear PDEs =========
+label{ftut:nonlinear}
+
+!bquote
+FEniCS almost automates the solution of nonlinear problems, as shown
+in ref[Section ref{ftut1:gallery:nonlinearpoisson}][ in cite{ftut1}][the
+section "A nonlinear Poisson equation": "" in cite{ftut1}].
+However, in problems with severe nonlinearities it can be hard to
+obtain convergence of the iterative methods, and one needs to
+tailor the solution to the problem at hand. FEniCS is very well suited
+for this, but then the nonlinear iteration algorithm must be hand-coded.
+This chapter shows the implementation of three basic solution strategies:
+
+  * a simple Picard-type iteration
+  * a Newton method at the algebraic level
+  * a Newton method at the PDE level
+
+The detailed exposition will hopefully also
+help newcomers to the finite element method to understand the method
+better.
+##However, first we provide more
+##information for using the built-in automated Newton solver that
+##was demonstrated in Section ref{ftut:nonlinear:Newton:auto}.
+!equote
+
+__Test problem.__
+As basic test problem in this chapter, we use the nonlinear Poisson problem
+
+!bt
+\[ -\nabla\cdot(q(u)\nabla u)=f\tp\]
+!et
+
+It turns out that
+
+!bt
+\begin{equation}
+u(x_0,\ldots,x_{d-1}) = \left((2^{m+1}-1)x_0 + 1\right)^{1/(m+1)} - 1
+\end{equation}
+!et
+is an exact solution of this nonlinear PDE if $f=0$, $q(u)=(1+u)^m$,
+the domain $\Omega$ is the unit hypercube $[0, 1]^d$ in
+$d$ dimensions, $u=0$ for $x_0=0$, $u=1$ for
+$x_0=1$, and $\partial u/\partial n=0$ at all other boundaries $x_i=0$
+and $x_i=1$, $i=1,\ldots,d-1$. The coordinates are now represented by
+the symbols $x_0,\ldots,x_{d-1}$.
+
+We refer to ref[Section ref{ch:poisson0:nD}][ in cite{ftut1}][the
+section "A nonlinear Poisson equation": "" in cite{ftut1}]
+for details on formulating a PDE
+problem in $d$ space dimensions.
+
+
+======= The built-in automated Newton solver =======
+label{ch:poisson0:nonlinear}
+
+Solving nonlinear problems in FEniCS is a matter of defining the
+nonlinear variational form `F` and calling `solve(F == 0, ...)` as
+explained in ref[Section ref{ftut:nonlinear:Newton:auto}][ in cite{ftut1}][
+the section "FEniCS implementation": "" in cite{ftut1}].
+However, in real problems we will at least have control of the
+tolerance used in the stopping criterion in Newton's method.
+Sometimes we also want to derive the Jacobian ourselves or
+provide approximations. Such customizations are shown next.
+
+===== Computing the Jacobian =====
+
+idx{`${prog["nlpoisson_func"]}.py`}
+
+idx{nonlinear variational problems}
+idx{`NonlinearVariationalProblem`}
+idx{`NonlinearVariationalSolver`}
+
+We may provide the Jacobian for Newton's method as argument to `solve`:
+`solve(F == 0, u, bcs=bcs, J=J)`. However, if you have several
+nonlinear problems within the same code and want different solvers
+for them, it is better to use these objects:
+
+!bc pycod
+problem = NonlinearVariationalProblem(F, u, bcs, J)
+solver  = NonlinearVariationalSolver(problem)
+solver.solve()
+!ec
+Here, `F` corresponds to the nonlinear form $F(u;v)$,
+`u` is the unknown `Function` object, `bcs`
+represents the essential boundary conditions (in general a list of
+`DirichletBC` objects), and
+`J` is a variational form for the Jacobian of `F`.
+
+The `F` form corresponding to
+
+!bt
+\begin{equation}
+F(u; v) = \int_\Omega q(u)\nabla u\cdot \nabla v + fv \dx,
+\end{equation}
+!et
+is straightforwardly defined as follows, assuming `q(u)` is
+coded as a Python function (see
+ref[Section ref{ftut:nonlinear:Newton:auto}][ in cite{ftut1}][
+the section "FEniCS implementation": "" in cite{ftut1}]) for
+code):
+
+!bc pycod
+u_ = Function(V)     # most recently computed solution
+v  = TestFunction(V)
+F  = dot(q(u_)*grad(u_), grad(v))*dx
+!ec
+Note here that `u_` is a `Function` and not a `TrialFunction`.
+An alternative and perhaps more intuitive formula for $F$ is to
+define $F(u;v)$ directly in terms of
+a trial function for $u$ and a test function for $v$, and then
+create the proper `F` by
+
+!bc pycod
+u  = TrialFunction(V)
+v  = TestFunction(V)
+F  = dot(q(u)*grad(u), grad(v))*dx
+u_ = Function(V)     # the most recently computed solution
+F  = action(F, u_)
+!ec
+The latter statement is equivalent to $F(u=u^{-}; v)$, where $u^{-}$ is
+an existing finite element function representing the most recently
+computed approximation to the solution.
+(Note that $u^k$ and $u^{k+1}$ in the previous notation
+correspond to $u^{-}$ and $u$ in the present
+notation. We have changed notation to better align the mathematics with
+the associated code.)
+
+idx{Gateaux derivative}
+
+The derivative $J$ (`J`) of $F$ (`F`) is formally the Gateaux
+derivative $DF(u^k; \delta u, v)$ of $F(u;v)$ at $u=u^{-}$ in the
+direction of $\delta u$.  Technically, this Gateaux derivative is
+derived by computing
+
+!bt
+\begin{equation}
+\lim_{\epsilon\rightarrow 0}{d\over d\epsilon} F_i(u^{-} + \epsilon\delta u; v)
+\tp  label{ch:poisson0:nonlinear:Gateaux1}
+\end{equation}
+!et
+The $\delta u$ is now the trial function and $u^{-}$ is the previous
+approximation to the solution $u$.  We start with
+
+!bt
+\begin{equation*}
+{d\over d\epsilon}\int_\Omega \nabla v\cdot\left( q(u^{-} + \epsilon\delta u)
+\nabla (u^{-} + \epsilon\delta u)\right) \dx
+\end{equation*}
+!et
+and obtain
+
+!bt
+\begin{equation*}
+\int_\Omega \nabla v\cdot\left\lbrack
+q'(u^{-} + \epsilon\delta u)\delta u
+\nabla (u^{-} + \epsilon\delta u)
++
+q(u^{-} + \epsilon\delta u)
+\nabla \delta u
+\right\rbrack \dx,
+\end{equation*}
+!et
+which leads to
+
+!bt
+\begin{equation}
+\int_\Omega \nabla v\cdot\left\lbrack
+q'(u^{-})\delta u
+\nabla (u^{-})
++
+q(u^{-})
+\nabla \delta u
+\right\rbrack \dx,
+\end{equation}
+!et
+as $\epsilon\rightarrow 0$.  This last expression is the Gateaux
+derivative of $F$. We may use $J$ or $a(\delta u, v)$ for this
+derivative. The latter has the advantage of being easy to recognize
+as a bilinear form. However, in the forthcoming code
+examples `J` is used as variable name for the Jacobian.
+
+The specification of `J` goes as follows if `du` is the
+`TrialFunction`:
+
+!bc pycod
+du = TrialFunction(V)
+v  = TestFunction(V)
+u_ = Function(V)      # the most recently computed solution
+F  = dot(q(u_)*grad(u_), grad(v))*dx
+
+J = dot(q(u_)*grad(du), grad(v))*dx + \
+    dot(Dq(u_)*du*grad(u_), grad(v))*dx
+!ec
+With the alternative specification of `F`, where `u` is a
+`TrialFunction`, `J` is computed by
+
+!bc pycod
+u  = TrialFunction(V)
+v  = TestFunction(V)
+u_ = Function(V)      # the most recently computed solution
+F  = dot(q(u)*grad(u), grad(v))*dx
+F  = action(F, u_)
+
+J = dot(q(u_)*grad(u), grad(v))*dx + \
+    dot(Dq(u_)*u*grad(u_), grad(v))*dx
+!ec
+
+idx{`derivative`}
+idx{automatic differentiation}
+idx{Jacobian, automatic computation}
+
+The UFL language, used to specify weak forms, supports differentiation
+of forms. This feature facilitates automatic *symbolic* computation of the
+Jacobian `J` by calling the function `derivative` with `F`, the most
+recently computed solution (`Function`), and the unknown
+(`TrialFunction`) as parameters:
+
+!bc pycod
+du = TrialFunction(V)
+v  = TestFunction(V)
+u_ = Function(V)      # the most recently computed solution
+F  = dot(q(u_)*grad(u_), grad(v))*dx
+
+J  = derivative(F, u_, du)  # Gateaux derivative in dir. of du
+!ec
+or
+
+!bc pycod
+u  = TrialFunction(V)
+v  = TestFunction(V)
+u_ = Function(V)      # the most recently computed solution
+F  = dot(q(u)*grad(u), grad(v))*dx
+F  = action(F, u_)
+
+J  = derivative(F, u_, u)   # Gateaux derivative in dir. of u
+!ec
+The `derivative` function is obviously very convenient in problems
+where differentiating `F` by hand implies lengthy calculations.
+
+# For difference between diff and derivative, see p 531 in the FEniCS book.
+# Hyperelasticity is an application that contains both functions.
+
+===== Setting solver parameters =====
+
+The following code defines the nonlinear variational problem and
+an associated solver based on Newton's method. We here demonstrate
+how key parameters in
+Newton's method can be set, as well as the choice of
+solver and preconditioner, and associated parameters, for the
+linear system occurring in the Newton iterations.
+
+@@@CODE-4 src/nlpoisson_func.py fromto: problem = NonlinearVar@set_log_level
+
+A list of available parameters and their default values can as
+usual be printed by calling `info(prm, True)`.
+The `u_` we feed to the nonlinear variational problem object
+is filled with the solution by the call `solver.solve()`.
+
+===== FEniCS implementation =====
+
+The preferred implementation of `F` and `J`, depending on whether `du`
+or `u` is the `TrialFunction` object, is a matter of personal
+taste. Derivation of the Gateaux derivative by hand, as shown above,
+is most naturally matched by an implementation where `du` is the
+`TrialFunction`, while use of automatic symbolic differentiation with
+the aid of the `derivative` function is most naturally matched by an
+implementation where `u` is the `TrialFunction`.  We have implemented
+both approaches in a `solver` function in
+the file "`${prog['nlpoisson_func']}.py`":
+"${src_url}/${prog['nlpoisson_func']}.py".
+An argument `TrialFunction_object`
+can be set to `u` if we want to have `u` as
+`TrialFunction`, otherwise it set to `du`.
+
+@@@CODE src/nlpoisson_func.py fromto: def solver@# Create mesh
+
+Let us run the code for $m=2$ and three meshes corresponding to
+`divisions` as `(10, 10)`, `(20, 20)`, and `(40, 40)`. The maximum
+errors are then $5\cdot 10^{-3}$, $1.7\cdot 10^{-3}\approx
+\frac{1}{4}5\cdot 10^{-3}$, $4.5\cdot
+10^{-4}\approx\frac{1}{4}1.7\cdot 10^{-3}$, and $1.2\cdot
+10^{-4}\approx\frac{1}{4}4.5\cdot 10^{-4}$, demonstrating second-order
+convergence in the cell size as expected for P1 elements.  This test
+is turned into a proper unit test in the `test_solver` function.
+
+
+======= Manual implementation of solution algorithms =======
+
+We now show how we can implement the solution algorithm for
+handling nonlinear PDEs from scratch. First, we treat the
+common and popular Picard iteration method. Second, we look at
+a standard Newton method for solving nonlinear algebraic equations.
+And third, we demonstrate application of the Newton method directly
+to the PDE, which is an approach that is more attractive to
+FEniCS programmers than the second one.
+
+===== Picard iteration =====
+label{ftut:nonlinear:Picard}
+idx{Picard iteration}
+idx{successive substitutions}
+
+=== Idea ===
+
+Picard iteration, also called the method of successive substitutions,
+is an easy way of handling nonlinear PDEs: we simply
+use a known, previous solution in the nonlinear terms so that these
+terms become linear in the unknown $u$. The strategy is also known as
+the method of successive substitutions.  For our particular problem,
+we use a known, previous solution in the coefficient $q(u)$.  More
+precisely, given a solution $u^k$ from iteration $k$, we seek a new
+(hopefully improved) solution $u^{k+1}$ in iteration $k+1$ such that
+$u^{k+1}$ solves the *linear problem*,
+
+!bt
+\begin{equation}
+label{ch:poisson0:nonlinear:picard1}
+\nabla\cdot \left(q(u^k)\nabla u^{k+1}\right) = 0,\quad k=0,1,\ldots
+\end{equation}
+!et
+The iterations require an initial guess $u^0$.
+The hope is that $u^{k} \rightarrow u$ as $k\rightarrow\infty$, and that
+$u^{k+1}$ is sufficiently close to the exact
+solution $u$ of the discrete problem after just a few iterations.
+
+A similar linearization is needed in Neumann and Robin conditions as
+well, e.g., the condition
+
+!bt
+\[ -q(u)\frac{\partial u}{\partial n} = r(u-U_s)\]
+!et
+is linearized to
+
+!bt
+\[ -q(u^k)\frac{\partial u^{k+1}}{\partial n} = r(u^{k+1}-U_s)\tp\]
+!et
+
+=== Variational formulation ===
+
+We can easily formulate a variational problem for $u^{k+1}$ from
+(ref{ch:poisson0:nonlinear:picard1}) by the same steps as for a
+linear Poisson problem.
+The problem boils down to seeking
+$u^{k+1} \in V$ such that
+
+!bt
+\begin{equation} label{ch:poisson0:nonlinear:picard2}
+  \tilde F(u^{k+1}; v) = 0 \quad \forall v \in \hat{V},\quad k=0,1,\ldots,
+\end{equation}
+!et
+with
+
+!bt
+\begin{equation}
+label{ch:poisson0:nonlinear:picard3}
+\tilde F(u^{k+1}; v) = \int_\Omega q(u^k)\nabla u^{k+1}\cdot \nabla v \dx
+\tp
+\end{equation}
+!et
+Since this is a linear problem in the unknown $u^{k+1}$, we can equivalently
+use the formulation
+
+!bt
+\begin{equation}
+a(u^{k+1},v) = L(v),
+\end{equation}
+!et
+with $a(u,v) = \int_\Omega q(u^k)\nabla u\cdot \nabla v \dx$ and
+$L(v) = 0$.
+
+## Avoid || norm notation at beginning of the line since doconce
+## interprets it as start of table
+
+=== Stopping criteria ===
+
+The iterations can be stopped when $\epsilon\equiv ||u^{k+1}-u^k|| <
+\mbox{tol}$, where $\mbox{tol}$ is a small tolerance, say $10^{-5}$,
+or when the number of iterations exceed some critical limit. The
+latter case will pick up divergence of the method or unacceptable slow
+convergence. The residual
+criterion $||\epsilon_F \equiv ||F(u^{k+1};v)|| < \mbox{tol}$
+can also be used, but it would require
+a kind of extra iteration since we must compute the linear system in
+the next iteration to be in position to evaluate $||F(u^{k+1};v)||$.
+However, since the residual criterion is costly, we use the change
+in solution $\epsilon$ instead.
+
+idx{`${prog["nlpoisson_picard"]}.py`}
+
+=== FEniCS implementation ===
+
+In the solution algorithm we only need to store $u^k$ and $u^{k+1}$,
+called `u_` and `u` in the code below (our convention is that
+`u` is always the unknown to be computed in a code, and `u_` is
+the most recently computed approximation to the mathematical solution
+of the problem).
+The algorithm can then be expressed as follows:
+
+!bc pycod-t
+def q(u):
+    return (1+u)**m
+
+# Define variational problem for Picard iteration
+u = TrialFunction(V)
+v = TestFunction(V)
+u_ = interpolate(Constant(0.0), V)  # previous (known) u
+a = dot(q(u_)*grad(u), grad(v))*dx
+f = Constant(0.0)
+L = f*v*dx
+
+# Picard iterations
+u = Function(V)     # new unknown function
+eps = 1.0           # error measure ||u-u_||
+tol = 1.0E-5        # tolerance
+iter = 0            # iteration counter
+maxiter = 25        # max no of iterations allowed
+while eps > tol and iter < maxiter:
+    iter += 1
+    solve(a == L, u, bcs)
+    du = u.vector().array() - u_.vector().array()
+    eps = np.linalg.norm(du, ord=numpy.Inf)
+    print('iter=%d: norm=%g' % (iter, eps))
+    u_.assign(u)   # update for next iteration
+!ec
+We need to define the previous solution in the iterations, `u_`,
+as a finite element function so that `u_` can be updated with
+`u` at the end of the loop. We may create the initial
+`Function u_`
+by interpolating
+an `Expression` or a `Constant`
+to the same vector space as `u` lives in (`V`).
+
+In the code above we demonstrate how to use
+`numpy` functionality to compute the norm of
+the difference between the two most recent solutions. Here we apply
+the maximum norm ($\ell_\infty$ norm) on the difference of the solution vectors
+(`ord=1` and `ord=2` give the $\ell_1$ and $\ell_2$ vector
+norms - other norms are possible for `numpy` arrays,
+see `pydoc numpy.linalg.norm`).
+
+The file `${prog["nlpoisson_picard"]}.py` contains the complete code
+for this nonlinear Poisson problem.  The implementation is $d$
+dimensional, with mesh construction and setting of Dirichlet
+conditions as explained in ref[Section ref{ch:poisson0:nD}][ in
+cite{ftut1}][the section "A nonlinear Poisson equation": "" in
+cite{ftut1}].  For a $33\times 33$ grid with $m=2$ we need 9
+iterations for convergence when the tolerance is $10^{-5}$.
+
+===== A Newton method at the algebraic level =====
+label{ftut:nonlinear:Newton:algebraic}
+idx{Newton's method (algebraic equations)}
+
+=== Identifying the variational formulation of the linearized problem ===
+
+After having discretized our nonlinear PDE problem, we may
+use Newton's method to solve the system of nonlinear algebraic equations.
+From the variational problem $F(u; v) = 0\ \forall v\in\hat{V}$,
+we get a system of equations for the unknown parameters $U_1,\ldots, U_N$
+(by inserting $u = \sum_{j=1}^N U_j \phi_j$
+and $v=\hat\phi_i$ in $F(u;v)$):
+
+!bt
+\begin{equation}
+F_i(U_1,\ldots,U_N) \equiv
+\sum_{j=1}^N
+\int_\Omega \left( q\left(\sum_{\ell=1}^NU_\ell\phi_\ell\right)
+\nabla \phi_j U_j\right)\cdot \nabla \hat\phi_i \dx = 0,\quad i=1,\ldots,N\tp
+label{ftut:nonlinear:Newton:F1}
+\end{equation}
+!et
+Newton's method for the system $F_i(U_1,\ldots,U_j)=0$, $i=1,\ldots,N$
+can be formulated as
+
+!bt
+\begin{align}
+\sum_{j=1}^N
+{\partial \over\partial U_j} F_i(U_1^k,\ldots,U_N^k)\delta U_j
+&= -F_i(U_1^k,\ldots,U_N^k),\quad i=1,\ldots,N,\\
+U_j^{k+1} &= U_j^k + \omega\delta U_j,\quad j=1,\ldots,N,
+\end{align}
+!et
+where $\omega\in [0,1]$ is a relaxation parameter, and $k$ is
+an iteration index. An initial guess $u^0$ must
+be provided to start the algorithm.
+
+idx{under-relaxation}
+The original Newton method has $\omega=1$, but in problems where it is
+difficult to obtain convergence,
+so-called *under-relaxation* with $\omega < 1$ may help. It means that
+one takes a smaller step than what is suggested by Newton's method.
+
+idx{Jacobian, manual computation}
+
+We need, in a program, to compute the Jacobian
+matrix $\partial F_i/\partial U_j$
+and the right-hand side vector $-F_i$.
+Our present problem has $F_i$ given by (ref{ftut:nonlinear:Newton:F1}).
+The derivative $\partial F_i/\partial U_j$ becomes
+
+!bt
+\begin{equation}
+\int\limits_\Omega \left\lbrack
+ q'(\sum_{\ell=1}^NU_\ell^k\phi_\ell)\phi_j
+\nabla (\sum_{j=1}^NU_j^k\phi_j)\cdot \nabla \hat\phi_i
++
+q\left(\sum_{\ell=1}^NU_\ell^k\phi_\ell\right)
+\nabla \phi_j \cdot \nabla \hat\phi_i
+\right\rbrack
+ \dx\tp
+label{ch:poisson0:nonlinear:dFdU}
+\end{equation}
+!et
+The following results were used to obtain (ref{ch:poisson0:nonlinear:dFdU}):
+
+!bt
+\begin{equation}
+{\partial u\over\partial U_j} = {\partial\over\partial U_j}
+\sum_{j=1}^NU_j\phi_j = \phi_j,\quad {\partial\over\partial U_j}\nabla u = \nabla\phi_j,\quad {\partial\over\partial U_j}q(u) = q'(u)\phi_j\tp
+\end{equation}
+!et
+We can reformulate the Jacobian matrix
+in (ref{ch:poisson0:nonlinear:dFdU})
+by introducing the short
+notation $u^k = \sum_{j=1}^NU_j^k\phi_j$:
+
+!bt
+\begin{equation}
+{\partial F_i\over\partial U_j} =
+\int_\Omega \left\lbrack
+q'(u^k)\phi_j
+\nabla u^k \cdot \nabla \hat\phi_i
++
+q(u^k)
+\nabla \phi_j \cdot \nabla \hat\phi_i
+\right\rbrack \dx\tp
+\end{equation}
+!et
+Now it is time to write such a key expression with the
+computer code friendly notation $u^{-}$ for $u^k$:
+
+!bt
+\begin{equation}
+{\partial F_i\over\partial U_j} =
+\int_\Omega \left\lbrack
+q'(u^{-})\phi_j
+\nabla u^{-} \cdot \nabla \hat\phi_i
++
+q(u^{-})
+\nabla \phi_j \cdot \nabla \hat\phi_i
+\right\rbrack \dx\tp
+\end{equation}
+!et
+
+In order to make FEniCS compute this matrix, we need to formulate a
+corresponding variational problem. Looking at the
+linear system of equations in Newton's method,
+
+!bt
+\begin{equation*}
+\sum_{j=1}^N {\partial F_i\over\partial U_j}\delta U_j = -F_i,\quad
+i=1,\ldots,N,
+\end{equation*}
+!et
+we can introduce $v$ as a general test function replacing $\hat\phi_i$,
+and we can identify the unknown
+$\delta u = \sum_{j=1}^N\delta U_j\phi_j$. From the linear system
+we can now go ``backwards'' to construct the corresponding linear
+discrete weak form $F(u;v)=0$ to be solved in each Newton iteration:
+
+!bt
+\begin{equation}
+label{ftut:nonlinear:Newton:aLF}
+F = \int_\Omega \left\lbrack
+q'(u^{-})\delta u
+\nabla u^{-} \cdot \nabla v
++
+q(u^{-})
+\nabla \delta u\cdot \nabla v
++ q(u^{-})
+\nabla u^{-}\cdot \nabla v \right\rbrack \dx\tp
+\end{equation}
+!et
+Note the important feature in Newton's method
+that the
+previous solution $u^{-}$ replaces $u$
+in the formulas when computing the matrix
+$\partial F_i/\partial U_j$ and vector $F_i$ for the linear system in
+each Newton iteration.
+
+idx{`${prog["nlpoisson_alg_newton"]}.py`}
+
+=== FEniCS implementation ===
+
+To obtain a good initial guess $u^0$, we can solve a simplified, linear
+problem, typically with $q(u)=1$, which yields the standard Laplace
+equation $\nabla^2 u^0 =0$.
+The code for computing the initial guess $u^0$ becomes as follows:
+
+!bc pycod
+tol = 1E-14
+def left_boundary(x, on_boundary):
+    return on_boundary and abs(x[0]) < tol
+
+def right_boundary(x, on_boundary):
+    return on_boundary and abs(x[0]-1) < tol
+
+Gamma_0 = DirichletBC(V, Constant(0.0), left_boundary)
+Gamma_1 = DirichletBC(V, Constant(1.0), right_boundary)
+bcs = [Gamma_0, Gamma_1]
+
+# Define variational problem for initial guess (q(u)=1, i.e., m=0)
+u = TrialFunction(V)
+v = TestFunction(V)
+F = dot(grad(u), grad(v))*dx + Constant(0)*v*dx
+A, b = assemble_system(lhs(F), rhs(F), bcs)
+u_ = Function(V)
+U_ = u_.vector()
+solve(A, U_, b)
+!ec
+Here, `u_` is the initial guess we denote by $u^0$ in the mathematics.
+
+The Dirichlet boundary conditions for $\delta u$, in the problem to be
+solved in each Newton iteration, are somewhat different than the
+conditions for $u$.  Assuming that $u^k$ fulfills the Dirichlet
+conditions for $u$, $\delta u$ must be zero at the boundaries where
+the Dirichlet conditions apply, in order for $u^{k+1}=u^k +
+\omega\delta u$ to fulfill the right boundary values. We therefore
+define an additional list of Dirichlet boundary conditions objects for
+$\delta u$:
+
+!bc pycod
+Gamma_0_du = DirichletBC(V, Constant(0), left_boundary)
+Gamma_1_du = DirichletBC(V, Constant(0), right_boundary)
+bcs_du = [Gamma_0_du, Gamma_1_du]
+!ec
+The nonlinear coefficient and its derivative must be defined
+before coding the weak form of the Newton system:
+
+@@@CODE src/nlpoisson_alg_newton.py fromto: def q\(@du = Function\(V
+
+The Newton iteration loop is very similar to the Picard iteration loop
+in Section ref{ftut:nonlinear:Picard}:
+
+@@@CODE src/nlpoisson_alg_newton.py fromto: du = Function\(V@convergence =
+
+There are other ways of implementing the
+update of the solution as well:
+
+!bc pycod
+u.assign(u_)  # u = u_
+u.vector().axpy(omega, du.vector())
+
+# or
+u.vector()[:] += omega*du.vector()
+!ec
+The `axpy(a, y)` operation adds a scalar `a` times a `Vector`
+`y` to a `Vector` object.  It is usually a fast operation
+calling up an optimized BLAS routine for the calculation.
+
+The important message is that we cannot do (the slightly more
+intuitive) `u = u_ + omega*du` because this is computed as an
+UFL expression of a `Function` plus a scalar times a `Function`.
+We would need to project or interpolate this UFL expression `u`
+in $V$ in that case. Instead, we update the values through the
+degrees of freedom vectors of the finite element function objects.
+
+Mesh construction for a $d$-dimensional problem with arbitrary degree of
+the Lagrange elements can be done as
+explained in ref[Section ref{ch:poisson0:nD}][ in cite{ftut1}][the
+section "Parameterizing the number of space dimensions": "" in
+cite{ftut1}].
+The complete program appears in the file `${prog["nlpoisson_alg_newton"]}.py`.
+
+===== A Newton method at the PDE level =====
+label{ftut:nonlinear:Newton:pdelevel}
+idx{Newton's method (PDE level)}
+
+Although Newton's method in PDE problems is normally formulated at the
+linear algebra level, i.e., as a solution method for systems of nonlinear
+algebraic equations, we can also formulate the method at the PDE level.
+This approach yields a linearization of the PDEs before they are discretized.
+FEniCS users will probably find this technique simpler to apply than
+the more standard method in Section ref{ftut:nonlinear:Newton:algebraic},
+which needs an unfamiliar interpretation of a linear system as a
+variational formulation.
+
+=== The mathematical method ===
+
+Given an approximation to the solution field, $u^k$, we seek a
+perturbation $\delta u$ so that
+
+!bt
+\begin{equation}
+u^{k+1} = u^k + \delta u
+\end{equation}
+!et
+fulfills the nonlinear PDE.
+However, the problem for $\delta u$ is still nonlinear and nothing is
+gained. The idea is therefore to assume that $\delta u$ is sufficiently
+small so that we can linearize the problem with respect to $\delta u$.
+Inserting $u^{k+1}$ in the PDE,
+linearizing the $q$ term as
+
+!bt
+\begin{equation}
+q(u^{k+1}) = q(u^k) + q'(u^k)\delta u + {\cal O}((\delta u)^2)
+\approx q(u^k) + q'(u^k)\delta u,
+\end{equation}
+!et
+and dropping nonlinear terms in $\delta u$,
+we get
+
+!bt
+\begin{equation*}
+\nabla\cdot\left( q(u^k)\nabla u^k\right) +
+\nabla\cdot\left( q(u^k)\nabla\delta u\right) +
+\nabla\cdot\left( q'(u^k)\delta u\nabla u^k\right) = 0\tp
+\end{equation*}
+!et
+We may collect the terms with the unknown $\delta u$ on the left-hand side,
+
+!bt
+\begin{equation}
+\nabla\cdot\left( q(u^k)\nabla\delta u\right) +
+\nabla\cdot\left( q'(u^k)\delta u\nabla u^k\right) =
+-\nabla\cdot\left( q(u^k)\nabla u^k\right)\tp
+\end{equation}
+!et
+We may state this equation using the code-friendly notation $u^{-}$ for $u^k$:
+
+!bt
+\begin{equation}
+\nabla\cdot\left( q(u^{-})\nabla\delta u\right) +
+\nabla\cdot\left( q'(u^{-})\delta u\nabla u^{-}\right) =
+-\nabla\cdot\left( q(u^{-})\nabla u^{-}\right)\tp
+\end{equation}
+!et
+
+
+The weak form of this PDE is derived by multiplying by a test function
+$v$ and integrating over $\Omega$, integrating as usual the
+second-order derivatives by parts. This results in the variational
+formulation: find $u\in V$ such that $F(\delta u;v)=0\ \forall
+v\in\hat V$, where
+
+!bt
+\begin{equation}
+F= \int_\Omega \left(
+q(u^{-})\nabla\delta u\cdot \nabla v
++ q'(u^{-})\delta u\nabla u^{-}\cdot \nabla v\right) \dx
+-\int_\Omega q(u^{-})\nabla u^{-}\cdot \nabla v \dx\tp
+label{ftut:nonlinear:Newton:pdelevel:F}
+\end{equation}
+!et
+Note that this $F(\delta u;v)$ expression is linear in the unknown
+$\delta u$. We know that FEniCS can neatly extract the corresponding
+bilinear form and the linear form by the `lhs` and `rhs` commands, so
+in a program we prefer to state $F$ rather than the bilinear and
+linear forms.
+
+The function spaces $V$ and $\hat V$, being continuous or discrete,
+are as in the corresponding linear Poisson problem, see ref[Section
+ref{ch:poisson0:varform}][ in cite{ftut1}][the section "Finite element
+variational formulation": "" in cite{ftut1}].
+
+We must provide some initial guess. In the present problem, the
+solution of the corresponding linear PDE is a natural choice.
+The linear PDE corresponds to
+$q(u)=1$. The corresponding weak form $a_0(u^0,v)=L_0(v)$
+has
+
+!bt
+\begin{equation*}
+a_0(u,v)=\int_\Omega\nabla u\cdot \nabla v \dx,\quad L_0(v)=0\tp
+\end{equation*}
+!et
+Thereafter, we enter a loop and solve the linearized
+$F(\delta u;v)=0$ for $\delta u$ and compute a new approximation
+$u^{-} + \delta u$. Note that $\delta u$ is a correction, so if
+the initial guess $u^0$ satisfies the prescribed
+Dirichlet conditions on some part $\Gamma_D$ of the boundary,
+we must demand $\delta u=0$ on $\Gamma_D$.
+
+=== FEniCS implementation ===
+
+Looking at (ref{ftut:nonlinear:Newton:pdelevel:F}) we realize that
+the variational form is the same as for the Newton method
+at the algebraic level in Section
+ref{ftut:nonlinear:Newton:algebraic}. Since Newton's method at the
+algebraic level required some ``backward'' construction of the
+underlying weak forms, FEniCS users may prefer Newton's method at the
+PDE level, which this author finds more straightforward, although not so
+commonly documented in the literature on numerical methods for PDEs.
+There is seemingly no need for differentiations to derive a Jacobian
+matrix, but a mathematically equivalent derivation is done when
+nonlinear terms are linearized using the first two Taylor series terms
+and when products in the perturbation $\delta u$ are neglected.
+
+idx{`${prog["nlpoisson_pde_newton"]}.py`}
+
+The implementation is identical to the one in Section
+ref{ftut:nonlinear:Newton:algebraic} and is found in the file
+"`${prog['nlpoisson_pde_newton']}.py`":
+"${src_url}/nlpoisson_pde_newton.py". The reader is encouraged to
+go through this code to be convinced that the present method actually
+ends up with the same program
+("`${prog['nlpoisson_alg_newton']}.py`":
+"${src_url}/nlpoisson_alg_newton.py") as needed for the Newton method at the
+linear algebra level in Section ref{ftut:nonlinear:Newton:algebraic}.
+
+===== Implementations with functions and classes =====
+
+The implementations of the Picard and Newton methods so far in
+this chapter have been done in terms of flat programs to maximize
+the focus on the numerical details. However, for real-life
+applications of the software you will most likely prefer to
+have a solver function or problem and solver classes.
+
+The Newton methods implemented as solver functions are found
+in the file "`${prog['nlpoisson_func']}.py`":
+"${src_url}/nlpoisson_func.py". The functions `solver`,
+`application_test` and `test_solver` should be examined.
+These represent a general solver, a special application, and a
+series of unit tests, respectively.
+
+A downside of the solver function mentioned is that it is quite restricted
+with respect to boundary conditions and meshes. Much more flexibility
+is enabled through a class implementation, although the code is also
+much more lengthy. The file "`${prog['nlpoisson_func']}.py`":
+"${src_url}/nlpoisson_func.py" contains all the details:
+
+ * class `NonlinearPoissonSolver` for solving $-\nabla\cdot (q(u)\nabla u)=f$
+   on a general mesh with general Dirichlet and Neumann conditions,
+ * class `NonlinearPoissonProblem` as an abstract super class for
+   nonlinear Poisson problems,
+ * class `TestProblem` for a specific implementation of the test problem
+   used in this chapter.
+
+There is also a comprehensive unit test for verifying all methods
+through empirical convergence rate estimation. We strongly recommend
+the reader to study the class implementation to identify its superiority
+to other implementations in this chapter and to use this code base as
+ideas for solving nonlinear problems with FEniCS.
+
+
+% if EXV:
+===== Exercise: Solve another nonlinear Poisson problem =====
+label{ftut:nonlinear:exer:Poissonwfu}
+
+We now consider the nonlinear PDE
+
+!bt
+\[ -\nabla^2 u = f(u),\]
+!et
+with Dirichlet, Neumann, or Robin conditions. Create some test problem
+and an implementation to solve the problem.
+
+% endif
