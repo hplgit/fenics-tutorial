@@ -2,8 +2,5 @@
 
 Source files, published documents, and example programs for the FEniCS tutorial.
 
- * `doc`: Source files and published versions of all documents.
- * `src`: Source files for examples (complete FEniCS programs).
- * `doc/web`: Entry point for the web pages.
- * `doc/pub`: Published versions of the documents.
- * `doc/src`: Source files for all documents.
+ * `pub`: Published versions of all documents (book, online version, example programs)
+ * `src`: Source for all documents (book, online version, example programs)
