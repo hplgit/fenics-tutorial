@@ -1,0 +1,461 @@
+# Stand-alone notebook?
+# #if FORMAT == "ipynb"
+# #include "../mako_code.txt"
+# #endif
+
+======= Deflection of a membrane =======
+label{ch:poisson0:membrane}
+
+Our first FEniCS program for the Poisson equation targeted a
+simple test problem where we could easily verify the
+implementation. Now we turn the attention to a more physically
+relevant problem, in a non-trivial geometry, and that results in
+solutions of somewhat more exciting shape.
+
+We want to compute the deflection $D(x,y)$ of a two-dimensional,
+circular membrane, subject to a load $p$ over the membrane. The
+appropriate PDE model is
+
+!bt
+\begin{equation}
+-T\nabla^2 D = p(x,y)\quad\hbox{in }\Omega = \{ (x,y)\,\vert\, x^2+y^2\leq R\}\tp
+\end{equation}
+!et
+Here, $T$ is the tension in the membrane (constant), and $p$ is the external
+pressure load.
+The boundary of the membrane has no
+deflection, implying $D=0$ as boundary condition.
+A localized load can be modeled as a Gaussian function:
+
+!bt
+\begin{equation}
+p(x,y) = {A\over 2\pi\sigma}\exp{\left(
+- {1\over2}\left( {x-x_0\over\sigma}\right)^2
+- {1\over2}\left( {y-y_0\over\sigma}\right)^2
+\right)}\, .
+\end{equation}
+!et
+The parameter $A$ is the amplitude of the pressure,
+$(x_0,y_0)$ the localization of the maximum point of the load,
+and $\sigma$ the ``width'' of $p$.
+
+===== Scaling the equation =====
+
+The localization of the pressure, $(x_0,y_0)$, is for simplicity
+set to $(0, R_0)$.
+There are many physical parameters in this problem, and we can benefit
+from grouping them by means of scaling. Let us introduce dimensionless
+coordinates $\bar x = x/R$, $\bar y = y/R$, and a dimensionless
+deflection $w=D/D_c$, where $D_c$ is a characteristic size of the
+deflection. Introducing $\bar R_0=R_0/R$, we get
+
+[AL: Introduced minus signs here in Poisson equation. OK?]
+
+!bt
+\[ -\frac{\partial^2 w}{\partial\bar x^2} +
+-\frac{\partial^2 w}{\partial\bar y^2}= \alpha
+\exp{\left(
+- \beta^2(\bar x^2
++ (\bar y-\bar R_0)^2)\right)}\hbox{ for } \bar x^2 + \bar y^2 < 1,\]
+!et
+where
+
+!bt
+\[ \alpha = \frac{R^2A}{2\pi T D_c\sigma},\quad\beta = \frac{R}{\sqrt{2}\sigma}\tp\]
+!et
+With an appropriate scaling, $w$ and its derivatives are of size
+unity, so the left-hand side of the scaled PDE is about unity in size,
+while the right-hand side has $\alpha$ as its characteristic size.
+This suggest choosing $\alpha$ to be unity, or around unit. We shall
+in this particular case choose $\alpha=4$. With this value, the solution is
+$w(\bar x,\bar y) = 1-\bar x^2 - \bar y^2$.  (One can also find the
+analytical solution in scaled coordinates and show that the maximum
+deflection $D(0,0)$ is $D_c$ if we choose $\alpha=4$ to determine
+$D_c$.)  With $D_c=AR^2/(8\pi\sigma T)$ and dropping the bars we get
+the scaled problem
+
+!bt
+\begin{equation}
+-\nabla^2w = 4\exp{\left(
+- \beta^2(x^2
++ (y-R_0)^2)\right)},
+label{ch:poisson0:membrane:scaled:eq}
+\end{equation}
+!et
+to be solved over the unit circle with $w=0$ on the boundary.  Now
+there are only two parameters to vary: the dimensionless extent of the
+pressure, $\beta$, and the localization of the pressure peak, $R_0\in
+[0,1]$.  As $\beta\rightarrow 0$, we have a special case with solution
+$w=1-x^2-y^2$.
+
+Given a computed scaled solution $w$, the physical deflection can be computed by
+
+!bt
+\[ D = \frac{AR^2}{8\pi\sigma T}w\tp\]
+!et
+
+Just a few modifications are necessary in our previous program to solve
+this new problem.
+
+===== Defining the mesh =====
+
+A mesh over the unit circle can be created by the `mshr` tool in
+FEniCS:
+
+!bc pyhid
+from fenics import *
+!ec
+
+!bc pycod
+from mshr import *
+domain = Circle(Point(0.0, 0.0), 1.0)
+n = 20
+mesh = generate_mesh(domain, n)
+% if FORMAT != 'ipynb':
+plot(mesh, interactive=True)
+% endif
+!ec
+The `Circle` shape from `mshr` takes the center and radius of the circle
+as the two first arguments, while `n` is the resolution, here the
+suggested number of cells per radius.
+
+===== Defining the load =====
+
+idx{`Expresion`}
+idx{Expression with parameters}
+
+The right-hand side pressure function
+is represented by an `Expression` object. There
+are two physical parameters in the formula for $f$ that enter the
+expression string and these parameters must have their values set
+by keyword arguments:
+
+!bc pycod
+beta = 8
+R0 = 0.6
+p = Expression(
+    '4*exp(-pow(beta,2)*(pow(x[0], 2) + pow(x[1]-R0, 2)))',
+    beta=beta, R0=R0)
+!ec
+The coordinates in `Expression` objects *must* be a vector
+with indices 0, 1, and 2, and with the name `x`. Otherwise
+we are free to introduce names of parameters as long as these are
+given default values by keyword arguments. All the parameters
+initialized by keyword arguments can at any time have their
+values modified. For example, we may set
+
+!bc pycod-t
+p.beta = 12
+p.R0 = 0.3
+!ec
+
+% if FORMAT == 'ipynb':
+We also need to define a function space and boundary conditions:
+
+!bc pyhid
+V = FunctionSpace(mesh, 'P', 2)
+
+def u0_boundary(x, on_boundary):
+    return on_boundary
+
+u0 = Constant(0)
+bc = DirichletBC(V, u0, u0_boundary)
+!ec
+% endif
+
+idx{interpolation}
+
+===== Defining the variational problem =====
+
+We may introduce `w` instead of `u` as primary unknown and `p` instead
+of `f` as right-hand side function:
+
+!bc pycod
+w = TrialFunction(V)
+v = TestFunction(V)
+a = dot(grad(w), grad(v))*dx
+L = p*v*dx
+
+w = Function(V)
+solve(a == L, w, bc)
+!ec
+
+% if FORMAT != 'ipynb':
+# Avoid plot command in notebook. It easily makes the kernel freeze.
+
+===== Plotting the solution =====
+
+It is of interest to visualize the pressure $p$ along with the
+deflection $w$ so that we can examine membrane's response to the
+pressure. We must then transform the formula (`Expression`) to a
+finite element function (`Function`). The most natural approach is to
+construct a finite element function whose degrees of freedom are
+calculated from $p$. That is, we interpolate $p$:
+
+!bc pycod
+p = interpolate(p, V)
+!ec
+Note that the assignment to `p` destroys the previous `Expression`
+object `p`, so if it is of interest to still have access to this
+object, another name must be used for the `Function` object returned
+by `interpolate`.
+
+We can now plot `w` and `p` on the screen
+as well as save the fields to file in VTK format:
+
+!bc pycod
+plot(w, title='Deflection')
+plot(p, title='Load')
+
+vtkfile_w = File('membrane_deflection.pvd')
+vtkfile_w << w
+vtkfile_p = File('membrane_load.pvd')
+vtkfile_p << p
+!ec
+Figure ref{ch:poisson0:membrane:fig} shows the result of the `plot` commands.
+
+FIGURE: [fig/membrane_fenics_viz, width=800 frac=1] Load (left) and resulting deflection (right) of a circular membrane. label{ch:poisson0:membrane:fig}
+% endif
+
+===== Making curve plots through the domain =====
+
+# Nice with some matplotlib plots in notebooks...and very useful for
+# scientific investigations.
+
+The best way to compare the load and the deflection is to make a curve plot
+along the line $x=0$. This is just a matter of defining a set of points
+along the line and evaluating the finite element functions `w` and `p`
+at these points:
+
+% if FORMAT != 'ipynb':
+@@@CODE src/membrane.py fromto: # Curve plot@
+The resulting curve plot appears in Figure ref{ch:poisson0:membrane:fig2}.
+It is seen how the localized input ($p$) is heavily damped and smoothened in
+the output ($w$). This reflects a typical property of the Poisson equation.
+
+FIGURE: [fig/membrane_curveplot, width=700 frac=1.0] Comparison of membrane load and deflection. label{ch:poisson0:membrane:fig2}
+
+The complete program is available in the file
+"`${prog["membrane"]}.py`": "${src_url}/${prog['membrane']}.py".
+
+===== Visualizing the solution in ParaView =====
+label{ftut:paraview}
+
+"ParaView": "http://www.paraview.org" is a powerful
+tool for visualizing scalar and vector fields, including those
+computed by FEniCS.
+
+Our program writes the fields $w$ and $p$ to file as finite element
+functions. We choose the names of these files to be
+`membrane_deflection.pvd` for $w$ and `membrane_load.pvd` for $p$.
+These files are in VTK format and their data can be visualized in
+ParaView. We now give a detailed account for how to visualize
+the fields $w$ and $p$ in ParaView.
+
+ o Start the ParaView application.
+ o Open a file with _File - Open..._. You will see a list of `.pvd` and
+   `.vtu` files. More specifically you will see `membrane_deflection.pvd`.
+   Choose this file.
+ o Click on _Apply_ to the left (*Properties* pane) in the GUI, and
+   ParaView will visualize the contents of the file, here as a color image.
+ o To get rid of the axis in the lower left corner of the plot area
+   and axis cross in the middle of the circle, find the *Show Orientation Axis* and *Show Center* buttons to the right in the second row of buttons at the top of the GUI. Click on these buttons to toggle axis information on/off.
+ o If you want a color bar to explain the mapping between $w$ values and colors,
+   go to the *Color Map Editor* in the right of the GUI and use the
+   *Show/hide color legend* button. Alternatively, find *Coloring* in the
+   lower left part of the GUI, and toggle the *Show* button.
+ o The color map, by default going from blue (low values) to red (high values),
+   can easily be changed. Find the *Coloring* menu in the left part of the
+   GUI, click *Edit*, then in the *Color Map Editor* double click at the
+   left end of the color spectrum and choose another color, say yellow, then
+   double click at the right and of the spectrum and choose pink, scroll
+   down to the bottom of the dialog and click *Update*. The color map now
+   goes from yellow to pink.
+ o To save the plot to file, click on _File - Export Scene..._,
+   fill in a filename, and save.
+   See Figure ref{ftut:paraview:figwp} (middle).
+ o To change the background color of plots, choose
+   _Edit - Settings..._, _Color_ tab, click on _Background Color_,
+   and choose it to be, e.g., white. Then choose _Foreground Color_ to
+   be something different.
+ o To plot the mesh with colors reflecting the size of $w$, find the
+   *Representation* drop down menu in the left part of the GUI, and replace
+   *Surface* by *Wireframe*.
+ o To overlay a surface plot with a wireframe plot, load $w$ and plot
+   as surface, then load $w$ again and plot as wireframe. Make sure
+   both icons in the *Pipeline Browser* in the left part of the GUI
+   are *on* for the `membrane_deflection.pvd` files you want to display.
+   See Figure ref{ftut:paraview:figwp} (left).
+ o Redo the surface plot. Then we can add some contour lines.
+   Press the semi-sphere icon in the third row of buttons at the top of the
+   GUI (the so-called *filters*). A set of contour values can now be
+   specified at in a dialog box in the left part of the GUI. Remove
+   the default contour (0.578808) and add 0.01, 0.02, 0.03, 0.04, 0.05.
+   Click *Apply* and see an overlay of white contour lines.
+   In the *Pipeline Browser* you can click on the icons to turn
+   a filter on or off.
+ o Divide the plot window into two, say horizontally, using the top right
+   small icon. Choose the _3D View_ button. Open a new file and load
+   `membrane_load.pvd`. Click on _Apply_ to see a plot of the load.
+ o To plot a 2D scalar field as a surface, load the field,
+   click _Apply_ to plot it, then select
+   from the _Filters_ pulldown menu the filter *Warp By Scalar*, click
+   _Apply_, then toggle the _2D_ button to _3D_ in the Layout `#1`
+   window (upper row of buttons in that window). Now you can rotate
+   the figure. The height of the surface is very low, so go to the
+   *Properties (Warp By Scalar1)* window to the left in the GUI and give
+   a *Scale Factor* of 20 and re-click _Apply_
+   to lift the surface by a factor of 20.
+   Figure ref{ftut:paraview:figwp} (right) shows the result.
+
+FIGURE: [fig/paraview_membrane3b, width=800 frac=1] Default visualizations in ParaView: deflection (left, middle) and pressure load (right). label{ftut:paraview:figwp}
+
+FIGURE: [fig/paraview_membrane2_3D, width=800 frac=1] Use of Warp By Scalar filter to create lifted surfaces (with different vertical scales!) in ParaView: load (left) and deflection (right). label{ftut:paraview:figwp2}
+
+A particularly useful feature of ParaView is that you can record GUI clicks
+(_Tools - Start/Stop Trace_) and
+get them translated to Python code. This allows you automate the
+visualization process. You can also make curve plots along lines through
+the domain, etc.
+
+For more information, we refer to The ParaView Guide cite{Paraview}
+(free PDF available) and to the "ParaView tutorial":
+"http://www.paraview.org/Wiki/The_ParaView_Tutorial" as well as
+an "instruction video": "https://vimeo.com/34037236".
+
+===== Using the built-in visualization tool =====
+label{ftut:quickviz}
+idx{visualization} idx{plotting} idx{VTK}
+
+This section explains some useful visualization features of the
+built-in visualization tool in FEniCS.  The `plot` command applies the
+VTK package to visualize finite element functions in a very quick and
+simple way.  The command is ideal for debugging, teaching, and initial
+scientific investigations.  The visualization can be interactive, or
+you can steer and automate it through program statements. More
+advanced and professional visualizations are usually better created
+with advanced tools like Mayavi, ParaView, or VisIt.
+
+idx{`plot`}
+
+The `plot` function can take additional arguments, such as
+a title of the plot, or a specification of a wireframe plot (elevated mesh)
+instead of a colored surface plot:
+
+!bc pycod
+plot(mesh, title='Finite element mesh')
+plot(w, wireframe=True, title='Solution')
+!ec
+Axes can be turned on by the `axes=True` argument, while
+`interactive=True` makes the program hang at the plot command - you have
+to type `q` in the plot window to terminate the plot and continue execution.
+
+The left mouse button is used to rotate the surface, while the right
+button can zoom the image in and out.  Point the mouse to the `Help`
+text down in the lower left corner to get a list of all the keyboard
+commands that are available.
+
+The plots created by pressing `p` or `P` are stored in filenames
+having the form `dolfin_plot_X.png` or `dolfin_plot_X.pdf`, where `X`
+is an integer that is increased by one from the last plot that was
+made. The file stem `dolfin_plot_` can be set to something more
+suitable through the `hardcopy_prefix` keyword argument to the `plot`
+function, for instance, `plot(f, hardcopy_prefix='pressure')`.
+
+idx{rotate PDF plots}
+idx{`pdftk`}
+
+#Plots stored in PDF format need to be rotated 90 degrees before
+#inclusion in documents. This can be done using the `pdftk` command:
+
+#!bc sys
+#Terminal> pdftk dolfin_plot_1.pdf cat 1-endnorth output out.pdf
+#!ec
+
+#For making plots in batch, we can do the following:
+
+#!bc pycod
+#viz_w = plot(w, interactive=False)
+#viz_w.elevate(-10)  # adjust (lift) camera from the default view
+#viz_w.plot(w)       # bring new settings into action
+#viz_w.write_png('deflection')  # make deflection.png
+#viz_w.write_pdf('deflection')  # make deflection.pdf
+## Rotate pdf file (right) from landscape to portrait
+#import os
+#os.system('pdftk deflection.pdf cat 1-endnorth output w.pdf')
+#!ec
+
+The ranges of the color scale can be set by the `range_min` and `range_max`
+keyword arguments to `plot`. The values must be `float` objects. These
+arguments are important to keep fixed for animations in time-dependent
+problems.
+
+FIGURE:[fig/membrane_deflection, width=480 frac=0.7] Plot of the deflection of a membrane using the built-in visualization tool. label{ch:poisson0:2D:fig1}
+
+!bwarning Built-in plotting on Mac OS X and in Docker
+The built-in plotting in FEniCS may not work as expected when either
+running on Mac OS X or when running inside a FEniCS Docker container.
+FEniCS supports plotting using the `plot()` command on Mac OS
+X. However, the keyboard shortcuts `h`, `p`, `P` and so on may fail
+to work. When running inside a Docker container, plotting is not
+supported since Docker does not interact with your windowing system.
+For Docker users who need plotting, it is recommended to either work
+within a Jupyter/FEniCS notebook (command `fenicsproject notebook`)
+or rely on Paraview or other external tools for visualization.
+!ewarning
+
+% if EXV:
+===== Exercise: Visualize a solution in a cube =====
+file=poissin_3d_func
+
+[hpl: The solution refers to a solver *function*. This is not introduced
+before later, so present both a flat program and a solver function (as
+a teaser).]
+
+Solve the problem $-\nabla^2 u = f$ on the unit cube $[0,1]\times[0,1]\times
+[0,1]$ with $u_0 = 1 + x^2 + 2y^2 - 4z^2$ on the boundary.
+Visualize the solution. Explore both the built-in visualization tool and
+ParaView.
+
+!bsol
+As hinted by the filename in this exercise,
+a good starting point is the `solver` function in
+the program `${prog["poisson_func"]}.py`, which solves the corresponding 2D
+problem. Only two lines in the body of `solver` needs to be changed (!):
+`mesh = ...`. Replace this line with
+
+!bc pycod
+mesh = UnitCubeMesh(Nx, Ny, Nz)
+!ec
+and add `Nz` as argument to `solver`. We implement the new $u_0$ function
+in `application_test` and realize that the proper $f(x,y,z)$ function
+in this new case is 2.
+
+!bc pycod
+u0 = Expression('1 + x[0]*x[0] + 2*x[1]*x[1] - 4*x[2]*x[2]')
+f = Constant(2.0)
+u = solver(f, u0, 6, 4, 3, 1)
+!ec
+The numerical solution is without approximation errors so we can
+reuse the unit test from 2D, but it needs an extra `Nz` parameter.
+
+The variation in $u$ is only quadratic so a coarse mesh is okay for
+visualization. Below is plot from the ParaView (left) and the built-in
+visualization tool (right).  The usage is as in 2D, but now one can
+use the mouse to rotate the 3D cube.
+
+FIGURE: [fig/cube3D_quad_sol, width=800 frac=1]
+
+We can in ParaView add a contour filter and define contour surfaces for
+$u=-2,1,0,1,2,3$, then add a slice filter to get a slice with colors:
+
+FIGURE: [fig/cube3D_quad_sol_contours, width=500 frac=0.8]
+
+!esol
+% endif
+
+% else:
+@@@CODE src/membrane.py fromto: # Curve plot@plt\.savefig
+
+Tell about visualization in notebook...
+% endif
