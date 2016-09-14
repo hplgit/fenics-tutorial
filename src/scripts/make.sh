@@ -65,10 +65,6 @@ function edit_solution_admons {
 
 function compile {
     options="$@"
-# Blue headings, FEniCS book style code:
-#system doconce format pdflatex $name --latex_title_layout=titlepage "--latex_code_style=default:lst[style=yellow2_fb]@sys:vrb[frame=lines,label=\\fbox{{\tiny Terminal}},framesep=2.5mm,framerule=0.7pt,fontsize=\fontsize{9pt}{9pt}]" --encoding=utf-8 --latex_copyright=titlepages --latex_section_headings=blue
-# Fix: make full box around code blocks a la the FEniCS book
-#doconce replace 'frame=tb,' 'frame=tblr,' $name.tex
 system doconce format pdflatex $name --exercise_numbering=chapter --latex_style=Springer_sv --latex_title_layout=std --latex_list_of_exercises=none --latex_admon=mdfbox --latex_admon_color=1,1,1 --latex_table_format=left --latex_admon_title_no_period --latex_no_program_footnotelink "--latex_code_style=default:lst[style=graycolor]@sys:vrb[frame=lines,label=\\fbox{{\tiny Terminal}},framesep=2.5mm,framerule=0.7pt,fontsize=\fontsize{9pt}{9pt}]" --exercises_as_subsections --encoding=utf-8 --movie_prefix=https://raw.githubusercontent.com/hplgit/fenics-tutorial/brief/doc/src/ --allow_refs_to_external_docs $options
 
 # Auto edits
@@ -116,10 +112,16 @@ system doconce format html $name --encoding=utf-8 --html_style=bootswatch_journa
 cp $name.dlog ${name}-html.dlog  # for examining error messages
 system doconce split_html $name.html --pagination
 
-# Publish in doc/pub
+# Root directory for published documents
 dest=../pub
+
+# Publish PDF
+cp fenics-tutorial*.pdf $dest/pdf
+
+# Publish HTML
+cp -r $name.html ._*.html fig mov $dest/html
+
+# Publish Sphinx
 rm -rf $dest/sphinx${bookno}
-cp fenics-tutorial*.pdf $dest
-cp -r $name.html ._*.html fig mov $dest
 cp -r sphinx-rootdir${bookno}/_build/html $dest
 mv -f $dest/html $dest/sphinx${bookno}
