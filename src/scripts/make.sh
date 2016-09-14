@@ -123,5 +123,4 @@ cp -r $name.html ._*.html fig mov $dest/html
 
 # Publish Sphinx
 rm -rf $dest/sphinx${bookno}
-cp -r sphinx-rootdir${bookno}/_build/html $dest
-mv -f $dest/html $dest/sphinx${bookno}
+cp -r sphinx-rootdir${bookno}/_build/html $dest/sphinx${bookno}
