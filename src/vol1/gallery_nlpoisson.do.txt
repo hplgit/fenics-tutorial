@@ -1,0 +1,240 @@
+# Stand-alone notebook?
+# #if FORMAT == "ipynb"
+# #include "../mako_code.txt"
+# #endif
+
+======= A nonlinear Poisson equation =======
+label{ftut1:gallery:nonlinearpoisson}
+
+We shall now address how to solve nonlinear PDEs. We will see that
+nonlinear problems can be solved just as easily as linear problems in
+FEniCS, by simply defining a nonlinear variational problem and calling
+the `solve` function. When doing so, we will encounter a subtle
+difference in how the variational problem is defined.
+
+===== PDE problem =====
+
+As a sample PDE for the implementation of nonlinear problems, we
+take the following nonlinear Poisson equation:
+
+!bt
+\begin{equation}
+-\nabla\cdot\left( q(u)\nabla u\right) = f,
+\end{equation}
+!et
+in $\Omega$, with $u=\ub$ on the boundary $\partial\Omega$.
+The coefficient $q(u)$ makes the equation nonlinear (unless $q(u)$
+is constant in $u$).
+
+===== Variational formulation =====
+
+As usual, we multiply our PDE by a test function $v\in\hat V$,
+integrate over the domain, and integrate the second-order derivatives
+by parts.  The boundary integral arising from integration by parts
+vanishes wherever we employ Dirichlet conditions. The resulting
+variational formulation of our model problem becomes: find $u \in V$
+such that
+
+!bt
+\begin{equation}
+F(u; v) = 0 \quad \forall v \in \hat{V},
+label{ch:poisson0:nonlinear1}
+\end{equation}
+!et
+where
+
+!bt
+\begin{equation}
+F(u; v) = \int_\Omega q(u)\nabla u\cdot \nabla v - fv \dx,
+label{ch:poisson0:nonlinear2}
+\end{equation}
+!et
+and
+
+!bt
+\begin{align*}
+     V      &= \{v \in H^1(\Omega) : v = \ub \mbox{ on } \partial\Omega\},\\
+    \hat{V} &= \{v \in H^1(\Omega) : v = 0 \mbox{ on } \partial\Omega\}\tp
+\end{align*}
+!et
+
+The discrete problem arises as usual by restricting $V$ and $\hat V$
+to a pair of discrete spaces. As before, we omit any subscript on
+the discrete spaces and discrete solution.
+The discrete nonlinear problem is then written as: Find $u\in V$ such that
+
+!bt
+\begin{equation}
+  F(u; v) = 0 \quad \forall v \in \hat{V},
+label{ch:poisson0:nonlinear:d}
+\end{equation}
+!et
+with $u = \sum_{j=1}^N U_j \phi_j$. Since $F$ is nonlinear in
+$u$, the variational statement gives rise to a system of
+nonlinear algebraic equations in the unknowns $U_1,\ldots,U_N$.
+
+===== FEniCS implementation =====
+label{ftut:nonlinear:Newton:auto}
+
+=== Test problem ===
+
+To solve a test problem, we need to choose the right-hand side $f$,
+the coefficient $q(u)$ and the boundary value $\ub$.  Previously, we
+have worked with manufactured solutions that can be reproduced without
+approximation errors. This is more difficult in nonlinear problems,
+and the algebra is more tedious. However, we may utilize SymPy for
+symbolic computing and integrate such computations in the FEniCS
+solver. This allows us to easily experiment with different
+manufactured solutions. The forthcoming code with SymPy requires some
+basic familiarity with this package. In particular, we will use the
+SymPy functions `diff` for symbolic differentiation and `ccode` for
+C/C++ code generation.
+
+We try out a two-dimensional manufactured
+solution that is linear in the unknowns:
+
+@@@CODE vol1/python/poisson_nonlinear.py fromto: from fenics import *@# Create
+
+!bnotice Define symbolic coordinates as required in `Expression` objects
+Note that we would normally write `x, y = sym.symbols('x y')`, but
+if we want the resulting expressions to have valid syntax for
+FEniCS `Expression` objects, we must use `x[0]` and `x[1]`.
+This is easily accomplished with `sympy` by defining the names of `x` and
+`y` as `x[0]` and `x[1]`: `x, y = sym.symbols('x[0] x[1]')`.
+!enotice
+
+Turning the expressions for `u` and `f` into C or C++ syntax for
+FEniCS `Expression` objects needs two steps. First, we ask for the C
+code of the expressions:
+
+!bc pycod
+u_code = sym.printing.ccode(u)
+f_code = sym.printing.ccode(f)
+!ec
+Sometimes, we need some editing of the result to match the required
+syntax of `Expression` objects, but not in this case. (The primary
+example is that `M_PI` for $\pi$ in C/C++ must be replaced by `pi` for
+`Expression` objects.) In the present case, the output of `c_code` and
+`f_code` is
+
+!bc ccod-t
+x[0] + 2*x[1] + 1
+-10*x[0] - 20*x[1] - 10
+!ec
+After having defined the mesh, the function space, and the boundary,
+we define the boundary value `u_D` as
+
+!bc pycod
+u_D = Expression(u_code)
+!ec
+Similarly, we define the right-hand side function as
+
+!bc pycod
+f = Expression(f_code)
+!ec
+% if FORMAT == 'ipynb':
+
+Here is the complete code to be executed and experimented with:
+
+@@@CODE vol1/python/poisson_nonlinear.py fromto: from __future__ import print@print\('error
+
+We can examine the solution at the vertices:
+
+!bc pycod
+u0_at_vertices = u0_Function.compute_vertex_values()
+u_at_vertices = u.compute_vertex_values()
+coor = V.mesh().coordinates()
+for i, x in enumerate(coor):
+    print('vertex %2d (%9g,%9g): error=%g' %
+          (i, x[0], x[1],
+           u0_at_vertices[i] - u_at_vertices[i]))
+!ec
+% endif
+
+!bwarning Name clash between FEniCS and program variables
+In a program like the one above, strange errors may occur due to
+name clashes. If you define `sym` and `q` prior to doing
+`from fenics import *`, the latter statement will also import
+variables with the names `sym` and `q`, overwriting
+the objects you have previously defined! This may lead to strange
+errors. The safest solution is to do `import fenics as fe`
+and then prefix all FEniCS
+object names by `fe`. The next best solution is to do
+`from fenics import *` first and then define your own variables
+that overwrite those imported from `fenics`. This is acceptable
+if we do not need `sym` and `q` from `fenics`.
+!ewarning
+
+=== FEniCS implementation ===
+
+A working solver for the nonlinear Poisson equation is as easy to
+implement as a solver for the corresponding linear problem.
+All we need to do is to state the formula for $F$ and call
+`solve(F == 0, u, bc)` instead of `solve(a == L, u, bc)` as we did
+in the linear case. Here is a minimalistic code:
+
+!bc pycod
+from fenics import *
+
+def q(u):
+    return 1 + u**2
+
+mesh = UnitSquareMesh(32, 32)
+V = FunctionSpace(mesh, 'P', 1)
+u_D = Expression(...)
+
+def boundary(x, on_boundary):
+    return on_boundary
+
+bc = DirichletBC(V, u_D, boundary)
+
+u = Function(V)
+v = TestFunction(V)
+f = Expression(...)
+F = q(u)*dot(grad(u), grad(v))*dx - f*v*dx
+
+solve(F == 0, u, bc)
+!ec
+The complete code can be found in the file `${prog["poisson_nonlinear"]}.py`.
+
+The major difference from a linear problem is that the unknown function
+`u` in the variational form in the nonlinear case
+must be defined as a `Function`, not as a `TrialFunction`. In some sense
+this is a simplification from the linear case where we must define `u`
+first as a `TrialFunction` and then as a `Function`.
+
+The `solve` function takes the nonlinear equations, derives symbolically
+the Jacobian matrix, and runs a Newton method to compute the solution.
+
+% if FORMAT in ('html', 'sphinx'):
+@@@CODE vol1/python/poisson_nonlinear.py envir=pypro-h fromto:from fenics import@
+% endif
+
+Running the code gives output that tells how the Newton iteration
+progresses. With $2\cdot(8\times 8)$ cells we reach convergence in 8
+iterations with a tolerance of $10^{-9}$, and the error in the
+numerical solution is about $10^{-16}$. These results bring evidence
+for a correct implementation. Thinking in terms of finite differences
+on a uniform mesh, $\mathcal{P}_1$ elements mimic standard
+second-order differences, which compute the derivative of a linear or
+quadratic function exactly. Here, $\nabla u$ is a constant vector, but
+then multiplied by $(1+u^2)$, which is a second-order polynomial in
+$x$ and $y$, which the divergence ``difference operator'' should
+compute exactly. We can therefore, even with $\mathcal{P}_1$
+elements, expect the manufactured $u$ to be reproduced by the
+numerical method. With a nonlinearity like $1+u^4$, this will not be
+the case, and we would need to verify convergence rates instead.
+
+The current example shows how easy it is to solve a nonlinear problem
+in FEniCS. However, experts on the numerical solution of nonlinear PDEs
+know very well that automated procedures may fail in nonlinear
+problems, and that it is often necessary to have much better manual
+control of the solution process than what we have in the current
+case. Therefore, we return to this problem in ref[Chapter
+ref{ftut:nonlinear}][ in cite{ftut2}][the chapter
+"Implementing solvers for nonlinear PDEs": "" cite{ftut2}]
+and show how we can implement our
+own solution algorithms for nonlinear equations and also how we can
+steer the parameters in the automated Newton method used above. You
+will then see how easy it is to implement tailored solution
+strategies for nonlinear problems in FEniCS.

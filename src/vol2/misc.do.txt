@@ -1,0 +1,327 @@
+
+
+======= Solving Neumann problems =======
+
+Could have a section here with pure Neumann problems and different
+methods for handling that case:
+
+ * Fixing the value at a point.
+ * Integral constraint: vanishing average value of $u$ for instance.
+ * Others.
+
+Applications: Potential theory in fluid flow. Always pure Neumann
+problems and (most likely) a headache for teachers how to code demos.
+
+
+# #include "prepro.do.txt"
+
+======= Encyclopedia stuff =======
+
+===== Glossary =====
+
+idx{`self`}idx{FEniCS}idx{DOLFIN}idx{Viper}idx{UFL}idx{class}idx{instance}
+idx{method (class)}idx{attribute (class)}
+
+Below we explain some key terms used in this tutorial.
+
+  FEniCS: name of a software suite composed of many individual software
+          components (see `fenicsproject.org`). Some components are DOLFIN and
+	  Viper, explicitly referred to in this tutorial. Others are
+          FFC and FIAT, heavily used by the programs appearing in this tutorial,
+          but never explicitly used from the programs.
+
+  DOLFIN: a FEniCS component, more precisely a C++ library, with
+          a Python interface, for performing important actions in finite element
+          programs. DOLFIN makes use of many other FEniCS components and
+          many external software packages.
+
+  Viper:  a FEniCS component for quick visualization of finite element
+          meshes and solutions.
+
+  UFL:    a FEniCS component implementing the *unified form language*
+          for specifying finite element forms in FEniCS programs.
+          The definition of the forms, typically called `a` and `L` in
+          this tutorial, must have legal UFL syntax. The same applies to
+          the definition of functionals.
+
+  Class (Python): a programming construction for creating objects
+          containing a set of variables and functions. Most
+          types of FEniCS objects are defined through the class concept.
+
+  Instance (Python): an object of a particular type, where the type is
+          implemented as a class. For instance,
+          `mesh = UnitIntervalMesh(10)` creates
+          an instance of class `UnitIntervalMesh`, which is reached by the
+          name `mesh`. (Class `UnitIntervalMesh` is actually just
+          an interface to a corresponding C++ class in the DOLFIN C++ library.)
+
+  Class method (Python): a function in a class, reached by dot
+          notation: `instance_name.method_name`
+
+  argument `self` (Python): required first parameter in class methods,
+         representing a particular object of the class.
+         Used in method definitions, but never in calls to a method.
+         For example, if `method(self, x)` is the definition of
+         `method` in a class `Y`, `method` is called as
+         `y.method(x)`, where `y` is an instance of class `Y`.
+         In a call like `y.method(x)`, `method` is invoked with
+         `self=y`.
+
+  Class attribute (Python): a variable in a class, reached by
+         dot notation: `instance_name.attribute_name`
+
+
+
+
+===== Overview of objects and functions =====
+
+Most classes in FEniCS have an explanation of the purpose and usage
+that can be seen by using the general documentation command
+`pydoc` for Python objects. You can type
+idx{`pydoc`}
+!bc sys
+pydoc fenics.X
+!ec
+to look up documentation of a Python class `X` from the DOLFIN
+library (`X` can be `UnitSquareMesh`, `Function`,
+`Viper`, etc.). Below is an overview of the most important classes
+and functions
+in FEniCS programs, in the order they typically appear within programs.
+
+`UnitSquareMesh(nx, ny)`: generate mesh over the unit square
+$[0,1]\times [0,1]$ using `nx` divisions in $x$ direction and
+`ny` divisions in $y$ direction. Each of the `nx*ny` squares
+are divided into two cells of triangular shape.
+
+`UnitIntervalMesh`, `UnitCubeMesh`, `UnitCircleMesh`, `UnitSphere`,
+`IntervalMesh`, `RectangleMesh`, and `BoxMesh`: generate mesh over
+domains of simple geometric shape, see Section ref{ftut:prepro}.
+
+`FunctionSpace(mesh, element_type, degree)`:
+a function space defined over a mesh, with a given element type
+(e.g., `'Lagrange'` or `'DG'`), with basis functions as polynomials of
+a specified degree.
+
+`Expression(formula, p1=v1, p2=v2, ...)`:
+a scalar- or vector-valued function, given as a
+mathematical expression `formula` (string) written in C++ syntax.
+The spatial coordinates in the expression are named
+`x[0]`, `x[1]`, and `x[2]`, while time and other
+physical parameters can be represented as symbols `p1`, `p2`,
+etc., with corresponding values `v1`, `v2`, etc., initialized
+through keyword arguments. These parameters become attributes,
+whose values can be modified when desired.
+
+
+`Function(V)`: a scalar- or vector-valued finite element field in
+the function space `V`. If `V` is a `FunctionSpace` object,
+`Function(V)` becomes a scalar field, and with `V` as a
+`VectorFunctionSpace` object, `Function(V)` becomes a
+vector field.
+
+`SubDomain`: class for defining a subdomain, either a part of the
+boundary, an internal boundary, or a part of the domain.
+The programmer must subclass `SubDomain` and implement the
+`inside(self, x, on_boundary)` function
+(see Section ref{ch:poisson0:impl}) for telling whether a
+point `x` is inside the subdomain or not.
+
+`Mesh`: class for representing a finite element mesh, consisting of
+cells, vertices, and optionally faces, edges, and facets.
+
+`MeshFunction`: tool for marking parts of the domain or the boundary.
+Used for variable coefficients (``material properties'' or for
+boundary conditions.
+
+`DirichletBC(V, value, where)`: specification of Dirichlet (essential)
+boundary conditions via a function space `V`, a function
+`value(x)` for computing the value of the condition at a point `x`,
+and a specification `where` of the boundary, either as a
+`SubDomain` subclass instance, a plain function, or as a
+`MeshFunction` instance.
+In the latter case, a 4th argument is provided to describe which subdomain
+number that describes the relevant boundary.
+
+`TestFunction(V)`: define a test function on a space `V` to be used
+in a variational form.
+
+`TrialFunction(V)`: define a trial function on a space `V` to be used
+in a variational form to represent the unknown in a finite element problem.
+
+`assemble(X)`: assemble a matrix, a right-hand side, or a functional,
+given a from `X` written with UFL syntax.
+
+`assemble_system(a, L, bcs)`: assemble the matrix and the right-hand
+side from a bilinear (`a`) and linear (`L`) form written with UFL
+syntax. The `bcs` parameter holds one or more `DirichletBC` objects.
+
+`LinearVariationalProblem(a, L, u, bcs)`: define a variational problem,
+given a bilinear (`a`) and linear (`L`) form, written with UFL
+syntax, and one or more `DirichletBC` objects stored in `bcs`.
+
+`LinearVariationalSolver(problem)`: create solver object for a linear
+variational problem object (`problem`).
+
+`solve(A, U, b)`: solve a linear system with `A` as coefficient
+matrix (`Matrix` object), `U` as unknown (`Vector` object),
+and `b` as right-hand side (`Vector` object).
+Usually, `U = u.vector()`, where
+`u` is a `Function` object representing the unknown finite
+element function of the problem, while
+`A` and `b` are computed by calls to `assemble`
+or `assemble_system`.
+
+`plot(q)`: quick visualization of a mesh, function, or mesh function
+`q`, using a built-in, VTK-based component in FEniCS.
+
+`interpolate(func, V)`: interpolate a formula or finite
+element function `func` onto the function space `V`.
+
+`project(func, V)`: project a formula or finite element function `func`
+onto the function space `V`.
+
+
+===== Handy methods in key FEniCS objects =====
+
+idx{`pydoc`}
+In general,
+`pydoc fenics.X` shows the documentation of any name `X`
+and lists all the methods (i.e.g, functions in the class) that
+can be called. Below, we list just a few, but very useful, methods
+in the most central FEniCS classes.
+
+=== Mesh ===
+
+Let `mesh` be a `Mesh` object.
+
+  * `mesh.coordinates()` returns an array of the coordinates of
+     the vertices in the mesh.
+  * `mesh.num_cells()` returns the number of cells (triangles)
+    in the mesh,
+  * `mesh.num_vertices()` returns the number of vertices in
+    the mesh (with our choice of linear Lagrange elements this equals the
+    number of nodes, `len(u_array)`, or dimension of the space `V.dim()`),
+  * `mesh.cells()` returns the vertex numbers of the vertices in
+    each cell as a `numpy` array with shape
+    (*number of cells*, *number of vertices in a cell*),
+  * `mesh.hmin()` returns the minimum cell diameter (``smallest cell''),
+  * `mesh.hmax()` returns the maximum cell diameter (``largest cell'').
+  * `mesh.topology().dim()` returns the number of physical dimensions of
+    the mesh.
+
+Writing `print(mesh)` dumps a short, pretty-print description
+of the mesh (`print(mesh)` actually displays the result of `str(mesh)`,
+which defines the pretty print):
+
+!bc dat
+<Mesh of topological dimension 2 (triangles) with
+16 vertices and 18 cells, ordered>
+!ec
+
+=== Function space ===
+
+Let `V` be a `FunctionSpace` object.
+
+ * `V.mesh()` returns the associated mesh.
+ * `V.dim()` returns the dimension (number of degrees of freedom).
+ * `V.ufl_element()` returns the associated finite element.
+
+=== Function ===
+
+Let `u` be a `Function` object.
+
+ * `u.function_space()` returns the associated function space.
+ * `u.vector()` returns the vector object of degrees of freedom.
+ * `u.vector().array()` returns a copy of the degrees of freedom
+   in a `numpy` array.
+
+===== Using a backend-specific solver =====
+label{ftut:Epetra}
+
+!bwarning
+The linear algebra backends in FEniCS have recently changed. This
+section is not yet up-to-date.
+!ewarning
+
+idx{down-casting matrices and vectors}
+idx{PETSc}
+
+The linear algebra backend determines the specific data structures
+that are used in the `Matrix` and `Vector` classes. For example, with
+the PETSc backend, `Matrix` encapsulates a PETSc matrix storage
+structure, and `Vector` encapsulates a PETSc vector storage structure.
+Sometimes one wants to perform operations directly on (say) the
+underlying PETSc objects. These can be fetched by
+
+!bc pycod
+A_PETSc =
+down_cast(A).mat() b_PETSc = down_cast(b).vec() U_PETSc =
+down_cast(u.vector()).vec()
+!ec
+Here, `u` is a `Function`, `A` is a
+`Matrix`, and `b` is a `Vector`.  The same syntax applies if we want
+to fetch the underlying Epetra, uBLAS, or MTL4 matrices and vectors.
+
+#  ../../../la/trilinos/python/demo.py
+idx{Trilinos}  idx{Epetra}
+
+Sometimes one wants to implement tailored solution algorithms, using
+special features of the underlying numerical packages.  Here is an
+example where we create an ML preconditioned Conjugate Gradient solver
+by programming with Trilinos-specific objects directly.  Given a
+linear system $AU=b$, represented by a `Matrix` object `A`, and two
+`Vector` objects `U` and `b` in a Python program, the purpose is to
+set up a solver using the Aztec Conjugate Gradient method from
+Trilinos' Aztec library and combine that solver with the algebraic
+multigrid preconditioner ML from the ML library in Trilinos. Since the
+various parts of Trilinos are mirrored in Python through the
+PyTrilinos package, we can operate directly on Trilinos-specific
+objects.
+
+!bc pycod
+try:
+    from PyTrilinos import Epetra, AztecOO, TriUtils, ML
+except:
+    print('''You Need to have PyTrilinos with
+Epetra, AztecOO, TriUtils and ML installed
+for this demo to run''')
+    exit()
+
+from fenics import *
+
+if not has_la_backend('Epetra'):
+    print('Warning: Dolfin is not compiled with Trilinos')
+    exit()
+
+parameters['linear_algebra_backend'] = 'Epetra'
+
+# create matrix A and vector b in the usual way
+# u is a Function
+
+# Fetch underlying Epetra objects
+A_epetra = down_cast(A).mat()
+b_epetra = down_cast(b).vec()
+U_epetra = down_cast(u.vector()).vec()
+
+# Sets up the parameters for ML using a python dictionary
+ML_param = {"max levels"        : 3,
+            "output"            : 10,
+            "smoother: type"    : "ML symmetric Gauss-Seidel",
+            "aggregation: type" : "Uncoupled",
+            "ML validate parameter list" : False
+}
+
+# Create the preconditioner
+prec = ML.MultiLevelPreconditioner(A_epetra, False)
+prec.SetParameterList(ML_param)
+prec.ComputePreconditioner()
+
+# Create solver and solve system
+solver = AztecOO.AztecOO(A_epetra, U_epetra, b_epetra)
+solver.SetPrecOperator(prec)
+solver.SetAztecOption(AztecOO.AZ_solver, AztecOO.AZ_cg)
+solver.SetAztecOption(AztecOO.AZ_output, 16)
+solver.Iterate(MaxIters=1550, Tolerance=1e-5)
+
+plot(u)
+!ec
