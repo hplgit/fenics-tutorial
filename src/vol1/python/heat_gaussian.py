@@ -43,7 +43,7 @@ F = u*v*dx + dt*dot(grad(u), grad(v))*dx - (u_n + dt*f)*v*dx
 a, L = lhs(F), rhs(F)
 
 # Create VTK file for saving solution
-vtkfile = File('gaussian_diffusion/solution.pvd')
+vtkfile = File('heat_gaussian/solution.pvd')
 vtkfile << u_n
 
 # Time-stepping

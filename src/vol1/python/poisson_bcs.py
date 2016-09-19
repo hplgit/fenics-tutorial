@@ -658,7 +658,7 @@ def demo_bc_test():
 
     # Define manufactured solution in sympy and derive f, g, etc.
     import sympy as sym
-    x, y = sym.symbols('x[0] x[1]')             # needed by UFL
+    x, y = sym.symbols('x[0], x[1]')            # needed by UFL
     u = 1 + x**2 + 2*y**2                       # exact solution
     u_e = u                                     # exact solution
     u_00 = u.subs(x, 0)                         # restrict to x = 0
@@ -717,7 +717,7 @@ def test_solvers_bc():
     """Reproduce u=1+x^2+2y^2 to machince precision with different solvers."""
     tol = 3E-12  # Appropriate tolerance for these tests (P2, 20x20 mesh)
     import sympy as sym
-    x, y = sym.symbols('x[0] x[1]')
+    x, y = sym.symbols('x[0], x[1]')
     u = 1 + x**2 + 2*y**2
     f = -sym.diff(u, x, 2) - sym.diff(u, y, 2)
     f = sym.simplify(f)

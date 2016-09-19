@@ -1,10 +1,10 @@
 """
-FEniCS tutorial demo program: Poisson equation with Dirichlet conditions.
-Simplest example of computation and visualization with FEniCS.
+FEniCS tutorial demo program: Nonlinear Poisson equation.
 
--div(q(u)*grad(u)) = f on the unit square.
-u = u0 on the boundary.
+  -div(q(u)*grad(u)) = f   in the unit square.
+                   u = u_D on the boundary.
 """
+
 from __future__ import print_function
 
 # Warning: from fenics import * will import both `sym` and
@@ -18,7 +18,7 @@ def q(u):
 
 # Use SymPy to compute f given manufactured solution u
 import sympy as sym
-x, y = sym.symbols('x[0] x[1]')
+x, y = sym.symbols('x[0], x[1]')
 u = 1 + x + 2*y
 f = - sym.diff(q(u)*sym.diff(u, x), x) - \
       sym.diff(q(u)*sym.diff(u, y), y)
@@ -41,7 +41,7 @@ def boundary(x, on_boundary):
 bc = DirichletBC(V, u_D, boundary)
 
 # Define variational problem
-u = Function(V) # not TrialFunction!
+u = Function(V)  # not TrialFunction!
 v = TestFunction(V)
 f = Expression(f_code, degree=2)
 F = q(u)*dot(grad(u), grad(v))*dx - f*v*dx
@@ -53,11 +53,12 @@ solve(F == 0, u, bc)
 u.rename('u', 'solution')
 plot(u)
 
-# Compute error at vertices
+# Compute maximum error at vertices. This computation illustrates
+# an alternative to using compute_vertex_values as in poisson.py.
 u_e = interpolate(u_D, V)
 import numpy as np
-error = np.abs(u_e.vector().array() - u.vector().array()).max()
-print('error = %.3g' % error)
+error_max = np.abs(u_e.vector().array() - u.vector().array()).max()
+print('error_max = ', error_max)
 
 # Hold plot
 interactive()
