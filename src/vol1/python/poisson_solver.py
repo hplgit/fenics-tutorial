@@ -2,7 +2,7 @@
 FEniCS tutorial demo program: Poisson equation with Dirichlet conditions.
 Test problem is chosen to give an exact solution at all nodes of the mesh.
 
-  -Laplace(u) = f   in the unit square
+  -Laplace(u) = f    in the unit square
             u = u_D  on the boundary
 
   u = 1 + x^2 + 2y^2 = u_D
@@ -18,7 +18,7 @@ from fenics import *
 def solver(f, u_D, Nx, Ny, degree=1):
     """
     Solve -Laplace(u) = f on [0,1] x [0,1] with 2*Nx*Ny Lagrange
-    elements of specified degree and u=u_D (Expresssion) on
+    elements of specified degree and u = u_D (Expresssion) on
     the boundary.
     """
 
@@ -26,6 +26,7 @@ def solver(f, u_D, Nx, Ny, degree=1):
     mesh = UnitSquareMesh(Nx, Ny)
     V = FunctionSpace(mesh, 'P', degree)
 
+    # Define boundary condition
     def boundary(x, on_boundary):
         return on_boundary
 
@@ -49,14 +50,15 @@ def run_solver():
     # Set up problem parameters and call solver
     u_D = Expression('1 + x[0]*x[0] + 2*x[1]*x[1]')
     f = Constant(-6.0)
-    u = solver(f, u_D, 6, 4, 1)
+    u = solver(f, u_D, 8, 8, 1)
 
-    # Plot solution
-    u.rename('u', 'u')
+    # Plot solution and mesh
+    u.rename('u', 'solution')
     plot(u)
+    plot(u.function_space().mesh())
 
     # Save solution to file in VTK format
-    vtkfile = File('poisson.pvd')
+    vtkfile = File('poisson_solver/solution.pvd')
     vtkfile << u
 
 def test_solver():
