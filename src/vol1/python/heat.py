@@ -2,9 +2,9 @@
 FEniCS tutorial demo program: Heat equation with Dirichlet conditions.
 Test problem is chosen to give an exact solution at all nodes of the mesh.
 
-  u' = Laplace(u) + f  in the unit square
-  u  = u_D             on the boundary
-  u  = u_0             at t = 0
+  u'= Laplace(u) + f  in the unit square
+  u = u_D             on the boundary
+  u = u_0             at t = 0
 
   u = 1 + x^2 + alpha*y^2 + \beta*t
   f = beta - 2 - 2*alpha
@@ -48,6 +48,7 @@ a, L = lhs(F), rhs(F)
 
 # Create VTK file for saving solution
 vtkfile = File('heat/solution.pvd')
+vtkfile << u_n
 
 # Time-stepping
 u = Function(V)
@@ -61,8 +62,9 @@ for n in range(num_steps):
     # Compute solution
     solve(a == L, u, bc)
 
-    # Save solution to file in VTK format
+    # Save solution to file and plot solution
     vtkfile << u
+    plot(u)
 
     # Compute error at vertices
     u_e = interpolate(u_D, V)
@@ -71,3 +73,6 @@ for n in range(num_steps):
 
     # Update previous solution
     u_n.assign(u)
+
+# Hold plot
+interactive()
