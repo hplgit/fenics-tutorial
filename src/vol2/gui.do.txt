@@ -1,0 +1,83 @@
+======= Creating a graphical user interface =======
+label{ftut:gui}
+
+Everything in this book is about solving PDEs by creating FEniCS programs.
+The short set of powerful statements is what makes FEniCS so powerful.
+Users of your FEniCS software can just set some variables and call
+up your ready-made solver functions. However, some users will not be
+at home with anything that needs to be programmed. In such cases you
+want to offer a stand-alone application that is completely graphical.
+This can be accomplished in a few lines of code using the
+"Parampool": "https://github.com/hplgit/parampool" tool.
+
+We want to create a graphical application to solve $-\nabla^2 u=f$ in
+2D, where the user can choose $f$ and $u_0$, the $N_x$ and $N_y$
+divisions of the mesh, and the degree of the finite element
+polynomials. In addition, the user may set *any* of DOLFIN's
+collection of user-adjustable parameters (the `parameters`
+dictionary). When the PDE is solved, we should see a plot of the
+solution and have a link to the VTK solution file.
+This minimalistic application is created in a about one page of Python code.
+
+The "Parampool documentation": "http://hplgit.github.io/parampool/doc/web/index.html" explains how to wrap Python solvers with different types of
+user interfaces: command-line, commands in a file, or a graphical web
+interface. Here we just list the necessary steps.
+
+===== Making a pool of parameters =====
+
+Parampool requires the user to make a module, typically called `compute.py`,
+with two functions, one defining a data tree structure for all input
+parameters that can be adjusted in the user interface, and one function
+for computing the solution and returning HTML code with the results to
+be displayed.
+
+@@@CODE src/gui/compute.py fromto: def define_pool@import sys
+
+===== Make a compute function =====
+
+@@@CODE src/gui/compute.py fromto: import sys@
+
+===== Multiple parameters objects =====
+
+With `from fenics import *` comes the `parameters` database that we
+have worked with so far. However, one may have several such databases
+in a program. For example, suppose we want to have separate iterative
+solvers for two PDE problems in a program:
+
+!bc pycod
+solver_u = KrylovSolver()
+solver_v = KrylovSolver()
+!ec
+Each of `solver_u` and `solver_v` now has a `parameters` database
+(`solver_u.parameters` and `solver_v.parameters`)
+with parameters for setting parameters in the iterative solvers. How can
+we get also these two `parameters` objects into our GUI?
+
+The recommended approach is that you dump all parameters objects to
+separate XML files:
+
+!bc pycod
+file = File('solver_u.xml')
+file << solver_u.parameters
+file = File('solver_u.xml')
+file << solver_u.parameters
+
+myprm = Parameters('My parameters')
+myprm.add('some parameter', value)
+...
+file = File('myprm.xml')
+file << myprm
+!ec
+In the function where you create the pool object (`define_pool`),
+you can call
+`fenicsxml2pool` for the relevant XML files at the relevant
+locations in the pool tree. These actions build up the entire pool.
+In the compute function, you need to call `pool.traverse` for
+the various parameters objects in the solver. It is easy to fill
+the `fenics.parameters` object since we get access to that object through
+the `fenics` module, but local parameter objects like `solver_u`
+are not trivial to access from the compute function. The best solution
+is to have the solver available as a class. With an object of this
+class inside the compute function, and with all parameter objects as
+attributes in the class, we can easily call `pool.traverse` for
+each parameter object of interest.
