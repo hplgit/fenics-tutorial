@@ -2,7 +2,7 @@
 FEniCS tutorial demo program: Poisson equation with Dirichlet conditions.
 Test problem is chosen to give an exact solution at all nodes of the mesh.
 
-  -Laplace(u) = f   in the unit square
+  -Laplace(u) = f    in the unit square
             u = u_D  on the boundary
 
   u = 1 + x^2 + 2y^2 = u_D
@@ -41,7 +41,7 @@ plot(u)
 plot(mesh)
 
 # Save solution to file in VTK format
-vtkfile = File('poisson.pvd')
+vtkfile = File('poisson/solution.pvd')
 vtkfile << u
 
 # Compute error in L2 norm

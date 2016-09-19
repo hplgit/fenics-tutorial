@@ -1,9 +1,10 @@
 """
 FEniCS tutorial demo program: Deflection of a membrane.
 
-  -Laplace(w) = p = Gaussian function
+  -Laplace(w) = p  in the unit circle
+            w = 0  on the boundary
 
-Computed on the unit circle with w = 0 on the boundary.
+The load p is a Gaussian function centered at (0, 0.6).
 """
 
 from __future__ import print_function
@@ -17,18 +18,18 @@ mesh = generate_mesh(domain, 20)
 V = FunctionSpace(mesh, 'P', 2)
 
 # Define boundary condition
-u_D = Constant(0)
+w_D = Constant(0)
 
 def boundary(x, on_boundary):
     return on_boundary
 
-bc = DirichletBC(V, u_D, boundary)
+bc = DirichletBC(V, w_D, boundary)
 
 # Define load
 beta = 8
 R0 = 0.6
 p = Expression(
-    '4*exp(-pow(beta,2)*(pow(x[0], 2) + pow(x[1]-R0, 2)))',
+    '4*exp(-pow(beta, 2)*(pow(x[0], 2) + pow(x[1] - R0, 2)))',
     beta=beta, R0=R0)
 
 # Define variational problem
@@ -49,9 +50,9 @@ plot(w, title='Deflection')
 plot(p, title='Load')
 
 # Save solution to file in VTK format
-vtkfile_w = File('membrane_deflection.pvd')
+vtkfile_w = File('poisson_membrane/deflection.pvd')
 vtkfile_w << w
-vtkfile_p = File('membrane_load.pvd')
+vtkfile_p = File('poisson_membrane/load.pvd')
 vtkfile_p << p
 
 # Curve plot along x = 0 comparing p and w
@@ -65,7 +66,8 @@ p_line = np.array([p(point) for point in points])
 plt.plot(y, 100*w_line, 'r-', y, p_line, 'b--') # magnify w
 plt.legend(['100 x deflection', 'load'], loc='upper left')
 plt.xlabel('y'); plt.ylabel('$p$ and $100u$')
-plt.savefig('plot.pdf'); plt.savefig('plot.png')
+plt.savefig('poisson_membrane/plot.pdf')
+plt.savefig('poisson_membrane/plot.png')
 
 # Hold plots
 interactive()
