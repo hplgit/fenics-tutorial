@@ -1,11 +1,12 @@
 """
-FEniCS tutorial demo program: Poisson equation with Dirichlet conditions.
-Simplest example of computation and visualization with FEniCS.
+FEniCS tutorial demo program: Linear elastic problem.
 
--Laplace(u) = f on the unit square.
-u = u0 on the boundary.
-u0 = u = 1 + x^2 + 2y^2, f = -6.
+  -div(sigma(u)) = f
+
+The model is used to simulate an elastic beam clamped at
+its left end and deformed under its own weight.
 """
+
 from __future__ import print_function
 from fenics import *
 
@@ -23,7 +24,7 @@ g = gamma
 mesh = BoxMesh(Point(0, 0, 0), Point(L, W, W), 10, 3, 3)
 V = VectorFunctionSpace(mesh, 'P', 1)
 
-# Define boundary conditions
+# Define boundary condition
 tol = 1E-14
 
 def clamped_boundary(x, on_boundary):
@@ -71,10 +72,9 @@ print('min/max u:', u_magnitude.vector().array().min(),
       u_magnitude.vector().array().max())
 
 # Save solution to file in VTK format
-vtkfile = File("elasticity.pvd")
-vtkfile << u
-vtkfile << von_Mises
-vtkfile << u_magnitude
+File('elasticity/displacement.pvd') << u
+File('elasticity/von_mises.pvd') << von_Mises
+File('elasticity/magnitude.pvd') << u_magnitude
 
 # Hold plot
 interactive()
