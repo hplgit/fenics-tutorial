@@ -1,7 +1,10 @@
 all:
 	bash scripts/make.sh
 
-vol2:
+1:
+	bash scripts/make.sh 1
+
+2:
 	bash scripts/make.sh 2
 
 simple:
