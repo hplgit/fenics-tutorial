@@ -1,0 +1,3278 @@
+.. !split
+
+.. _ch:gallery:
+
+A Gallery of finite element solvers
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+..
+
+    The goal of this chapter is to demonstrate how a range of important
+    PDEs from science and engineering can be quickly solved with a few
+    lines of FEniCS code. We start with the heat equation and continue
+    with a nonlinear Poisson equation, the equations for linear
+    elasticity, the Navier - Stokes equations, and finally look at how to
+    solve systems of nonlinear advection - diffusion - reaction
+    equations. These problems illustrate how to solve time-dependent
+    problems, nonlinear problems, vector-valued problems, and systems of
+    PDE. For each problem, we derive the variational formulation and
+    express the problem in Python in a way that closely resembles the
+    mathematics.
+
+
+
+.. Stand-alone notebook?
+
+.. _ch:fundamentals:diffusion:
+
+The heat equation
+=================
+
+As a first extension of the Poisson problem from the previous chapter,
+we consider the time-dependent heat equation, or the time-dependent
+diffusion equation. This is the natural extension of the Poisson
+equation describing the stationary distribution of heat in a body to a
+time-dependent problem.
+
+We will see that by discretizing time into small time intervals and
+applying standard time-stepping methods, we can solve the heat
+equation by solving a sequence of variational problems, much like the
+one we encountered for the Poisson equation.
+
+.. The solution of
+
+.. nonlinear problems, as we showed in Section
+
+.. :ref:`ch:poisson0:nonlinear`, can also be automated (cf. Section
+
+.. :ref:`ftut:nonlinear:Newton:auto`), but many scientists will prefer to
+
+.. code the solution strategy of the nonlinear problem themselves and
+
+.. experiment with various combinations of strategies in difficult
+
+.. problems. Time-dependent problems are somewhat similar in this
+
+.. respect: we have to add a time discretization scheme, which is often
+
+.. quite simple, making it natural to explicitly code the details of the
+
+.. scheme so that the programmer has full control.
+
+.. We shall explain how
+
+.. easily this is accomplished through examples.
+
+PDE problem          (1)
+------------------------
+
+Our model problem for time-dependent PDEs reads
+
+.. _Eq:ch:diffusion0:pde1:
+
+.. math::
+
+    \tag{17}
+    {\partial u\over\partial t} = \nabla^2 u + f\hbox{ in }\Omega,
+        
+        
+
+.. _Eq:ch:diffusion0:pde1:bc:
+
+.. math::
+
+    \tag{18}
+    u = u_{_\mathrm{D}}\hbox{ on } \partial \Omega,
+        
+        
+
+.. _Eq:ch:diffusion0:pde1:ic:
+
+.. math::
+
+    \tag{19}
+    u = u_0 \mbox{ at } t=0{\thinspace .}
+        
+        
+
+Here, :math:`u` varies with space and time, e.g., :math:`u=u(x,y,t)` if the spatial
+domain :math:`\Omega` is two-dimensional. The source function :math:`f` and the
+boundary values :math:`u_{_\mathrm{D}}` may also vary with space and time.
+The initial condition :math:`u_0` is a function of space only.
+
+.. _ftut:timedep:diffusion1:
+
+Variational formulation          (1)
+------------------------------------
+
+.. index:: time-dependent PDEs
+
+A straightforward approach to solving time-dependent PDEs by the
+finite element method is to first discretize the time derivative by a
+finite difference approximation, which yields a sequence of
+stationary problems, and then turn each stationary problem into a
+variational formulation.
+
+Let superscript :math:`n` denote a quantity at time :math:`t_n`, where :math:`n` is an
+integer counting time levels. For example, :math:`u^n` means :math:`u` at time
+level :math:`n`. A finite difference discretization in time first consists
+of sampling the PDE at some time level, say :math:`t_{n+1}`:
+
+.. _Eq:ch:diffusion0:pde1:tk:
+
+.. math::
+
+    \tag{20}
+    \left({\partial u \over\partial t}\right)^{n+1} = \nabla^2 u^{n+1} + f^{n+1}{\thinspace .}
+        
+        
+
+The time-derivative can be approximated by a difference quotient.
+For simplicity and stability reasons, we choose a
+simple backward difference:
+
+.. _Eq:ch:diffusion0:BE:
+
+.. math::
+
+    \tag{21}
+    \left({\partial u\over\partial t}\right)^{n+1}\approx {{u^{n+1} - u^n}\over{{\Delta t}}},
+        
+        
+
+where :math:`{\Delta t}` is the time discretization parameter.
+Inserting :ref:`(21) <Eq:ch:diffusion0:BE>` in :ref:`(20) <Eq:ch:diffusion0:pde1:tk>` yields
+
+.. _Eq:ch:diffusion0:pde1:BE:
+
+.. math::
+
+    \tag{22}
+    {{u^{n+1} - u^n}\over{{\Delta t}}} = \nabla^2 u^{n+1} + f^{n+1}{\thinspace .}
+        
+        
+
+This is our time-discrete version of the heat equation
+:ref:`(17) <Eq:ch:diffusion0:pde1>`. This is a so-called *backward Euler* or
+*implicit Euler* discretization. Alternatively, we may also view this
+as a finite element discretization in time in the form of the first order
+:math:`\mathrm{dG}(0)` method, which here is identical to the backward Euler
+method.
+
+We may reorder :ref:`(22) <Eq:ch:diffusion0:pde1:BE>` so
+that the left-hand side contains the terms with the unknown :math:`u^{n+1}` and
+the right-hand side contains computed terms only. The result
+is a sequence of spatial
+(stationary) problems for :math:`u^{n+1}` (assuming :math:`u^n` is known from
+computations at the previous time level):
+
+.. _Eq:ch:diffusion0:pde1:u0:
+
+.. math::
+
+    \tag{23}
+    u^0 = u_0, 
+        
+
+.. _Eq:ch:diffusion0:pde1:uk:
+
+.. math::
+
+    \tag{24}
+    u^{n+1} - {{\Delta t}}\nabla^2 u^{n+1} =  u^n + {{\Delta t}} f^{n+1},\quad n=0,1,2,\ldots
+        
+        
+
+Given :math:`u_0`, we can solve for :math:`u^0`, :math:`u^1`, :math:`u^2`, and so on.
+
+An alternative to :ref:`(24) <Eq:ch:diffusion0:pde1:uk>`, which can be
+convenient in implementations, is to collect
+all terms on one side of the equality sign:
+
+.. _Eq:ch:diffusion0:pde1:uk2:
+
+.. math::
+
+    \tag{25}
+    u^{n+1} - {{\Delta t}}\nabla^2 u^{n+1} -  u^{n} - {{\Delta t}} f^{n+1} = 0,\quad n=0,1,2,\ldots
+        
+        
+
+We use a finite element method to solve
+:ref:`(23) <Eq:ch:diffusion0:pde1:u0>` and either of the equations
+:ref:`(24) <Eq:ch:diffusion0:pde1:uk>` or :ref:`(25) <Eq:ch:diffusion0:pde1:uk2>`.  This
+requires turning the equations into weak forms.  As usual, we multiply
+by a test function :math:`v\in \hat V` and integrate second-derivatives by
+parts. Introducing the symbol :math:`u` for :math:`u^{n+1}` (which is natural in the
+program), the resulting weak form arising from
+formulation :ref:`(24) <Eq:ch:diffusion0:pde1:uk>`
+can be conveniently written in
+the standard notation:
+
+.. math::
+         a(u,v)=L_{n+1}(v),
+
+where
+
+.. _Eq:ch:diffusion0:pde1:a:
+
+.. math::
+
+    \tag{26}
+    a(u,v) = \int_\Omega\left( uv + {{\Delta t}}
+        \nabla u\cdot \nabla v\right) {\, \mathrm{d}x}, 
+        
+
+.. _Eq:ch:diffusion0:pde1:L:
+
+.. math::
+
+    \tag{27}
+    L_{n+1}(v) = \int_\Omega \left(u^n + {{\Delta t}}  f^{n+1}\right)v {\, \mathrm{d}x}{\thinspace .}
+        
+        
+
+The alternative form :ref:`(25) <Eq:ch:diffusion0:pde1:uk2>` has an
+abstract formulation
+
+.. math::
+         F(u;v) = 0,
+
+where
+
+.. _Eq:ch:diffusion0:pde1:F:
+
+.. math::
+
+    \tag{28}
+    F(u; v) = \int_\Omega  uv + {{\Delta t}}
+        \nabla u\cdot \nabla v -
+        (u^n + {{\Delta t}} f^{n+1})v {\, \mathrm{d}x}{\thinspace .}
+        
+        
+
+In addition to the variational problem to be solved in each time step,
+we also need to approximate the initial condition
+:ref:`(23) <Eq:ch:diffusion0:pde1:u0>`. This equation can also be turned into a
+variational problem:
+
+.. math::
+         a_0(u,v)=L_0(v),
+
+with
+
+.. _Eq:ch:diffusion0:pde1:a0:
+
+.. math::
+
+    \tag{29}
+    a_0(u,v) = \int_\Omega uv {\, \mathrm{d}x}, 
+        
+
+.. _Eq:ch:diffusion0:pde1:L0:
+
+.. math::
+
+    \tag{30}
+    L_0(v) = \int_\Omega u_0 v {\, \mathrm{d}x}{\thinspace .} 
+        
+
+When solving this variational problem, :math:`u^0` becomes the
+:math:`L^2` projection of the given initial value :math:`u_0` into the finite
+element space. The alternative is to construct :math:`u^0` by just
+interpolating the initial value :math:`u_0`; that is,
+if :math:`u^0=\sum_{j=1}^N U^0_j\phi_j`, we simply set :math:`U_j=u_0(x_j,y_j)`,
+where :math:`(x_j,y_j)` are the coordinates of node number :math:`j`. We refer to
+these two strategies as computing the initial condition by either
+projection or interpolation. Both operations are easy to
+compute in FEniCS through one statement, using either the ``project`` or
+``interpolate`` function. The most common choice is ``project``, which computes an
+approximation to :math:`u_0`, but in some
+applications where we want to verify the code by reproducing exact solutions,
+one must use ``interpolate`` (and we use such a test problem!).
+
+In summary, we thus need to solve the following sequence of variational
+problems to compute the finite element solution to the heat equation:
+find :math:`u^0\in V` such that :math:`a_0(u^0,v)=L_0(v)` holds for all :math:`v\in\hat V`,
+and then find :math:`u^{n+1}\in V`
+such that :math:`a(u^{n+1},v)=L_{n+1}(v)` for all :math:`v\in\hat V`,
+or alternatively, :math:`F(u^{n+1},v)=0` for all :math:`v\in\hat V`,
+for :math:`n=0,1,2,\ldots`.
+
+.. _ftut:timedep:diffusion1:impl:
+
+FEniCS implementation          (2)
+----------------------------------
+
+Our program needs to implement the time-stepping manually, but can
+rely on FEniCS to easily compute :math:`a_0`, :math:`L_0`, :math:`F`, :math:`a`, and :math:`L`, and solve
+the linear systems for the unknowns.
+
+Test problem          (1)
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Just as for the Poisson problem from the previous chapter, we
+construct a test problem that makes it easy to determine if the
+calculations are correct. Since we know that our first-order
+time-stepping scheme is exact for linear functions, we create a test
+problem which has a linear variation in time. We combine this with a
+quadratic variation in space. We thus take
+
+.. _Eq:ch:diffusion0:pde1:u0test:
+
+.. math::
+
+    \tag{31}
+    u = 1 + x^2 + \alpha y^2 + \beta t,
+        
+        
+
+which yields a function whose computed values at the nodes will be
+exact, regardless of the size of the elements and :math:`{\Delta t}`, as long as
+the mesh is uniformly partitioned. By inserting
+:ref:`(31) <Eq:ch:diffusion0:pde1:u0test>` into the heat equation
+:ref:`(17) <Eq:ch:diffusion0:pde1>`, we find that the right-hand side :math:`f` must
+be given by :math:`f(x,y,t)=\beta - 2 - 2\alpha`. The boundary value
+is :math:`u_{_\mathrm{D}}(x, y, t) = 1 + x^2 + \alpha y^2 + \beta t` and the initial
+value is :math:`u_0(x, y) = 1 + x^2 + \alpha y^2`.
+
+.. index:: ft04_heat.py
+
+FEniCS implementation          (3)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+A new programming issue is how to deal with functions that vary in
+space *and time*, such as the boundary condition :math:`u_{_\mathrm{D}}(x, y,
+t) = 1 + x^2 + \alpha y^2 + \beta t`. A natural solution is to use a
+FEniCS ``Expression`` with time :math:`t` as a parameter, in addition to the
+parameters :math:`\alpha` and :math:`\beta`:
+
+.. code-block:: python
+
+    alpha = 3; beta = 1.2
+    u_D = Expression('1 + x[0]*x[0] + alpha*x[1]*x[1] + beta*t',
+                     degree=2, alpha=alpha, beta=beta, t=0)
+
+This expression uses the components of ``x`` as independent
+variables, while ``alpha``, ``beta``, and ``t`` are parameters.  The
+parameters can later be updated as in
+
+.. code-block:: python
+
+    u_D.t = t
+
+The essential boundary conditions, along the entire boundary in this case,
+are set in the usual way:
+
+.. code-block:: python
+
+    def boundary(x, on_boundary):
+        return on_boundary
+    
+    bc = DirichletBC(V, u_D, boundary)
+
+We shall use ``u`` for the unknown :math:`u^n` at the new time level and ``u_n``
+for :math:`u^n` at the previous time level. The initial value of ``u_n`` can be
+computed by either projection or interpolation of :math:`u_0`. Since we set
+``t = 0`` for the boundary value ``u_D``, we can use this to also specify
+the initial condition. We can then do
+
+.. code-block:: python
+
+    u_n = project(u_D, V)
+    # or
+    u_n = interpolate(u_D, V)
+
+
+.. admonition:: Projecting versus interpolating the initial condition
+
+   To actually recover the
+   exact solution :ref:`(31) <Eq:ch:diffusion0:pde1:u0test>` to machine precision,
+   it is important not to compute the discrete initial condition by
+   projecting :math:`u_0`, but by interpolating :math:`u_0` so that the degrees of freedom have
+   exact values at :math:`t=0` (projection results in approximate values at the
+   nodes).
+
+
+
+
+.. index:: lhs
+
+.. index:: rhs
+
+We may either define :math:`a` or :math:`L` according to the formulas above, or
+we may just define :math:`F` and ask FEniCS to figure out which terms that
+go into the bilinear form :math:`a` and which that go into the linear form
+:math:`L`. The latter is convenient, especially in more complicated problems,
+so we illustrate that construction of :math:`a` and :math:`L`:
+
+.. code-block:: python
+
+    u = TrialFunction(V)
+    v = TestFunction(V)
+    f = Constant(beta - 2 - 2*alpha)
+    
+    F = u*v*dx + dt*dot(grad(u), grad(v))*dx - (u_n + dt*f)*v*dx
+    a, L = lhs(F), rhs(F)
+
+Finally, we perform the time-stepping in a loop:
+
+.. code-block:: python
+
+    u = Function(V)
+    t = 0
+    for n in range(num_steps):
+    
+        # Update current time
+        t += dt
+        u_D.t = t
+    
+        # Solve variational problem
+        solve(a == L, u, bc)
+    
+        # Update previous solution
+        u_n.assign(u)
+
+In the last step of the time-stepping loop, we assign the values of
+the variable ``u`` (the new computed solution) to the variable ``u_n``
+containing the values at the previous time step. This must be done
+using the ``assign`` member function. If we instead try to do ``u_n = u``,
+we will set the ``u_n`` variable to be the *same* variable as ``u``
+which is not what we want. (We need two variables, one for the values
+at the previous time step and one for the values at the current time
+step.)
+
+
+.. admonition:: Remember to update expression objects with the current time
+
+   Inside the time loop,
+   observe that ``u_D.t`` must be updated before the ``solve`` statement
+   to enforce computation of Dirichlet conditions at the
+   current time level. (The Dirichlet conditions look up the ``u_D`` object
+   for values.)
+
+
+
+
+The time loop above does not contain any comparison of the numerical
+and the exact solution, which we must include in order to verify the
+implementation.  As in the Poisson equation example in
+the section :ref:`ch:poisson0:impl:dissect`, we compute the
+difference between the array of nodal values for ``u`` and the array of
+nodal values for
+the interpolated exact solution. This may be done as follows:
+
+.. code-block:: python
+
+    u_e = interpolate(u_D, V)
+    error = np.abs(u_e.vector().array() - u.vector().array()).max()
+    print('error, t=%.2f: %.3g' % (t, error))
+
+The complete program code for this time-dependent case goes as follows:
+
+.. code-block:: python
+
+    from fenics import *
+    import numpy as np
+    
+    T = 2.0            # final time
+    num_steps = 10     # number of time steps
+    dt = T / num_steps # time step size
+    alpha = 3          # parameter alpha
+    beta = 1.2         # parameter beta
+    
+    # Create mesh and define function space
+    nx = ny = 8
+    mesh = UnitSquareMesh(nx, ny)
+    V = FunctionSpace(mesh, 'P', 1)
+    
+    # Define boundary condition
+    u_D = Expression('1 + x[0]*x[0] + alpha*x[1]*x[1] + beta*t',
+                     degree=2, alpha=alpha, beta=beta, t=0)
+    
+    def boundary(x, on_boundary):
+        return on_boundary
+    
+    bc = DirichletBC(V, u_D, boundary)
+    
+    # Define initial value
+    u_n = interpolate(u_D, V)
+    #u_n = project(u_D, V)
+    
+    # Define variational problem
+    u = TrialFunction(V)
+    v = TestFunction(V)
+    f = Constant(beta - 2 - 2*alpha)
+    
+    F = u*v*dx + dt*dot(grad(u), grad(v))*dx - (u_n + dt*f)*v*dx
+    a, L = lhs(F), rhs(F)
+    
+    # Time-stepping
+    u = Function(V)
+    t = 0
+    for n in range(num_steps):
+    
+        # Update current time
+        t += dt
+        u_D.t = t # update for bc
+    
+        # Compute solution
+        solve(a == L, u, bc)
+    
+        # Compute error at vertices
+        u_e = interpolate(u_D, V)
+        error = np.abs(u_e.vector().array() - u.vector().array()).max()
+        print('t = %.2f: error = %.3g' % (t, error))
+    
+        # Update previous solution
+        u_n.assign(u)
+
+The complete code can be found in the file ``ft04_heat.py``.
+
+Diffusion of a Gaussian function
+--------------------------------
+
+The mathematical problem
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+Let's solve a more interesting test problem, namely the diffusion of
+a Gaussian hill. We take the initial value to be given by
+
+.. math::
+         u_0(x,y)= e^{-ax^2 - ay^2}
+
+on the domain :math:`[-2,2]\times [2,2]`. We will take :math:`a = 5`. For this
+problem we will use homogeneous Dirichlet boundary conditions (:math:`u_{_\mathrm{D}} = 0`).
+
+FEniCS implementation          (4)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Which are the required changes to our previous program? One major
+change is that the domain is not a unit square anymore. We also want to
+use much higher resolution. The new domain can
+be created easily in FEniCS using ``RectangleMesh``:
+
+.. code-block:: python
+
+    nx = ny = 30
+    mesh = RectangleMesh(Point(-2, -2), Point(2, 2), nx, ny)
+
+We also need to redefine the initial condition and boundary condition.
+Both are easily changed by defining a new ``Expression`` and by setting
+:math:`u = 0` on the boundary. We will also save the solution to file in VTK
+format in each time step:
+
+.. code-block:: python
+
+    vtkfile << (u, t)
+
+The complete program appears below.
+
+.. code-block:: python
+
+    from fenics import *
+    import time
+    
+    T = 2.0            # final time
+    num_steps = 50     # number of time steps
+    dt = T / num_steps # time step size
+    
+    # Create mesh and define function space
+    nx = ny = 30
+    mesh = RectangleMesh(Point(-2,-2), Point(2,2), nx, ny)
+    V = FunctionSpace(mesh, 'P', 1)
+    
+    # Define boundary condition
+    def boundary(x, on_boundary):
+        return on_boundary
+    
+    bc = DirichletBC(V, Constant(0), boundary)
+    
+    # Define initial value
+    u_0 = Expression('exp(-a*pow(x[0],2) - a*pow(x[1],2))',
+                     degree=2, a=5)
+    u_n = interpolate(u_0, V)
+    u_n.rename('u', 'initial value')
+    vtkfile = File('gaussian_diffusion.pvd')
+    vtkfile << (u_n, 0.0)
+    
+    # Define variational problem
+    u = TrialFunction(V)
+    v = TestFunction(V)
+    f = Constant(0)
+    
+    F = u*v*dx + dt*dot(grad(u), grad(v))*dx - (u_n + dt*f)*v*dx
+    a, L = lhs(F), rhs(F)
+    
+    # Compute solution
+    u = Function(V)
+    u.rename('u', 'solution')
+    t = 0
+    for n in range(num_steps):
+    
+        # Update current time
+        t += dt
+    
+        # Solve variational problem
+        solve(a == L, u, bc)
+    
+        # Save to file and plot solution
+        vtkfile << (u, float(t))
+        plot(u)
+        time.sleep(0.3)
+    
+        # Update previous solution
+        u_n.assign(u)
+
+The complete code can be found in the file ``ft05_gaussian_diffusion.py``.
+
+Visualization in ParaView
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+To visualize the diffusion of the Gaussian hill, start ParaView,
+choose **File - Open**, open the file ``gaussian_diffusion.pvd``, click
+the green **Apply** button on the left to see the initial condition
+being plotted. Choose **View - Animation View**. Click on the play
+button or (better) the next frame button in the row of buttons at the
+top of the GUI to see the evolution of the scalar field you have just
+computed. Choose **File - Save Animation...** to save the animation to the AVI or OGG video format.
+
+.. raw:: html
+        
+        <div>
+        <video  loop controls width='640' height='365' preload='none'>
+            <source src='mov/diffusion0.ogg'  type='video/ogg;  codecs="theora, vorbis"'>
+        </video>
+        </div>
+        <p><em></em></p>
+        
+        <!-- Issue warning if in a Safari browser -->
+        <script language="javascript">
+        if (!!(window.safari)) {
+          document.write("<div style=\"width: 95%%; padding: 10px; border: 1px solid #100; border-radius: 4px;\"><p><font color=\"red\">The above movie will not play in Safari - use Chrome, Firefox, or Opera.</font></p></div>")}
+        </script>
+        
+
+Once the animation has been saved to file, you can play the animation
+offline using a player such as mplayer or VLC, or upload your
+animation to YouTube. Below is a sequence of
+snapshots of the solution (first three time steps).
+
+.. figure:: diffusion0_3snapshots.png
+   :width: 800
+
+.. Stand-alone notebook?
+
+.. _ftut1:gallery:nonlinearpoisson:
+
+A nonlinear Poisson equation
+============================
+
+We shall now address how to solve nonlinear PDEs. We will see that
+nonlinear problems can be solved just as easily as linear problems in
+FEniCS, by simply defining a nonlinear variational problem and calling
+the ``solve`` function. When doing so, we will encounter a subtle
+difference in how the variational problem is defined.
+
+PDE problem          (2)
+------------------------
+
+As a sample PDE for the implementation of nonlinear problems, we
+take the following nonlinear Poisson equation:
+
+.. _Eq:_auto5:
+
+.. math::
+
+    \tag{32}
+    -\nabla\cdot\left( q(u)\nabla u\right) = f,
+        
+        
+
+in :math:`\Omega`, with :math:`u=u_{_\mathrm{D}}` on the boundary :math:`\partial\Omega`.
+The coefficient :math:`q(u)` makes the equation nonlinear (unless :math:`q(u)`
+is constant in :math:`u`).
+
+Variational formulation          (2)
+------------------------------------
+
+As usual, we multiply our PDE by a test function :math:`v\in\hat V`,
+integrate over the domain, and integrate the second-order derivatives
+by parts.  The boundary integral arising from integration by parts
+vanishes wherever we employ Dirichlet conditions. The resulting
+variational formulation of our model problem becomes: find :math:`u \in V`
+such that
+
+.. _Eq:ch:poisson0:nonlinear1:
+
+.. math::
+
+    \tag{33}
+    F(u; v) = 0 \quad \forall v \in \hat{V},
+        
+        
+
+where
+
+.. _Eq:ch:poisson0:nonlinear2:
+
+.. math::
+
+    \tag{34}
+    F(u; v) = \int_\Omega q(u)\nabla u\cdot \nabla v - fv {\, \mathrm{d}x},
+        
+        
+
+and
+
+.. math::
+        \begin{align*}
+             V      &= \{v \in H^1(\Omega) : v = u_{_\mathrm{D}} \mbox{ on } \partial\Omega\},\\ 
+            \hat{V} &= \{v \in H^1(\Omega) : v = 0 \mbox{ on } \partial\Omega\}{\thinspace .}
+        \end{align*}
+
+The discrete problem arises as usual by restricting :math:`V` and :math:`\hat V`
+to a pair of discrete spaces. As before, we omit any subscript on
+the discrete spaces and discrete solution.
+The discrete nonlinear problem is then written as: Find :math:`u\in V` such that
+
+.. _Eq:ch:poisson0:nonlinear:d:
+
+.. math::
+
+    \tag{35}
+    F(u; v) = 0 \quad \forall v \in \hat{V},
+        
+        
+
+with :math:`u = \sum_{j=1}^N U_j \phi_j`. Since :math:`F` is nonlinear in
+:math:`u`, the variational statement gives rise to a system of
+nonlinear algebraic equations in the unknowns :math:`U_1,\ldots,U_N`.
+
+.. _ftut:nonlinear:Newton:auto:
+
+FEniCS implementation          (5)
+----------------------------------
+
+Test problem          (2)
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+To solve a test problem, we need to choose the right-hand side :math:`f`,
+the coefficient :math:`q(u)` and the boundary value :math:`u_{_\mathrm{D}}`.  Previously, we
+have worked with manufactured solutions that can be reproduced without
+approximation errors. This is more difficult in nonlinear problems,
+and the algebra is more tedious. However, we may utilize SymPy for
+symbolic computing and integrate such computations in the FEniCS
+solver. This allows us to easily experiment with different
+manufactured solutions. The forthcoming code with SymPy requires some
+basic familiarity with this package. In particular, we will use the
+SymPy functions ``diff`` for symbolic differentiation and ``ccode`` for
+C/C++ code generation.
+
+We try out a two-dimensional manufactured
+solution that is linear in the unknowns:
+
+.. code-block:: python
+
+    # Warning: from fenics import * will import both `sym` and
+    # `q` from FEniCS. We therefore import FEniCS first and then
+    # overwrite these objects.
+    from fenics import *
+    
+    def q(u):
+        """Nonlinear coefficient in the PDE."""
+        return 1 + u**2
+    
+    # Use SymPy to compute f given manufactured solution u
+    import sympy as sym
+    x, y = sym.symbols('x[0] x[1]')
+    u = 1 + x + 2*y
+    f = - sym.diff(q(u)*sym.diff(u, x), x) - \ 
+          sym.diff(q(u)*sym.diff(u, y), y)
+    f = sym.simplify(f)
+    u_code = sym.printing.ccode(u)
+    f_code = sym.printing.ccode(f)
+    print('u =', u_code)
+    print('f =', f_code)
+
+
+.. admonition:: Define symbolic coordinates as required in ``Expression`` objects
+
+   Note that we would normally write ``x, y = sym.symbols('x y')``, but
+   if we want the resulting expressions to have valid syntax for
+   FEniCS ``Expression`` objects, we must use ``x[0]`` and ``x[1]``.
+   This is easily accomplished with ``sympy`` by defining the names of ``x`` and
+   ``y`` as ``x[0]`` and ``x[1]``: ``x, y = sym.symbols('x[0] x[1]')``.
+
+
+
+
+Turning the expressions for ``u`` and ``f`` into C or C++ syntax for
+FEniCS ``Expression`` objects needs two steps. First, we ask for the C
+code of the expressions:
+
+.. code-block:: python
+
+    u_code = sym.printing.ccode(u)
+    f_code = sym.printing.ccode(f)
+
+Sometimes, we need some editing of the result to match the required
+syntax of ``Expression`` objects, but not in this case. (The primary
+example is that ``M_PI`` for :math:`\pi` in C/C++ must be replaced by ``pi`` for
+``Expression`` objects.) In the present case, the output of ``c_code`` and
+``f_code`` is
+
+.. code-block:: c
+
+    x[0] + 2*x[1] + 1
+    -10*x[0] - 20*x[1] - 10
+
+After having defined the mesh, the function space, and the boundary,
+we define the boundary value ``u_D`` as
+
+.. code-block:: python
+
+    u_D = Expression(u_code)
+
+Similarly, we define the right-hand side function as
+
+.. code-block:: python
+
+    f = Expression(f_code)
+
+
+.. admonition:: Name clash between FEniCS and program variables
+
+   In a program like the one above, strange errors may occur due to
+   name clashes. If you define ``sym`` and ``q`` prior to doing
+   ``from fenics import *``, the latter statement will also import
+   variables with the names ``sym`` and ``q``, overwriting
+   the objects you have previously defined! This may lead to strange
+   errors. The safest solution is to do ``import fenics as fe``
+   and then prefix all FEniCS
+   object names by ``fe``. The next best solution is to do
+   ``from fenics import *`` first and then define your own variables
+   that overwrite those imported from ``fenics``. This is acceptable
+   if we do not need ``sym`` and ``q`` from ``fenics``.
+
+
+
+
+FEniCS implementation          (6)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+A working solver for the nonlinear Poisson equation is as easy to
+implement as a solver for the corresponding linear problem.
+All we need to do is to state the formula for :math:`F` and call
+``solve(F == 0, u, bc)`` instead of ``solve(a == L, u, bc)`` as we did
+in the linear case. Here is a minimalistic code:
+
+.. code-block:: python
+
+    from fenics import *
+    
+    def q(u):
+        return 1 + u**2
+    
+    mesh = UnitSquareMesh(32, 32)
+    V = FunctionSpace(mesh, 'P', 1)
+    u_D = Expression(...)
+    
+    def boundary(x, on_boundary):
+        return on_boundary
+    
+    bc = DirichletBC(V, u_D, boundary)
+    
+    u = Function(V)
+    v = TestFunction(V)
+    f = Expression(...)
+    F = q(u)*dot(grad(u), grad(v))*dx - f*v*dx
+    
+    solve(F == 0, u, bc)
+
+The complete code can be found in the file ``ft06_poisson_nonlinear.py``.
+
+The major difference from a linear problem is that the unknown function
+``u`` in the variational form in the nonlinear case
+must be defined as a ``Function``, not as a ``TrialFunction``. In some sense
+this is a simplification from the linear case where we must define ``u``
+first as a ``TrialFunction`` and then as a ``Function``.
+
+The ``solve`` function takes the nonlinear equations, derives symbolically
+the Jacobian matrix, and runs a Newton method to compute the solution.
+
+.. container:: toggle
+
+    .. container:: header
+
+        **Show/Hide Code**
+
+    .. code-block:: python
+
+        # Warning: from fenics import * will import both `sym` and
+        # `q` from FEniCS. We therefore import FEniCS first and then
+        # overwrite these objects.
+        from fenics import *
+        
+        def q(u):
+            """Nonlinear coefficient in the PDE."""
+            return 1 + u**2
+        
+        # Use SymPy to compute f given manufactured solution u
+        import sympy as sym
+        x, y = sym.symbols('x[0] x[1]')
+        u = 1 + x + 2*y
+        f = - sym.diff(q(u)*sym.diff(u, x), x) - \ 
+              sym.diff(q(u)*sym.diff(u, y), y)
+        f = sym.simplify(f)
+        u_code = sym.printing.ccode(u)
+        f_code = sym.printing.ccode(f)
+        print('u =', u_code)
+        print('f =', f_code)
+        
+        # Create mesh and define function space
+        mesh = UnitSquareMesh(8, 8)
+        V = FunctionSpace(mesh, 'P', 1)
+        
+        # Define boundary condition
+        u_D = Expression(u_code, degree=2)
+        
+        def boundary(x, on_boundary):
+            return on_boundary
+        
+        bc = DirichletBC(V, u_D, boundary)
+        
+        # Define variational problem
+        u = Function(V) # not TrialFunction!
+        v = TestFunction(V)
+        f = Expression(f_code, degree=2)
+        F = q(u)*dot(grad(u), grad(v))*dx - f*v*dx
+        
+        # Compute solution
+        solve(F == 0, u, bc)
+        
+        # Plot solution
+        u.rename('u', 'solution')
+        plot(u)
+        
+        # Compute error at vertices
+        u_e = interpolate(u_D, V)
+        import numpy as np
+        error = np.abs(u_e.vector().array() - u.vector().array()).max()
+        print('error = %.3g' % error)
+        
+        # Hold plot
+        interactive()
+
+Running the code gives output that tells how the Newton iteration
+progresses. With :math:`2\cdot(8\times 8)` cells we reach convergence in 8
+iterations with a tolerance of :math:`10^{-9}`, and the error in the
+numerical solution is about :math:`10^{-16}`. These results bring evidence
+for a correct implementation. Thinking in terms of finite differences
+on a uniform mesh, :math:`\mathcal{P}_1` elements mimic standard
+second-order differences, which compute the derivative of a linear or
+quadratic function exactly. Here, :math:`\nabla u` is a constant vector, but
+then multiplied by :math:`(1+u^2)`, which is a second-order polynomial in
+:math:`x` and :math:`y`, which the divergence "difference operator" should
+compute exactly. We can therefore, even with :math:`\mathcal{P}_1`
+elements, expect the manufactured :math:`u` to be reproduced by the
+numerical method. With a nonlinearity like :math:`1+u^4`, this will not be
+the case, and we would need to verify convergence rates instead.
+
+The current example shows how easy it is to solve a nonlinear problem
+in FEniCS. However, experts on the numerical solution of nonlinear PDEs
+know very well that automated procedures may fail in nonlinear
+problems, and that it is often necessary to have much better manual
+control of the solution process than what we have in the current
+case. Therefore, we return to this problem in the chapter
+"Implementing solvers for nonlinear PDEs": "" [Ref25]_
+and show how we can implement our
+own solution algorithms for nonlinear equations and also how we can
+steer the parameters in the automated Newton method used above. You
+will then see how easy it is to implement tailored solution
+strategies for nonlinear problems in FEniCS.
+
+.. Stand-alone notebook?
+
+.. _ftut:elast:
+
+The equations of linear elasticity
+==================================
+
+Analysis of structures is one of the major activities of modern
+engineering, thus making the PDEs for deformation of elastic bodies
+likely the most popular PDE model in the world.
+It takes just one page of code to solve the equations of 2D or 3D
+elasticity in FEniCS, and the details follow below.
+
+PDE problem          (3)
+------------------------
+
+The equations governing small elastic deformations of a body :math:`\Omega`
+can be written as
+
+.. FIXME: The :math:`\text{Lam\'e's}` thing is to trick the doconce spell-checking
+
+.. _Eq:ftut:elast:varform:equilibrium:
+
+.. math::
+
+    \tag{36}
+    -\nabla\cdot\sigma = f\hbox{ in }\Omega,
+        
+        
+
+.. _Eq:ftut:elast:varform:stresstrain:
+
+.. math::
+
+    \tag{37}
+    \sigma = \lambda\,\hbox{tr}\,(\varepsilon) I) + 2\mu\varepsilon,
+        
+        
+
+.. _Eq:ftut:elast:varform:strainu:
+
+.. math::
+
+    \tag{38}
+    \varepsilon = \frac{1}{2}\left(\nabla u + (\nabla u)^{\top}\right),
+        
+        
+
+where :math:`\sigma` is the stress tensor, :math:`f` is the body force per unit
+volume, :math:`\lambda` and :math:`\mu` are :math:`\text{Lam\'e's}` elasticity parameters for the
+material in :math:`\Omega`, :math:`I` is the identity tensor, :math:`\mathrm{tr}` is the
+trace operator on a tensor, :math:`\varepsilon` is the strain tensor
+(symmetric gradient), and :math:`u` is the displacement vector field.
+We have here assumed isotropic elastic conditions.
+
+We combine :ref:`(37) <Eq:ftut:elast:varform:stresstrain>` and
+:ref:`(38) <Eq:ftut:elast:varform:strainu>` to obtain
+
+.. _Eq:ftut:elast:varform:stressu:
+
+.. math::
+
+    \tag{39}
+    \sigma = \lambda(\nabla\cdot u)I + \mu(\nabla u + (\nabla u)^{\top}){\thinspace .}
+        
+        
+
+Note that :ref:`(36) <Eq:ftut:elast:varform:equilibrium>`--:ref:`(38) <Eq:ftut:elast:varform:strainu>`
+can easily be transformed to a single vector PDE for :math:`u`, which is the governing
+PDE for the unknown :math:`u` (Navier's equation).
+In the derivation of the variational formulation,
+however, it is convenient to keep the splitting of the equations as above.
+
+.. _ftut:elast:varform:
+
+Variational formulation          (3)
+------------------------------------
+
+The variational formulation of
+:ref:`(36) <Eq:ftut:elast:varform:equilibrium>`--:ref:`(38) <Eq:ftut:elast:varform:strainu>`
+consists of forming the inner product of
+:ref:`(36) <Eq:ftut:elast:varform:equilibrium>` and a *vector* test function
+:math:`v\in \hat{V}`, where :math:`\hat{V}` is a vector-valued test function space, and
+integrating over the domain :math:`\Omega`:
+
+.. math::
+         -\int_\Omega (\nabla\cdot\sigma) \cdot v {\, \mathrm{d}x} =
+        \int_\Omega f\cdot v{\, \mathrm{d}x}{\thinspace .}
+
+Since :math:`\nabla\cdot\sigma` contains second-order derivatives of the primary
+unknown :math:`u`, we integrate this term by parts:
+
+.. math::
+         -\int_\Omega (\nabla\cdot\sigma) \cdot v {\, \mathrm{d}x}
+        = \int_\Omega \sigma : \nabla v{\, \mathrm{d}x} - \int_{\partial\Omega}
+        (\sigma\cdot n)\cdot v {\, \mathrm{d}s},
+
+where the colon operator is the inner product between tensors
+(summed pairwise product of all elements), and :math:`n`
+is the outward unit normal at the boundary. The quantity :math:`\sigma\cdot n`
+is known as the *traction* or stress vector at the boundary, and is often
+prescribed as a boundary condition. We assume that it is prescribed
+at a part :math:`\partial\Omega_T` of the boundary as :math:`\sigma\cdot n = T`. On the remaining part of the boundary, we assume that the value of
+the displacement is given as a Dirichlet condition.
+We then have
+
+.. math::
+        
+        \int_\Omega \sigma : \nabla v {\, \mathrm{d}x} =
+        \int_\Omega f\cdot v {\, \mathrm{d}x}
+        + \int_{\partial\Omega_T} T\cdot v{\, \mathrm{d}s}{\thinspace .}
+
+Inserting the expression :ref:`(39) <Eq:ftut:elast:varform:stressu>` for
+:math:`\sigma` gives the variational form with :math:`u` as unknown. Note that the
+boundary integral on the remaining part
+:math:`\partial\Omega\setminus\Omega_T` vanishes due to the Dirichlet
+condition (:math:`v = 0`).
+
+We can now summarize the variational formulation as: find :math:`u\in V` such that
+
+.. _Eq:_auto6:
+
+.. math::
+
+    \tag{40}
+    a(u,v) = L(v)\quad\forall v\in\hat{V},
+        
+        
+
+where
+
+.. _Eq:ftut:elast:varform:sigma_inner_gradv:
+
+.. math::
+
+    \tag{41}
+    a(u,v) = \int_\Omega\sigma(u) :\nabla v {\, \mathrm{d}x},
+        
+        
+
+.. _Eq:_auto7:
+
+.. math::
+
+    \tag{42}
+    \sigma(u) = \lambda(\nabla\cdot u)I + \mu(\nabla u + (\nabla u)^{\top}),
+        
+        
+
+.. _Eq:_auto8:
+
+.. math::
+
+    \tag{43}
+    L(v) = \int_\Omega f\cdot v{\, \mathrm{d}x} + \int_{\partial\Omega_T}
+        T\cdot v{\, \mathrm{d}s}{\thinspace .}
+        
+        
+
+One can show that the inner product of a symmetric tensor :math:`A` and a
+anti-symmetric tensor :math:`B` vanishes. If we express :math:`\nabla v` as a sum
+of its symmetric and anti-symmetric parts, only the symmetric part will
+survive in the product :math:`\sigma :\nabla v` since :math:`\sigma` is a
+symmetric tensor. Thus replacing :math:`\nabla u` by the symmetric gradient
+:math:`\epsilon(u)` gives rise to the slightly different variational form
+
+.. _Eq:ftut:elast:varform:sigma_inner_eps:
+
+.. math::
+
+    \tag{44}
+    a(u,v) = \int_\Omega\sigma(u) :\varepsilon(v) {\, \mathrm{d}x},
+        
+        
+
+where :math:`\varepsilon(v)` is the symmetric part of :math:`\nabla v`:
+
+.. math::
+         \varepsilon(v) = \frac{1}{2}\left(\nabla v + (\nabla v)^{\top}\right){\thinspace .}
+
+The formulation :ref:`(44) <Eq:ftut:elast:varform:sigma_inner_eps>` is what naturally
+arises from minimization of elastic potential energy and is a more
+popular formulation than :ref:`(41) <Eq:ftut:elast:varform:sigma_inner_gradv>`.
+
+FEniCS implementation          (7)
+----------------------------------
+
+Test problem          (3)
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+As a test example, we may look at a clamped beam deformed under its
+own weight. Then :math:`f=(0,0,-\varrho g)` is the body force per unit
+volume with :math:`\varrho` the
+density of the beam and :math:`g` the acceleration of gravity. The beam is
+box-shaped with length :math:`L` and has a square cross section of width :math:`W`. We
+set :math:`u=u_{_\mathrm{D}} = (0,0,0)` at the clamped end, :math:`x=0`. The rest of the boundary is
+traction free; that is, we set :math:`T = 0`.
+
+The code
+~~~~~~~~
+
+We first list the code and then comment upon the new constructions
+compared to the Poisson equation case.
+
+.. code-block:: python
+
+    from fenics import *
+    
+    # Scaled variables
+    L = 1; W = 0.2
+    mu = 1
+    rho = 1
+    delta = W/L
+    gamma = 0.4*delta**2
+    beta = 1.25
+    lambda_ = beta
+    g = gamma
+    
+    # Create mesh and define function space
+    mesh = BoxMesh(Point(0, 0, 0), Point(L, W, W), 10, 3, 3)
+    V = VectorFunctionSpace(mesh, 'P', 1)
+    
+    # Define boundary conditions
+    tol = 1E-14
+    
+    def clamped_boundary(x, on_boundary):
+        return on_boundary and x[0] < tol
+    
+    bc = DirichletBC(V, Constant((0, 0, 0)), clamped_boundary)
+    
+    # Define strain and stress
+    
+    def epsilon(u):
+        return 0.5*(nabla_grad(u) + nabla_grad(u).T)
+        #return sym(nabla_grad(u))
+    
+    def sigma(u):
+        return lambda_*nabla_div(u)*Identity(d) + 2*mu*epsilon(u)
+    
+    # Define variational problem
+    u = TrialFunction(V)
+    d = u.geometric_dimension()  # no of space dim
+    v = TestFunction(V)
+    f = Constant((0, 0, rho*g))
+    T = Constant((0, 0, 0))
+    a = inner(sigma(u), epsilon(v))*dx
+    L = dot(f, v)*dx + dot(T, v)*ds
+    
+    # Compute solution
+    u = Function(V)
+    solve(a == L, u, bc)
+    
+    # Plot solution
+    plot(u, title='Displacement', mode='displacement')
+    
+    # Plot stress
+    s = sigma(u) - (1./3)*tr(sigma(u))*Identity(d)  # deviatoric stress
+    von_Mises = sqrt(3./2*inner(s, s))
+    V = FunctionSpace(mesh, 'P', 1)
+    von_Mises = project(von_Mises, V)
+    plot(von_Mises, title='Stress intensity')
+    
+    # Compute magnitude of displacement
+    u_magnitude = sqrt(dot(u, u))
+    u_magnitude = project(u_magnitude, V)
+    plot(u_magnitude, 'Displacement magnitude')
+    print('min/max u:', u_magnitude.vector().array().min(),
+          u_magnitude.vector().array().max())
+
+The complete code can be found in the file ``ft07_elasticity.py``.
+
+We comment below on some of the key features of this example that
+we have not seen in previous examples.
+
+Vector function spaces
+~~~~~~~~~~~~~~~~~~~~~~
+
+The primary unknown is now a vector field :math:`u` and not a scalar field,
+so we need to work with a vector function space:
+
+.. code-block:: python
+
+    V = VectorFunctionSpace(mesh, 'P', 1)
+
+With ``u = Function(V)`` we get ``u`` as a vector-valued finite element function.
+
+Constant vectors
+~~~~~~~~~~~~~~~~
+
+In the boundary condition :math:`u=0`, we must set a vector value to zero, not just
+a scalar, and a constant zero vector is specified as ``Constant((0, 0, 0))`` in
+FEniCS. The corresponding 2D code would use ``Constant((0, 0))``.
+Later in the code, we also need ``f`` as a vector and specify it
+as ``Constant((0, 0, rho*g))``.
+
+``nabla_grad``
+~~~~~~~~~~~~~~
+
+The gradient and divergence operators now have a prefix ``nabla_``.
+This is strictly not necessary in the present problem, but
+recommended in general for vector PDEs arising from continuum mechanics,
+if you interpret :math:`\nabla` as a vector in the PDE notation;
+see the box about ``nabla_grad`` in the section :ref:`ftut1:NS:varform`.
+
+Stress computation
+~~~~~~~~~~~~~~~~~~
+
+As soon as ``u`` is computed, we can compute various stress measures, here
+the von Mises stress defined as :math:`\sigma_M = \sqrt{\frac{3}{2}s:s}`
+where :math:`s` is the deviatoric stress tensor
+
+.. math::
+         s = \sigma - \frac{1}{3}\mathrm{tr}\,(\sigma)\,I{\thinspace .}
+
+There is a one to one mapping between these formulas and the FEniCS code:
+
+.. code-block:: python
+
+    s = sigma(u) - (1./3)*tr(sigma(u))*Identity(d)
+    von_Mises = sqrt(3./2*inner(s, s))
+
+The ``von_Mises`` variable is now an expression that must be projected to
+a finite element space before we can visualize it.
+
+Scaling
+~~~~~~~
+
+Before doing simulations for a specific problem, it is often
+advantageous to scale the problem as it reduces the need for setting
+physical parameters, and one obtains dimensionsless numbers that
+reflect the competition of parameters and physical effects. We develop
+the code for the original model with dimensions, and run the scaled
+problem by tweaking parameters appropriately. Scaling reduces the
+number of active parameters from 6 to 2 in the present application.
+
+In Navier's equation for :math:`u`, arising from inserting
+:ref:`(37) <Eq:ftut:elast:varform:stresstrain>` and
+:ref:`(38) <Eq:ftut:elast:varform:strainu>` in
+:ref:`(36) <Eq:ftut:elast:varform:equilibrium>`,
+
+.. math::
+         \nabla\cdot(\lambda\nabla\cdot u) + \mu\nabla^2 u = f,
+
+we insert coordinates made dimensionless by :math:`L`, and :math:`\bar u=u/U`,
+which results in the dimensionless governing equation
+
+.. math::
+        
+        \beta\bar\nabla\cdot(\bar\nabla\cdot \bar u) + \bar\nabla^2 \bar u =
+        \bar f,\quad \bar f = (0,0,\gamma),
+
+where :math:`\beta = \lambda/\mu` is a dimensionless elasticity parameter and
+
+.. math::
+         \gamma = \frac{\varrho gL^2}{\mu U}
+
+is also a dimensionless variable reflecting the ratio of the load
+:math:`\varrho g` and the shear stress
+term :math:`\mu\nabla^2 u\sim \mu U/L^2` in the PDE.
+
+Sometimes, one will argue to chose :math:`U` to make :math:`\gamma` unity (:math:`U =
+\varrho gL^2/\mu`). However, in elasticity, this leads us to
+displacements of the size of the geometry, which makes plots look very
+strange. We therefore want the characteristic displacement to be a
+small fraction of the characteristic length of the geometry.  This can
+be achieved by choosing :math:`U` equal to the maximum deflection of a
+clamped beam, for which there actually exists an formula: :math:`U =
+\frac{3}{2}\varrho gL^2\delta^2/E`, where :math:`\delta = L/W` is a
+parameter reflecting how slender the beam is, and :math:`E` is the modulus
+of elasticity.  Thus, the dimensionless parameter :math:`\delta` is very
+important in the problem (as expected, since :math:`\delta\gg 1` is what
+gives beam theory!).  Taking :math:`E` to be of the same order as :math:`\mu`,
+which is the case for many materials, we realize that :math:`\gamma \sim
+\delta^{-2}` is an appropriate choice.  Experimenting with the
+code to find a displacement that "looks right" in plots of the
+deformed geometry, points to :math:`\gamma = 0.4\delta^{-2}` as our final
+choice of :math:`\gamma`.
+
+The simulation code implements the problem with dimensions and
+physical parameters :math:`\lambda`, :math:`\mu`, :math:`\varrho`, :math:`g`, :math:`L`, and :math:`W`.
+However, we can easily reuse this code for a scaled problem: just set
+:math:`\mu = \varrho = L = 1`, :math:`W` as :math:`W/L` (:math:`\delta^{-1}`), :math:`g=\gamma`, and
+:math:`\lambda=\beta`.
+
+.. figure:: beam2.png
+   :width: 800
+
+   Gravity-induced deformation of a clamped beam: deflection (left) and stress intensity seen from below (right)
+
+.. Stand-alone notebook?
+
+.. _ftut1:NS:
+
+The Navier - Stokes equations
+=============================
+
+As our next example in this chapter, we will solve the incompressible
+Navier - Stokes equations. This problem combines many of the challenges
+from our previously studied problems: time-dependence, nonlinearity,
+and vector-valued variables. We shall touch on a number of FEniCS topics,
+many of them quite advanced. But you will see that even a relatively
+complex algorithm such as a second-order splitting method for the
+incompressible Navier - Stokes equations, can be implemented with
+relative ease in FEniCS.
+
+PDE problem          (4)
+------------------------
+
+The incompressible Navier - Stokes equations are a system of equations
+for the velocity :math:`u` and pressure :math:`p` in an incompressible fluid:
+
+.. _Eq:ftut1:ns:momentum:
+
+.. math::
+
+    \tag{45}
+    \varrho\left(\frac{\partial u}{\partial t} +
+          u \cdot \nabla u\right) = \nabla\cdot\sigma(u, p) + f, 
+        
+
+.. _Eq:ftut1:ns:continuity:
+
+.. math::
+
+    \tag{46}
+    \nabla \cdot u = 0.
+        
+
+The right-hand side :math:`f` is a given force per unit volume and
+just as for the equations of linear elasticity,
+:math:`\sigma(u, p)` denotes the stress tensor which for a Newtonian fluid
+is given by
+
+.. _Eq:_auto9:
+
+.. math::
+
+    \tag{47}
+    \sigma(u, p) = 2\mu\epsilon(u) - pI,
+        
+        
+
+where :math:`\epsilon(u)` is the strain-rate tensor
+
+.. math::
+         \epsilon(u) = \frac{1}{2}\left(\nabla u + (\nabla u)^T\right){\thinspace .}
+
+The parameter :math:`\mu` is the dynamic viscosity. Note that the momentum
+equation :ref:`(45) <Eq:ftut1:ns:momentum>` is very similar to the elasticity
+equation :ref:`(36) <Eq:ftut:elast:varform:equilibrium>`. The difference is in the
+two additional terms :math:`\varrho(\partial u / \partial t + u \cdot \nabla u)` and the different
+expression for the stress tensor. The two extra terms express the
+acceleration balanced by the force :math:`F = \nabla\cdot\sigma + f` per unit volume in Newton's second law of motion.
+
+.. _ftut1:NS:varform:
+
+Variational formulation          (4)
+------------------------------------
+
+The Navier - Stokes equations are different from
+the time-dependent heat equation in that we need to solve a system of
+equations and this system is of a special type. If we apply the same
+technique as for the heat equation; that is, replacing the time
+derivative with a simple difference quotient, we obtain a nonlinear
+system of equations. This in
+itself is not a problem for FEniCS as we saw in the section :ref:`ftut1:gallery:nonlinearpoisson`, but the system has a so-called
+*saddle point structure* and requires special techniques
+(preconditioners and iterative methods) to be solved efficiently.
+
+Instead, we will apply a simpler and often very efficient approach,
+known as a *splitting method*. The idea is to
+consider the two equations :ref:`(45) <Eq:ftut1:ns:momentum>` and
+:ref:`(46) <Eq:ftut1:ns:continuity>` separately. There exist many splitting
+strategies for the incompressible Navier - Stokes equations. One of the
+oldest is the method proposed by Chorin [Ref26]_ and
+Temam [Ref27]_, often referred to as *Chorin's method*. We will
+use a modified version of Chorin's method, the so-called incremental
+pressure correction scheme (IPCS) due to [Ref28]_ which gives
+improved accuracy compared to the original scheme at little extra
+cost.
+
+The IPCS scheme involves three steps. First, we compute a *tentative
+velocity* :math:`u^{\star}` by advancing the momentum equation
+:ref:`(45) <Eq:ftut1:ns:momentum>` by a midpoint finite difference scheme in
+time, but using the pressure :math:`p^{n}` from the
+previous time interval. We will also linearize the nonlinear convective
+term by using the known velocity :math:`u^{n}` from the previous time step:
+:math:`u^{n}\cdot\nabla u^{n}`.
+The variational problem for this first step is:
+
+.. _Eq:ftut1:ipcs1:
+
+.. math::
+
+    \tag{48}
+    {\langle \varrho(u^{\star, v \rangle} - u^{n}) / {\Delta t}}
+              + {\langle \varrho u^{n, v \rangle} \cdot \nabla u^{n}}
+              + \nonumber
+        
+
+.. math::
+          
+               {\langle \sigma(u^{n+\frac{1, \epsilon(v) \rangle}{2}}, p^{n})}
+              + {\langle p^{n, v \rangle} n}_{\partial\Omega}
+              - \nonumber
+        
+
+.. _Eq:_auto10:
+
+.. math::
+
+    \tag{49}
+    {\langle \mu \nabla u^{n+\frac{1, v \rangle}{2}}\cdot n}_{\partial\Omega}
+              = {\langle f^{n+1, v \rangle}}.
+        
+        
+
+This notation, suitable for problems with many terms in the variational
+formulations, requires some explanation. First, we use the short-hand
+notation
+
+.. math::
+        
+          {\langle v, w \rangle} = \int_{\Omega} vw {\, \mathrm{d}x}, \quad
+          {\langle v, w \rangle}_{\partial\Omega} = \int_{\partial\Omega} vw {\, \mathrm{d}s}.
+        
+
+This allows us to express the variational problem in a more compact
+way. Second, we use the notation :math:`u^{n+\frac{1}{2}}`. This notation
+means the value of :math:`u` at the midpoint of the interval, usually approximated
+by an arithmetic mean
+
+.. math::
+        
+          u^{n+\frac{1}{2}} \approx (u^n + u^{n+1}) / 2.
+        
+
+Third, we notice that the variational problem :ref:`(48) <Eq:ftut1:ipcs1>`
+arises from the integration by parts of the term
+:math:`{\langle -\nabla\cdot\sigma, v \rangle}`. Just as for the elasticity problem in
+the section :ref:`ftut:elast`, we obtain
+
+.. math::
+        
+          {\langle -\nabla\cdot\sigma, v \rangle}
+          = {\langle \sigma, \epsilon(v) \rangle}
+          - {\langle T, v \rangle}_{\partial\Omega},
+        
+
+where :math:`T = \sigma\cdot n` is the boundary traction. If we solve a
+problem with a free boundary, we can take :math:`T = 0` on the
+boundary. However, if we compute the flow through a channel or a pipe
+and want to model flow that continues into an "imaginary channel" at
+the outflow, we need to treat this term with some care. The assumption
+we then make is that the derivative of the velocity in the direction
+of the channel is zero at the outflow, corresponding to a flow that is
+"fully developed" or doesn't change significantly downstream of the
+outflow. Doing so, the remaining boundary term at the outflow becomes
+:math:`pn - \mu\nabla u \cdot n`, which is the term appearing in the
+variational problem :ref:`(48) <Eq:ftut1:ipcs1>`.
+
+
+.. admonition:: ``grad(u)`` vs. ``nabla_grad(u)``
+
+   For scalar functions :math:`\nabla u` has a clear meaning as the vector
+   
+   .. math::
+            \nabla u =\left(\frac{\partial u}{\partial x}, \frac{\partial u}{\partial y},
+           \frac{\partial u}{\partial z}\right){\thinspace .}
+   
+   However, if :math:`u` is vector-valued, the meaning is less clear.
+   Some sources define :math:`\nabla u` as the matrix with elements
+   :math:`\partial u_j / \partial x_i`, while other sources prefer
+   :math:`\partial u_i / \partial x_j`. In FEniCS, ``grad(u)`` is defined as the
+   matrix with elements :math:`\partial u_i / \partial x_j`, which is the
+   natural definition of :math:`\nabla u` if we think of this as the *gradient* or
+   *derivative* of :math:`u`. This way, the matrix :math:`\nabla u` can be applied to
+   a differential :math:`{\, \mathrm{d}x}` to give an increment :math:`\mathrm{d}u = \nabla u \,
+   {\, \mathrm{d}x}`. Since the alternative interpretation of :math:`\nabla u` as the matrix
+   with elements :math:`\partial u_j / \partial x_i` is very common, in
+   particular in continuum mechanics, FEniCS
+   provides the operator ``nabla_grad`` for this purpose.
+   For the Navier - Stokes equations, it is important to consider the
+   term :math:`u \cdot \nabla u` which should be interpreted as the vector
+   :math:`w` with elements
+   
+   .. math::
+           
+           w_i = \sum_j \left(u_j \frac{\partial}{\partial x_j}\right) u_i
+           = \sum_j u_j \frac{\partial u_i}{\partial x_j}{\thinspace .}
+   
+   This term can be implemented in FEniCS either as
+   ``grad(u)*u``, since this is expression becomes
+   :math:`\sum_j \partial u_i/\partial x_j u_j`, or as
+   ``dot(u, nabla_grad(u))`` since this expression becomes
+   :math:`\sum_i u_i \partial u_j/\partial x_i`. We will use the notation
+   ``dot(u, nabla_grad(u))`` below since it corresponds more closely
+   to the standard notation :math:`u \cdot \nabla u`.
+   
+   To be more precise, there are three different notations used for PDEs
+   involving gradient, divergence, and curl operators.
+   One employs :math:`\mathrm{grad}\, u`, :math:`\mathrm{div}\, u`, and
+   :math:`\mathrm{curl}\, u` operators. Another employs :math:`\nabla u`
+   as a synonym for :math:`\mathrm{grad}\, u`, :math:`\nabla\cdot u` means :math:`\mathrm{div}\, u`,
+   and :math:`\nabla\times u` is the name for :math:`\mathrm{curl}\, u`. The
+   third operates with :math:`\nabla u`, :math:`\nabla\cdot u`, and :math:`\nabla\times u`
+   in which :math:`\nabla` is a *vector* and, e.g., :math:`\nabla u` is a dyadic
+   expression: :math:`(\nabla u)_{i,j} = \partial u_j/\partial x_i =
+   (\mathrm{grad}\,u)^{\top}`.
+   The latter notation, with :math:`\nabla` as a vector operator,
+   is often handy when deriving equations in continuum mechanics, and if
+   this interpretation of :math:`\nabla` is the foundation of your PDE, you must
+   use ``nabla_grad``, ``nabla_div``, and ``nabla_curl`` in FEniCS code as
+   these operators are compatible with dyadic computations.
+   From the Navier - Stokes equations we can easily see what :math:`\nabla` means:
+   if the convective term has the form :math:`u\cdot \nabla u` (actually meaning
+   :math:`(u\cdot\nabla) u`), :math:`\nabla` is a vector operator, reading
+   ``dot(u, nabla_grad(u))`` in FEniCS, but if we see
+   :math:`\nabla u\cdot u` or :math:`(\mathrm{grad} u)\cdot u`, the
+   corresponding FEniCS
+   expression is ``dot(grad(u), u)``.
+
+
+
+
+We now move on to the second step in our splitting scheme for the
+incompressible Navier - Stokes equations. In the first step, we computed
+the tentative velocity :math:`u^{\star}` based on the pressure from the
+previous time step. We may now use the computed tentative velocity to
+compute the new pressure :math:`p^n`:
+
+.. _Eq:ftut1:ipcs2:
+
+.. math::
+
+    \tag{50}
+    {\langle \nabla p^{n+1, \nabla q \rangle}}
+          = {\langle \nabla p^{n, \nabla q \rangle}} - {\Delta t}^{-1}{\langle \nabla \cdot u^{\star, q \rangle}}.
+        
+
+Note here that :math:`q` is a scalar-valued test function from the pressure
+space, whereas the test function :math:`v` in :ref:`(48) <Eq:ftut1:ipcs1>` is a
+vector-valued test function from the velocity space.
+
+One way to think about this step is to subtract the Navier - Stokes
+momentum equation :ref:`(45) <Eq:ftut1:ns:momentum>` expressed in terms of the
+tentative velocity :math:`u^{\star}` and the pressure :math:`p^{n}` from the
+momentum equation expressed in terms of the velocity :math:`u^n` and
+pressure :math:`p^n`. This results in the equation
+
+.. _Eq:ftut1:ipcs:step:
+
+.. math::
+
+    \tag{51}
+    \
+          (u^n - u^{\star}) / {\Delta t} + \nabla p^{n+1} - \nabla p^n = 0.
+        
+
+Taking the divergence and requiring that :math:`\nabla \cdot u^n = 0` by the
+Navier - Stokes continuity equation :ref:`(46) <Eq:ftut1:ns:continuity>`, we
+obtain the equation :math:`-\nabla\cdot u^{\star} / {\Delta t} + \nabla^2 p^{n+1} -
+\nabla^2 p^n = 0`, which is a Poisson problem for the pressure :math:`p^{n+1}`
+resulting in the variational problem :ref:`(50) <Eq:ftut1:ipcs2>`.
+
+Finally, we compute the corrected velocity :math:`u^{n+1}` from the equation
+:ref:`(51) <Eq:ftut1:ipcs:step>`. Multiplying this equation by a test function
+:math:`v`, we obtain
+
+.. _Eq:ftut1:ipcs3:
+
+.. math::
+
+    \tag{52}
+    {\langle u^{n+1, v \rangle}} =
+          {\langle u^{\star, v \rangle}} - {\Delta t}{\langle \nabla(p^{n+1, v \rangle}-p^{n})}.
+        
+
+In summary, we may thus solve the incompressible Navier - Stokes
+equations efficiently by solving a sequence of three linear variational
+problems in each time step.
+
+FEniCS implementation          (8)
+----------------------------------
+
+Test problem 1: Channel flow
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+As a first test problem, we compute the flow between two infinite plates,
+so-called channel or Poiseuille flow, since this problem has a known
+analytical solution. Let :math:`H` be the distance between the plates and :math:`L`
+the length of the channel. There are no body forces.
+
+We may scale the problem first to get rid of seemingly independent
+physical parameters. The physics of this problem is governed by
+viscous effects only, in the direction perpendicular to the flow, so a
+time scale should be based on diffusion accross the channel: :math:`t_c =
+H^2/\nu`. We let :math:`U`, some characteristic inflow velocity, be the
+velocity scale and :math:`H` the spatial scale. The pressure scale is taken
+as the characteristic shear stress, :math:`\mu U/H`, since this is a primary
+example of shear flow.  Inserting :math:`\bar x = x/H`, :math:`\bar y = y/H`,
+:math:`\bar z = z/H`, :math:`\bar u =u/U`, :math:`\bar p = Hp/(\mu U)`, and :math:`\bar t =
+H^2/\nu` in the equations results in the scaled Navier - Stokes
+equations (dropping bars after the scaling):
+
+[**AL 3**: This looks very strange to me. Why don't we get the standard scaled version of NS? And why is :math:`\mu` still in there? And last term should be dropped since it is actually zero, just seems confusing.]
+[**hpl 4**: You are right: The two last terms are typos and left-overs from the equation with dimension. Should be no :math:`\mu` in a scaled equation! Otherwise the dimension is wrong...]
+
+.. math::
+        \begin{align*}
+        \frac{\partial u}{\partial t} + \mathrm{Re}\, u\cdot\nabla u
+        &= -\nabla p + \nabla^2 u,\\ 
+        \nabla\cdot u &= 0{\thinspace .}
+        \end{align*}
+
+Here, :math:`\mathrm{Re} = \varrho UH/\mu` is the Reynolds number. Because
+of the time and pressure scale, which are different from
+convection-dominated fluid flow, the Reynolds number is associated
+with the convective term and not the viscosity term. Note that the
+last term in the first equation is zero, but we included this term as
+it arises naturally from the original :math:`\nabla\cdot\sigma` term.
+
+[**AL 5**: How can we conclude that :math:`\partial p / \partial x =` constant?]
+[**hpl 6**: Explained in the text below.]
+
+The exact solution is derived by assuming :math:`u=(u_x(x,y,z),0,0)`, with
+the :math:`x` axis pointing along the channel. Since :math:`\nabla\cdot u=0`, :math:`u`
+cannot depend on :math:`x`. The physics of channel flow is also
+two-dimensional so we can omit the :math:`z` coordinate (more precisely:
+:math:`\partial/\partial z=0`). Inserting :math:`u=(u_x,0,0)` in the (scaled)
+governing equations gives :math:`u_x''(y) = \partial p/\partial x`.
+Differentiating this equation with respect to :math:`x` shows that :math:`\partial^2
+p/\partial^2 x =0` so :math:`\partial
+p/\partial x` is a constant, here called :math:`-\beta`. This is the driving
+force of the flow and can be specified as a known parameter in the
+problem.  Integrating :math:`u_x''(y)=-\beta` over the width of the channel,
+:math:`[0,1]`, and requiring :math:`u=0` at the channel walls, results in
+:math:`u_x=\frac{1}{2}\beta y(1-y)`. The characteristic inlet flow in the
+channel, :math:`U`, can be taken as the maximum inflow at :math:`y=1/2`, implying
+that :math:`\beta = 8`. The length of the channel, :math:`L/H` in the scaled
+model, has no impact on the result, so for simplicity we just compute
+on the unit square. Mathematically, the pressure must be prescribed
+at a point, but since :math:`p` does not depend on :math:`y`, we can set :math:`p` to a
+known value, e.g. zero, along the outlet boundary :math:`x=1`. The result
+is :math:`p(x)=8(1-x)` and :math:`u_x=4y(1-y)`.
+
+The boundary conditions can be set as :math:`p=1` at :math:`x=0`, :math:`p=0` at :math:`x=1`
+and :math:`u=0` on the walls :math:`y=0,1`. This defines the pressure drop and
+should result in unit maximum velocity at the inlet and outlet and a
+parabolic velocity profile without further specifications.  Note that
+it is only meaningful to solve the Navier - Stokes equations in 2D or 3D
+geometries, although the underlying mathematical problem collapses to
+two 1D problems, one for :math:`u_x(y)` and one for :math:`p(x)`.
+
+The scaled model is not so easy to simulate using a standard
+Navier - Stokes solver with dimensions. However, one can argue that the
+convection term is zero, so the Re coefficient in front of this term
+in the scaled PDEs is not important and can be set to unity. In that
+case, setting :math:`\varrho = \mu = 1` in the original Navier - Stokes equations
+resembles the scaled model.
+
+[**AL 7**: One could ask why the scaling is important at all here? It is interesting to discuss for physics and analysis, but don't we always want to implement a solver using units so that one can insert specific material parameters?]
+
+FEniCS implementation          (9)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Our previous examples have all started out with the creation of a
+mesh and then the definition of a ``FunctionSpace`` on the mesh. For the
+splitting scheme we will use to solve the Navier - Stokes equations we
+need to define two function spaces, one for the velocity and one for
+the pressure:
+
+.. code-block:: python
+
+    V = VectorFunctionSpace(mesh, 'P', 2)
+    Q = FunctionSpace(mesh, 'P', 1)
+
+The first space ``V`` is a vector-valued function space for the velocity
+and the second space ``Q`` is a scalar-valued function space for the
+pressure. We use piecewise quadratic elements for the velocity and
+piecewise linear elements for the pressure. When creating a
+``VectorFunctionSpace`` in FEniCS, the value-dimension (the length of
+the vectors) will be set equal to the geometric dimension of the
+finite element mesh. One can easily create vector-valued function
+spaces with other dimensions in FEniCS by adding the keyword parameter
+``dim``:
+
+.. code-block:: python
+
+    V = VectorFunctionSpace(mesh, 'P', 2, dim=10)
+
+
+.. admonition:: Stable finite element spaces for the Navier - Stokes equations
+
+   It is well-known that certain finite element spaces are not *stable*
+   for the Navier - Stokes equations, or even for the simpler Stokes
+   equations. The prime example of an unstable pair of finite element
+   spaces is to use first degree continuous piecewise polynomials for both the
+   velocity and the pressure. Using an
+   unstable pair of spaces typically results in a solution with
+   *spurious* (unwanted, non-physical) oscillations in the pressure
+   solution. The simple remedy is to use piecewise continuous piecewise
+   quadratic elements for the velocity and continuous piecewise linear
+   elements for the pressure. Together, these elements form the so-called
+   *Taylor-Hood* element. Spurious oscillations may occur also for
+   splitting methods if an unstable element pair is used.
+
+
+
+
+Since we have two different function spaces, we need to create two sets
+of trial and test functions:
+
+.. code-block:: python
+
+    u = TrialFunction(V)
+    v = TestFunction(V)
+    p = TrialFunction(Q)
+    q = TestFunction(Q)
+
+.. index:: near
+
+As we have seen in previous examples, boundaries may be defined in
+FEniCS by defining Python functions that return ``True`` or ``False``
+depending on whether a point should be considered part of the
+boundary, for example
+
+.. code-block:: python
+
+    def boundary(x, on_boundary):
+        return near(x[0], 0)
+
+This function defines the boundary to be all points with
+:math:`x`-coordinate equal to (near) zero. The ``near`` function comes from
+FEniCS and performs a test with tolerance: ``abs(x[0]-0) < 3E-16`` so
+we do not run into rounding troubles.
+Alternatively, we may give the boundary
+definition as a string of C++ code, much like we have previously
+defined expressions such as ``u0 = Expression('1 + x[0]*x[0] +
+2*x[1]*x[1]')``. The above definition of the boundary in terms of a
+Python function may thus be replaced by a simple C++ string:
+
+.. code-block:: python
+
+    boundary = 'near(x[0], 0)'
+
+This has the advantage of moving the computation of which nodes
+belong to the boundary from Python to C++, which improves the efficiency
+of the program.
+
+For the current example, we will set three different boundary
+conditions. First, we will set :math:`u = 0` at the walls of the channel;
+that is, at :math:`y = 0` and :math:`y = 1`. Second, we will set :math:`p = 1` at the
+inflow (:math:`x = 0`) and, finally, :math:`p = 0` at the outflow (:math:`x = 1`). This
+will result in a pressure gradient that will accelerate the flow from an
+initial stationary state. These
+boundary conditions may be defined as follows:
+
+.. code-block:: python
+
+    # Define boundaries
+    inflow   = 'near(x[0], 0)'
+    outflow  = 'near(x[0], 1)'
+    walls    = 'near(x[1], 0) || near(x[1], 1)'
+    
+    # Define boundary conditions
+    bcu_noslip  = DirichletBC(V, Constant((0, 0)), walls)
+    bcp_inflow  = DirichletBC(Q, Constant(8), inflow)
+    bcp_outflow = DirichletBC(Q, Constant(0), outflow)
+    bcu = [bcu_noslip]
+    bcp = [bcp_inflow, bcp_outflow]
+
+At the end, we collect the boundary conditions for the velocity and
+pressure in Python lists so we can easily access them in the
+following computation.
+
+We now move on to the definition of the variational forms. There are
+three variational problems to be defined, one for each step in the
+IPCS scheme. Let us look at the definition of the first variational
+problem. We start with some constants:
+
+.. code-block:: python
+
+    U   = 0.5*(u_n + u)
+    n   = FacetNormal(mesh)
+    f   = Constant((0, 0))
+    k   = Constant(dt)
+    mu  = Constant(mu)
+    rho = Constant(rho)
+
+The next step is to set up the variational form for the first step
+:ref:`(48) <Eq:ftut1:ipcs1>` in the solution process.
+Since the variational problem contains a mix of
+known and unknown quantities we have introduced a naming convention to
+be used throughout the book: ``u`` is the unknown (mathematically :math:`u^{n+1}`)
+as a trial function in the variational form, ``u_`` is the most recently
+computed approximation (:math:`u^{n+1}` available as a finite element
+FEniCS ``Function`` object), ``u_n`` is :math:`u^n`, and the same convention
+goes for ``p``, ``p_`` (:math:`p^{n+1}`), and ``p_n`` (:math:`p^n`).
+
+.. code-block:: python
+
+    def epsilon(u):
+        return sym(nabla_grad(u))
+    
+    # Define stress tensor
+    def sigma(u, p):
+        return 2*mu*epsilon(u) - p*Identity(len(u))
+    
+    # Define variational problem for step 1
+    F1 = rho*dot((u - u_n) / k, v)*dx + \ 
+         rho*dot(dot(u_n, nabla_grad(u_n)), v)*dx \ 
+       + inner(sigma(U, p_n), epsilon(v))*dx \ 
+       + dot(p_n*n, v)*ds - dot(mu*nabla_grad(U)*n, v)*ds \ 
+       - rho*dot(f, v)*dx
+    a1 = lhs(F1)
+    L1 = rhs(F1)
+
+Note that we, in the definition of the variational problem,
+take advantage of the
+Python programming language to define our own operators ``sigma`` and
+``epsilon``. Using Python this way makes it easy to extend the
+mathematical language of FEniCS with special operators and
+constitutive laws.
+
+Also note that FEniCS can sort out the bilinear form :math:`a(u,v)` and
+linear form :math:`L(v)` forms by the ``lhs``
+and ``rhs`` functions. This is particularly convenient in longer and
+more complicated variational forms.
+
+The splitting scheme requires the solution of a sequence of three
+variational problems in each time step. We have previously used the
+built-in FEniCS function ``solve`` to solve variational problems. Under
+the hood, when a user calls ``solve(a == L, u, bc)``, FEniCS will
+perform the following steps:
+
+.. code-block:: python
+
+    A = assemble(A)
+    b = assemble(L)
+    bc.apply(A, b)
+    solve(A, u.vector(), b)
+
+In the last step, FEniCS uses the overloaded ``solve`` function to solve
+the linear system ``AU = b`` where ``U`` is the vector of degrees of
+freedom for the function :math:`u(x) = \sum_{j=1} U_j \phi_j(x)`.
+
+In our implementation of the splitting scheme, we will make use of
+these low-level commands to first assemble and then call solve. This
+has the advantage that we may control when we assemble and when we
+solve the linear system. In particular, since the matrices for the
+three variational problems are all time-independent, it makes sense to
+assemble them once and for all outside of the time-stepping loop:
+
+.. code-block:: python
+
+    A1 = assemble(a1)
+    A2 = assemble(a2)
+    A3 = assemble(a3)
+
+Within the time-stepping loop, we may then assemble only the
+right-hand side vectors, apply boundary conditions, and call the solve
+function as here for the first of the three steps:
+
+.. code-block:: python
+
+    # Time-stepping
+    t = 0
+    for n in range(num_steps):
+    
+        # Update current time
+        t += dt
+    
+        # Step 1: Tentative velocity step
+        b1 = assemble(L1)
+        [bc.apply(b1) for bc in bcu]
+        solve(A1, u_.vector(), b1)
+
+Notice the Python *list comprehension* ``[bc.apply(b1) for bc in bcu]``
+which iterates over all ``bc`` in the list ``bcu``. This is a convenient
+and compact way to construct a loop that applies
+all boundary conditions in a single line. Also, the code works if
+we add more Dirichlet boundary conditions in the future.
+
+Finally, let us look at an important detail in how we use parameters
+such as the time step ``dt`` in the definition of our variational
+problems. Since we might want to change these later, for example if we
+want to experiment with smaller or larger time steps, we wrap these
+using a FEniCS ``Constant``:
+
+.. code-block:: python
+
+    k = Constant(dt)
+
+The assembly of matrices and vectors in FEniCS is based on code
+generation. This means that whenever we change a variational problem,
+FEniCS will have to generate new code, which may take a little
+time. New code will also be generated when a float value for the time
+step is changed. By wrapping this parameter using
+``Constant``, FEniCS will treat the parameter as a generic constant and
+not a specific numerical value, which prevents repeated code
+generation. In the case of the time step, we choose a new name ``k``
+instead of ``dt`` for the ``Constant`` since we also want to use the
+variable ``dt`` as a Python float as part of the time-stepping.
+
+The complete code for simulating 2D channel flow with FEniCS looks as
+follows:
+
+.. code-block:: python
+
+    from fenics import *
+    import numpy as np
+    
+    T = 10.0           # final time
+    num_steps = 500    # number of time steps
+    dt = T / num_steps # time step size
+    mu = 1             # kinematic viscosity
+    rho = 1            # density
+    
+    # Create mesh and define function spaces
+    mesh = UnitSquareMesh(16, 16)
+    V = VectorFunctionSpace(mesh, 'P', 2)
+    Q = FunctionSpace(mesh, 'P', 1)
+    
+    # Define boundaries
+    inflow  = 'near(x[0], 0)'
+    outflow = 'near(x[0], 1)'
+    walls   = 'near(x[1], 0) || near(x[1], 1)'
+    
+    # Define boundary conditions
+    bcu_noslip = DirichletBC(V, Constant((0, 0)), walls)
+    bcp_inflow = DirichletBC(Q, Constant(8), inflow)
+    bcp_outflow = DirichletBC(Q, Constant(0), outflow)
+    bcu = [bcu_noslip]
+    bcp = [bcp_inflow, bcp_outflow]
+    
+    # Define trial and test functions
+    u = TrialFunction(V)
+    v = TestFunction(V)
+    p = TrialFunction(Q)
+    q = TestFunction(Q)
+    
+    # Define functions for solutions at previous and current time steps
+    u_n = Function(V)
+    u_  = Function(V)
+    p_n = Function(Q)
+    p_  = Function(Q)
+    
+    # Define expressions used in variational forms
+    U   = 0.5*(u_n + u)
+    n   = FacetNormal(mesh)
+    f   = Constant((0, 0))
+    k   = Constant(dt)
+    mu  = Constant(mu)
+    rho = Constant(rho)
+    
+    # Define strain-rate tensor
+    def epsilon(u):
+        return sym(nabla_grad(u))
+    
+    # Define stress tensor
+    def sigma(u, p):
+        return 2*mu*epsilon(u) - p*Identity(len(u))
+    
+    # Define variational problem for step 1
+    F1 = rho*dot((u - u_n) / k, v)*dx + \ 
+         rho*dot(dot(u_n, nabla_grad(u_n)), v)*dx \ 
+       + inner(sigma(U, p_n), epsilon(v))*dx \ 
+       + dot(p_n*n, v)*ds - dot(mu*nabla_grad(U)*n, v)*ds \ 
+       - rho*dot(f, v)*dx
+    a1 = lhs(F1)
+    L1 = rhs(F1)
+    
+    # Define variational problem for step 2
+    a2 = dot(nabla_grad(p), nabla_grad(q))*dx
+    L2 = dot(nabla_grad(p_n), nabla_grad(q))*dx - (1/k)*div(u_)*q*dx
+    
+    # Define variational problem for step 3
+    a3 = dot(u, v)*dx
+    L3 = dot(u_, v)*dx - k*dot(nabla_grad(p_ - p_n), v)*dx
+    
+    # Assemble matrices
+    A1 = assemble(a1)
+    A2 = assemble(a2)
+    A3 = assemble(a3)
+    
+    # Apply boundary conditions to matrices
+    [bc.apply(A1) for bc in bcu]
+    [bc.apply(A2) for bc in bcp]
+    
+    # Time-stepping
+    t = 0
+    for n in range(num_steps):
+    
+        # Update current time
+        t += dt
+    
+        # Step 1: Tentative velocity step
+        b1 = assemble(L1)
+        [bc.apply(b1) for bc in bcu]
+        solve(A1, u_.vector(), b1)
+    
+        # Step 2: Pressure correction step
+        b2 = assemble(L2)
+        [bc.apply(b2) for bc in bcp]
+        solve(A2, p_.vector(), b2)
+    
+        # Step 3: Velocity correction step
+        b3 = assemble(L3)
+        solve(A3, u_.vector(), b3)
+    
+        # Plot solution
+        plot(u_)
+    
+        # Compute error
+        u_e = Expression(('4*x[1]*(1.0 - x[1])', '0'), degree=2)
+        u_e = interpolate(u_e, V)
+        error = np.abs(u_e.vector().array() - u_.vector().array()).max()
+        print('t = %.2f: error = %.3g' % (t, error))
+        print('max u:', u_.vector().array().max())
+    
+        # Update previous solution
+        u_n.assign(u_)
+        p_n.assign(p_)
+    
+    # Hold plot
+    interactive()
+
+The complete code can be found in the file ``ft08_navier_stokes_channel.py``.
+
+Verification
+~~~~~~~~~~~~
+
+We compute the error at the nodes as we have done before to verify
+that our implementation is correct. Our Navier - Stokes solver computes
+the solution to the time-dependent incompressible Navier - Stokes
+equations, starting from the initial condition :math:`u = (0, 0)`. We have
+not specified the initial condition explicitly in our solver which
+means that FEniCS will initialize all variables, in particular the
+previous and current velocities ``u_n`` and ``u_``, to zero. Since the
+exact solution is quadratic, we expect the solution to be exact to
+within machine precision at the nodes at infinite time. For our
+implementation, the error quickly approaches zero and is approximately
+:math:`10^{-6}` at time :math:`T = 10`.
+
+.. _ftut1:fig:navier_stokes_poisseuille:
+
+.. figure:: navier_stokes_poiseuille.png
+   :width: 600
+
+   *Plot of the velocity profile at the final time for the Navier - Stokes Poiseuille flow example*
+
+.. --- begin exercise ---
+
+Exercise 2: Simulate channel flow in a 3D geometry
+--------------------------------------------------
+
+FEniCS solvers typically have the number of space dimensions
+parameterized, so a 1D, 2D, and 3D code all look the same.
+We shall demonstrate what this means by extending the 2D solver
+``navier_stokes_channel.py`` to a simulator where the domain is a box
+(the unit cube in the scaled model).
+
+**a)**
+Set up boundary conditions for :math:`u` at all points on the boundary.
+Set up boundary conditions for :math:`p` at all points on the boundary as
+this is required by our Poisson equation for :math:`p` (but not in the
+original mathematical model - there, knowing :math:`p` at one point throughout
+time is sufficient).
+
+.. --- begin solution of exercise ---
+
+**Solution.**
+At the inlet :math:`x=0` we have the velocity completely described: :math:`(u_x,0,0)`.
+At the channel walls, :math:`y=0` and :math:`y=1`, we also have the velocity
+completely described: :math:`u=(0,0,0)` because of no-slip.
+At the outlet x=1 we do not specify anything. This means that the
+boundary integrals in Step 1 vanish and that :math:`p=0` and
+:math:`\partial u/\partial n = 0`, with :math:`n` as the :math:`x` direction,
+implying "no change" with :math:`x`, which is reasonable (since we know
+that :math:`\partial/\partial x=0` because of incompressibility).
+For the pressure we set :math:`p=8` at :math:`x=0` and :math:`p=0` at :math:`x=1` to
+represent a scaled pressure gradient equal to 8 (which leads to
+a unit maximum velocity). At :math:`y=0` and :math:`y=1` we do not specify anything,
+which implies :math:`\partial p/\partial y=0`. This is a condition much
+discussed in the literature, but it works perfectly in channel flow
+with straight walls.
+
+The two remaining boundaries, :math:`z=0` and :math:`z=1`, requires attention.
+For the pressure, "nothing happens" in the :math:`z` direction so
+:math:`\partial p/\partial z=\partial p/\partial n=0` is the condition.
+This is automatically implemented by the finite element method.
+For the velocity we also have a "nothing happens" criterion in the
+3rd direction, and we can in addition use the assumption of :math:`u_z=0`,
+if needed.
+The derivative criterion means :math:`\partial u/\partial z=\partial u/\partial n=0`
+in the boundary integrals. There is also an integral involving :math:`pn_z`
+in a component PDE with :math:`u_z` in all terms.
+
+.. --- end solution of exercise ---
+
+**b)**
+Modify the ``navier_stokes_channel.py`` file so it computes 3D channel flow.
+
+.. --- begin solution of exercise ---
+
+**Solution.**
+We must switch the domain from ``UnitSquareMesh`` to ``UnitCubeMesh``.
+We must also switch all 3-vectors to 2-vectors, such as
+replacing going from ``(0,0)`` to ``(0,0,0)`` in ``bcu_noslip``. Similarly,
+``f`` and ``u_e`` must extend their 2-vectors to 3-vectors.
+
+.. container:: toggle
+
+    .. container:: header
+
+        **Show/Hide Code**
+
+    .. code-block:: python
+
+        from fenics import *
+        import numpy as np
+        
+        T = 10.0           # final time
+        num_steps = 500    # number of time steps
+        dt = T / num_steps # time step size
+        mu = 1             # kinematic viscosity
+        rho = 1            # density
+        
+        # Create mesh and define function spaces
+        mesh = UnitCubeMesh(4, 8, 4)
+        V = VectorFunctionSpace(mesh, 'P', 2)
+        Q = FunctionSpace(mesh, 'P', 1)
+        
+        # Define boundaries
+        inflow  = 'near(x[0], 0)'
+        outflow = 'near(x[0], 1)'
+        walls   = 'near(x[1], 0) || near(x[1], 1)'
+        
+        # Define boundary conditions
+        bcu_noslip = DirichletBC(V, Constant((0, 0, 0)), walls)
+        bcp_inflow = DirichletBC(Q, Constant(8), inflow)
+        bcp_outflow = DirichletBC(Q, Constant(0), outflow)
+        bcu = [bcu_noslip]
+        bcp = [bcp_inflow, bcp_outflow]
+        
+        # Define trial and test functions
+        u = TrialFunction(V)
+        v = TestFunction(V)
+        p = TrialFunction(Q)
+        q = TestFunction(Q)
+        
+        # Define functions for solutions at previous and current time steps
+        u0 = Function(V)
+        u1 = Function(V)
+        p0 = Function(Q)
+        p1 = Function(Q)
+        
+        # Define expressions used in variational forms
+        U   = 0.5*(u0 + u)
+        n   = FacetNormal(mesh)
+        f   = Constant((0, 0, 0))
+        k   = Constant(dt)
+        mu  = Constant(mu)
+        rho = Constant(rho)
+        
+        # Define strain-rate tensor
+        def epsilon(u):
+            return sym(nabla_grad(u))
+        
+        # Define stress tensor
+        def sigma(u, p):
+            return 2*mu*epsilon(u) - p*Identity(len(u))
+        
+        # Define variational problem for step 1
+        F1 = rho*dot((u - u0) / k, v)*dx + \ 
+             rho*dot(dot(u0, nabla_grad(u0)), v)*dx \ 
+           + inner(sigma(U, p0), epsilon(v))*dx \ 
+           + dot(p0*n, v)*ds - dot(mu*nabla_grad(U)*n, v)*ds \ 
+           - rho*dot(f, v)*dx
+        a1 = lhs(F1)
+        L1 = rhs(F1)
+        
+        # Define variational problem for step 2
+        a2 = dot(nabla_grad(p), nabla_grad(q))*dx
+        L2 = dot(nabla_grad(p0), nabla_grad(q))*dx - (1/k)*div(u1)*q*dx
+        
+        # Define variational problem for step 3
+        a3 = dot(u, v)*dx
+        L3 = dot(u1, v)*dx - k*dot(nabla_grad(p1 - p0), v)*dx
+        
+        # Assemble matrices
+        A1 = assemble(a1)
+        A2 = assemble(a2)
+        A3 = assemble(a3)
+        
+        # Apply boundary conditions to matrices
+        [bc.apply(A1) for bc in bcu]
+        [bc.apply(A2) for bc in bcp]
+        
+        # Time-stepping
+        t = 0
+        for n in xrange(num_steps):
+        
+            # Update current time
+            t += dt
+        
+            # Step 1: Tentative velocity step
+            b1 = assemble(L1)
+            [bc.apply(b1) for bc in bcu]
+            solve(A1, u1.vector(), b1)
+        
+            # Step 2: Pressure correction step
+            b2 = assemble(L2)
+            [bc.apply(b2) for bc in bcp]
+            solve(A2, p1.vector(), b2)
+        
+            # Step 3: Velocity correction step
+            b3 = assemble(L3)
+            solve(A3, u1.vector(), b3)
+        
+            # Plot solution
+            plot(u1)
+        
+            # Compute error
+            u_e = Expression(('4*x[1]*(1.0 - x[1])', '0', '0'), degree=2)
+            u_e = interpolate(u_e, V)
+            error = np.abs(u_e.vector().array() - u1.vector().array()).max()
+            print('t = %.2f: error = %.3g' % (t, error))
+            print('max u:', u1.vector().array().max())
+        
+            # Update previous solution
+            u0.assign(u1)
+            p0.assign(p1)
+        
+        # Hold plot
+        interactive()
+
+.. --- end solution of exercise ---
+
+.. --- end exercise ---
+
+Flow past a cylinder
+--------------------
+
+We now turn our attention to a more challenging physical example: flow
+past a circular cylinder. The geometry and parameters are taken from
+problem DFG 2D-2 in the `FEATFLOW/1995-DFG benchmark suite <http://www.featflow.de/en/benchmarks/cfdbenchmarking/flow/dfg_benchmark2_re100.html>`__
+and is illustrated in Figure
+:ref:`ftut1:navier_stokes_cylinder:geometry`. The kinematic viscosity is
+given by :math:`\nu = 0.001 = \mu/\varrho` and the inflow velocity profile is
+specified as
+
+.. math::
+        
+          u(x, y, t) = \left(1.5 \cdot \frac{4y(1-y)}{0.41^2}, 0\right),
+        
+
+which has a maximum magnitude of :math:`1.5` at :math:`y = 0.41/2`. We do not
+scale anything in this benchmark since exact parameters in the case
+we want to simulate are known.
+
+.. _ftut1:navier_stokes_cylinder:geometry:
+
+.. figure:: navier_stokes_cylinder_geometry.png
+   :width: 600
+
+   *Geometry for the flow past a cylinder test problem. Notice the slightly perturbed and unsymmetric geometry*
+
+FEniCS implementation          (10)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+So far all our domains have been simple shapes such as a unit square or
+a rectangular box. A number of such simple meshes may be created in
+FEniCS using the built-in meshes
+(``UnitIntervalMesh``,
+``UnitSquareMesh``,
+``UnitCubeMesh``,
+``IntervalMesh``,
+``RectangleMesh``, and
+``BoxMesh``).
+FEniCS supports the creation of more complex meshes via a technique
+called *constructive solid geometry* (CSG), which lets us define
+geometries in terms of simple shapes (primitives) and set operations:
+union, intersection, and set difference. The set operations are
+encoded in FEniCS using the operators ``+`` (union), ``*`` (intersection),
+and ``-`` (set difference). To access the CSG functionality in FEniCS,
+one must import the FEniCS module ``mshr`` which provides the
+extended meshing functionality of FEniCS.
+
+The geometry for the cylinder flow test problem can be defined easily
+by first defining the rectangular channel and then subtracting the
+circle:
+
+.. code-block:: python
+
+    channel = Rectangle(Point(0, 0), Point(2.2, 0.41))
+    cylinder = Circle(Point(0.2, 0.2), 0.05)
+    geometry = channel - cylinder
+
+We may then create the mesh by calling the function ``generate_mesh``:
+
+.. code-block:: python
+
+    mesh = generate_mesh(geometry, 64)
+
+To solve the cylinder test problem, we only need to make a few minor
+changes to the code we wrote for the Poiseuille flow test
+case. Besides defining the new mesh, the only change we need to make
+is to modify the boundary conditions and the time step size. The
+boundaries are specified as follows:
+
+.. code-block:: python
+
+    inflow   = 'near(x[0], 0)'
+    outflow  = 'near(x[0], 2.2)'
+    walls    = 'near(x[1], 0) || near(x[1], 0.41)'
+    cylinder = 'on_boundary && x[0]>0.1 && x[0]<0.3 && x[1]>0.1 && x[1]<0.3'
+
+The last line may seem cryptic before you catch the idea: we want to pick
+out all boundary points (``on_boundary``) that also lie within the 2D
+domain :math:`[0.1,0.3]\times [0.1,0.3]`, see Figure :ref:`ftut1:navier_stokes_cylinder:geometry`. The only possible points are then the points on the
+circular boundary!
+
+.. index:: set_log_level
+
+.. index:: DEBUG log level
+
+.. index:: PROGRESS log level
+
+In addition to these essential changes, we will make a number of small
+changes to improve our solver. First, since we need to choose a
+relatively small time step to compute the solution (a time step that
+is too large will make the solution blow up) we add a progress bar so
+that we can follow the progress of our computation. This can be done
+as follows:
+
+.. code-block:: python
+
+    progress = Progress('Time-stepping')
+    set_log_level(PROGRESS)
+    
+    t = 0.0
+    for n in range(num_steps):
+    
+        # Update current time
+        t += dt
+    
+        # Place computation here
+    
+        # Update progress bar
+        progress.update(t / T)
+
+
+.. admonition:: Log levels and printing in FEniCS
+
+   Notice the call to ``set_log_level(PROGRESS)`` which is essential to
+   make FEniCS actually display the progress bar. FEniCS is actually
+   quite informative about what is going on during a computation but the
+   amount of information printed to screen depends on the current log
+   level. Only messages with a priority higher than or equal to the
+   current log level will be displayed. The predefined log levels in
+   FEniCS are
+   ``DBG``,
+   ``TRACE``,
+   ``PROGRESS``,
+   ``INFO``,
+   ``WARNING``,
+   ``ERROR``, and
+   ``CRITICAL``. By default, the log level is set to ``INFO`` which means
+   that messages at level ``DBG``, ``TRACE``, and ``PROGRESS`` will not be
+   printed. Users may print messages using the FEniCS functions ``info``,
+   ``warning``, and ``error`` which will print messages at the obvious log
+   level (and in the case of ``error`` also throw an exception and
+   exit). One may also use the call ``log(level, message)`` to print a
+   message at a specific log level.
+
+
+
+
+Since the system(s) of linear equations are significantly larger than
+for the simple Poiseuille flow test problem, we choose to use an
+iterative method instead of the default direct (sparse) solver used by
+FEniCS when calling ``solve``. Efficient solution of linear systems
+arising from the discretization of PDEs requires the choice of both a
+good iterative (Krylov subspace) method and a good
+preconditioner. For this problem, we will simply use the biconjugate
+gradient stabilized method (BiCGSTAB). This can be done by adding the
+keyword ``bicgstab`` in the call to ``solve``. We also add a preconditioner,
+``ilu`` to further speed up the computations:
+
+.. code-block:: python
+
+    solve(A1, u1.vector(), b1, 'bicgstab', 'ilu')
+    solve(A2, p1.vector(), b2, 'bicgstab', 'ilu')
+    solve(A3, u1.vector(), b3, 'bicgstab')
+
+Finally, to be able to postprocess the computed solution in Paraview,
+we store the solution to file in each time step. To avoid cluttering
+our working directory with a large number of solution
+files, we make sure to store the solution in a subdirectory:
+
+.. code-block:: python
+
+    vtkfile_u = File('navier_stokes_cylinder/velocity.pvd')
+    vtkfile_p = File('navier_stokes_cylinder/pressure.pvd')
+
+Note that one does not need to create the directory before running the
+program. It will be created automatically by FEniCS.
+
+We also store the solution using a FEniCS ``TimeSeries``. This allows us
+to store the solution not for visualization (as when using VTK
+files), but for later reuse in a computation as we will see in the
+next section. Using a ``TimeSeries`` it is easy and efficient to read in
+solutions from certain points in time during a simulation. The
+``TimeSeries`` class uses a binary HDF5 file for efficient storage and
+access to data.
+
+Figures :ref:`ftut1:fig:navier_stokes_cylinder:velocity` and
+:ref:`ftut1:fig:navier_stokes_cylinder:pressure` show the velocity and
+pressure at final time visualized in Paraview. For the visualization
+of the velocity, we have used the **Glyph** filter to visualize the
+vector velocity field. For the visualization of the pressure, we have
+used the **Warp By Scalar** filter.
+
+.. _ftut1:fig:navier_stokes_cylinder:velocity:
+
+.. figure:: navier_stokes_cylinder_velocity.png
+   :width: 600
+
+   *Plot of the velocity for the cylinder test problem at final time*
+
+.. _ftut1:fig:navier_stokes_cylinder:pressure:
+
+.. figure:: navier_stokes_cylinder_pressure.png
+   :width: 600
+
+   *Plot of the pressure for the cylinder test problem at final time*
+
+The complete code for the cylinder test problem looks as
+follows:
+
+.. code-block:: python
+
+    from fenics import *
+    from mshr import *
+    import numpy as np
+    
+    T = 5.0            # final time
+    num_steps = 5000   # number of time steps
+    dt = T / num_steps # time step size
+    mu = 0.001         # dynamic viscosity
+    rho = 1            # density
+    
+    # Create mesh
+    channel = Rectangle(Point(0, 0), Point(2.2, 0.41))
+    cylinder = Circle(Point(0.2, 0.2), 0.05)
+    geometry = channel - cylinder
+    mesh = generate_mesh(geometry, 64)
+    
+    # Define function spaces
+    V = VectorFunctionSpace(mesh, 'P', 2)
+    Q = FunctionSpace(mesh, 'P', 1)
+    
+    # Define boundaries
+    inflow   = 'near(x[0], 0)'
+    outflow  = 'near(x[0], 2.2)'
+    walls    = 'near(x[1], 0) || near(x[1], 0.41)'
+    cylinder = 'on_boundary && x[0]>0.1 && x[0]<0.3 && x[1]>0.1 && x[1]<0.3'
+    
+    # Define inflow profile
+    inflow_profile = ('4.0*1.5*x[1]*(0.41 - x[1]) / pow(0.41, 2)', '0')
+    
+    # Define boundary conditions
+    bcu_inflow = DirichletBC(V, Expression(inflow_profile, degree=2), inflow)
+    bcu_walls = DirichletBC(V, Constant((0, 0)), walls)
+    bcu_cylinder = DirichletBC(V, Constant((0, 0)), cylinder)
+    bcp_outflow = DirichletBC(Q, Constant(0), outflow)
+    bcu = [bcu_inflow, bcu_walls, bcu_cylinder]
+    bcp = [bcp_outflow]
+    
+    # Define trial and test functions
+    u = TrialFunction(V)
+    v = TestFunction(V)
+    p = TrialFunction(Q)
+    q = TestFunction(Q)
+    
+    # Define functions for solutions at previous and current time steps
+    u_n = Function(V)
+    u_  = Function(V)
+    p_n = Function(Q)
+    p_  = Function(Q)
+    
+    # Define expressions used in variational forms
+    U   = 0.5*(u_n + u)
+    n   = FacetNormal(mesh)
+    f   = Constant((0, 0))
+    k   = Constant(dt)
+    mu  = Constant(mu)
+    
+    # Define symmetric gradient
+    def epsilon(u):
+        return sym(nabla_grad(u))
+    
+    # Define stress tensor
+    def sigma(u, p):
+        return 2*mu*epsilon(u) - p*Identity(len(u))
+    
+    # Define variational problem for step 1
+    F1 = rho*dot((u - u_n) / k, v)*dx \ 
+       + rho*dot(dot(u_n, nabla_grad(u_n)), v)*dx \ 
+       + inner(sigma(U, p_n), epsilon(v))*dx \ 
+       + dot(p_n*n, v)*ds - dot(mu*nabla_grad(U)*n, v)*ds \ 
+       - rho*dot(f, v)*dx
+    a1 = lhs(F1)
+    L1 = rhs(F1)
+    
+    # Define variational problem for step 2
+    a2 = dot(nabla_grad(p), nabla_grad(q))*dx
+    L2 = dot(nabla_grad(p_n), nabla_grad(q))*dx - (1/k)*div(u_)*q*dx
+    
+    # Define variational problem for step 3
+    a3 = dot(u, v)*dx
+    L3 = dot(u_, v)*dx - k*dot(nabla_grad(p_ - p_n), v)*dx
+    
+    # Assemble matrices
+    A1 = assemble(a1)
+    A2 = assemble(a2)
+    A3 = assemble(a3)
+    
+    # Apply boundary conditions to matrices
+    [bc.apply(A1) for bc in bcu]
+    [bc.apply(A2) for bc in bcp]
+    
+    # Create VTK files for visualization output
+    vtkfile_u = File('navier_stokes_cylinder/velocity.pvd')
+    vtkfile_p = File('navier_stokes_cylinder/pressure.pvd')
+    
+    # FIXME: mpi_comm_world should not be needed here, fix in FEniCS!
+    
+    # Create time series for saving solution for later
+    timeseries_u = TimeSeries('navier_stokes_cylinder/velocity')
+    timeseries_p = TimeSeries('navier_stokes_cylinder/pressure')
+    
+    # Save mesh to file for later
+    File('cylinder.xml.gz') << mesh
+    
+    # Create progress bar
+    progress = Progress('Time-stepping')
+    set_log_level(PROGRESS)
+    
+    # Time-stepping
+    t = 0
+    for n in range(num_steps):
+    
+        # Update current time
+        t += dt
+    
+        # Step 1: Tentative velocity step
+        b1 = assemble(L1)
+        [bc.apply(b1) for bc in bcu]
+        solve(A1, u_.vector(), b1, 'bicgstab', 'ilu')
+    
+        # Step 2: Pressure correction step
+        b2 = assemble(L2)
+        [bc.apply(b2) for bc in bcp]
+        solve(A2, p_.vector(), b2, 'bicgstab', 'ilu')
+    
+        # Step 3: Velocity correction step
+        b3 = assemble(L3)
+        solve(A3, u_.vector(), b3, 'bicgstab')
+    
+        # Plot solution
+        plot(u_, title='Velocity')
+        plot(p_, title='Pressure')
+    
+        # Save solution to file (VTK)
+        vtkfile_u << (u_, t)
+        vtkfile_p << (p_, t)
+    
+        # Save solution to file (HDF5)
+        timeseries_u.store(u_.vector(), t)
+        timeseries_p.store(p_.vector(), t)
+    
+        # Update previous solution
+        u_n.assign(u_)
+        p_n.assign(p_)
+    
+        # Update progress bar
+        progress.update(t / T)
+        print('u max:', u_.vector().array().max())
+    
+    # Hold plot
+    interactive()
+
+The complete code can be found in the file ``ft09_navier_stokes_cylinder.py``.
+
+.. Stand-alone notebook?
+
+.. _ftut1:reactionsystem:
+
+A system of advection - diffusion - reaction equations
+======================================================
+
+The problems we have encountered so far---with the notable exception
+of the Navier - Stokes equations---all share a common feature: they all
+involve models expressed by a *single* scalar or vector PDE. In many
+situations the model is instead expressed as a system of PDEs,
+describing different quantities and with possibly (very) different
+physics.  As we saw for the Navier - Stokes equations, one way to solve
+a system of PDEs in FEniCS is to use a splitting method where we solve
+one equation at a time and feed the solution from one equation into
+the next. However, one of the strengths with FEniCS is the ease by
+which one can instead define variational problems that couple several
+PDEs into one compound system. In this section, we will look at how to use
+FEniCS to write solvers for such systems of coupled PDEs.
+The goal is to demonstrate how easy it is to implement fully implicit,
+also known as monolithic, solvers in FEniCS.
+
+PDE problem          (5)
+------------------------
+
+Our model problem is the following system of
+advection - diffusion - reaction equations:
+
+.. _Eq:ftut1:reactionsystem:system:1:
+
+.. math::
+
+    \tag{53}
+    \frac{\partial u_1}{\partial t} +
+          w \cdot \nabla u_1 - \nabla\cdot(\epsilon\nabla u_1)
+            = f_1 -K u_1 u_2, 
+        
+
+.. _Eq:ftut1:reactionsystem:system:2:
+
+.. math::
+
+    \tag{54}
+    \frac{\partial u_2}{\partial t} +
+          w \cdot \nabla u_2 - \nabla\cdot(\epsilon\nabla u_2)
+            = f_2 -K u_1 u_2, 
+        
+
+.. _Eq:ftut1:reactionsystem:system:3:
+
+.. math::
+
+    \tag{55}
+    \frac{\partial u_3}{\partial t} +
+          w \cdot \nabla u_3 - \nabla\cdot(\epsilon\nabla u_3)
+            = f_3 + K u_1 u_2 - K u_3.
+        
+
+This system models the chemical reaction between two species :math:`A` and
+:math:`B` in some domain :math:`\Omega`:
+
+.. math::
+        
+          A + B \rightarrow C.
+        
+
+We assume that the equation is *first-order*, meaning that the
+reaction rate is proportional to the concentrations :math:`[A]` and :math:`[B]` of
+the two species :math:`A` and :math:`B`:
+
+.. math::
+        
+          \frac{\mathrm{d}}{\mathrm{d}t} [C] = K [A] [B].
+        
+
+We also assume that the formed species :math:`C` spontaneously decays with a
+rate proportional to the concentration :math:`[C]`. In the PDE system
+:ref:`(53) <Eq:ftut1:reactionsystem:system:1>`--:ref:`(55) <Eq:ftut1:reactionsystem:system:3>`,
+we use the variables :math:`u_1`, :math:`u_2`, and :math:`u_3` to denote the
+concentrations of the three species:
+
+.. math::
+        
+          u_1 = [A], \quad u_2 = [B], \quad u_3 = [C].
+        
+
+We see that the chemical reactions are accounted for in the
+right-hand sides of the PDE system :ref:`(53) <Eq:ftut1:reactionsystem:system:1>`--:ref:`(55) <Eq:ftut1:reactionsystem:system:3>`.
+
+The chemical reactions take part at each point in the domain
+:math:`\Omega`. In addition, we assume that the species :math:`A`, :math:`B`, and :math:`C`
+diffuse throughout the domain with diffusivity :math:`\epsilon` (the terms
+:math:`-\nabla\cdot(\epsilon\nabla u_i)`) and are advected with velocity
+:math:`w` (terms like :math:`w\cdot\nabla u_i`).
+
+To make things visually and physically interesting, we shall let the
+chemical reaction take place in the velocity field computed from the
+solution of the incompressible Navier - Stokes equations around a
+cylinder from the previous section.  In summary, we will thus be
+solving the following coupled system of nonlinear PDEs:
+
+.. _Eq:ftut1:reactionsystem:full:
+
+.. math::
+
+    \tag{56}
+    \varrho\left(\frac{\partial w}{\partial t} +
+          w \cdot \nabla w\right) = \nabla\cdot\sigma(w, p) + f, 
+        
+
+.. _Eq:_auto11:
+
+.. math::
+
+    \tag{57}
+    \nabla \cdot w = 0, 
+        
+        
+
+.. _Eq:_auto12:
+
+.. math::
+
+    \tag{58}
+    \frac{\partial u_1}{\partial t} +
+          w \cdot \nabla u_1 - \nabla\cdot(\epsilon\nabla u_1)
+            = f_1 - K u_1 u_2, 
+        
+        
+
+.. _Eq:_auto13:
+
+.. math::
+
+    \tag{59}
+    \frac{\partial u_2}{\partial t} +
+          w \cdot \nabla u_2 - \nabla\cdot(\epsilon\nabla u_2)
+            = f_2 - K u_1 u_2, 
+        
+        
+
+.. _Eq:_auto14:
+
+.. math::
+
+    \tag{60}
+    \frac{\partial u_3}{\partial t} +
+          w \cdot \nabla u_3 - \nabla\cdot(\epsilon\nabla u_3)
+            = f_3 + K u_1 u_2 - K u_3.
+        
+        
+
+We assume that :math:`u_1 = u_2 = u_3 = 0` at :math:`t = 0` and inject the species
+:math:`A` and :math:`B` into the system by specifying nonzero source terms :math:`f_1`
+and :math:`f_2` close to the corners at the inflow, and take :math:`f_3 = 0`. The
+result will be that :math:`A` and :math:`B` are convected by advection and
+diffusion throughout the channel, and when they mix the species :math:`C`
+will be formed.
+
+Since the system is one-way coupled from the Navier - Stokes subsystem
+to the advection - diffusion - reaction subsystem, we do not need to
+recompute the solution to the Navier - Stokes equations, but can just
+read back the previously computed velocity field :math:`w` and feed it into
+our equations. But we *do* need to learn how to read and write
+solutions from time-dependent PDE problems.
+
+Variational formulation          (5)
+------------------------------------
+
+We obtain the variational formulation of our system by multiplying
+each equation by a test function, integrating the second-order terms
+:math:`-\nabla\cdot(\epsilon\nabla u_i)` by parts, and summing up the
+equations. When working with FEniCS it is convenient to think of the
+PDE system as a vector of equations. The test functions are collected in
+a vector too, and the variational formulation is the inner product of
+the vector PDE and the vector test function.
+
+We also need introduce some discretization in time. We will use the
+backward Euler method as before when we solved the heat equation and
+approximate the time derivatives by :math:`(u_i^{n+1}-u_i^n) / {\Delta t}`. Let
+:math:`v_1`, :math:`v_2`, and :math:`v_3` be the test functions, or the components of
+the test vector function. The inner product results in
+
+.. _Eq:ftu1:reactionsystem:varproblem:
+
+.. math::
+
+    \tag{61}
+    \int_{\Omega}
+          ({\Delta t}^{-1} (u_1^{n+1} - u_1^n) v_1 + w \cdot \nabla u^{n+1}_1 \, v_1
+          + \epsilon \nabla u^{n+1}_1 \cdot \nabla v_1) {\, \mathrm{d}x} 
+        
+
+.. _Eq:_auto15:
+
+.. math::
+
+    \tag{62}
+    +  \int_{\Omega} ({\Delta t}^{-1} (u_2^{n+1} - u_2^n) v_2
+          + w \cdot \nabla u^{n+1}_2 \, v_2
+          + \epsilon \nabla u^{n+1}_2 \cdot \nabla v_2) {\, \mathrm{d}x} 
+        
+        
+
+.. _Eq:_auto16:
+
+.. math::
+
+    \tag{63}
+    +  \int_{\Omega} ({\Delta t}^{-1} (u_3^{n+1} - u_3^n) v_3
+          + w \cdot \nabla u^{n+1}_3 \, v_3
+          + \epsilon \nabla u^{n+1}_3 \cdot \nabla v_3) {\, \mathrm{d}x} 
+        
+        
+
+.. _Eq:_auto17:
+
+.. math::
+
+    \tag{64}
+    -  \int_{\Omega} (f_1 v_1 + f_2 v_2 + f_3 v_3) {\, \mathrm{d}x} 
+        
+        
+
+.. _Eq:_auto18:
+
+.. math::
+
+    \tag{65}
+    -  \int_{\Omega} (-K u^{n+1}_1 u^{n+1}_2 v_1 - K u^{n+1}_1
+          u^{n+1}_2 v_2 + K u^{n+1}_1 u^{n+1}_2 v_3 - K u^{n+1}_3 v_3) {\, \mathrm{d}x} = 0.
+        
+        
+
+For this problem it is natural to assume homogeneous Neumann boundary
+conditions on the entire boundary for :math:`u_1`, :math:`u_2`, and :math:`u_3`; that
+is, :math:`\partial u_i/\partial n = 0` for :math:`i = 1, 2, 3`. This means that
+the boundary terms vanish when we integrate by parts.
+
+FEniCS implementation          (11)
+-----------------------------------
+
+The first step is to read the mesh from file. Luckily, we made sure to
+save the mesh to file in the Navier - Stokes example and can now easily
+read it back from file:
+
+.. code-block:: python
+
+    mesh = Mesh(cylinder.xml.gz')
+
+The mesh is stored in the native FEniCS XML format (with additional
+gzipping to decrease the file size).
+
+Next, we need to define the finite element function space. For this
+problem, we need to define several spaces. The first space we create
+is the space for the velocity field :math:`w` from the Navier - Stokes
+simulation. We call this space :math:`W` and define the space by
+
+.. code-block:: python
+
+    W = VectorFunctionSpace(mesh, 'P', 2)
+
+It is important that this space is exactly the same as the space we
+used for the velocity field in the Navier - Stokes solver. To read the
+values for the velocity field, we use a ``TimeSeries``:
+
+.. code-block:: python
+
+    timeseries_w = TimeSeries('navier_stokes_cylinder/velocity')
+
+This will initialize the object ``timeseries_w`` which we will call
+later in the time-stepping loop to retrieve values from the
+file ``velocity.h5`` (in binary HDF5 format).
+
+For the three concentrations :math:`u_1`, :math:`u_2`, and :math:`u_3`, we want to
+create a *mixed space* with functions that represent the full system
+:math:`(u_1, u_2, u_3)` as a single entity. To do this, we need to define a
+``MixedElement`` as the product space of three simple finite elements
+and then used the mixed element to define the function space:
+
+.. code-block:: python
+
+    P1 = FiniteElement('P', 'triangle', 1)
+    element = MixedElement([P1, P1, P1])
+    V = FunctionSpace(mesh, element)
+
+
+.. admonition:: Mixed elements as products of elements
+
+   FEniCS also allows finite elements to be defined as products of simple
+   elements (or mixed elements). For example, the well-known Taylor - Hood
+   element, with quadratic velocity components and linear pressure functions,
+   may be defined as follows:
+   
+   .. code-block:: python
+   
+       P2 = VectorElement('P', 'triangle', 2)
+       P1 = FiniteElement('P', 'triangle', 1)
+       TH = P2 * P1
+   
+   This syntax works great for two elements, but for three or more
+   elements we meet a subtle issue in how the Python interpreter handles
+   the ``*`` operator. For the reaction system, we create the mixed element
+   by ``element = MixedElement([P1, P1, P1])`` and one would be tempted to
+   write
+   
+   .. code-block:: python
+   
+       element = P1 * P1 * P1
+   
+   However, this is equivalent to writing ``element = (P1 * P1) * P1`` so
+   the result will be a mixed element consisting of two subsystems, the
+   first of which in turn consists of two scalar subsystems.
+   
+   Finally, we remark that for the simple case of a mixed system
+   consisting of three scalar elements as for the reaction system, the
+   definition is in fact equivalent to using a standard vector-valued
+   element:
+   
+   .. code-block:: python
+   
+       element = VectorElement('P', 'triangle', 1, dim=3)
+       V = FunctionSpace(mesh, element)
+
+
+
+
+Once the space has been created, we need to define our test functions
+and finite element functions. Test functions for a mixed function
+space can be created by replacing ``TestFunction`` by ``TestFunctions``:
+
+.. code-block:: python
+
+    v_1, v_2, v_3 = TestFunctions(V)
+
+Since the problem is nonlinear, we need to work with functions rather
+than trial functions for the unknowns. This can be done by using the
+corresponding ``Functions`` construction in FEniCS. However, as we will
+need to access the ``Function`` for the entire system itself, we first
+need to create that function and then access its components:
+
+.. code-block:: python
+
+    u = Function(V)
+    u_1, u_2, u_3 = split(u)
+
+These functions will be used to represent the unknowns :math:`u_1`, :math:`u_2`, and :math:`u_3`
+at the new time level :math:`n+1`. The corresponding values at the previous
+time level :math:`n` are denoted by ``u_n1``, ``u_n2``, and ``u_n3`` in our program.
+
+When now all functions and test functions have been defined, we can
+express the nonlinear variational problem
+:ref:`(61) <Eq:ftu1:reactionsystem:varproblem>`:
+
+.. code-block:: python
+
+    F = ((u_1 - u_n1) / k)*v_1*dx + dot(w, grad(u_1))*v_1*dx \ 
+      + eps*dot(grad(u_1), grad(v_1))*dx + K*u_1*u_2*v_1*dx  \ 
+      + ((u_2 - u_n2) / k)*v_2*dx + dot(w, grad(u_2))*v_2*dx \ 
+      + eps*dot(grad(u_2), grad(v_2))*dx + K*u_1*u_2*v_2*dx  \ 
+      + ((u_3 - u_n3) / k)*v_3*dx + dot(w, grad(u_3))*v_3*dx \ 
+      + eps*dot(grad(u_3), grad(v_3))*dx - K*u_1*u_2*v_3*dx + K*u_3*v_3*dx \ 
+      - f_1*v_1*dx - f_2*v_2*dx - f_3*v_3*dx
+
+The time-stepping simply consists of solving this variational problem
+in each time step by a call to the ``solve`` function:
+
+.. code-block:: python
+
+    t = 0
+    for n in range(num_steps):
+        t += dt
+        timeseries_w.retrieve(w.vector(), t)
+        solve(F == 0, u)
+        u_n.assign(u)
+
+In each time step, we first read the current value for the velocity
+field from the time series we have previously stored. We then solve
+the nonlinear system, and assign the computed values to the left-hand
+side values for the next time interval.
+
+The solution at the final time is shown in Figure
+:ref:`ftut1:fig:reactionsystem:solution`. We
+clearly see the advection of the species :math:`A` and :math:`B` and the formation
+of :math:`C` along the center of the channel where :math:`A` and :math:`B` meet.
+
+.. _ftut1:fig:reactionsystem:solution:
+
+.. figure:: reaction_system.png
+   :width: 600
+
+   *Plot of the concentrations of the three species :math:`A`, :math:`B`, and :math:`C` (from top to bottom) at final time*
+
+The complete code is presented below.
+
+.. code-block:: python
+
+    from fenics import *
+    
+    T = 5.0            # final time
+    num_steps = 500    # number of time steps
+    dt = T / num_steps # time step size
+    eps = 0.01         # diffusion coefficient
+    K = 10.0           # reaction rate
+    
+    # Read mesh from file
+    mesh = Mesh('cylinder.xml.gz')
+    
+    # Define function space for velocity
+    W = VectorFunctionSpace(mesh, 'P', 2)
+    
+    # Define function space for system of concentrations
+    P1 = FiniteElement('P', 'triangle', 1)
+    element = MixedElement([P1, P1, P1])
+    V = FunctionSpace(mesh, element)
+    
+    # Define test functions
+    v_1, v_2, v_3 = TestFunctions(V)
+    
+    # Define functions for velocity and concentrations
+    w = Function(W)
+    u = Function(V)
+    u_n = Function(V)
+    
+    # Split system functions to access components
+    u_1, u_2, u_3 = split(u)
+    u_n1, u_n2, u_n3 = split(u_n)
+    
+    # Define source terms
+    f_1 = Expression('pow(x[0]-0.1,2)+pow(x[1]-0.1,2)<0.05*0.05 ? 0.1 : 0',
+                     degree=1)
+    f_2 = Expression('pow(x[0]-0.1,2)+pow(x[1]-0.3,2)<0.05*0.05 ? 0.1 : 0',
+                     degree=1)
+    f_3 = Constant(0)
+    
+    # Define expressions used in variational forms
+    k = Constant(dt)
+    K = Constant(K)
+    eps = Constant(eps)
+    
+    # Define variational problem
+    F = ((u_1 - u_n1) / k)*v_1*dx + dot(w, grad(u_1))*v_1*dx \ 
+      + eps*dot(grad(u_1), grad(v_1))*dx + K*u_1*u_2*v_1*dx  \ 
+      + ((u_2 - u_n2) / k)*v_2*dx + dot(w, grad(u_2))*v_2*dx \ 
+      + eps*dot(grad(u_2), grad(v_2))*dx + K*u_1*u_2*v_2*dx  \ 
+      + ((u_3 - u_n3) / k)*v_3*dx + dot(w, grad(u_3))*v_3*dx \ 
+      + eps*dot(grad(u_3), grad(v_3))*dx - K*u_1*u_2*v_3*dx + K*u_3*v_3*dx \ 
+      - f_1*v_1*dx - f_2*v_2*dx - f_3*v_3*dx
+    
+    # Create time series for reading velocity data
+    timeseries_w = TimeSeries('navier_stokes_cylinder/velocity')
+    
+    # Create VTK files for visualization output
+    vtkfile_u_1 = File('reaction_system/u_1.pvd')
+    vtkfile_u_2 = File('reaction_system/u_2.pvd')
+    vtkfile_u_3 = File('reaction_system/u_3.pvd')
+    
+    # Create progress bar
+    progress = Progress('Time-stepping')
+    set_log_level(PROGRESS)
+    
+    # Time-stepping
+    t = 0
+    for n in range(num_steps):
+    
+        # Update current time
+        t += dt
+    
+        # Read velocity from file
+        timeseries_w.retrieve(w.vector(), t)
+    
+        # Solve variational problem for time step
+        solve(F == 0, u)
+    
+        # Save solution to file (VTK)
+        _u_1, _u_2, _u_3 = u.split()
+        vtkfile_u_1 << _u_1
+        vtkfile_u_2 << _u_2
+        vtkfile_u_3 << _u_3
+    
+        # Update previous solution
+        u_n.assign(u)
+    
+        # Update progress bar
+        progress.update(t / T)
+    
+    # Hold plot
+    interactive()
+
+The complete code can be found in the file ``ft10_reaction_system.py``.
+
+Finally, we comment on three important techniques that are very useful
+when working with systems of PDEs: setting initial conditions, setting
+boundary conditions, and extracting components of the system for
+plotting or postprocessing.
+
+Setting initial conditions for mixed systems
+--------------------------------------------
+
+In our example, we did not need to worry about setting an initial
+condition, since we start with :math:`u_1 = u_2 = u_3 = 0`. This happens
+automatically in the code when we set ``u_n = Function(V)``. This
+creates a ``Function`` for the whole system and all degrees of freedom
+are set to zero.
+
+If we want to set initial conditions for the components of the
+system separately, the easiest solution is to define the initial
+conditions as a vector-valued ``Expression`` and then
+project this to the ``Function`` representing the whole system. For
+example,
+
+.. code-block:: python
+
+    u_0 = Expression(('sin(x[0])', 'cos(x[0]*x[1])', 'exp(x[1])'), degree=1)
+    u_n = project(u_0, V)
+
+This defines :math:`u_1`, :math:`u_2`, and :math:`u_2` to be the projections of :math:`\sin
+x`, :math:`\cos (xy)`, and :math:`\exp(y)`, respectively.
+
+Setting boundary conditions for mixed systems
+---------------------------------------------
+
+In our example, we also did not need to worry about setting boundary
+conditions since we used a natural Neumann condition. If we want to set
+Dirichlet conditions for individual components of the system, this can
+be done as usual by the class ``DirichletBC``, but we must specify for
+which subsystem we set the boundary condition. For example, to specify
+that :math:`u_2` should be equal to :math:`xy` on the boundary defined by
+``boundary``, we do
+
+.. code-block:: text
+
+    u_D = Expression('x[0]*x[1]', degree=1)
+    bc = DirichletBC(V.sub(1), u_D, boundary)
+
+The object ``bc`` or a list of such objects containing different
+boundary conditions, can then be passed to the ``solve`` function as usual.
+Note that numbering starts at :math:`0` in FEniCS so the subspace
+corresponding to :math:`u_2` is ``V.sub(1)``.
+
+Accessing components of mixed systems
+-------------------------------------
+
+If ``u`` is a ``Function`` defined on a mixed function space in FEniCS,
+there are several ways in which ``u`` can be *split* into components.
+Above we already saw an example of the first of these:
+
+.. code-block:: python
+
+    u_1, u_2, u_3 = split(u)
+
+This extracts the components of ``u`` as *symbols* that can be used in a
+variational problem. The above statement is in fact equivalent to
+
+.. code-block:: python
+
+    u_1 = u[0]
+    u_2 = u[1]
+    u_3 = u[2]
+
+Note that ``u[0]`` is not really a ``Function`` object, but merely a
+symbolic expression, just like ``grad(u)`` in FEniCS is a symbolic
+expression and not a ``Function`` representing the gradient.  This means
+that ``u_1``, ``u_2``, ``u_3`` can be used in a variational problem, but
+cannot be used for plotting or postprocessing.
+
+To access the components of ``u`` for plotting and saving the solution
+to file, we need to use a different variant of the ``split`` function:
+
+.. code-block:: python
+
+    _u_1, _u_2, _u_3 = u.split()
+
+This returns three subfunctions as actual objects with access to the
+common underlying data stored in ``u``, which makes plotting and saving
+to file possible. Alternatively, we can do
+
+.. code-block:: python
+
+    _u_1, _u_2, _u_3 = u.split(deepcopy=True)
+
+which will create ``_u_1``, ``_u_2``, and ``u_3`` as stand-alone ``Function``
+objects, each holding a copy of the subfunction data extracted from
+``u``. This is useful in many situations but is not necessary for
+plotting and saving solutions to file.
+
