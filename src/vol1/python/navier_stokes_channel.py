@@ -3,8 +3,8 @@ FEniCS tutorial demo program: Incompressible Navier-Stokes equations
 for Poisseuille flow in the unit square using the Incremental Pressure
 Correction Scheme (IPCS).
 
-  u' + u . nabla(u)) - div(sigma) = f
-                           div(u) = 0
+  u' + u . nabla(u)) - div(sigma(u, p)) = f
+                                 div(u) = 0
 """
 
 from __future__ import print_function
