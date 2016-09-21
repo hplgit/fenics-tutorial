@@ -1,0 +1,606 @@
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Specifying large systems of PDEs with ease &mdash; cbc.pde 1.0 documentation</title>
+    
+    <link rel="stylesheet" href="_static/fenics.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '',
+        VERSION:     '1.0',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="top" title="cbc.pde 1.0 documentation" href="index.html" />
+    <link rel="prev" title="Welcome to cbc.pde!" href="index.html" />
+
+<!--[if lte IE 6]>
+<link rel="stylesheet" href="_static/ie6.css" type="text/css" media="screen" charset="utf-8" />
+<![endif]-->
+
+<link rel="stylesheet" href="_static/featured.css">
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/1.5.1/jquery.min.js"></script>
+<script src="_static/slides.min.jquery.js"></script>
+  <script>
+	$(function(){
+		$('#products').slides({
+			preload: true,
+			preloadImage: 'img/loading.gif',
+			effect: 'slide, fade',
+			crossfade: true,
+			slideSpeed: 350,
+			fadeSpeed: 500,
+			generateNextPrev: false,
+			generatePagination: false,
+	                play: 5000,
+                        hoverPause: false
+		});
+	});
+  </script>
+
+
+<link rel="shortcut icon" href="_static/fenics.ico" />
+
+
+<script type="text/javascript">
+  var _gaq = _gaq || [];
+  _gaq.push(['_setAccount', 'UA-19595948-1']);
+  _gaq.push(['_trackPageview']);
+
+  (function() {
+    var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+    ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+    var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+  })();
+</script>
+
+  </head>
+  <body>
+<div class="wrapper">
+  <a href="/"><img src="_static/fenics_banner.png" width="900px" alt="FEniCS Project Banner" /></a>
+  <div id="access">
+    <div class="menu">
+      <ul>
+	<li class="page_item"><a href="/about/" title="Find out more about the FEniCS project">About</a></li>
+	<li class="page_item"><a href="/download/" title="Obtain the FEniCS project">Download</a></li>
+	<li class="page_item"><a href="/doc/" title="Learn how to use the FEniCS project">Documentation</a></li>
+	<li class="page_item"><a href="/applications/" title="Learn how others are using the FEniCS project">Applications</a></li>
+	<li class="page_item"><a href="/contributing/" title="Learn how to contribute to the FEniCS project">Contributing</a></li>
+	<li class="page_item"><a href="/citing/" title="Learn how to cite the FEniCS project">Citing</a></li>
+	<li class="page_item"><a href="/support/" title="Where to go for more help">Support</a></li>
+      </ul>
+    </div><!-- .menu -->
+  </div><!-- #access -->
+</div><!-- #wrapper -->
+
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="specifying-large-systems-of-pdes-with-ease">
+<h1>Specifying large systems of PDEs with ease<a class="headerlink" href="#specifying-large-systems-of-pdes-with-ease" title="Permalink to this headline">¶</a></h1>
+<div class="line-block">
+<div class="line">Featured article 2011-08-19</div>
+</div>
+<div class="line-block">
+<div class="line"><em>Created by Mikael Mortensen and Hans Petter Langtangen</em></div>
+</div>
+<p>This article describes the <a class="reference external" href="http://bazaar.launchpad.net/~cbc.rans/cbc.rans/mikael/files/head:/cbc/pdesys/">cbc.pdesys</a>
+Python package, built on top of
+FEniCS, for specifying and solving systems of nonlinear PDEs with very
+compact and flexible code.</p>
+<div class="section" id="about-solving-large-systems-of-nonlinear-pdes">
+<h2>About solving large systems of nonlinear PDEs<a class="headerlink" href="#about-solving-large-systems-of-nonlinear-pdes" title="Permalink to this headline">¶</a></h2>
+<p>Computational Fluid Dynamics (CFD) presents many tough challenges for
+a scientific computing software. The Navier-Stokes equations that are used to
+model Newtonian fluid flows are represented by a nonlinear
+system of PDEs, where velocity is non trivially coupled with pressure &#8211;
+and that is just the beginning. The fluid may also interact with solid objects,
+flames, particles or simply another fluid with a different density.
+Most applications we investigate today are built by adding more and
+more PDE systems on top of the basic fluid flow model. For example,
+to study combustion we need to couple the Navier-Stokes equations with
+a turbulence model and several (often more than 10) nonlinear scalar
+transport equations, one for each of the reacting species. Combustion
+is hot, so we have to incorporate the energy equation in the model
+system of PDEs as well.
+Each of the three components (Navier-Stokes, turbulence model and
+combustion) of the complete model problem is represented by its own system
+of PDEs.</p>
+<p>In fact, the needs of CFD is simply a very flexible software
+environment for systems of nonlinear PDEs. To meet these needs, we
+created the completely general
+<tt class="docutils literal"><span class="pre">cbc.pdesys</span></tt> Python package on top of FEniCS.  The purpose of the
+package is to offer the computational scientist an efficient way of</p>
+<blockquote>
+<div><ul class="simple">
+<li>specifying possibly large, complicated systems of PDEs,</li>
+<li>dividing each system of PDEs into subsystems that are solved
+either fully coupled or segregated,</li>
+<li>linearizing nonlinear PDEs in a flexible way (Picard or Newton strategies),</li>
+</ul>
+</div></blockquote>
+<p>The package targets any system of PDEs, but the applications so
+far have been restricted to CFD. The stream-functions above illustrating
+flow past a dolphin is computed in the tutorial given below.</p>
+</div>
+<div class="section" id="proof-of-concept-the-elliptic-relaxation-model">
+<h2>Proof of concept &#8211; The elliptic relaxation model<a class="headerlink" href="#proof-of-concept-the-elliptic-relaxation-model" title="Permalink to this headline">¶</a></h2>
+<p>Reynolds Averaged Navier-Stokes (RANS) models are widely used in
+industry for modeling statistical properties of turbulent flows. One
+of the most advanced RANS models around is the elliptic relaxation
+model. This model consists of the RANS equations and two coupled
+second rank tensor equations for modeling the Reynolds stress
+(<img class="math" src="_images/math/34aaaeb9473881f871555bc1355afd963410be9a.png" alt="\overline{u'_i u'_j}"/>). The model is often discussed in textbooks on
+advanced modeling of turbulent flows, but is rarely in use because of its
+complexity and because it is not implemented in any commercial
+CFD software.  Without going too much into detail the most important
+equations of the model look something like</p>
+<div class="math">
+<p><img src="_images/math/abaaae67d0edc6cbfc16a2f7075c62a97a054774.png" alt="\frac{\partial \overline{u_i}} {\partial t} + \overline{u_j} \frac{\partial \overline{u_i}}{\partial x_j}
+      &amp;= - \frac{1} {\varrho}\frac{\partial p}{\partial x_i} + \frac{\partial}{\partial x_j} \nu( \frac{\partial \overline{u_i}}{\partial x_j} + \frac{\partial \overline{u_j}}{\partial x_i})
+            - \frac{\partial \overline{u'_i u'_j}}{\partial x_j} + \overline{f_i}, \\
+   \frac{\partial \overline{u_i}}{\partial x_i} &amp;= 0, \\
+ \frac{\partial \overline{u'_i u'_j}} {\partial t} + \overline{u_k} \frac{\partial \overline{u'_i u'_j}}{\partial x_k} +
+\frac{\partial T_{kij}}{\partial x_k}  &amp;= \ensuremath{\mathbb{P}}_{ij} + \ensuremath{\mathbb{G}}_{ij} - \varepsilon_{ij}, \\
+ L^2 \nabla^2 f_{ij} - f_{ij} &amp;=  -\frac{\ensuremath{\mathbb{C}}_{ij}}{k} - \frac{\overline{u'_i u'_j}/k - 2\delta_{ij}/{3}}{T}, \\
+ \ensuremath{\mathbb{P}}_{ij} &amp;= -\overline{u'_i u'_k} \frac{\partial \overline{u_j}}{\partial x_k} - \overline{u'_j u'_k} \frac{\partial \overline{u_i}}{\partial x_k}, \\
+\varepsilon_{ij} &amp;= 2\nu\overline{\frac{\partial u_i}{\partial x_k} \frac{\partial u_j}{\partial x_k}}, \\
+ \ensuremath{\mathbb{G}}_{ij} &amp;= \left(\varepsilon_{ij} - \frac{\overline{u'_i u'_j}}{k} \varepsilon \right) + k f_{ij}, \\
+... &amp;="/></p>
+</div><p>Here <img class="math" src="_images/math/6c6b2103381c3afe56f678fb6598f5de4a1297b0.png" alt="\overline{u_i}"/> is a component of the Reynolds averaged
+velocity. The first two equations are basically the incompressible
+Navier-Stokes equations for <img class="math" src="_images/math/6c6b2103381c3afe56f678fb6598f5de4a1297b0.png" alt="\overline{u_i}"/> (with variable viscosity),
+while the rest of the equations define the turbulence model.
+Note that we have two PDEs for the two second rank tensors
+<img class="math" src="_images/math/34aaaeb9473881f871555bc1355afd963410be9a.png" alt="\overline{u'_i u'_j}"/> and <img class="math" src="_images/math/5134e1a5cbcb701ba41d11d3f29989450dcff82d.png" alt="f_{ij}"/>.  All in all the model requires
+solving for
+two second rank PDEs, one vector PDE and 3 scalar PDEs plus a number
+of derived quantities. That is, we need to solve 18 coupled, highly
+nonlinear PDEs.</p>
+<p>FEniCS has support for working with PDEs of second rank tensors and as
+such we have been able to implement the elliptic relaxation model
+using no more than 300 lines of code. The variational form for the two
+coupled second rank tensors looks like</p>
+<div class="highlight-py"><div class="highlight"><pre><span class="k">class</span> <span class="nc">Steady_RijFij_1</span><span class="p">(</span><span class="n">RIJFIJBase</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">form</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">Rij</span><span class="p">,</span> <span class="n">Rij_</span><span class="p">,</span> <span class="n">v_Rij</span><span class="p">,</span> <span class="n">k_</span><span class="p">,</span> <span class="n">e_</span><span class="p">,</span> <span class="n">Pij_</span><span class="p">,</span> <span class="n">nu</span><span class="p">,</span> <span class="n">u_</span><span class="p">,</span> <span class="n">nut_</span><span class="p">,</span>
+             <span class="n">Fij</span><span class="p">,</span> <span class="n">Fij_</span><span class="p">,</span> <span class="n">v_Fij</span><span class="p">,</span> <span class="n">Aij_</span><span class="p">,</span> <span class="n">Aij</span><span class="p">,</span> <span class="n">PHIij_</span><span class="p">,</span> <span class="n">Cmu</span><span class="p">,</span> <span class="n">T_</span><span class="p">,</span> <span class="n">L_</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="n">Fr</span> <span class="o">=</span> <span class="n">nu</span><span class="o">*</span><span class="n">inner</span><span class="p">(</span><span class="n">nabla_grad</span><span class="p">(</span><span class="n">Rij</span><span class="p">),</span> <span class="n">nabla_grad</span><span class="p">(</span><span class="n">v_Rij</span><span class="p">))</span><span class="o">*</span><span class="n">dx</span> \
+             <span class="o">+</span> <span class="n">inner</span><span class="p">(</span> <span class="n">dot</span><span class="p">(</span><span class="n">nabla_grad</span><span class="p">(</span><span class="n">Rij</span><span class="p">),</span> <span class="n">u_</span><span class="p">)</span> <span class="p">,</span> <span class="n">v_Rij</span> <span class="p">)</span><span class="o">*</span><span class="n">dx</span> \
+             <span class="o">-</span> <span class="n">inner</span><span class="p">(</span> <span class="n">k_</span><span class="o">*</span><span class="n">Fij</span> <span class="p">,</span> <span class="n">v_Rij</span> <span class="p">)</span><span class="o">*</span><span class="n">dx</span> \
+             <span class="o">-</span> <span class="n">inner</span><span class="p">(</span> <span class="n">Pij_</span> <span class="p">,</span> <span class="n">v_Rij</span> <span class="p">)</span><span class="o">*</span><span class="n">dx</span> \
+             <span class="o">+</span> <span class="n">inner</span><span class="p">(</span> <span class="n">Rij</span><span class="o">*</span><span class="n">e_</span><span class="o">*</span><span class="p">(</span><span class="mf">1.</span><span class="o">/</span><span class="n">k_</span><span class="p">)</span> <span class="p">,</span> <span class="n">v_Rij</span><span class="p">)</span><span class="o">*</span><span class="n">dx</span> \
+             <span class="o">+</span> <span class="n">inner</span><span class="p">(</span> <span class="n">Cmu</span><span class="o">*</span><span class="n">T_</span><span class="o">*</span><span class="n">dot</span><span class="p">(</span><span class="n">nabla_grad</span><span class="p">(</span><span class="n">Rij</span><span class="p">),</span> <span class="n">Rij_</span><span class="p">),</span>
+                      <span class="n">nabla_grad</span><span class="p">(</span><span class="n">v_Rij</span><span class="p">)</span> <span class="p">)</span><span class="o">*</span><span class="n">dx</span>
+
+        <span class="n">Ff</span> <span class="o">=</span> <span class="n">inner</span><span class="p">(</span> <span class="n">nabla_grad</span><span class="p">(</span><span class="n">Fij</span><span class="p">),</span> <span class="n">nabla_grad</span><span class="p">(</span><span class="n">L_</span><span class="o">**</span><span class="mi">2</span><span class="o">*</span><span class="n">v_Fij</span><span class="p">)</span> <span class="p">)</span><span class="o">*</span><span class="n">dx</span> \
+             <span class="o">+</span> <span class="n">inner</span><span class="p">(</span> <span class="n">Fij</span> <span class="p">,</span> <span class="n">v_Fij</span> <span class="p">)</span><span class="o">*</span><span class="n">dx</span> \
+             <span class="o">-</span> <span class="p">(</span><span class="mf">1.</span><span class="o">/</span><span class="n">k_</span><span class="p">)</span><span class="o">*</span><span class="n">inner</span><span class="p">(</span> <span class="n">PHIij_</span> <span class="p">,</span> <span class="n">v_Fij</span> <span class="p">)</span><span class="o">*</span><span class="n">dx</span> \
+             <span class="o">-</span> <span class="p">(</span><span class="mf">2.</span><span class="o">/</span><span class="n">T_</span><span class="p">)</span><span class="o">*</span><span class="n">inner</span><span class="p">(</span> <span class="n">Aij_</span> <span class="p">,</span> <span class="n">v_Fij</span> <span class="p">)</span><span class="o">*</span><span class="n">dx</span>
+
+        <span class="k">return</span> <span class="n">Fr</span> <span class="o">+</span> <span class="n">Ff</span>
+</pre></div>
+</div>
+<p>where <tt class="docutils literal"><span class="pre">Rij</span></tt>, <tt class="docutils literal"><span class="pre">Fij</span></tt>, <tt class="docutils literal"><span class="pre">v_Rij</span></tt>, and <tt class="docutils literal"><span class="pre">v_Fij</span></tt> are the trial- and test
+functions for <img class="math" src="_images/math/66464c07a6a700211159b4053873d23d58996a8e.png" alt="R_{ij}\equiv \overline{u'_i u'_j}"/> and <img class="math" src="_images/math/5134e1a5cbcb701ba41d11d3f29989450dcff82d.png" alt="f_{ij}"/>,
+respectively. The most recently computed approximations to <tt class="docutils literal"><span class="pre">Rij</span></tt> and
+<tt class="docutils literal"><span class="pre">Fij</span></tt> are recognized by an underscore: <tt class="docutils literal"><span class="pre">Rij_</span></tt> and <tt class="docutils literal"><span class="pre">Fij_</span></tt>. More details
+of the implementation and some results for turbulent flow in an axial
+diffusor is provided in <a class="reference external" href="cbc.rans-MekIT11.pdf">cbc.rans-MekIT11.pdf</a>. The contours of
+<img class="math" src="_images/math/428a9dc1d8e9806753dc4e8af5ccbac760b5d826.png" alt="f_{12}"/> (left) and <img class="math" src="_images/math/9d7a0f503395c2eb4479b4eb37a16fe9e04732f6.png" alt="\overline{u'_1 u'_2}"/> (right) in the diffusior
+are shown below:</p>
+<div class="figure align-left">
+<img alt="_images/diffusor_F12.png" src="_images/diffusor_F12.png" style="width: 400px;" />
+</div>
+<div class="figure align-right">
+<img alt="_images/diffusor_R12.png" src="_images/diffusor_R12.png" style="width: 400px;" />
+</div>
+</div>
+<div class="section" id="nonlinear-equations-and-linearization">
+<h2>Nonlinear equations and linearization<a class="headerlink" href="#nonlinear-equations-and-linearization" title="Permalink to this headline">¶</a></h2>
+<p>One of the many advantages of using a high-level language like
+<tt class="docutils literal"><span class="pre">FEniCS</span></tt> for CFD is the ease of which we can experiment with various
+discretizations, coupling and linearizations of the same model. For
+example, all turbulence models are highly nonlinear and coupled with
+the Navier-Stokes equations. Nonlinear equations must be solved
+as a sequence of linear problems, but a standard linearization
+according to Newton&#8217;s method will normally fail.</p>
+<p>A feasible linearization, leading to a
+convergent iteration to solve the highly nonlinear equations, is not
+necessarily obvious for the turbulence model in question and usually
+calls for extensive trial and error. Using <tt class="docutils literal"><span class="pre">cbc.pdesys</span></tt>, the placement
+of a term in a variational form - explicitly on the right hand side
+of the equation system or implicitly in the coefficient matrix - is
+reduced to the inclusion or not of an underscore: <tt class="docutils literal"><span class="pre">k</span></tt> means an unknown
+finite element function <img class="math" src="_images/math/8c325612684d41304b9751c175df7bcc0f61f64f.png" alt="k"/> (<tt class="docutils literal"><span class="pre">TrialFunction</span></tt> object), while <tt class="docutils literal"><span class="pre">k_</span></tt> is
+the most recently computed approximation to <tt class="docutils literal"><span class="pre">k</span></tt> (<tt class="docutils literal"><span class="pre">Function</span></tt> object).
+For example, a nonlinear term <img class="math" src="_images/math/0e5c83cc0c639fc2ed843bbe2d3d209fb478b104.png" alt="k^2"/> can be linearized as <tt class="docutils literal"><span class="pre">k_*k</span></tt> or
+made fully known as <tt class="docutils literal"><span class="pre">k_*k_</span></tt>.  The term can also be retained as <tt class="docutils literal"><span class="pre">k*k</span></tt>
+in a Newton method, where the corresponding Jacobian can be
+automatically computed.</p>
+<p>As opposed to most other software packages for CFD, which require
+<em>user defined</em> PDEs to be solved in a segregated manner, the coupling
+or splitting of a system of PDEs is in <tt class="docutils literal"><span class="pre">cbc.pdesys</span></tt> a matter of
+inserting a few brackets in a little list.  As a result, experimenting
+with numerics for complicated systems of nonlinear PDEs has never been
+easier!</p>
+</div>
+<div class="section" id="implementation-details">
+<h2>Implementation details<a class="headerlink" href="#implementation-details" title="Permalink to this headline">¶</a></h2>
+<p>There are basically three building blocks for setting up a problem
+with <tt class="docutils literal"><span class="pre">cbc.pdesys</span></tt>:</p>
+<blockquote>
+<div><ul class="simple">
+<li><tt class="docutils literal"><span class="pre">Problem</span></tt> (defines the physical problem)</li>
+<li><tt class="docutils literal"><span class="pre">PDESystem</span></tt> (defines a complete system of PDEs)</li>
+<li><tt class="docutils literal"><span class="pre">PDESubSystem</span></tt> (defines one variational form as a subsystem of the complete system of PDEs)</li>
+</ul>
+</div></blockquote>
+<p>Here we will briefly explain the rationale behind these three classes.</p>
+<p><tt class="docutils literal"><span class="pre">PDESubSystem</span></tt> is a class that
+contains all information necessary to assemble and solve one single
+variational form. In that way, a <tt class="docutils literal"><span class="pre">PDESubSystem</span></tt> is closely related to
+the <tt class="docutils literal"><span class="pre">Linear/NonlinearVariationalProblem/Solver</span></tt> classes provided with
+the regular Python <tt class="docutils literal"><span class="pre">dolfin</span></tt> package in FEniCS. In fact, all problems
+composed of one single variational form can equally well be set up
+with either approach, as demonstrated below.
+The <tt class="docutils literal"><span class="pre">cbc.pdesys</span></tt> package first shows its
+advantages when you need many variational forms to build your complete
+mathematical model of a physical phenomenon.</p>
+<p><tt class="docutils literal"><span class="pre">PDESystem</span></tt> is a class that contains a list of one or more
+<tt class="docutils literal"><span class="pre">PDESubSystem</span></tt> objects. For example,
+the Navier-Stokes equations can be represented through a <tt class="docutils literal"><span class="pre">PDESystem</span></tt>
+object.  A coupled Navier-Stokes (NS) solver contains just one single
+<tt class="docutils literal"><span class="pre">PDESubSystem</span></tt>, which is a variational form for the coupled mixed
+finite element formulation for velocity and pressure. A segregated NS
+solver, on the other hand, contains two <tt class="docutils literal"><span class="pre">PDESubSystem</span></tt> objects, one
+for the velocity (vector field, governed by a vector PDE) and one for
+the pressure (scalar field, governed by a Poisson equation).  The
+<tt class="docutils literal"><span class="pre">PDESystem</span></tt> object is responsible for creating all necessary
+<tt class="docutils literal"><span class="pre">FunctionSpace</span></tt>, <tt class="docutils literal"><span class="pre">TestFunction</span></tt>, and <tt class="docutils literal"><span class="pre">TrialFunction</span></tt> objects, as well
+as solution (<tt class="docutils literal"><span class="pre">Function</span></tt>) objects required to solve a certain system of
+PDEs.</p>
+<p><tt class="docutils literal"><span class="pre">Problem</span></tt> is a class that contains the mesh and boundaries
+(<tt class="docutils literal"><span class="pre">SubDomain</span></tt> objects), and that is responsible for initializing all
+<tt class="docutils literal"><span class="pre">PDESystem</span></tt> objects. The class also keeps track of any common
+parameters for all <tt class="docutils literal"><span class="pre">PDESystem</span></tt> objects, such as viscosity, time, and
+time step.  Most importantly, the <tt class="docutils literal"><span class="pre">Problem</span></tt> class has implemented solve
+functionality used to advance any number of <tt class="docutils literal"><span class="pre">PDESystem</span></tt>
+objects simultaneously in time (or iterate over them in stationary problems).</p>
+<p>Here is an example of how the Poisson equation
+can be solved, using either standard <tt class="docutils literal"><span class="pre">dolfin</span></tt> or <tt class="docutils literal"><span class="pre">cbc.pdesys</span></tt>:</p>
+<div class="highlight-py"><div class="highlight"><pre><span class="kn">from</span> <span class="nn">cbc.pdesys</span> <span class="kn">import</span> <span class="o">*</span>
+
+<span class="n">mesh</span> <span class="o">=</span> <span class="n">UnitSquare</span><span class="p">(</span><span class="mi">10</span><span class="p">,</span> <span class="mi">10</span><span class="p">)</span>
+<span class="n">Q</span> <span class="o">=</span> <span class="n">FunctionSpace</span><span class="p">(</span><span class="n">mesh</span><span class="p">,</span> <span class="s">&#39;CG&#39;</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+<span class="n">u</span> <span class="o">=</span> <span class="n">TrialFunction</span><span class="p">(</span><span class="n">Q</span><span class="p">)</span>
+<span class="n">v</span> <span class="o">=</span> <span class="n">TestFunction</span><span class="p">(</span><span class="n">Q</span><span class="p">)</span>
+<span class="n">u_</span> <span class="o">=</span> <span class="n">Function</span><span class="p">(</span><span class="n">Q</span><span class="p">)</span>
+<span class="n">f</span> <span class="o">=</span> <span class="n">Constant</span><span class="p">(</span><span class="mf">1.</span><span class="p">)</span>
+<span class="n">F</span> <span class="o">=</span> <span class="n">inner</span><span class="p">(</span><span class="n">nabla_grad</span><span class="p">(</span><span class="n">u</span><span class="p">),</span> <span class="n">nabla_grad</span><span class="p">(</span><span class="n">v</span><span class="p">))</span><span class="o">*</span><span class="n">dx</span> <span class="o">+</span> <span class="n">f</span><span class="o">*</span><span class="n">v</span><span class="o">*</span><span class="n">dx</span>
+<span class="n">bcs</span> <span class="o">=</span> <span class="n">DirichletBC</span><span class="p">(</span><span class="n">Q</span><span class="p">,</span> <span class="p">(</span><span class="mf">0.</span><span class="p">),</span> <span class="n">DomainBoundary</span><span class="p">())</span>
+
+<span class="c"># Implementation with LinearVariationalProblem/Solver</span>
+<span class="n">a</span><span class="p">,</span> <span class="n">L</span> <span class="o">=</span> <span class="n">lhs</span><span class="p">(</span><span class="n">F</span><span class="p">),</span> <span class="n">rhs</span><span class="p">(</span><span class="n">F</span><span class="p">)</span>
+<span class="n">poisson_problem</span> <span class="o">=</span> <span class="n">LinearVariationalProblem</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">L</span><span class="p">,</span> <span class="n">u_</span><span class="p">,</span> <span class="n">bcs</span><span class="o">=</span><span class="n">bcs</span><span class="p">)</span>
+<span class="n">poisson_solver</span>  <span class="o">=</span> <span class="n">LinearVariationalSolver</span><span class="p">(</span><span class="n">poisson_problem</span><span class="p">)</span>
+<span class="n">poisson_solver</span><span class="o">.</span><span class="n">solve</span><span class="p">()</span>
+
+<span class="c"># Implementation with cbc.pdesys</span>
+<span class="n">poisson</span> <span class="o">=</span> <span class="n">PDESubSystem</span><span class="p">(</span><span class="nb">vars</span><span class="p">(),</span> <span class="p">[</span><span class="s">&#39;u&#39;</span><span class="p">],</span> <span class="n">bcs</span><span class="o">=</span><span class="p">[</span><span class="n">bcs</span><span class="p">],</span> <span class="n">F</span><span class="o">=</span><span class="n">F</span><span class="p">)</span>
+<span class="n">poisson</span><span class="o">.</span><span class="n">solve</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>Note that the <tt class="docutils literal"><span class="pre">PDESubSystem</span></tt> takes as argument the python namespace,
+<tt class="docutils literal"><span class="pre">vars()</span></tt>, containing the solution <tt class="docutils literal"><span class="pre">Function</span></tt>, <tt class="docutils literal"><span class="pre">TrialFunction</span></tt> etc.
+The reason for this choice will become more evident when the same
+problem is solved using both the <tt class="docutils literal"><span class="pre">PDESystem</span></tt> and <tt class="docutils literal"><span class="pre">Problem</span></tt> classes,
+where such objects are created automatically by <tt class="docutils literal"><span class="pre">PDESystem</span></tt>:</p>
+<div class="highlight-py"><div class="highlight"><pre><span class="kn">from</span> <span class="nn">cbc.pdesys</span> <span class="kn">import</span> <span class="o">*</span>
+
+<span class="n">mesh</span> <span class="o">=</span> <span class="n">UnitSquare</span><span class="p">(</span><span class="mi">10</span><span class="p">,</span> <span class="mi">10</span><span class="p">)</span>
+<span class="c"># Change desired items in the problem_parameters dict from cbc.pdesys</span>
+<span class="n">problem</span> <span class="o">=</span> <span class="n">Problem</span><span class="p">(</span><span class="n">mesh</span><span class="p">,</span> <span class="n">problem_parameters</span><span class="p">)</span>
+<span class="n">poisson</span> <span class="o">=</span> <span class="n">PDESystem</span><span class="p">([[</span><span class="s">&#39;u&#39;</span><span class="p">]],</span> <span class="n">problem</span><span class="p">,</span> <span class="n">solver_parameters</span><span class="p">)</span>
+<span class="n">poisson</span><span class="o">.</span><span class="n">setup</span><span class="p">()</span> <span class="c"># Creates FunctionSpace, Functions etc.</span>
+<span class="n">poisson</span><span class="o">.</span><span class="n">f</span> <span class="o">=</span> <span class="n">Constant</span><span class="p">(</span><span class="mf">1.</span><span class="p">)</span>
+
+<span class="k">class</span> <span class="nc">Poisson</span><span class="p">(</span><span class="n">PDESubSystem</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">form</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">u</span><span class="p">,</span> <span class="n">v_u</span><span class="p">,</span> <span class="n">f</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>    <span class="c"># v_u is the TestFunction</span>
+        <span class="k">return</span> <span class="n">inner</span><span class="p">(</span><span class="n">nabla_grad</span><span class="p">(</span><span class="n">u</span><span class="p">),</span> <span class="n">nabla_grad</span><span class="p">(</span><span class="n">v_u</span><span class="p">))</span><span class="o">*</span><span class="n">dx</span> <span class="o">+</span> <span class="n">f</span><span class="o">*</span><span class="n">v_u</span><span class="o">*</span><span class="n">dx</span>
+
+<span class="n">bcs</span> <span class="o">=</span> <span class="n">DirichletBC</span><span class="p">(</span><span class="n">poisson</span><span class="o">.</span><span class="n">V</span><span class="p">[</span><span class="s">&#39;u&#39;</span><span class="p">],</span> <span class="p">(</span><span class="mf">0.</span><span class="p">),</span> <span class="n">DomainBoundary</span><span class="p">())</span>
+<span class="n">poisson</span><span class="o">.</span><span class="n">pdesubsystems</span><span class="p">[</span><span class="s">&#39;u&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">Poisson</span><span class="p">(</span><span class="nb">vars</span><span class="p">(</span><span class="n">poisson</span><span class="p">),</span> <span class="p">[</span><span class="s">&#39;u&#39;</span><span class="p">],</span> <span class="n">bcs</span><span class="o">=</span><span class="p">[</span><span class="n">bcs</span><span class="p">])</span>
+<span class="n">problem</span><span class="o">.</span><span class="n">solve</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>Here the namespace <tt class="docutils literal"><span class="pre">vars(poisson)</span></tt> contains <tt class="docutils literal"><span class="pre">u</span></tt>, <tt class="docutils literal"><span class="pre">u_</span></tt>, <tt class="docutils literal"><span class="pre">v_u</span></tt> (automatically
+created by <tt class="docutils literal"><span class="pre">poisson.setup()</span></tt>) and <tt class="docutils literal"><span class="pre">f</span></tt>. The namespace is futher
+provided as argument to the form method of the <tt class="docutils literal"><span class="pre">Poisson</span></tt> class.</p>
+</div>
+<div class="section" id="flow-past-a-dolphin">
+<h2>Flow past a dolphin<a class="headerlink" href="#flow-past-a-dolphin" title="Permalink to this headline">¶</a></h2>
+<p>We will now show a slightly more complicating example of how two
+<tt class="docutils literal"><span class="pre">PDESystem</span></tt> objects can be created and solved through the use of a
+<tt class="docutils literal"><span class="pre">Problem</span></tt> object. The physical problem regards the low Reynolds number
+flow past a hot two-dimensional dolphin (where of course the simplification to
+2D eliminates any physical resemblance to an actual flow past an actual dolphin),
+where temperature (<img class="math" src="_images/math/3372c1cb6d68cf97c2d231acc0b47b95a9ed04cc.png" alt="c"/>) is modeled as a passive scalar with a nonlinear
+diffusion coefficient. The complete PDE system reads as follows in an
+appropriately scaled form,</p>
+<div class="math">
+<p><img src="_images/math/eb80ea63edb9dab6d6cea79a0473e160f7eb2645.png" alt="\frac{\partial {\mbox{\boldmath $u$}}}{\partial t} + ({\mbox{\boldmath $u$}} \cdot \nabla) {\mbox{\boldmath $u$}} &amp;= \nu \nabla^2 {\mbox{\boldmath $u$}} - \nabla p + {{\mbox{\boldmath $f$}}}\\
+\nabla\cdot {\mbox{\boldmath $u$}} &amp;= 0\\
+\frac{\partial c}{\partial t} + {\mbox{\boldmath $u$}} \cdot \nabla c &amp;= \nabla\cdot\left(\nu(1+c^2)\nabla c\right)"/></p>
+</div><p>Discretizing these equations with a Crank-Nicolson type of scheme in time,
+and redefining <img class="math" src="_images/math/d9df74315a21f447e0a338c4c76dcd9880542eaf.png" alt="{\mbox{\boldmath $u$}}"/> to be the velocity at the new time level and <img class="math" src="_images/math/07b7a448bfecd2f80c803ebf7fd4d0d3fac9036f.png" alt="{\mbox{\boldmath $u$}}_1"/>
+the velocity at the previous time level, we arrive at these
+spatial problems:</p>
+<div class="math">
+<p><img src="_images/math/fc86ed98d9d17fac659a56347b7df58f022fc037.png" alt="\frac{{\mbox{\boldmath $u$}} - {\mbox{\boldmath $u$}}_1}{\Delta t} + ({\mbox{\boldmath $u$}}_1\cdot \nabla) {\mbox{\boldmath $u$}}_1 &amp;= \nu\nabla^2 {\mbox{\boldmath $U$}} - \nabla p + {{\mbox{\boldmath $f$}}}\\
+\nabla\cdot {\mbox{\boldmath $U$}} &amp;= 0\\
+\frac{c - c_1}{\Delta t} + {\mbox{\boldmath $U$}} \cdot \nabla C &amp;= \nabla\cdot\left(\nu(1+c^2)\nabla C\right),"/></p>
+</div><p>with</p>
+<div class="math">
+<p><img src="_images/math/0b2a51cd41243ff8b59ede0a9dccc538c08db0b2.png" alt="{\mbox{\boldmath $U$}} = \frac{1}{2}\left( {\mbox{\boldmath $u$}} + {\mbox{\boldmath $u$}}_1\right),\quad C = \frac{1}{2}\left( c + c_1\right)"/></p>
+</div><p>denoting the arithmetic averages needed in a Crank-Nicolson time
+integration.
+The corresponding variational formulation involves the integrals</p>
+<div class="math">
+<p><img src="_images/math/e650e8d5c522136f6c016d523c5ef552f089cc78.png" alt="\int_\Omega \left( \frac{{\mbox{\boldmath $u$}} - {\mbox{\boldmath $u$}}_1}{\Delta t} v_{u} + ({\mbox{\boldmath $u$}}_1\cdot\nabla {\mbox{\boldmath $u$}}_1) \cdot v_{u} +
+\nu \nabla{\mbox{\boldmath $U$}}\cdot\nabla v_{u} - p \nabla\cdot v_{u} - {{\mbox{\boldmath $f$}}}v_{u} +
+v_p\nabla\cdot {\mbox{\boldmath $U$}}\right)dx &amp;= 0,\\
+\int_\Omega\left( \frac{c - c_1}{\Delta t}v_c + {\mbox{\boldmath $U$}} \cdot \nabla C + \nu (1+c^2)\nabla C\cdot\nabla v_c\right)dx &amp;= 0,"/></p>
+</div><p>where <img class="math" src="_images/math/52cb3f2ae29919e529bd2a0fd37a1d43f43f575b.png" alt="v_{u}"/>, <img class="math" src="_images/math/be298c21806debb3e79cdb3ab3386c57c2562998.png" alt="v_p"/>, and <img class="math" src="_images/math/15f4c9ff200fdbfde16109ecc1e017cae769f4db.png" alt="v_c"/> are test functions for the test
+spaces for <img class="math" src="_images/math/d9df74315a21f447e0a338c4c76dcd9880542eaf.png" alt="{\mbox{\boldmath $u$}}"/>, <img class="math" src="_images/math/36f73fc1312ee0349b3f3a0f3bd9eb5504339011.png" alt="p"/>, and <img class="math" src="_images/math/3372c1cb6d68cf97c2d231acc0b47b95a9ed04cc.png" alt="c"/>, respectively.</p>
+<p>The implementation of this model for the flow past a dolphin can be done as follows:</p>
+<div class="highlight-py"><div class="highlight"><pre><span class="kn">from</span> <span class="nn">cbc.pdesys</span> <span class="kn">import</span> <span class="o">*</span>
+
+<span class="c"># Set up problem by loading mesh from file</span>
+<span class="n">mesh</span> <span class="o">=</span> <span class="n">Mesh</span><span class="p">(</span><span class="s">&#39;dolfin-outside.xml.gz&#39;</span><span class="p">)</span>
+
+<span class="c"># problem_parameters are defined in Problem.py</span>
+<span class="n">problem_parameters</span><span class="p">[</span><span class="s">&#39;time_integration&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s">&quot;Transient&quot;</span>    <span class="c"># default=&#39;Steady&#39;</span>
+<span class="n">problem</span> <span class="o">=</span> <span class="n">Problem</span><span class="p">(</span><span class="n">mesh</span><span class="p">,</span> <span class="n">problem_parameters</span><span class="p">)</span>
+
+<span class="c"># Set up first PDESystem</span>
+<span class="n">solver_parameters</span><span class="p">[</span><span class="s">&#39;space&#39;</span><span class="p">][</span><span class="s">&#39;u&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">VectorFunctionSpace</span>   <span class="c"># default=FunctionSpace</span>
+<span class="n">solver_parameters</span><span class="p">[</span><span class="s">&#39;degree&#39;</span><span class="p">][</span><span class="s">&#39;u&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="mi">2</span>                    <span class="c"># default=1</span>
+<span class="n">NStokes</span> <span class="o">=</span> <span class="n">PDESystem</span><span class="p">([[</span><span class="s">&#39;u&#39;</span><span class="p">,</span> <span class="s">&#39;p&#39;</span><span class="p">]],</span> <span class="n">problem</span><span class="p">,</span> <span class="n">solver_parameters</span><span class="p">)</span>
+<span class="n">NStokes</span><span class="o">.</span><span class="n">setup</span><span class="p">()</span>
+
+<span class="c"># Use a constant forcing field to drive the flow from right to left</span>
+<span class="n">NStokes</span><span class="o">.</span><span class="n">f</span> <span class="o">=</span> <span class="n">Constant</span><span class="p">((</span><span class="o">-</span><span class="mf">1.</span><span class="p">,</span> <span class="mf">0.</span><span class="p">))</span>
+
+<span class="c"># No-slip boundary condition for velocity on the dolfin</span>
+<span class="n">dolfin</span> <span class="o">=</span> <span class="n">AutoSubDomain</span><span class="p">(</span><span class="k">lambda</span> <span class="n">x</span><span class="p">,</span> <span class="n">on_boundary</span><span class="p">:</span> <span class="n">on_boundary</span> \
+                       <span class="ow">and</span> <span class="ow">not</span> <span class="p">(</span><span class="n">near</span><span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="mi">0</span><span class="p">)</span> <span class="ow">or</span> <span class="n">near</span><span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="mf">1.</span><span class="p">)</span> <span class="ow">or</span> \
+                       <span class="n">near</span><span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="mf">0.</span><span class="p">)</span> <span class="ow">or</span> <span class="n">near</span><span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="mf">1.</span><span class="p">)))</span>
+
+<span class="n">bc</span> <span class="o">=</span> <span class="p">[</span><span class="n">DirichletBC</span><span class="p">(</span><span class="n">NStokes</span><span class="o">.</span><span class="n">V</span><span class="p">[</span><span class="s">&#39;up&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">sub</span><span class="p">(</span><span class="mi">0</span><span class="p">),</span> <span class="n">Constant</span><span class="p">((</span><span class="mf">0.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">)),</span> <span class="n">dolfin</span><span class="p">)]</span>
+
+<span class="c"># Set up variational form.</span>
+<span class="c"># u_, u_1, u_2 are the solution Functions at time steps N, N-1 and N-2.</span>
+<span class="c"># v_u/v_p are the TestFunctions for velocity/pressure in the</span>
+<span class="c"># MixedFunctionSpace for u and p</span>
+
+<span class="k">class</span> <span class="nc">NavierStokes</span><span class="p">(</span><span class="n">PDESubSystem</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">form</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">u</span><span class="p">,</span> <span class="n">v_u</span><span class="p">,</span> <span class="n">u_</span><span class="p">,</span> <span class="n">u_1</span><span class="p">,</span> <span class="n">p</span><span class="p">,</span> <span class="n">v_p</span><span class="p">,</span> <span class="n">nu</span><span class="p">,</span> <span class="n">dt</span><span class="p">,</span> <span class="n">f</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="n">U</span> <span class="o">=</span> <span class="mf">0.5</span><span class="o">*</span><span class="p">(</span><span class="n">u</span> <span class="o">+</span> <span class="n">u_1</span><span class="p">)</span>
+        <span class="k">return</span> <span class="p">(</span><span class="mf">1.</span><span class="o">/</span><span class="n">dt</span><span class="p">)</span><span class="o">*</span><span class="n">inner</span><span class="p">(</span><span class="n">u</span> <span class="o">-</span> <span class="n">u_1</span><span class="p">,</span> <span class="n">v_u</span><span class="p">)</span><span class="o">*</span><span class="n">dx</span> <span class="o">+</span> \
+               <span class="n">inner</span><span class="p">(</span><span class="n">u_1</span><span class="o">*</span><span class="n">nabla_grad</span><span class="p">(</span><span class="n">u_1</span><span class="p">),</span> <span class="n">v_u</span><span class="p">)</span> <span class="o">+</span> \
+               <span class="n">nu</span><span class="o">*</span><span class="n">inner</span><span class="p">(</span><span class="n">nabla_grad</span><span class="p">(</span><span class="n">U</span><span class="p">),</span> <span class="n">nabla_grad</span><span class="p">(</span><span class="n">v_u</span><span class="p">))</span><span class="o">*</span><span class="n">dx</span> <span class="o">-</span> \
+               <span class="n">inner</span><span class="p">(</span><span class="n">div</span><span class="p">(</span><span class="n">v_u</span><span class="p">),</span> <span class="n">p</span><span class="p">)</span><span class="o">*</span><span class="n">dx</span> <span class="o">+</span> <span class="n">v_p</span><span class="o">*</span><span class="n">div</span><span class="p">(</span><span class="n">U</span><span class="p">)</span><span class="o">*</span><span class="n">dx</span> <span class="o">-</span> \
+               <span class="n">inner</span><span class="p">(</span><span class="n">f</span><span class="p">,</span> <span class="n">v_u</span><span class="p">)</span><span class="o">*</span><span class="n">dx</span>
+
+<span class="n">NStokes</span><span class="o">.</span><span class="n">pdesubsystems</span><span class="p">[</span><span class="s">&#39;up&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">NavierStokes</span><span class="p">(</span>
+         <span class="nb">vars</span><span class="p">(</span><span class="n">NStokes</span><span class="p">),</span> <span class="p">[</span><span class="s">&#39;u&#39;</span><span class="p">,</span> <span class="s">&#39;p&#39;</span><span class="p">],</span> <span class="n">bcs</span><span class="o">=</span><span class="n">bc</span><span class="p">,</span> <span class="n">reassemble_lhs</span><span class="o">=</span><span class="bp">False</span><span class="p">)</span>
+
+<span class="c"># Integrate the solution from t=0 to t=0.5</span>
+<span class="n">problem</span><span class="o">.</span><span class="n">prm</span><span class="p">[</span><span class="s">&#39;T&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="mf">0.5</span>
+<span class="n">problem</span><span class="o">.</span><span class="n">solve</span><span class="p">()</span>
+
+<span class="c"># Define a new nonlinear PDESystem for a scalar c</span>
+<span class="n">scalar</span> <span class="o">=</span> <span class="n">PDESystem</span><span class="p">([[</span><span class="s">&#39;c&#39;</span><span class="p">]],</span> <span class="n">problem</span><span class="p">,</span> <span class="n">solver_parameters</span><span class="p">)</span>
+<span class="n">scalar</span><span class="o">.</span><span class="n">setup</span><span class="p">()</span>
+
+<span class="k">class</span> <span class="nc">Scalar</span><span class="p">(</span><span class="n">PDESubSystem</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">form</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">c</span><span class="p">,</span> <span class="n">v_c</span><span class="p">,</span> <span class="n">c_</span><span class="p">,</span> <span class="n">c_1</span><span class="p">,</span> <span class="n">U_</span><span class="p">,</span> <span class="n">dt</span><span class="p">,</span> <span class="n">nu</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="n">C</span> <span class="o">=</span> <span class="mf">0.5</span><span class="o">*</span><span class="p">(</span><span class="n">c</span> <span class="o">+</span> <span class="n">c_1</span><span class="p">)</span>
+        <span class="k">return</span> <span class="p">(</span><span class="mf">1.</span><span class="o">/</span><span class="n">dt</span><span class="p">)</span><span class="o">*</span><span class="n">inner</span><span class="p">(</span><span class="n">c</span> <span class="o">-</span> <span class="n">c_1</span><span class="p">,</span> <span class="n">v_c</span><span class="p">)</span><span class="o">*</span><span class="n">dx</span> <span class="o">+</span> \
+                <span class="n">inner</span><span class="p">(</span><span class="n">dot</span><span class="p">(</span><span class="n">U_</span><span class="p">,</span> <span class="n">nabla_grad</span><span class="p">(</span><span class="n">C</span><span class="p">)),</span> <span class="n">v_c</span><span class="p">)</span><span class="o">*</span><span class="n">dx</span> <span class="o">+</span> \
+                <span class="n">nu</span><span class="o">*</span><span class="p">(</span><span class="mf">1.</span><span class="o">+</span><span class="n">c_</span><span class="o">**</span><span class="mi">2</span><span class="p">)</span><span class="o">*</span><span class="n">inner</span><span class="p">(</span><span class="n">nabla_grad</span><span class="p">(</span><span class="n">C</span><span class="p">),</span> <span class="n">nabla_grad</span><span class="p">(</span><span class="n">v_c</span><span class="p">))</span><span class="o">*</span><span class="n">dx</span>
+                <span class="c"># Note nonlinearity in c_ (above)</span>
+
+<span class="n">bcc</span> <span class="o">=</span> <span class="p">[</span><span class="n">DirichletBC</span><span class="p">(</span><span class="n">scalar</span><span class="o">.</span><span class="n">V</span><span class="p">[</span><span class="s">&#39;c&#39;</span><span class="p">],</span> <span class="n">Constant</span><span class="p">(</span><span class="mf">1.0</span><span class="p">),</span> <span class="n">dolfin</span><span class="p">)]</span>
+
+<span class="c"># Iterate on c_</span>
+<span class="n">scalar</span><span class="o">.</span><span class="n">U_</span> <span class="o">=</span> <span class="mf">0.5</span><span class="o">*</span><span class="p">(</span><span class="n">NStokes</span><span class="o">.</span><span class="n">u_</span> <span class="o">+</span> <span class="n">NStokes</span><span class="o">.</span><span class="n">u_1</span><span class="p">)</span> <span class="c"># Scalar&#39;s form needs vel.</span>
+<span class="n">csub1</span> <span class="o">=</span> <span class="n">Scalar</span><span class="p">(</span><span class="nb">vars</span><span class="p">(</span><span class="n">scalar</span><span class="p">),</span> <span class="p">[</span><span class="s">&#39;c&#39;</span><span class="p">],</span> <span class="n">bcs</span><span class="o">=</span><span class="n">bcc</span><span class="p">,</span> <span class="n">max_inner_iter</span><span class="o">=</span><span class="mi">5</span><span class="p">)</span>
+<span class="n">scalar</span><span class="o">.</span><span class="n">pdesubsystems</span><span class="p">[</span><span class="s">&#39;c&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">csub1</span>
+
+<span class="c"># Integrate both PDESystems from t=0.5 to t=1.0 using Picard</span>
+<span class="c"># iterations on each time step</span>
+<span class="n">problem</span><span class="o">.</span><span class="n">prm</span><span class="p">[</span><span class="s">&#39;T&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="mf">1.0</span>
+<span class="n">problem</span><span class="o">.</span><span class="n">solve</span><span class="p">()</span>
+
+<span class="c"># Switch to using the Newton method for the nonlinear variational form</span>
+<span class="c"># With these calls we replace c by c_ in the Scalar form and compute</span>
+<span class="c"># the Jacobian wrt c_</span>
+<span class="n">csub1</span><span class="o">.</span><span class="n">prm</span><span class="p">[</span><span class="s">&#39;iteration_type&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s">&#39;Newton&#39;</span>
+<span class="n">csub1</span><span class="o">.</span><span class="n">define</span><span class="p">()</span>
+
+<span class="c"># Integrate both PDESystems from T=1.0 to T=1.5 using Newton</span>
+<span class="c"># iterations on each time step for the scalar</span>
+<span class="n">problem</span><span class="o">.</span><span class="n">prm</span><span class="p">[</span><span class="s">&#39;T&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="mf">1.5</span>
+<span class="n">problem</span><span class="o">.</span><span class="n">solve</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>There are a few interesting features of <tt class="docutils literal"><span class="pre">cbc.pdesys</span></tt> at display
+here. First, in the creation of <tt class="docutils literal"><span class="pre">NStokes</span></tt> (<tt class="docutils literal"><span class="pre">PDESystem</span></tt> object), we
+request a coupled system of PDEs (using <tt class="docutils literal"><span class="pre">MixedFunctionSpace</span></tt>)
+consisting of the vector <tt class="docutils literal"><span class="pre">u</span></tt> and the scalar <tt class="docutils literal"><span class="pre">p</span></tt> (scalar is default
+option). A segregated system, on the other hand, would require the
+list <tt class="docutils literal"><span class="pre">[['u'],</span> <span class="pre">['p']]</span></tt> being sent to the <tt class="docutils literal"><span class="pre">PDESystem</span></tt> object to indicate
+that <tt class="docutils literal"><span class="pre">u</span></tt> and <tt class="docutils literal"><span class="pre">p</span></tt> are solved in sequence, i.e., in a segregated way. The
+<tt class="docutils literal"><span class="pre">solver_parameters</span></tt> dictionary contains many dictionaries, with default
+values for many of the options. The dictionaries use the
+names of the variables (here <tt class="docutils literal"><span class="pre">u</span></tt> and <tt class="docutils literal"><span class="pre">p</span></tt>) as keys. <tt class="docutils literal"><span class="pre">FunctionSpace</span></tt> is
+the default option for the <tt class="docutils literal"><span class="pre">space</span></tt> dictionary and <tt class="docutils literal"><span class="pre">1</span></tt> for the <tt class="docutils literal"><span class="pre">degree</span></tt>
+dictionary (polynomial order of the basis functions), and as such we
+need only specify new values for <tt class="docutils literal"><span class="pre">u</span></tt>.</p>
+<p>The variational form is hooked up by subclassing the <tt class="docutils literal"><span class="pre">PDESubSystem</span></tt>
+class and overloading the <tt class="docutils literal"><span class="pre">form</span></tt> method that returns the variational
+form. The <tt class="docutils literal"><span class="pre">PDESubSystem</span></tt> class contains numerous methods and switches
+for optimization of finite element assembly and solving linear or
+nonlinear system arising from the form.  Since the Navier-Stokes
+equations being solved here are discretized with explicit convection,
+the left hand side coefficient matrix will not change in time. When we
+provide this information (through <tt class="docutils literal"><span class="pre">reassemble_lhs=False</span></tt>), the
+coefficient matrix will only be assembled on the first time step.</p>
+<p>One major advantage of placing numerical schemes as methods in a
+variational form class is the ease of which we can manipulate and
+store numerous different discretizations. The classes of numerical
+schemes are typically kept in a single file, or Python module (e.g.,
+<tt class="docutils literal"><span class="pre">NavierStokes.py</span></tt>), and can be retrieved as required. So if we in the
+future need to solve the Navier-Stokes equations together with other
+PDEs, then we can simply pull the scheme from <tt class="docutils literal"><span class="pre">NavierStokes.py</span></tt> and
+reuse it. This is not possible with the standard <tt class="docutils literal"><span class="pre">dolfin</span></tt>
+implementation displayed above. For turbulent flow models, we would
+like to set up our problem and then select the appropriate turbulence
+model and numerics from a predefined library. Each turbulence model
+will then have a main <tt class="docutils literal"><span class="pre">PDESystem</span></tt> class and a library of possible
+transient and steady schemes that can be picked at runtime.</p>
+<p>Note that implementing a new problem through <tt class="docutils literal"><span class="pre">cbc.pdesys</span></tt> generally
+will not require redefining the variational
+forms as done above (<tt class="docutils literal"><span class="pre">Scalar</span></tt> and <tt class="docutils literal"><span class="pre">NavierStokes</span></tt>). Instead the user will
+be required to set up a mesh and its boundaries, pick <tt class="docutils literal"><span class="pre">PDESystem's</span></tt>
+from modules, initialize and solve. In the end this leads to very compact,
+flexible and, most importantly, reusable code.</p>
+</div>
+<div class="section" id="rans-models">
+<h2>RANS models<a class="headerlink" href="#rans-models" title="Permalink to this headline">¶</a></h2>
+<p>Most industrial flows have high Reynolds number and are
+far too complex for all details of the flow to be fully resolved. For
+this reason researchers have developed simplified models representing
+the most relevant statistical properties of the flow, like the mean
+velocity and the mean turbulent kinetic energy. The largest family of
+such models are the Reynolds Averaged Navier Stokes (RANS)
+equations.  There are hundreds of different RANS models, each
+represented by a system of nonlinear PDEs, coupling statistical
+turbulence quantities with the mean flow.</p>
+<p>There is a hierarchy of turbulence models. So-called eddy-viscosity (EV) models
+close the Reynolds stress through the following formula:</p>
+<div class="math">
+<p><img src="_images/math/bc2b87757d39785a57718562d1595e21fcf91b50.png" alt="\overline{u'_i u'_j} = - \nu_T\left( \frac{\partial \overline{u_i}}{\partial x_j} + \frac{\partial \overline{u_j}}{\partial x_i} \right) + \frac{1}{3}\delta_{ij} \overline{u'_k u'_k}"/></p>
+</div><p>Eddy-viscosity models are usually classified by the number of additional
+PDEs that are required to close an expression for the turbulent viscosity <img class="math" src="_images/math/4ea4839b68acd0e4233d3a4977b6ef432ae88096.png" alt="\nu_T"/>.
+Reynolds stress models, like the elliptic relaxation model outlined above, solves
+a PDE for the second rank tensor <img class="math" src="_images/math/34aaaeb9473881f871555bc1355afd963410be9a.png" alt="\overline{u'_i u'_j}"/> and do not make
+use of the eddy-viscosity model. Using <tt class="docutils literal"><span class="pre">cbc.pdesys</span></tt> we have currently implemented
+the following turbulence models in <tt class="docutils literal"><span class="pre">cbc.rans</span></tt>:</p>
+<ol class="arabic">
+<li><p class="first">One-equation EV models</p>
+<blockquote>
+<div><ul class="simple">
+<li>Spalart-Allmaras</li>
+</ul>
+</div></blockquote>
+</li>
+<li><p class="first">Two-equation EV models</p>
+<blockquote>
+<div><ul class="simple">
+<li>Standard k-epsilon</li>
+<li>Low-Reynolds k-epsilon (3 different)</li>
+<li>Menter&#8217;s SST</li>
+</ul>
+</div></blockquote>
+</li>
+<li><p class="first">Four-equation EV models</p>
+<blockquote>
+<div><ul class="simple">
+<li>V2F (2 different)</li>
+</ul>
+</div></blockquote>
+</li>
+<li><p class="first">Reynolds stress models</p>
+<blockquote>
+<div><ul class="simple">
+<li>Standard</li>
+<li>Elliptic relaxation</li>
+</ul>
+</div></blockquote>
+</li>
+</ol>
+<p>The tutorial <a class="reference external" href="cbc.rans-MekIT11.pdf">cbc.rans-MekIT11.pdf</a> on using <tt class="docutils literal"><span class="pre">cbc.rans</span></tt> to implement
+advanced turbulence models was published in the
+proceedings of the 6th National Conference on Computational
+Mechanics, 2011 (MekIT&#8216;11).</p>
+<p>The interested reader will also learn more about the motivation for,
+the design, and the inner workings of the <tt class="docutils literal"><span class="pre">cbc.rans</span></tt> package by
+studying the recently published paper <a class="reference external" href="http://arxiv.org/abs/1102.2933">A FEniCS-Based Programming
+Framework for Modeling Turbulent Flow by the Reynolds-Averaged
+Navier-Stokes Equations</a> (<em>Advances
+in Water Resources</em>, 2011, DOI: 10.1016/j.advwatres.2011.02.013).</p>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+<div class="wrapper">
+  <div class="footer">
+    <div class="footer-nav">
+      <div class="span-6">
+	<h4>Usage documentation</h4>
+	<ul>
+	  <li><a href="/doc/tutorial/">Tutorial</a></li>
+	  <li><a href="/doc/dolfin/dev/python/">Python API</a></li>
+	  <li><a href="/doc/dolfin/dev/cpp/">C++ API</a></li>
+          <li><a href="/releases/">Release notes</a></li>
+	</ul>
+      </div>
+      <div class="span-6">
+	<h4>Developer resources</h4>
+	<ul>
+	  <li><a href="/buildbot/">Buildbot</a></li>
+	  <li><a href="/benchbot/">Benchbot</a></li>
+	  <li><a href="/support/launchpad_pages.html">FEniCS on Launchpad</a></li>
+	</ul>
+      </div>
+      <div class="span-6 last">
+	<h4>Search this site</h4>
+	<div id="searchbox">
+	  <form class="search" action="/search.html" method="get">
+	    <input type="text" name="q" size="18" />
+	    <input type="submit" value="Go" />
+	    <input type="hidden" name="check_keywords" value="yes" />
+	    <input type="hidden" name="area" value="default" />
+	  </form>
+	</div>
+      </div>
+    </div>
+    &copy; Copyright 2011, <a href="/">The FEniCS Project</a>. (<a href="/disclaimer.html">Disclaimer</a>)
+  </div>
+</div>
+
+  </body>
+</html>
