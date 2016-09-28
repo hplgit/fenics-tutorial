@@ -2,27 +2,33 @@
 label{ftut:gui}
 
 Everything in this book is about solving PDEs by creating FEniCS programs.
-The short set of powerful statements is what makes FEniCS so powerful.
+The short set of powerful Python statements is what makes FEniCS so powerful.
 Users of your FEniCS software can just set some variables and call
 up your ready-made solver functions. However, this kind of scripting
-becomes much more powerful if we integrate the solver with some kind of
-interface to quickly set parameters. Most people who think the FEniCS way
-of writing solvers in terms of small scripts like to set the adjustable
+becomes much more powerful if we integrate the solver with an
+interface to quickly set parameters. Most people who like the FEniCS way
+of writing solvers in terms of small scripts also like to set the adjustable
 parameters on the command line and often embed that script in another
-script for parameter investingations, where results are recorded in
+script automate the investigation parameter variations, where results are
+recorded in
 reports together with plots, result files, etc. We shall refer to this
-as making a command-line interface to our solver.
+as making a *command-line interface* to our solver.
 
 Other users do not feel at home with FEniCS scripting at all as they are
 used to graphical applications rather programming. You can satisfy such
 a user group too, but that requires making a *graphical interface* to
-your solver. It appears the tool
+your solver. It appears that the tool
 "Parampool": "https://github.com/hplgit/parampool" can be integrated with
 your FEniCS solver to produce either a command-line interface or a
 complately graphical interface in just a few lines of code. Of course, short
-code also means a very restrictive interface that can do just one thing:
-set the parameters in the code, run the solver, and present the solution.
+code also means a very restrictive graphical interface:
+set the parameters in the code, run the solver, present the solution,
+and archive the solution for later inspection.
+The present section explains how we can do this. As usual, we tie the
+explanation closely to an application, this time to what we think is the
+simplest possible: the 2D Poisson equation.
 
+__Specific application.__
 [hpl: Show how easy it is to switch to elasticity.]
 We want to create a graphical application to solve $-\nabla^2 u=f$ in
 2D, where the user can choose $f$ and $u_0$, the $N_x$ and $N_y$
@@ -32,10 +38,32 @@ collection of user-adjustable parameters (the `parameters`
 dictionary). When the PDE is solved, we should see a plot of the
 solution and have a link to the VTK solution file.
 This minimalistic application is created in a about one page of Python code.
+Switching to any other stationary application is completely trivial, like
+such as elasticity, but a time-dependent problem would require some extensions,
+especially regarding the presentation of results.
 
 The "Parampool documentation": "http://hplgit.github.io/parampool/doc/web/index.html" explains how to wrap Python solvers with different types of
 user interfaces: command-line, commands in a file, or a graphical web
 interface. Here we just list the necessary steps.
+
+__Installing Parampool.__
+Parampool is pure Python 2.7 code. The easiest way to install the package
+is to run `pip`:
+
+!bc sys
+Terminal> pip install -e \
+          git+https://github.com/hplgit/parampool#egg=parampool
+!ec
+Alternatively, you can perform the entire standard setup procedure:
+
+!bc sys
+Terminal> git clone https://github.com/hplgit/parampool.git
+Terminal> cd parampool
+Terminal> sudo python setup.py install
+!ec
+You do not need the source code of Parampool to program with it,
+but it might be wise to have easy access to it.
+
 
 ===== Making a pool of parameters =====
 
@@ -45,9 +73,67 @@ parameters that can be adjusted in the user interface, and one function
 for computing the solution and returning HTML code with the results to
 be displayed.
 
-@@@CODE src/gui/compute.py fromto: def define_pool@import sys
+The function for making the pool object of parameters requires specific
+input about the application from the user, which here means
+`element degree`, `Nx`, `Ny`, `f`, and `u0`. The function also needs to
+see all the parameters that can be set inside FEniCS regarding solvers, etc.
+Fortunately, Parampool has a utility function `fenicsxml2pool` that can
+read and parse the XML file with the FEniCS `Parameters` object. The
+key code ingredints to build the parameter pool goes like
+
+!bc pycod
+pool = fenicsxml2pool('prm.xml', pool)
+from parampool.utils import fenicsxml2pool
+from parampool.pool.Pool import Pool
+pool = Pool()
+pool.subpool('Main menu')
+# Add something to this subpool (int Nx)
+pool.add_data_item(name='Nx', default=10, str2type=int)
+# Subpool with built-in FEniCS parameters
+pool = fenicsxml2pool('prm.xml', pool)
+pool.update()
+# pool is built
+!ec
+
+The complete code of `define_pool` in `compute.py` looks in our case like
+this:
+
+@@@CODE src/gui/compute.py fromto: def define_pool@def compute
 
 ===== Make a compute function =====
+
+The `compute` function loads the parameters in the pool (after they are
+filled in from some kind of interface), runs the application based on these
+parameters, and returns the HTML code we want to see. Most of the work
+with the graphical interface goes in constructing the HTML code.
+
+Loading the parameters is done by `name = pool.get_value(name)`. Again,
+we need to load all parameters into the FEniCS `Parameters` object, and
+Parampool has support for that:
+
+!bc pycod
+from parampool.utils import set_dolfin_prm
+import dolfin
+pool.traverse(set_dolfin_prm, user_data=dolfin.parameters)
+!ec
+The user's specific parameters must be manually loaded:
+
+!bc pycod
+Nx = pool.get_value('Nx')
+Ny = pool.get_value('Ny')
+degree = pool.get_value('element degree')
+f_str = pool.get_value('f')
+u0_str = pool.get_value('u0')
+f = dolfin.Expression(f_str)
+u0 = dolfin.Expression(u0_str)
+!ec
+
+Now we need our 2D Poisson FEniS solver as a function `solver`,
+found in
+the file `${prog['poisson_solver']}.py`. To call the code, Python must
+find it in `sys.path` or you must have a copy of it in the same
+directory as the `compute.py` file.
+
 
 @@@CODE src/gui/compute.py fromto: import sys@
 
