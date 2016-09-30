@@ -33,15 +33,11 @@ def compute(pool):
     f = dolfin.Expression(f_str)
     u0 = dolfin.Expression(u0_str)
 
-    import sys, os
-    sys.path.insert(0, os.pardir)
-    from p2D_func import solver
-    from p2D_iter import gradient
-    from p2D_vc import structured_mesh
-
+    from poisson_solver import solver
     u = solver(f, u0, Nx, Ny, degree)
     #dolfin.plot(u, title='Solution', interactive=True)
 
+    from poisson_iterative import gradient
     grad_u = gradient(u)
     grad_u_x, grad_u_y = grad_u.split(deepcopy=True)
 
@@ -51,6 +47,7 @@ def compute(pool):
     vtkfile << grad_u
 
     # Make Matplotlib plots and inline them in the HTML code
+    from poisson_bcs import structured_mesh
     u_box = structured_mesh(u, (Nx, Ny))
     u_ = u_box.values
     import matplotlib.pyplot as plt
