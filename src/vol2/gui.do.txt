@@ -1,4 +1,4 @@
-======= Integrating a FEniCS solver with interfaces =======
+========= Integrating a FEniCS solver with user interfaces =========
 label{ftut:gui}
 
 Everything in this book is about solving PDEs by creating FEniCS
@@ -66,6 +66,7 @@ Terminal> sudo python setup.py install
 You do not need the source code of Parampool to program with it,
 but it might be wise to have easy access to it.
 
+======= Constructing a graphical interface =======
 
 ===== Making a pool of parameters =====
 label{ftut:gui:pool}
@@ -382,17 +383,36 @@ FIGURE: [fig/guifig_view_dolfin_krylov_solver, width=400 frac=0.5] Initial web v
 FIGURE: [fig/guifig_view_results1, width=800 frac=1] Full web GUI of demo. label{ftut:gui:fig:results1}
 
 
+===== Common trouble: Address already in use =====
+
+Quite frequently
+after much trial and error with developing a graphical user
+interface, one gets an error message that the IP address is already in
+use. To recover from this problem, run the lsof program to see which
+program that applies the 5000 port (Flask runs its server on
+http://127.0.0.1:5000, which means that it uses the 5000 port). Find
+the PID of the program that occupies the port and force abortion of
+that program:
+
+!bc sys
+Terminal> lsof -i :5000
+COMMAND   PID USER   FD   TYPE  DEVICE SIZE/OFF NODE NAME
+python  48824  hpl    3u  IPv4 1128848      0t0  TCP ...
+Terminal> kill -9 48824
+!ec
+Now you can restart the application.
+
+
 ===== Design your own output on the web page =====
 label{ftut:gui:bootstrap}
 
-The parameters in the left column of the web page
-are typeset simply as a file browser widget,
-using the `dtree` JavaScript library,
-with ``directories'' as pools and ``files'' as parameters. The name of
-a parameter is first filter throuugh an online LaTeX typesetter such that
-the name appears as a LaTeX PNG image. This allows, for instance, for
-greek letters. The user can built arbitrarily complex structures of
-parameters catagorized into subpools, see the Parampool Tutorial
+The parameters in the left column of the web page are typeset simply
+as a file browser widget, using the `dtree` JavaScript library, with
+``directories'' as pools and ``files'' as parameters. The name of a
+parameter is first filter throuugh an online LaTeX typesetter such
+that the name appears as a LaTeX PNG image. This allows, for instance,
+for greek letters. The user can built arbitrarily complex structures
+of parameters catagorized into subpools, see the Parampool Tutorial
 cite{Langtangen_Johansen_parampool}.
 
 If really start start using this GUI, it is highly recommended to use
@@ -436,6 +456,7 @@ FIGURE: [fig/guifig_view_results1, width=800 frac=1] Full web GUI with grayish b
 [rerun]: Do not at all rerun `generate.py` as that will overwrite
 the `view.html` you edited!
 
+# #ifdef OLD
 ===== Multiple parameters objects =====
 
 With `from fenics import *` comes the `parameters` database that we
@@ -481,19 +502,143 @@ class inside the compute function, and with all parameter objects as
 attributes in the class, we can easily call `pool.traverse` for
 each parameter object of interest.
 
+# #endif
+
 ===== Logging in and acrchiving results =====
 
-===== Using the command-line interface =====
+======= Utilizing the command-line interface =====
 
-You can strat the `controller.py` application without actually using the
-web interface, just the command-line interface. For example,
+===== Running the command-line interface =====
+
+You can start the `controller.py` application without actually using the
+web interface, just the command-line interface that is automatically
+generated and inserted in the `controller.py` application.
+We illustrate the command line first by just *starting* the `controller.py`
+with command-line options for setting default items in the GUI.
 
 !bc sys
 Terminal> python controller.py --Nx 30 --Ny 30 \
           --f 'sin(pi*x[0]*x[1])' --u0 0
 !ec
+To run the applicaton, go into the web interface and press the compute button.
+You can set all parameters in the pool via the command line, but you need
+to visit the web interface to continue the execution.
 
-Script calling script...change constroller?
+===== Constructing a new command-line application =====
+
+It is attractive for many to have the command-line interface, but get rid
+of the GUI itself and just use Paramtool to set parameters. Then we have
+to edit the automatically generated `controller.py` file. Now we want
+a more plain FEniCS applications, just with a Paramtool command-line interface.
+
+ o Copy `controller.py` to `controller_noweb.py`.
+ o Copy `compute.py` to `compute_noweb.py`.
+ o Add a more plain FEniCS function `compute_noweb` in `compute_noweb.py`
+   where we also do some basic built-in FEniCS plotting (see below).
+ o Go into `controller_noweb.py` and change the import of `compute_noweb`
+   as `compute_function`. Remove everything that has to do with Flask.
+   Call `compute_function` in the main program. Now `controller_noweb.py`
+   simply runs a new compute compute function in an environment with
+   Parampool, but without a Flask web interface.
+
+The new key function is `compute_noweb`:
+
+!bc pycod
+def compute_noweb(pool):
+    # Load pool into DOLFIN's parameters data structure
+    from parampool.utils import set_dolfin_prm
+    import dolfin
+    pool.traverse(set_dolfin_prm, user_data=dolfin.parameters)
+    # Load user's parameters
+    Nx = pool.get_value('Nx')
+    Ny = pool.get_value('Ny')
+    degree = pool.get_value('element degree')
+    f_str = pool.get_value('f')
+    u0_str = pool.get_value('u0')
+    f = dolfin.Expression(f_str)
+    u0 = dolfin.Expression(u0_str)
+
+    from poisson_solver import solver
+    u = solver(f, u0, Nx, Ny, degree)
+    #dolfin.plot(u, title='Solution', interactive=True)
+
+    from poisson_iterative import gradient
+    grad_u = gradient(u)
+    grad_u_x, grad_u_y = grad_u.split(deepcopy=True)
+
+    # Make VTK file, offer for download
+    vtkfile = dolfin.File('poisson2D.pvd')
+    vtkfile << u
+    vtkfile << grad_u
+
+    dolfin.plot(u)
+    dolfin.plot(u.function_space().mesh())
+    dolfin.plot(grad_u)
+    dolfin.interactive()
+!ec
+We can prefix with `fenics` instead of `dolfin` if desired as these are
+equivalent.
+
+Here is the new application file `controller_noweb.py`:
+
+!bc pypro
+import os
+from compute_noweb import compute_noweb as compute_function  # changed
+
+# Pool object (must be imported before model)
+from compute import define_pool as pool_function
+pool = pool_function()
+
+# Can define other default values in a file: --poolfile name
+from parampool.pool.UI import set_defaults_from_file
+pool = set_defaults_from_file(pool)
+# Can override default values on the command line
+from parampool.pool.UI import set_values_from_command_line
+pool = set_values_from_command_line(pool)
+
+# Removed everything with Flask
+
+def compute(pool):
+    """
+    Generic function for calling compute_function with values
+    taken from the pool object.
+    Return the output from the compute_function.
+    """
+
+    # compute_function must have only one positional argument
+    # named pool
+    import inspect
+    arg_names = inspect.getargspec(compute_function).args
+    if len(arg_names) == 1 and arg_names[0] == "pool":
+        result = compute_function(pool)
+    else:
+        raise TypeError(
+	'%s(%s) can only have one argument named "pool"'
+        % (compute_function.__name__, ', '.join(arg_names)))
+    return result
+
+if __name__ == '__main__':
+    result = compute_function(pool)  # Add
+
+    # Dump pool to file for use with --poolfile .tmp_pool.dat
+    from parampool.pool.UI import write_poolfile
+    write_poolfile(pool, '.tmp_pool.dat')
+!ec
+
+===== Running the command-line application =====
+
+Now we are ready for testing the new command-line application:
+
+!bc sys
+Terminal> python controller_noweb.py --Nx 30 --Ny 30 \
+          --f 'sin(x[0]*pow(x[1],4))' --u0 0
+!ec
+The result is a a set of plots on the screen and dumping of the solution
+to file. We can, in the compute function, do other operations as we like.
+For example, we can drop all plotting and storage to file and instead
+study the output about solving the linear system from another Python
+script. Then we run the command above and capture the output in a
+string that can be processes as you like.
 
 % if EXV:
 
@@ -547,4 +692,3 @@ new GUI.
 !esol
 
 % endif
-
