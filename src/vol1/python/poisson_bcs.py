@@ -350,7 +350,7 @@ def convergence_rate_sin():
     """Compute convergence rates for u=sin(x)*sin(y) solution."""
     omega = 1.0
     u_exact = Expression('sin(omega*pi*x[0])*sin(omega*pi*x[1])',
-                         omega=omega)
+                         degree=3, omega=omega)
     f = 2*omega**2*pi**2*u_exact
     u_D = Constant(0)
     kappa = Constant(1)
