@@ -26,7 +26,7 @@ mesh = Mesh('cylinder.xml.gz')
 W = VectorFunctionSpace(mesh, 'P', 2)
 
 # Define function space for system of concentrations
-P1 = FiniteElement('P', 'triangle', 1)
+P1 = FiniteElement('P', triangle, 1)
 element = MixedElement([P1, P1, P1])
 V = FunctionSpace(mesh, element)
 
