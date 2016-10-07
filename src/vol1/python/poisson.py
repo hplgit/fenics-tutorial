@@ -44,7 +44,6 @@ plot(mesh)
 vtkfile = File('poisson/solution.pvd')
 vtkfile << u
 
-
 # Compute error in L2 norm
 error_L2 = errornorm(u_D, u, 'L2')
 
