@@ -2,7 +2,7 @@
 FEniCS tutorial demo program: Convection-diffusion-reaction for a system
 describing the concentration of three species A, B, C undergoing a simple
 first-order reaction A + B --> C with first-order decay of C. The velocity
-is given by the flow field w from the Navier-Stokes demo navier_stokes.py.
+is given by the flow field w from the demo navier_stokes_cylinder.py.
 
   u_1' + w . nabla(u_1) - div(eps*grad(u_1)) = f_1 - K*u_1*u_2
   u_2' + w . nabla(u_2) - div(eps*grad(u_2)) = f_2 - K*u_1*u_2
@@ -20,7 +20,7 @@ eps = 0.01         # diffusion coefficient
 K = 10.0           # reaction rate
 
 # Read mesh from file
-mesh = Mesh('cylinder.xml.gz')
+mesh = Mesh('navier_stokes_cylinder/cylinder.xml.gz')
 
 # Define function space for velocity
 W = VectorFunctionSpace(mesh, 'P', 2)
@@ -90,9 +90,9 @@ for n in range(num_steps):
 
     # Save solution to file (VTK)
     _u_1, _u_2, _u_3 = u.split()
-    vtkfile_u_1 << _u_1
-    vtkfile_u_2 << _u_2
-    vtkfile_u_3 << _u_3
+    vtkfile_u_1 << (_u_1, t)
+    vtkfile_u_2 << (_u_2, t)
+    vtkfile_u_3 << (_u_3, t)
 
     # Update previous solution
     u_n.assign(u)

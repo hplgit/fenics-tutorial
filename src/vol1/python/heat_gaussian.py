@@ -44,7 +44,7 @@ a, L = lhs(F), rhs(F)
 
 # Create VTK file for saving solution
 vtkfile = File('heat_gaussian/solution.pvd')
-vtkfile << u_n
+vtkfile << (u_n, 0)
 
 # Time-stepping
 u = Function(V)
@@ -58,7 +58,7 @@ for n in range(num_steps):
     solve(a == L, u, bc)
 
     # Save to file and plot solution
-    vtkfile << u
+    vtkfile << (u, t)
     plot(u)
 
     # Update previous solution
