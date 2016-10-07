@@ -102,8 +102,6 @@ A3 = assemble(a3)
 vtkfile_u = File('navier_stokes_cylinder/velocity.pvd')
 vtkfile_p = File('navier_stokes_cylinder/pressure.pvd')
 
-# FIXME: mpi_comm_world should not be needed here, fix in FEniCS!
-
 # Create time series for saving solution for later
 timeseries_u = TimeSeries('navier_stokes_cylinder/velocity')
 timeseries_p = TimeSeries('navier_stokes_cylinder/pressure')
