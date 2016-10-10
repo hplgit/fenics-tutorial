@@ -5,8 +5,8 @@ Test problem is chosen to give an exact solution at all nodes of the mesh.
   -Laplace(u) = f    in the unit square
             u = u_D  on the boundary
 
-  u = 1 + x^2 + 2y^2 = u_D
-  f = -6
+  u_D = 1 + x^2 + 2y^2
+    f = -6
 """
 
 from __future__ import print_function

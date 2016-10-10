@@ -13,7 +13,7 @@ from __future__ import print_function
 from fenics import *
 
 def q(u):
-    """Nonlinear coefficient in the PDE."""
+    "Return nonlinear coefficient in PDE"
     return 1 + u**2
 
 # Use SymPy to compute f given manufactured solution u
@@ -41,7 +41,7 @@ def boundary(x, on_boundary):
 bc = DirichletBC(V, u_D, boundary)
 
 # Define variational problem
-u = Function(V)  # not TrialFunction!
+u = Function(V)  # Note: not TrialFunction!
 v = TestFunction(V)
 f = Expression(f_code, degree=2)
 F = q(u)*dot(grad(u), grad(v))*dx - f*v*dx
