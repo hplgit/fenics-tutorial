@@ -45,7 +45,7 @@ def sigma(u):
 u = TrialFunction(V)
 d = u.geometric_dimension()  # no of space dim
 v = TestFunction(V)
-f = Constant((0, 0, rho*g))
+f = Constant((0, 0, -rho*g))
 T = Constant((0, 0, 0))
 a = inner(sigma(u), epsilon(v))*dx
 L = dot(f, v)*dx + dot(T, v)*ds
