@@ -524,8 +524,6 @@ File('fenics_parameters.xml') >> parameters
 !ec
 The XML file can also be in gzip'ed form with the extension `.xml.gz`.
 
-idx{`${prog["poisson_iterative"]}.py`}
-
 === An extended solver function ===
 
 We may extend the previous solver function from
@@ -533,42 +531,13 @@ We may extend the previous solver function from
 such that it also offers the GMRES+ILU
 preconditioned Krylov solver:
 
-!bc pycod
-def solver(
-    f, u_b, Nx, Ny,
-    degree=1,               # Polynomial degree of function space
-    linear_solver='Krylov', # Linear solver method (alt: 'direct')
-    abs_tol=1E-5,           # Absolute tolerance in Krylov solver
-    rel_tol=1E-3,           # Relative tolerance in Krylov solver
-    max_iter=1000,          # Max iterations in Krylov solver
-    log_level=PROGRESS,     # Amount of solver output
-    print_parameters=False, # Print solver parameters to screen?
-    ):
-    ...
-    # Set up variational problem: a, L, declare u, etc.
+#@@@CODE vol1/python/poisson_extended.py fromto: def solver(@def solver_objects
 
-    if linear_solver == 'Krylov':
-        prm = parameters['krylov_solver']
-        prm['absolute_tolerance'] = abs_tol
-        prm['relative_tolerance'] = rel_tol
-        prm['maximum_iterations'] = max_iter
-        print(parameters['linear_algebra_backend'])
-        set_log_level(log_level)
-        if print_parameters:
-            info(parameters, True)
-        solver_parameters = {'linear_solver': 'gmres',
-                             'preconditioner': 'ilu'}
-    else:
-        solver_parameters = {'linear_solver': 'lu'}
-
-    solve(a == L, u, bc, solver_parameters=solver_parameters)
-    return u
-!ec
 This new `solver` function, found in the file
-`${prog["poisson_iterative"]}.py`, replaces the one in `${prog["poisson_solver"]}.py`:
+`${prog["poisson_extended"]}.py`, replaces the one in `${prog["poisson_solver"]}.py`:
 it has all the functionality of the previous `solver` function,
 but can also solve the linear system with
-iterative methods and report the progress of such solvers.
+iterative methods.
 
 === A remark regarding unit tests ===
 
@@ -586,7 +555,7 @@ in those solvers). However, as soon as we switch to $\mathsf{P}_2$
 elements, it is hard to force the linear solver error below
 $10^{-6}$. Consequently, tolerances in tests depend on the numerical
 method being used. The interested reader is referred to the
-`test_solver` function in `${prog["poisson_iterative"]}.py` for details:
+`demo_solvers` function in `${prog["poisson_extended"]}.py` for details:
 this function tests the numerical solution for direct and iterative
 linear solvers, for different meshes, and different degrees of the
 polynomials in the finite element basis functions.
@@ -639,8 +608,6 @@ list_krylov_solver_preconditioners()
 label{ch:poisson0:solver:problem}
 idx{LinearVariationalProblem}
 idx{LinearVariationalSolver}
-
-idx{`${prog["poisson_iterative"]}.py`}
 
 The FEniCS interface allows different ways to access the core
 functionality, ranging from very high-level to low-level access. So
@@ -845,18 +812,7 @@ U = u.vector()
 solver.solve(A, U, b)
 !ec
 The function `solver_linalg` in the program file
-`${prog["poisson_iterative"]}.py` implements a solver function where the user
-can choose between different types of assembly. The function
-`demo_linalg` runs a test problem on a sequence of meshes and
-solves the problem with symmetric and non-symmetric modification of
-the system matrix. One can monitor the number of Krylov method
-iterations and realize that with a symmetric coefficient matrix, the
-Conjugate Gradient method requires slightly fewer iterations than
-GMRES in the non-symmetric case. Taking into account that the
-Conjugate Gradient method has less work per iteration, there is some
-efficiency to be gained by using `assemble_system` for this problem.
-
-idx{random start vector (linear systems)}
+`${prog["poisson_extended"]}.py` implements such a solver.
 
 The choice of start vector for the iterations in a linear solver is
 often important. By default, the values of `u` and thus the vector `U
@@ -1076,10 +1032,6 @@ for cell in cells(mesh):
     print(dofmap.cell_dofs(cell.index()))
 !ec
 
-#@@@CODE vol1/python/poisson_iterative.py fromto: def compare_exact@def normalize
-#As expected, the error is either identically zero or about $10^{-15}$ or
-#$10^{-16}$.
-
 !bwarning Cheap vs expensive function evaluation
 Given a `Function` object `u`, we can evaluate its values in various
 ways:
@@ -1120,7 +1072,8 @@ normalize the solution such that $\max_j |U_j| = 1$. Then we
 must divide all $U_j$ values
 by $\max_j |U_j|$. The following function performs the task:
 
-@@@CODE vol1/python/poisson_iterative.py fromto: def normalize@def test_normalize
+@@@CODE vol1/python/poisson_extended.py fromto: def normalize_solution@#---
+
 The `/=` operator implies an
 in-place modification of the object on the left-hand side: all
 elements of the array `nodal_values` are divided by the value `u_max`.
@@ -1136,17 +1089,11 @@ A call like `u.vector().array()` returns a *copy* of the data in
 = ` or use `u.set_local(...)`.
 !ewarning
 
-idx{`${prog["poisson_iterative"]}.py`}
-
-All the code in this can be found in the file
-`${prog["poisson_iterative"]}.py` (Poission solver with use of iterative
-methods).
-
 ======= Postprocessing computations =======
 label{ftut:possion:2D:varcoeff}
 idx{Poisson's equation with variable coefficient}
 idx{Postprocessing}
-idx{`${prog["poisson_bcs"]}.py`}
+idx{`${prog["poisson_extended"]}.py`}
 
 As the final theme in this chapter, we will look at how to
 *postprocess computations*; that is, how to compute various derived
@@ -1326,8 +1273,8 @@ freedom for both the $x$ and $y$ components of the flux and the
 ordering of the components may be mixed up by FEniCS in order to
 improve computational efficiency.
 
-The function `demo_test_flux` in the program
-`${prog["poisson_bcs"]}.py` demonstrates the computations described
+The function `demo_flux` in the program
+`${prog["poisson_extended"]}.py` demonstrates the computations described
 above.
 
 !bnotice Manual projection.
@@ -1575,8 +1522,8 @@ $L^2$-norm $\|e\|$ or $H^1_0$-norm $\|\nabla e\|$ typically have
 different convergence rates.
 
 To illustrate how to compute errors and convergence rates in FEniCS,
-we have included the function `convergence_rate` in
-`${prog["poisson_bcs"]}.py`. This is a tool that is very handy
+we have included the function `computes_convergence_rates` in
+`${prog["poisson_extended"]}.py`. This is a tool that is very handy
 when verifying finite element codes and will therefore be explained in
 detail here.
 
@@ -1669,15 +1616,15 @@ E = errornorm(u_e, u, norm_type='H10')
 Type `help(errornorm)` in Python for more information about available
 norm types.
 
-The function `compute_errors` in `${prog["poisson_bcs"]}.py`
+The function `compute_errors` in `${prog["poisson_extended"]}.py`
 illustrates the computation of various error norms in FEniCS.
 
-#@@@CODE vol1/python/poisson_bcs.py fromto: def compute_errors@def convergence_rate
+#@@@CODE vol1/python/poisson_extended.py fromto: def compute_errors@def compute_convergence_rates
 
 === Computing convergence rates ===
 
 Let's examine how to compute convergence rates in FEniCS.
-The `solver` function in `${prog["poisson_bcs"]}.py` allows us to
+The `solver` function in `${prog["poisson_extended"]}.py` allows us to
 easily compute solutions
 for finer and finer meshes and enables us to
 study the convergence rate. Define the element size $h=1/n$, where $n$
@@ -1698,11 +1645,10 @@ The $r$ values should approach the expected convergence rate
 increases.
 
 The procedure above can easily be turned into Python code. Here
-we run through a list of element degrees ($\mathsf{P}_1$, $\mathsf{P}_2$, $\mathsf{P}_3$, and $\mathsf{P}_4$),
+we run through a list of element degrees ($\mathsf{P}_1$,
+$\mathsf{P}_2$, and \mathsf{P}_3$,
 perform experiments over a series of refined meshes, and for
-each experiment report the six error types as returned by `compute_errors`:
-
-@@@CODE vol1/python/poisson_bcs.py fromto: def convergence_rate\(@def convergence_rate_sin
+each experiment report the six error types as returned by `compute_errors`.
 
 === Test problem ===
 
@@ -1737,9 +1683,9 @@ f = 2*pi**2*omega**2*u_e
 === Experiments ===
 
 An implementation of the computation of the convergence rate can be
-found in the function `convergence_rate_sin()` in the demo program
-`${prog["poisson_bcs"]}.py`. We achieve some interesting results.
-Using the error measure `E5` based on the infinity norm of the
+found in the function `demo_convergence_rates` in the demo program
+`${prog["poisson_extended"]}.py`. We achieve some interesting results.
+Using the error measure `E4` based on the infinity norm of the
 difference of the degrees of freedom, we obtain the following table.
 
 |---c---------c---------c---------c---------c---------c-----|
@@ -1827,9 +1773,10 @@ working with structured mesh data in FEniCS. Given a finite element
 function `u`, the following function returns a `BoxField` object that
 represents `u` on a structured mesh:
 
-@@@CODE vol1/python/poisson_bcs.py fromto: def structured_mesh@def demo_structured_mesh
-
-[AL: Comment below needs to be modified if interpolation to P1 is included in `BoxField`.]
+!bc
+from boxfield import *
+u_box = FEniCSBoxField(u, (nx, ny))
+!ec
 
 Note that we can only turn functions on meshes with $\mathsf{P}_1$ elements into
 `BoxField` objects, so if `u` is based on another element type, we first
@@ -1850,14 +1797,12 @@ The `u_box` object contains several useful data structures:
  * `u_box.grid.coorv[Z]`: vectorized version of `u_box.grid.coor[Z]`
  * `u_box.values`: `numpy` array holding the `u` values;
    `u_box.values[i,j]` holds `u` at the mesh point with coordinates <linebreak>
-   `(u_box.grid.coor[X], u_box.grid.coor[Y])`
-
-[AL: Is something missing in the last line above? The `i` and `j` indices?]
+   `(u_box.grid.coor[X][i], u_box.grid.coor[Y][j])`
 
 === Iterating over points and values ===
 
 Let us go back to the `solver` function in the
-`${prog["poisson_bcs"]}.py` code from
+`${prog["poisson_extended"]}.py` code from
 Section ref{ftut:possion:2D:varcoeff}, compute `u`, map it onto a
 `BoxField` object for a structured mesh representation, and
 write out the coordinates and function values at all mesh points:
@@ -1865,18 +1810,15 @@ write out the coordinates and function values at all mesh points:
 !bc pycod
 u = solver(p, f, u_b, nx, ny, 1, linear_solver='direct')
 u_box = structured_mesh(u, (nx, ny))
-u_ = u_box.values       # numpy array
+u_ = u_box.values
 
-print('u_ is defined on a structured mesh with %s points' %
-      str(u_.shape))
-
-# Iterate over 2D mesh points (i,j)
+# Iterate over 2D mesh points (i, j)
 for j in range(u_.shape[1]):
     for i in range(u_.shape[0]):
         print('u[%d, %d] = u(%g, %g) = %g' %
               (i, j,
-               u_box.grid.coor[X][i], u_box.grid.coor[X][j],
-               u_[i,j]))
+               u_box.grid.coor[X][i], u_box.grid.coor[Y][j],
+               u_[i, j]))
 !ec
 
 === Computing finite difference approximations ===

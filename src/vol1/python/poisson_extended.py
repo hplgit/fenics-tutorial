@@ -577,7 +577,7 @@ def demo_structured_mesh():
             for i in range(u_.shape[0]):
                 print('u[%d, %d] = u(%g, %g) = %g' %
                       (i, j,
-                       u_box.grid.coor[X][i], u_box.grid.coor[X][j],
+                       u_box.grid.coor[X][i], u_box.grid.coor[Y][j],
                        u_[i, j]))
 
     # Make surface plot
@@ -666,10 +666,10 @@ def demo_bcs():
     u_e, u_00, u_01, f, g, r, s = variables
 
     # Define boundary conditions
-    boundary_conditions = {0: {'Dirichlet': u_00},   # x=0
-                           1: {'Dirichlet': u_01},   # x=1
-                           2: {'Robin':     (r, s)}, # y=0
-                           3: {'Neumann':   g}}      # y=1
+    boundary_conditions = {0: {'Dirichlet': u_00},   # x = 0
+                           1: {'Dirichlet': u_01},   # x = 1
+                           2: {'Robin':     (r, s)}, # y = 0
+                           3: {'Neumann':   g}}      # y = 1
 
     # Compute solution
     kappa = Constant(1)
