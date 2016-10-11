@@ -295,11 +295,11 @@ def solver_bcs(kappa, f, boundary_conditions, Nx, Ny,
             r, s = boundary_conditions[i]['Robin']
             integrals_R.append(r*(u - s)*v*ds(i))
 
-    # Define variational problem
+    # Sum integrals to define variational problem
     a = kappa*dot(grad(u), grad(v))*dx + sum(integrals_R_a)
     L = f*v*dx - sum(integrals_N) + sum(integrals_R_L)
 
-    # Simpler variational formulation
+    # Simpler variational problem
     F = kappa*dot(grad(u), grad(v))*dx + \
         sum(integrals_R) - f*v*dx + sum(integrals_N)
     a, L = lhs(F), rhs(F)

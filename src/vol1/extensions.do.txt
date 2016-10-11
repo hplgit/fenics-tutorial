@@ -136,13 +136,14 @@ pytest or nose testing frameworks has the following form. Note
 that we perform the test for different mesh resolutions and degrees of
 finite elements.
 
-@@@CODE vol1/python/poisson_solver.py fromto: def test_solver@def demo_test
+@@@CODE vol1/python/poisson_solver.py fromto: def test_solver@if __name__
+
 To run the test, we type the following command:
 
 !bc sys
 Terminal> py.test ${prog['poisson_solver']}.py
 !ec
-This will run all functions `test_*()` (currently only the
+This will run all functions named `test_*` (currently only the
 `test_solver` function) found in the file and report the results.
 For more verbose output, add the flags `-s -v`.
 
@@ -412,7 +413,7 @@ Incomplete LU factorization (ILU) is a popular and robust all-round
 preconditioner, so let us try the GMRES-ILU pair:
 
 !bc pycod
-solve(a == L, u, bc)
+solve(a == L, u, bc,
       solver_parameters={'linear_solver': 'gmres',
                          'preconditioner': 'ilu'})
 # Alternative syntax
@@ -437,7 +438,7 @@ the Eigen backend. The linear algebra backend in FEniCS can be set
 using the following command:
 
 !bc pycod
-parameters['linear_algebra_backend'] = backendname
+parameters.linear_algebra_backend = backendname
 !ec
 where `backendname` is a string. To see which linear algebra backends
 are available, you can call the FEniCS function
@@ -446,10 +447,10 @@ linear algebra backend is currently being used by the following
 command:
 
 !bc pycod
-print parameters['linear_algebra_backend']
+print parameters.linear_algebra_backend
 
 # Alternative syntax for Python 3
-print(parameters['linear_algebra_backend'])
+print(parameters.linear_algebra_backend)
 !ec
 
 idx{`parameters` database}
@@ -482,10 +483,10 @@ According to this output, the relevant parameter set is
 named `'krylov_solver'`, and the parameters are set like this:
 
 !bc pycod
-prm = parameters['krylov_solver'] # short form
-prm['absolute_tolerance'] = 1E-10
-prm['relative_tolerance'] = 1E-6
-prm['maximum_iterations'] = 1000
+prm = parameters.krylov_solver  # short form
+prm.absolute_tolerance = 1E-10
+prm.relative_tolerance = 1E-6
+prm.maximum_iterations = 1000
 !ec
 Stopping criteria for Krylov solvers usually involve the norm of
 the residual, which must be smaller than the absolute tolerance
@@ -641,12 +642,12 @@ method and specifying solver-specific parameters can be done
 like this:
 
 !bc pycod
-solver.parameters['linear_solver'] = 'gmres'
-solver.parameters['preconditioner'] = 'ilu'
-prm = solver.parameters['krylov_solver'] # short form
-prm['absolute_tolerance'] = 1E-7
-prm['relative_tolerance'] = 1E-4
-prm['maximum_iterations'] = 1000
+solver.parameters.linear_solver = 'gmres'
+solver.parameters.preconditioner = 'ilu'
+prm = solver.parameters.krylov_solver # short form
+prm.absolute_tolerance = 1E-7
+prm.relative_tolerance = 1E-4
+prm.maximum_iterations = 1000
 !ec
 Settings in the global `parameters` database are
 propagated to parameter sets in individual objects, with the
@@ -804,9 +805,9 @@ is an example:
 !bc pycod
 solver = KrylovSolver('cg', 'ilu')
 prm = solver.parameters
-prm['absolute_tolerance'] = 1E-7
-prm['relative_tolerance'] = 1E-4
-prm['maximum_iterations'] = 1000
+prm.absolute_tolerance = 1E-7
+prm.relative_tolerance = 1E-4
+prm.maximum_iterations = 1000
 u = Function(V)
 U = u.vector()
 solver.solve(A, U, b)
@@ -824,7 +825,7 @@ can be done as follows:
 n = u.vector().array().size
 U = u.vector()
 U[:] = numpy.random.uniform(-100, 100, n)
-solver.parameters['nonzero_initial_guess'] = True
+solver.parameters.nonzero_initial_guess = True
 solver.solve(A, U, b)
 !ec
 Note that we must both turn off the default behavior of setting the start
@@ -973,7 +974,7 @@ FIGURE: [fig/vertex_numbering, width=500 frac=0.8]
 idx{compute vertex values}
 idx{vertex values}
 
-Let's instead examine the values we get by calling
+Let's instead examine the values by calling
 `u.compute_vertex_values()`:
 
 !bc pyshell
@@ -1522,7 +1523,8 @@ $L^2$-norm $\|e\|$ or $H^1_0$-norm $\|\nabla e\|$ typically have
 different convergence rates.
 
 To illustrate how to compute errors and convergence rates in FEniCS,
-we have included the function `computes_convergence_rates` in
+we have included the function `compute_convergence_rates` in the
+tutorial program
 `${prog["poisson_extended"]}.py`. This is a tool that is very handy
 when verifying finite element codes and will therefore be explained in
 detail here.
@@ -1719,7 +1721,7 @@ results:
 |---c---------c---------c---------c---------c---------c-----|
 | element | $n=8\ $   | $n=16$\   | $n=32\ $  | $n=64\ $  | $n=128$ |
 |---l---------r---------r---------r---------r---------r-----|
-| $\mathsf{P}_1$     | 1.98    | 1.94    | 1.98    | 2.0     | 2.0     |
+| $\mathsf{P}_1$     | 1.98    | 1.94    | 1.98    | 2.00    | 2.00    |
 | $\mathsf{P}_2$     | 3.98    | 3.95    | 3.99    | 3.99    | 3.99    |
 | $\mathsf{P}_3$     | 3.69    | 4.03    | 4.01    | 3.95    | 2.77    |
 |-----------------------------------------------------------|
@@ -2048,3 +2050,23 @@ difficult in visualization packages utilizing unstructured grids, as
 hitting exactly then nodes when sampling a function along a line
 through the grid might be non-trivial.
 # #endif
+
+======= Taking the next step =======
+
+If you have come this far, you have learned how to both write simple
+script-like solvers for a range of PDEs, and how to structure Python
+solvers using functions and unit tests. Solving a more complex PDE
+and writing a more full-featured PDE solver is not much harder and the
+first step is typically to write a solver for a stripped-down test
+case as a simple Python script. As the script matures and becomes more
+complex, it is time to think about design, in particular how to
+modularize the code and organize it into reusable pieces that can be
+used to build a flexible and extensible solver.
+
+On the FEniCS web site you will find more extensive documentation,
+more example programs, and links to advanced solvers and applications
+written on top of FEniCS. Get inspired and develop your own solver
+for your favorite application, publish your code and share your
+knowledge with the FEniCS community and the world!
+
+PS: *Stay tuned for the FEniCS Tutorial Volume 2!*
