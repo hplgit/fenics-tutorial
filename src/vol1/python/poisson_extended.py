@@ -6,18 +6,21 @@ Dirichlet, Neumann, and Robin boundary conditions.
 
 This program illustrates a number of different topics:
 
- - Computing fluxes
- - Setting combinations of boundary conditions
- - Setting parameters for linear solvers
- - Creating manufactured solutions with SymPy
- - Creating unit tests that can be run with py.test
- - Representing solutions as structured fields (using FEniCSBoxField)
+- How to solve a problem using three different approaches of varying
+  complexity: solve / LinearVariationalSolver / assemble + solve
+- How to compute fluxes
+- How to set combinations of boundary conditions
+- How to set parameters for linear solvers
+- How to create manufactured solutions with SymPy
+- How to create unit tests
+- How to represent solutions as structured fields
 """
 
 from __future__ import print_function
 
 from fenics import *
 from boxfield import *
+import numpy as np
 
 #---------------------------------------------------------------------
 # Solvers
@@ -112,6 +115,52 @@ def solver_objects(kappa, f, u_D, Nx, Ny,
 
     return u
 
+def solver_linalg(kappa, f, u_D, Nx, Ny,
+                 degree=1,
+                 linear_solver='Krylov',
+                 abs_tol=1E-5,
+                 rel_tol=1E-3,
+                 max_iter=1000):
+    "Same as the solver() function but assembling and solving Ax = b"
+
+    # Create mesh and define function space
+    mesh = UnitSquareMesh(Nx, Ny)
+    V = FunctionSpace(mesh, 'P', degree)
+
+    # Define boundary condition
+    def boundary(x, on_boundary):
+        return on_boundary
+
+    bc = DirichletBC(V, u_D, boundary)
+
+    # Define variational problem
+    u = TrialFunction(V)
+    v = TestFunction(V)
+    a = kappa*dot(grad(u), grad(v))*dx
+    L = f*v*dx
+
+    # Assemble linear system
+    A = assemble(a)
+    b = assemble(L)
+
+    # Apply boundary conditions
+    bc.apply(A, b)
+
+    # Create linear solver and set parameters
+    if linear_solver == 'Krylov':
+        solver = KrylovSolver('gmres', 'ilu')
+        solver.parameters.absolute_tolerance = abs_tol
+        solver.parameters.relative_tolerance = rel_tol
+        solver.parameters.maximum_iterations = max_iter
+    else:
+        solver = LUSolver()
+
+    # Compute solution
+    u = Function(V)
+    solver.solve(A, u.vector(), b)
+
+    return u
+
 def solver_bcs(kappa, f, boundary_conditions, Nx, Ny,
                degree=1,
                subdomains=[],
@@ -131,7 +180,6 @@ def solver_bcs(kappa, f, boundary_conditions, Nx, Ny,
     V = FunctionSpace(mesh, 'P', degree)
 
     # Check if we have subdomains
-    import numpy as np
     if subdomains:
         if not isinstance(kappa, (list, tuple, np.ndarray)):
             raise TypeError(
@@ -289,33 +337,33 @@ def compute_errors(u_e, u):
     E1 = sqrt(abs(assemble(error)))
 
     # Explicit interpolation of u_e onto the same space as u
-    u_e = interpolate(u_e, V)
-    error = (u - u_e)**2*dx
+    u_e_ = interpolate(u_e, V)
+    error = (u - u_e_)**2*dx
     E2 = sqrt(abs(assemble(error)))
 
     # Explicit interpolation of u_e to higher-order elements.
     # u will also be interpolated to the space Ve before integration
     Ve = FunctionSpace(V.mesh(), 'P', 5)
-    u_e = interpolate(u_e, Ve)
+    u_e_ = interpolate(u_e, Ve)
     error = (u - u_e)**2*dx
     E3 = sqrt(abs(assemble(error)))
 
-    # L2 norm
-    E4 = errornorm(u_e, u, norm_type='L2')
-
     # Infinity norm based on nodal values
-    u_e = interpolate(u_e, V)
-    E5 = abs(u_e.vector().array() - u.vector().array()).max()
+    u_e_ = interpolate(u_e, V)
+    E4 = abs(u_e_.vector().array() - u.vector().array()).max()
+
+    # L2 norm
+    E5 = errornorm(u_e, u, norm_type='L2', degree_rise=3)
 
     # H1 seminorm
-    E6 = errornorm(u_e, u, norm_type='H10')
+    E6 = errornorm(u_e, u, norm_type='H10', degree_rise=3)
 
     # Collect error measures in a dictionary with self-explanatory keys
     errors = {'u - u_e': E1,
-              'u - interpolate(u_e,V)': E2,
-              'interpolate(u,Ve) - interpolate(u_e,Ve)': E3,
-              'L2 error': E4,
-              'infinity norm (of dofs)': E5,
+              'u - interpolate(u_e, V)': E2,
+              'interpolate(u, Ve) - interpolate(u_e, Ve)': E3,
+              'infinity norm (of dofs)': E4,
+              'L2 norm': E5,
               'H10 seminorm': E6}
 
     return errors
@@ -379,39 +427,40 @@ def normalize_solution(u):
 
 #---------------------------------------------------------------------
 # Unit tests (functions beginning with test_)
+# These unit tests can be run by calling `py.test poisson_extended.py`
 #---------------------------------------------------------------------
 
 def test_solvers():
-    "Reproduce exact solution machine precision with different solvers"
+    "Reproduce exact solution to machine precision with different solvers"
 
+    solver_functions = (solver, solver_objects, solver_linalg)
     tol = {'direct': {1: 1E-11, 2: 1E-11, 3: 1E-11},
            'Krylov': {1: 1E-14, 2: 1E-05, 3: 1E-03}}
     u_D = Expression('1 + x[0]*x[0] + 2*x[1]*x[1]')
     kappa = Expression('x[0] + x[1]')
     f = Expression('-8*x[0] - 10*x[1]')
-    for Nx, Ny in [(3,3), (3,5), (5,3)]:
+    for Nx, Ny in [(3, 3), (3, 5), (5 ,3)]:
         for degree in 1, 2, 3:
             for linear_solver in 'direct', 'Krylov':
-                for solver_func in solver, solver_objects:
+                for solver_function in solver_functions:
                     print('solving on 2 x (%d x %d) mesh with P%d elements'
                           % (Nx, Ny, degree)),
                     print(' %s solver, %s function' %
-                          (linear_solver, solver_func.__name__))
-                    u = solver_func(
-                         kappa, f, u_D, Nx, Ny, degree,
-                         linear_solver=linear_solver,
-                         abs_tol=0.1*tol[linear_solver][degree],
-                         rel_tol=0.1*tol[linear_solver][degree])
+                          (linear_solver, solver_function.__name__))
+                    u = solver_function(kappa, f, u_D, Nx, Ny, degree,
+                                        linear_solver=linear_solver,
+                                        abs_tol=0.1*tol[linear_solver][degree],
+                                        rel_tol=0.1*tol[linear_solver][degree])
                     V = u.function_space()
                     u_D_Function = interpolate(u_D, V)
                     u_D_array = u_D_Function.vector().array()
-                    max_error = (u_D_array - u.vector().array()).max()
-                    msg = 'max error: %g for 2 x (%d x %d) mesh, '
+                    error_max = (u_D_array - u.vector().array()).max()
+                    msg = 'max error: %g for 2 x (%d x %d) mesh, ' \
                           'degree = %d, %s solver, %s' % \
-                          (max_error, Nx, Ny, degree, linear_solver,
-                           solver_func.__name__)
+                          (error_max, Nx, Ny, degree, linear_solver,
+                           solver_function.__name__)
                     print(msg)
-                    assert max_error < tol[linear_solver][degree], msg
+                    assert error_max < tol[linear_solver][degree], msg
 
 def test_normalize_solution():
     u_D = Expression('1 + x[0]*x[0] + 2*x[1]*x[1]')
@@ -432,7 +481,7 @@ def demo_test():
     kappa = Expression('x[0] + x[1]')
     f = Expression('-8*x[0] - 10*x[1]')
     u = solver(kappa, f, u_D, 8, 8, 1)
-    vtkfile = File('poisson_bcs/solution.pvd')
+    vtkfile = File('poisson_extended/solution_test.pvd')
     vtkfile << u
     plot(u)
 
@@ -470,12 +519,12 @@ def demo_flux(Nx=8, Ny=8):
               (i, tuple(coor[i]), value, flux_y_exact(*coor[i]) - value))
 
 def demo_convergence_rates():
-    "Compute convergence rates for u = sin(x)*sin(y)"
+    "Compute convergence rates in various norms for P1, P2, P3"
 
     # Define exact solution and coefficients
     omega = 1.0
     u_e = Expression('sin(omega*pi*x[0])*sin(omega*pi*x[1])',
-                     degree=3, omega=omega)
+                     degree=6, omega=omega)
     f = 2*omega**2*pi**2*u_e
     u_D = Constant(0)
     kappa = Constant(1)
@@ -488,7 +537,7 @@ def demo_convergence_rates():
             print('P%d: %s' % (degree, str(rates[degree][error_type])[1:-1]))
 
 def demo_structured_mesh():
-    "Represent solution as a structured field (FEniCSBoxField)"
+    "Use structured mesh data to create plots with Matplotlib"
 
     # Define exact solution (Mexican hat) and coefficients
     from sympy import exp, sin, pi
@@ -517,15 +566,19 @@ def demo_structured_mesh():
     u = solver(kappa, f, u_D, nx, ny, 1, linear_solver='direct')
     u_box = FEniCSBoxField(u, (nx, ny))
 
-    # Iterate over 2D mesh points (i,j)
+    # Set coordinates and extract values
+    X = 0; Y = 1
     u_ = u_box.values
-    X = 0;  Y = 1
-    for j in range(u_.shape[1]):
-        for i in range(u_.shape[0]):
-            print('u[%d, %d] = u(%g, %g) = %g' %
-                  (i, j,
-                   u_box.grid.coor[X][i], u_box.grid.coor[X][j],
-                   u_[i, j]))
+
+    # Iterate over 2D mesh points (i, j)
+    debug = False
+    if debug:
+        for j in range(u_.shape[1]):
+            for i in range(u_.shape[0]):
+                print('u[%d, %d] = u(%g, %g) = %g' %
+                      (i, j,
+                       u_box.grid.coor[X][i], u_box.grid.coor[X][j],
+                       u_[i, j]))
 
     # Make surface plot
     import matplotlib.pyplot as plt
@@ -537,8 +590,8 @@ def demo_structured_mesh():
     ax.plot_surface(cv[X], cv[Y], u_, cmap=cm.coolwarm,
                     rstride=1, cstride=1)
     plt.title('Surface plot of solution')
-    plt.savefig('poisson_bcs/surface_plot.png')
-    plt.savefig('poisson_bcs/surface_plot.pdf')
+    plt.savefig('poisson_extended/surface_plot.png')
+    plt.savefig('poisson_extended/surface_plot.pdf')
 
     # Make contour plot
     fig = plt.figure()
@@ -547,8 +600,8 @@ def demo_structured_mesh():
     plt.clabel(cs)
     plt.axis('equal')
     plt.title('Contour plot of solution')
-    plt.savefig('poisson_bcs/contour_plot.png')
-    plt.savefig('poisson_bcs/contour_plot.pdf')
+    plt.savefig('poisson_extended/contour_plot.png')
+    plt.savefig('poisson_extended/contour_plot.pdf')
 
     # Plot u along a line y = const and compare with exact solution
     start = (0, 0.4)
@@ -560,8 +613,8 @@ def demo_structured_mesh():
     plt.legend(['P1 elements', 'exact'], loc='best')
     plt.title('Solution along line y=%g' % y_fixed)
     plt.xlabel('x');  plt.ylabel('u')
-    plt.savefig('poisson_bcs/line_plot.png')
-    plt.savefig('poisson_bcs/line_plot.pdf')
+    plt.savefig('poisson_extended/line_plot.png')
+    plt.savefig('poisson_extended/line_plot.pdf')
 
     # Plot the numerical and exact flux along the same line
     flux_u = flux(u, kappa)
@@ -579,12 +632,13 @@ def demo_structured_mesh():
     plt.legend(['P1 elements', 'exact'], loc='best')
     plt.title('Flux along line y=%g' % y_fixed)
     plt.xlabel('x');  plt.ylabel('u')
-    plt.savefig('poisson_bcs/line_flux.png')
-    plt.savefig('poisson_bcs/line_flux.pdf')
+    plt.savefig('poisson_extended/line_flux.png')
+    plt.savefig('poisson_extended/line_flux.pdf')
 
     plt.show()
 
 def demo_bcs():
+    "Compute and plot solution using a combination of boundary conditions"
 
     # Define manufactured solution in sympy and derive f, g, etc.
     import sympy as sym
@@ -627,13 +681,17 @@ def demo_bcs():
     mesh = u.function_space().mesh()
     vertex_values_u_e = u_e.compute_vertex_values(mesh)
     vertex_values_u = u.compute_vertex_values(mesh)
-    import numpy as np
     error_max = np.max(np.abs(vertex_values_u_e -
                               vertex_values_u))
     print('error_max =', error_max)
 
+    # Save and plot solution
+    vtkfile = File('poisson_extended/solution_bcs.pvd')
+    vtkfile << u
+    plot(u)
+
 def demo_solvers():
-    "Reproduce exact solution machine precision with different solvers"
+    "Reproduce exact solution to machine precision with different linear solvers"
 
     # Define exact solution and coefficients
     tol = 1E-10
@@ -676,7 +734,7 @@ def demo_solvers():
                            3: {'Neumann':   g}}
 
     # Iterate over meshes and degrees
-    for Nx, Ny in [(3,3), (3,5), (5,3), (20,20)]:
+    for Nx, Ny in [(3, 3), (3, 5), (5, 3), (20, 20)]:
         for degree in 1, 2, 3:
             for linear_solver in 'direct', 'Krylov':
                 print('\nSolving on 2 x (%d x %d) mesh with P%d elements '
@@ -694,7 +752,6 @@ def demo_solvers():
                 mesh = u.function_space().mesh()
                 vertex_values_u_e = u_e.compute_vertex_values(mesh)
                 vertex_values_u = u.compute_vertex_values(mesh)
-                import numpy as np
                 error_max = np.max(np.abs(vertex_values_u_e -
                                           vertex_values_u))
                 print('error_max =', error_max)
@@ -702,17 +759,17 @@ def demo_solvers():
 
 if __name__ == '__main__':
 
-    # Uncomment to choose which demo to run
-    demos = {0: demo_test,
-             1: demo_flux,
-             2: demo_convergence_rates,
-             3: demo_structured_mesh,
-             4: demo_bcs,
-             5: demo_solvers}
+    # List of demos
+    demos = (demo_test,
+             demo_flux,
+             demo_convergence_rates,
+             demo_structured_mesh,
+             demo_bcs,
+             demo_solvers)
 
     # Pick a demo
     for nr in range(len(demos)):
-        print('%d: %s' % (nr, demos[nr].__name__))
+        print('%d: %s (%s)' % (nr, demos[nr].__doc__, demos[nr].__name__))
     print('')
     nr = input('Pick a demo: ')
 
