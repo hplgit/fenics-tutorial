@@ -243,8 +243,8 @@ def solver_bcs(kappa, f, boundary_conditions, Nx, Ny,
                              boundary_markers, i)
             bcs.append(bc)
 
-    debug = False
-    if debug:
+    debug1 = False
+    if debug1:
 
         # Print all vertices that belong to the boundary parts
         for x in mesh.coordinates():
@@ -571,8 +571,8 @@ def demo_structured_mesh():
     u_ = u_box.values
 
     # Iterate over 2D mesh points (i, j)
-    debug = False
-    if debug:
+    debug2 = False
+    if debug2:
         for j in range(u_.shape[1]):
             for i in range(u_.shape[0]):
                 print('u[%d, %d] = u(%g, %g) = %g' %
