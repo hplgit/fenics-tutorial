@@ -6,6 +6,9 @@
 ======= The Navier--Stokes equations =======
 label{ftut1:NS}
 
+idx{Navier-Stokes equations}
+idx{CFD}
+
 As our next example in this chapter, we will solve the incompressible
 Navier--Stokes equations. This problem combines many of the challenges
 from our previously studied problems: time-dependence, nonlinearity,
@@ -34,12 +37,16 @@ just as for the equations of linear elasticity,
 $\sigma(u, p)$ denotes the stress tensor which for a Newtonian fluid
 is given by
 
+idx{stress tensor}
+
 !bt
 \begin{equation}
   \sigma(u, p) = 2\mu\epsilon(u) - pI,
 \end{equation}
 !et
 where $\epsilon(u)$ is the strain-rate tensor
+
+idx{strain-rate tensor}
 
 !bt
 \[ \epsilon(u) = \frac{1}{2}\left(\nabla u + (\nabla u)^T\right)\tp\]
@@ -64,6 +71,10 @@ itself is not a problem for FEniCS as we saw in Section
 ref{ftut1:gallery:nonlinearpoisson}, but the system has a so-called
 *saddle point structure* and requires special techniques
 (preconditioners and iterative methods) to be solved efficiently.
+
+idx{splitting method}
+idx{Chorin's method}
+idx{incremental pressure correction scheme}
 
 Instead, we will apply a simpler and often very efficient approach,
 known as a *splitting method*. The idea is to
@@ -142,6 +153,9 @@ of the channel is zero at the outflow, corresponding to a flow that is
 outflow. Doing so, the remaining boundary term at the outflow becomes
 $pn - \mu\nabla u \cdot n$, which is the term appearing in the
 variational problem (ref{ftut1:ipcs1}).
+
+idx{`grad`}
+idx{`nabla_grad`}
 
 !bwarning `grad(u)` vs. `nabla_grad(u)`
 For scalar functions $\nabla u$ has a clear meaning as the vector
@@ -269,10 +283,14 @@ problems in each time step.
 
 === Test problem 1: Channel flow ===
 
+idx{channel flow}
+
 As a first test problem, we compute the flow between two infinite plates,
 so-called channel or Poiseuille flow, since this problem has a known
 analytical solution. Let $H$ be the distance between the plates and $L$
 the length of the channel. There are no body forces.
+
+idx{scaling}
 
 We may scale the problem first to get rid of seemingly independent
 physical parameters. The physics of this problem is governed by
@@ -285,6 +303,8 @@ example of shear flow.  Inserting $\bar x = x/H$, $\bar y = y/H$,
 $\bar z = z/H$, $\bar u =u/U$, $\bar p = Hp/(\mu U)$, and $\bar t =
 H^2/\nu$ in the equations results in the scaled Navier--Stokes
 equations (dropping bars after the scaling):
+
+idx{Reynolds number}
 
 !bt
 \begin{align*}
@@ -375,6 +395,8 @@ the vectors) will be set equal to the geometric dimension of the
 finite element mesh. One can easily create vector-valued function
 spaces with other dimensions in FEniCS by adding the keyword parameter
 `dim`:
+
+idx{`VectorFunctionSpace`}
 
 !bc pycod
 V = VectorFunctionSpace(mesh, 'P', 2, dim=10)
@@ -504,12 +526,16 @@ In the last step, FEniCS uses the overloaded `solve` function to solve
 the linear system `AU = b` where `U` is the vector of degrees of
 freedom for the function $u(x) = \sum_{j=1} U_j \phi_j(x)$.
 
+idx{linear system}
+
 In our implementation of the splitting scheme, we will make use of
 these low-level commands to first assemble and then call solve. This
 has the advantage that we may control when we assemble and when we
 solve the linear system. In particular, since the matrices for the
 three variational problems are all time-independent, it makes sense to
 assemble them once and for all outside of the time-stepping loop:
+
+idx{`assemble`}
 
 !bc pycod
 A1 = assemble(a1)
@@ -563,6 +589,8 @@ The complete code for simulating 2D channel flow with FEniCS
 can be found in the file `${prog["navier_stokes_channel"]}.py`.
 
 === Verification ===
+
+idx{verification}
 
 We compute the error at the nodes as we have done before to verify
 that our implementation is correct. Our Navier--Stokes solver computes
@@ -639,6 +667,8 @@ replacing going from `(0,0)` to `(0,0,0)` in `bcu_noslip`. Similarly,
 
 ===== Flow past a cylinder =====
 
+idx{cylinder flow}
+
 We now turn our attention to a more challenging physical example: flow
 past a circular cylinder. The geometry and parameters are taken from
 problem DFG 2D-2 in the "FEATFLOW/1995-DFG benchmark suite":
@@ -679,6 +709,10 @@ and `-` (set difference). To access the CSG functionality in FEniCS,
 one must import the FEniCS module `mshr` which provides the
 extended meshing functionality of FEniCS.
 
+idx{mshr}
+idx{CSG}
+idx{constructive solid geometry}
+
 The geometry for the cylinder flow test problem can be defined easily
 by first defining the rectangular channel and then subtracting the
 circle:
@@ -693,6 +727,8 @@ We may then create the mesh by calling the function `generate_mesh`:
 !bc pycod
 mesh = generate_mesh(geometry, 64)
 !ec
+
+idx{`generate_mesh`}
 
 To solve the cylinder test problem, we only need to make a few minor
 changes to the code we wrote for the Poiseuille flow test
@@ -721,6 +757,8 @@ relatively small time step to compute the solution (a time step that
 is too large will make the solution blow up) we add a progress bar so
 that we can follow the progress of our computation. This can be done
 as follows:
+
+idx{`Progress`}
 
 !bc pycod
 progress = Progress('Time-stepping')
@@ -772,6 +810,9 @@ gradient stabilized method (BiCGSTAB). This can be done by adding the
 keyword `bicgstab` in the call to `solve`. We also add a preconditioner,
 `ilu` to further speed up the computations:
 
+idx{Krylov solver}
+idx{preconditioner}
+
 !bc pycod
 solve(A1, u1.vector(), b1, 'bicgstab', 'ilu')
 solve(A2, p1.vector(), b2, 'bicgstab', 'ilu')
@@ -789,6 +830,9 @@ vtkfile_p = File('navier_stokes_cylinder/pressure.pvd')
 !ec
 Note that one does not need to create the directory before running the
 program. It will be created automatically by FEniCS.
+
+idx{`TimeSeries`}
+idx{HDF5}
 
 We also store the solution using a FEniCS `TimeSeries`. This allows us
 to store the solution not for visualization (as when using VTK
