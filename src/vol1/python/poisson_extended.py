@@ -201,7 +201,7 @@ def solver_bcs(kappa, f, boundary_conditions, Nx, Ny,
                 'kappa is type %s, must be Expression or Constant'
                 % type(kappa))
 
-    # Defie boundary subdomains
+    # Define boundary subdomains
     tol = 1e-14
 
     class BoundaryX0(SubDomain):
@@ -378,17 +378,17 @@ def compute_convergence_rates(u_e, f, u_D, kappa,
     # Iterate over degrees and mesh refinement levels
     degrees = range(1, max_degree + 1)
     for degree in degrees:
-        n = 4  # coarsest mesh division
+        n = 8  # coarsest mesh division
         h[degree] = []
         E[degree] = []
         for i in range(num_levels):
-            n *= 2
             h[degree].append(1.0 / n)
             u = solver(kappa, f, u_D, n, n, degree, linear_solver='direct')
             errors = compute_errors(u_e, u)
             E[degree].append(errors)
             print('2 x (%d x %d) P%d mesh, %d unknowns, E1 = %g' %
               (n, n, degree, u.function_space().dim(), errors['u - u_e']))
+            n *= 2
 
     # Compute convergence rates
     from math import log as ln  # log is a fenics name too
@@ -398,7 +398,7 @@ def compute_convergence_rates(u_e, f, u_D, kappa,
         rates[degree] = {}
         for error_type in sorted(etypes):
             rates[degree][error_type] = []
-            for i in range(num_levels):
+            for i in range(1, num_levels):
                 Ei = E[degree][i][error_type]
                 Eim1 = E[degree][i - 1][error_type]
                 r = ln(Ei / Eim1) / ln(h[degree][i] / h[degree][i - 1])
@@ -422,7 +422,7 @@ def normalize_solution(u):
     u_max = u_array.max()
     u_array /= u_max
     u.vector()[:] = u_array
-    u.vector().set_local(u_array)  # alternative
+    #u.vector().set_local(u_array)  # alternative
     return u
 
 #---------------------------------------------------------------------

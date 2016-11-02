@@ -22,9 +22,10 @@ where
 $u = u(\x)$ is the unknown function, $f = f(\x)$ is a
 prescribed function, $\nabla^2$ is the Laplace operator (also
 often written as $\Delta$), $\Omega$ is the spatial domain, and
-$\partial\Omega$ is the boundary of $\Omega$. A stationary PDE like
-this, together with a complete set of boundary conditions, constitute
-a *boundary-value problem*, which must be precisely stated before
+$\partial\Omega$ is the boundary of $\Omega$. The Poisson problem,
+including both the PDE $-\nabla^2 u = f$ and the boundary condition
+$u = \ub$ on $\partial \Omega$, is an example of a *boundary-value
+problem*, which must be precisely stated before
 it makes sense to start solving it with FEniCS.
 
 idx{Poisson's equation}
@@ -109,9 +110,10 @@ u(\x) &= \ub(\x),\quad &&\x\mbox{ on } \partial \Omega\tp label{ch:poisson0:bc}
 Here, $u = u(\x)$ is the unknown function, $f = f(\x)$ is a
 prescribed function, $\nabla^2$ is the Laplace operator (also
 often written as $\Delta$), $\Omega$ is the spatial domain, and
-$\partial\Omega$ is the boundary of $\Omega$. A stationary PDE like
-this, together with a complete set of boundary conditions, constitute
-a *boundary-value problem*, which must be precisely stated before
+$\partial\Omega$ is the boundary of $\Omega$. The Poisson problem,
+including both the PDE $-\nabla^2 u = f$ and the boundary condition
+$u = \ub$ on $\partial \Omega$, is an example of a *boundary-value
+problem*, which must be precisely stated before
 it makes sense to start solving it with FEniCS.
 
 In two space dimensions with coordinates $x$ and $y$, we can write out
@@ -185,11 +187,10 @@ multiply the PDE by a function $v$, integrate the resulting equation
 over the domain $\Omega$, and perform integration by parts of terms
 with second-order derivatives. The function $v$ which multiplies the
 PDE is called a *test function*. The unknown function $u$ to be
-approximated is referred to as a *trial function*. The terms test and
-trial function are used in FEniCS programs too. Suitable function
-spaces must be specified for the test and trial functions. For
-standard PDEs arising in physics and mechanics such spaces are well
-known.
+approximated is referred to as a *trial function*. The terms trial and
+test functions are used in FEniCS programs too. The trial and test
+functions belong to certain so-called *function spaces* that specify
+the properties of the functions.
 
 idx{integration by parts}
 
@@ -412,11 +413,12 @@ the domain to be the unit square,
 !bt
 \[ \Omega = [0,1]\times [0,1] \tp\]
 !et
-This simple but very powerful method for constructing test problems
-is called the *method of manufactured solutions*: pick a simple
+This simple but very powerful method for constructing test problems is
+called the *method of manufactured solutions*: pick a simple
 expression for the exact solution, plug it into the equation to obtain
 the right-hand side (source term $f$), then solve the equation with
-this right-hand side and try to reproduce the exact solution.
+this right-hand side and using the exact solution as a boundary
+condition, and try to reproduce the exact solution.
 
 idx{verification}
 idx{exact solution}
@@ -635,7 +637,7 @@ of element is here $\mathsf{P}$, implying the standard Lagrange family of
 elements. You may also use `'Lagrange'` to specify this type of
 element. FEniCS supports all simplex element families and the notation
 defined in the "Periodic Table of the Finite Elements":
-"http://femtable.org" cite{ArnoldLogg2014}.
+"https://www.femtable.org" cite{ArnoldLogg2014}.
 
 idx{Periodic Table of the Finite Elements}
 
@@ -761,7 +763,7 @@ function
 is implemented as
 
 !bc pycod-t
-f = Expression('x[0] >= 0 && x[1] >= 0 ? pow(x[0], 2) : 2', degree=1)
+f = Expression('x[0]>=0 && x[1]>=0 ? pow(x[0], 2) : 2', degree=2)
 !ec
 
 Parameters in expression strings are allowed, but
@@ -770,7 +772,7 @@ arguments when creating the `Expression` object. For example, the
 function $f(x)=e^{-\kappa\pi^2t}\sin(\pi k x)$ can be coded as
 
 !bc pycod-t
-f = Expression('exp(-kappa*pow(pi, 2)*t)*sin(pi*k*x[0])', degree=1,
+f = Expression('exp(-kappa*pow(pi, 2)*t)*sin(pi*k*x[0])', degree=2,
                kappa=1.0, t=0, k=4)
 !ec
 At any time, parameters can be updated:
@@ -823,6 +825,7 @@ become false even though `x` lies on the boundary.  A better test is
 to check for equality with a tolerance, either explicitly
 
 !bc pycod-t
+tol = 1E-14
 def boundary(x):
     return abs(x[0]) < tol or abs(x[1]) < tol \
         or abs((x[0] - 1) < tol or abs(x[1] - 1) < tol
@@ -881,7 +884,7 @@ Before defining the bilinear and linear forms $a(u,v)$ and $L(v)$ we
 have to specify the source term $f$:
 
 !bc pycod-t
-f = Expression('-6', degree=1)
+f = Expression('-6', degree=0)
 !ec
 When $f$ is constant over the domain, `f` can be
 more efficiently represented as a `Constant`:
@@ -989,7 +992,7 @@ Figure ref{ch:poisson0:2D:fig:ex1:u} displays the resulting $u$ function.
 !bnotice Plotting in Docker
 When running FEniCS from the command-line in a Docker container,
 plotting is disabled. Visualization of solutions must then be made
-using external applications such as Paraview running on the host
+using external applications such as ParaView running on the host
 system. Post-processing of solutions is the topic of the following
 section.
 !enotice
@@ -1018,15 +1021,17 @@ idx{`rename`}
 Prior to plotting and storing solutions to file it is wise to
 give `u` a proper name by `u.rename('u', 'solution')`. Then
 `u` will be used as name in plots (rather than the more cryptic
-default names like `f_7`).
+default names like `f_7`). The first argument to `rename` is
+a variable name and the second argument is a descriptive label
+of the variable.
 
 Once the solution has been stored to file, it can be opened in
-Paraview by choosing _File - Open_. Find the file `solution.pvd`, and
+ParaView by choosing _File - Open_. Find the file `solution.pvd`, and
 click the green _Apply_ button to the left in the GUI. A 2D color plot
 of $u(x,y)$ is then shown.  You can save the figure to file by _File -
 Export Scene..._ and choosing a suitable filename. For more
-information about how to install and use Paraview, see the
-"Paraview web page": "http://www.paraview.org/".
+information about how to install and use ParaView, see the
+"ParaView web page": "http://www.paraview.org/".
 
 FIGURE: [fig/poisson0_paraview, width=800 frac=1] Visualization of the solution of the test problem in ParaView, with contour lines added in the right plot.
 
@@ -1100,7 +1105,7 @@ In [8]: %timeit max(abs(a))    # definitely no...
 # #endif
 
 !bnotice How to check that the error vanishes
-With inexact arithmetics, as we always have on a computer, the maximum
+With inexact (floating point) arithmetic, the maximum
 error at the vertices is not zero, but should be a small number. The
 machine precision is about $10^{-16}$, but in finite element
 calculations, rounding errors of this size may accumulate, to produce

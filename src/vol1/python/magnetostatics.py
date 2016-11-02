@@ -65,13 +65,13 @@ J_S = Constant(-1.0)
 class Permeability(Expression):
     def __init__(self, mesh, **kwargs):
         self.markers = markers
-    def eval_cell(self, values, x, ufc_cell):
-        if markers[ufc_cell.index] == 0:
+    def eval_cell(self, values, x, cell):
+        if markers[cell.index] == 0:
             values[0] = 4*pi*1e-7 # vacuum
-        elif markers[ufc_cell.index] == 1:
+        elif markers[cell.index] == 1:
             values[0] = 1e-5      # iron (should really be 2.5e-1)
         else:
-            values[0] = -6.4e-6   # copper
+            values[0] = -6.4e-6   # copper (yes, it's negative!)
 
 mu = Permeability(mesh, degree=1)
 

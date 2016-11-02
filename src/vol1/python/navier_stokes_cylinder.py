@@ -132,7 +132,7 @@ for n in range(num_steps):
 
     # Step 3: Velocity correction step
     b3 = assemble(L3)
-    solve(A3, u_.vector(), b3, 'bicgstab')
+    solve(A3, u_.vector(), b3, 'bicgstab', 'ilu')
 
     # Plot solution
     plot(u_, title='Velocity')
