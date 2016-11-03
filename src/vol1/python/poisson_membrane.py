@@ -46,8 +46,8 @@ solve(a == L, w, bc)
 p = interpolate(p, V)
 w.rename('w', 'deflection')
 p.rename('p', 'load')
-plot(w, title='Deflection')
-plot(p, title='Load')
+#plot(w, title='Deflection')
+#plot(p, title='Load')
 
 # Save solution to file in VTK format
 vtkfile_w = File('poisson_membrane/deflection.pvd')
@@ -63,9 +63,9 @@ y = np.linspace(-1+tol, 1-tol, 101)
 points = [(0, y_) for y_ in y]  # 2D points
 w_line = np.array([w(point) for point in points])
 p_line = np.array([p(point) for point in points])
-plt.plot(y, 100*w_line, 'r-', y, p_line, 'b--') # magnify w
-plt.legend(['100 x deflection', 'load'], loc='upper left')
-plt.xlabel('y'); plt.ylabel('$p$ and $100u$')
+plt.plot(y, 50*w_line, 'r-', y, p_line, 'b--')  # magnify w
+plt.legend(['50 x deflection', 'load'], loc='upper left')
+plt.xlabel('$y$'); plt.ylabel('$p$ and $100u$')
 plt.savefig('poisson_membrane/plot.pdf')
 plt.savefig('poisson_membrane/plot.png')
 

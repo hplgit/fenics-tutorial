@@ -87,7 +87,7 @@ is simply a call to `run_solver` followed by a call to `interactive`
 to hold the plot:
 
 @@@CODE vol1/python/poisson_solver.py fromto: if __name@
-The complete code can be found in the file `${prog['poisson_solver']}.py`.
+This example program can be found in the file `${prog['poisson_solver']}.py`.
 
 idx{unit testing}
 
@@ -165,6 +165,16 @@ executed. A psychological help is to print out something before `assert`
 test really takes place.
 Note that `py.test` needs the `-s` option to show printout
 from the test functions.
+!enotice
+
+!bnotice Tip: Debugging with iPython
+One can easily enter iPython from a Python script by adding the following
+line anywhere in the code:
+!bc pycod
+from IPython import embed; embed()
+!ec
+This line starts an interactive Python session which lets you
+print and plot variables, which can be very helpful for debugging.
 !enotice
 
 ===== Parameterizing the number of space dimensions =====
@@ -456,9 +466,6 @@ linear algebra backend is currently being used by the following
 command:
 
 !bc pycod
-print parameters.linear_algebra_backend
-
-# Alternative syntax for Python 3
 print(parameters.linear_algebra_backend)
 !ec
 
@@ -763,18 +770,14 @@ for bc in bcs:
 idx{`assemble_system`}
 
 Alternatively, we can use the function `assemble_system`, which takes
-the boundary conditions into account during the assembly of the matrix
-and vector:
-
-!bc pycod
-A, b = assemble_system(a, L, bcs)
-!ec
-The `assemble_system` function is preferable to the combination of
-`assemble` and `bc.apply` when the linear system is symmetric, since
-`assemble_system` will incorporate the boundary conditions in a
-symmetric way. Even if the matrix `A` that comes out of the call to
-`assemble` is symmetric (for a symmetric bilinear form `a`), the call to `bc.apply`
-will break the symmetry.
+the boundary conditions into account when assembling the linear
+system. This method preserves the symmetry of the linear system for a
+symmetric bilinear form. Even if the matrix `A` that comes out
+of the call to `assemble` is symmetric (for a symmetric bilinear form
+`a`), the call to `bc.apply` will break the symmetry. Preserving the
+symmetry of a variational problem is important when using particular
+linear solvers designed for symmetric systems, such as the conjugate
+gradient method.
 
 #That is, for each degree of freedom
 #that is known, the corresponding row and column is zero'ed out and 1
@@ -848,7 +851,10 @@ solver.solve(A, U, b)
 !ec
 Note that we must both turn off the default behavior of setting the start
 vector (``initial guess'') to zero, and also set the values of the
-vector `U` to nonzero values.
+vector `U` to nonzero values. This is also important if we happen to
+know a good initial guess for the solution, for example when solving a
+nonlinear time-dependent problem, in which case the solution from the
+previous time step is a good choice.
 
 Using a nonzero initial guess can be particularly important for
 time-dependent problems or when solving a linear system as part of a
@@ -1038,15 +1044,15 @@ these mappings are only available in FEniCS for $\mathsf{P}_1$ elements.
 
 For Lagrange elements of degree larger than 1, there are degrees of
 freedom (nodes) that do not correspond to vertices. For these
-elements, we may get the vertex values by
-calling `u.compute_vertex_values(mesh)`, and we can get the degrees of
-freedom by the call `u.vector().array()`. To get the coordinates
-associated with all degrees of freedom, we need to iterate over the
-elements of the mesh and ask FEniCS to return the coordinates and dofs
-associated with each cell. This information is stored in the
+elements, we may get the vertex values by calling
+`u.compute_vertex_values(mesh)`, and we can get the degrees of freedom
+by the call `u.vector().array()`. To get the coordinates associated
+with all degrees of freedom, we need to iterate over the elements of
+the mesh and ask FEniCS to return the coordinates and dofs associated
+with each element (cell). This information is stored in the
 `FiniteElement` and `DofMap` object of a `FunctionSpace`. The
-following code illustrates how to iterate over all elements of a mesh and
-print the degrees of freedom and coordinates associated with the
+following code illustrates how to iterate over all elements of a mesh
+and print the coordinates and degrees of freedom associated with the
 element.
 
 !bc pycod
@@ -1098,6 +1104,8 @@ must divide all $U_j$ values
 by $\max_j |U_j|$. The following function performs the task:
 
 @@@CODE vol1/python/poisson_extended.py fromto: def normalize_solution@#---
+When using Lagrange elements, this (approximately) ensures that the
+maximum value of the function $u$ with degrees of freedom $U$ is $1$.
 
 The `/=` operator implies an
 in-place modification of the object on the left-hand side: all
@@ -1243,7 +1251,7 @@ space of the same degree as the space `V` where `u` resides:
 V = u.function_space()
 mesh = V.mesh()
 degree = V.ufl_element().degree()
-W = VectorFunctionSpace(mesh(), 'P', degree)
+W = VectorFunctionSpace(mesh, 'P', degree)
 
 grad_u = project(grad(u), W)
 flux_u = project(-k*grad(u), W)
@@ -1562,7 +1570,7 @@ detail here.
 idx{error}
 idx{norm}
 
-As we have already seen, the $L^2$-norm of the error $\u_e - u$ can
+As we have already seen, the $L^2$-norm of the error $\uex - u$ can
 be implemented in FEniCS by
 
 !bc pycod
@@ -1685,15 +1693,16 @@ each experiment report the six error types as returned by `compute_errors`.
 
 === Test problem ===
 
-To demonstrate the computation of convergence rates, we will pick an
-exact solution $\uex$ given by
+To demonstrate the computation of convergence rates, we pick an
+exact solution $\uex$, this time a little more interesting than
+for the test problem in Chapter ref{ch:fundamentals}:
 
 !bt
 \begin{equation*}
-\uex(x,y) = \sin(\omega\pi x)\sin(\omega\pi y)
+\uex(x,y) = \sin(\omega\pi x)\sin(\omega\pi y).
 \end{equation*}
 !et
-on the unit square. This choice implies $f(x,y)=2\omega^2\pi^2 u(x,y)$.
+This choice implies $f(x,y)=2\omega^2\pi^2 u(x,y)$.
 With $\omega$ restricted to an integer,
 it follows that the boundary value is given by $\ub=0$.
 

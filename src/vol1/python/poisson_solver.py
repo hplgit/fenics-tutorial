@@ -14,6 +14,7 @@ encapsulates the solver as a Python function.
 
 from __future__ import print_function
 from fenics import *
+import numpy as np
 
 def solver(f, u_D, Nx, Ny, degree=1):
     """
@@ -84,7 +85,6 @@ def test_solver():
             # Compute maximum error at vertices
             vertex_values_u_D = u_D.compute_vertex_values(mesh)
             vertex_values_u  = u.compute_vertex_values(mesh)
-            import numpy as np
             error_max = np.max(np.abs(vertex_values_u_D - \
                                       vertex_values_u))
 
