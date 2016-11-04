@@ -123,16 +123,16 @@ for n in range(num_steps):
     # Step 1: Tentative velocity step
     b1 = assemble(L1)
     [bc.apply(b1) for bc in bcu]
-    solve(A1, u_.vector(), b1, 'bicgstab', 'ilu')
+    solve(A1, u_.vector(), b1, 'bicgstab', 'hypre_amg')
 
     # Step 2: Pressure correction step
     b2 = assemble(L2)
     [bc.apply(b2) for bc in bcp]
-    solve(A2, p_.vector(), b2, 'bicgstab', 'ilu')
+    solve(A2, p_.vector(), b2, 'bicgstab', 'hypre_amg')
 
     # Step 3: Velocity correction step
     b3 = assemble(L3)
-    solve(A3, u_.vector(), b3, 'bicgstab', 'ilu')
+    solve(A3, u_.vector(), b3, 'cg', 'sor')
 
     # Plot solution
     plot(u_, title='Velocity')

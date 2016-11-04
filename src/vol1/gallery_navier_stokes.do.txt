@@ -20,7 +20,7 @@ relative ease in FEniCS.
 
 ===== PDE problem =====
 
-The incompressible Navier--Stokes equations are a system of equations
+The incompressible Navier--Stokes equations form a system of equations
 for the velocity $u$ and pressure $p$ in an incompressible fluid:
 
 !bt
@@ -106,7 +106,7 @@ label{ftut1:ipcs1}
       & \renni{\epsilon(v)}{\sigma(u^{n+\frac{1}{2}}, p^{n})}
       + \renni{v}{p^{n} n}_{\partial\Omega}
       - \nonumber\\
-      &\renni{v}{\mu \nabla u^{n+\frac{1}{2}}\cdot n}_{\partial\Omega}
+      &\renni{v}{\mu\nabla u^{n+\frac{1}{2}}\cdot n}_{\partial\Omega}
       = \renni{v}{f^{n+1}}.
 \end{align}
 !et
@@ -152,7 +152,14 @@ of the channel is zero at the outflow, corresponding to a flow that is
 ``fully developed'' or doesn't change significantly downstream of the
 outflow. Doing so, the remaining boundary term at the outflow becomes
 $pn - \mu\nabla u \cdot n$, which is the term appearing in the
-variational problem (ref{ftut1:ipcs1}).
+variational problem (ref{ftut1:ipcs1}). Note that this argument and
+the implementation depends on the exact definition of $\nabla u$, as
+either the matrix with components $\partial u_i / \partial x_j$ or
+$\partial u_j / \partial x_i$. We here choose the latter, $\partial
+u_j / \partial x_i$, which means that we must use the FEniCS operator
+`nabla_grad` for the implementation. If we use the `grad` operator and
+the definition $\partial u_i / \partial x_j$, we must instead keep the
+terms $pn - \mu(\nabla u)^{\top} \cdot n$!
 
 idx{`grad`}
 idx{`nabla_grad`}
@@ -346,7 +353,7 @@ is $p(x)=8(1-x)$ and $u_x=4y(1-y)$.
 The boundary conditions can be set as $p=1$ at $x=0$, $p=0$ at $x=1$
 and $u=0$ on the walls $y=0,1$. This defines the pressure drop and
 should result in unit maximum velocity at the inlet and outlet and a
-parabolic velocity profile without further specifications.  Note that
+parabolic velocity profile without further specifications. Note that
 it is only meaningful to solve the Navier--Stokes equations in 2D or 3D
 geometries, although the underlying mathematical problem collapses to
 two 1D problems, one for $u_x(y)$ and one for $p(x)$.
@@ -461,9 +468,9 @@ For the current example, we will set three different boundary
 conditions. First, we will set $u = 0$ at the walls of the channel;
 that is, at $y = 0$ and $y = 1$. Second, we will set $p = 8$ at the
 inflow ($x = 0$) and, finally, $p = 0$ at the outflow ($x = 1$). This
-will result in a pressure gradient that will accelerate the flow from an
-initial stationary state. These
-boundary conditions may be defined as follows:
+will result in a pressure gradient that will accelerate the flow from
+the initial state with zero velocity. These boundary conditions may be
+defined as follows:
 
 !bc pycod
 # Define boundaries
@@ -813,17 +820,17 @@ FEniCS when calling `solve`. Efficient solution of linear systems
 arising from the discretization of PDEs requires the choice of both a
 good iterative (Krylov subspace) method and a good
 preconditioner. For this problem, we will simply use the biconjugate
-gradient stabilized method (BiCGSTAB). This can be done by adding the
-keyword `bicgstab` in the call to `solve`. We also add a preconditioner,
-`ilu` to further speed up the computations:
+gradient stabilized method (BiCGSTAB) and the conjugate gradient method. This can be done by adding the
+keywords `bicgstab` or `cg` in the call to `solve`. We also specify
+suitable preconditioners to speed up the computations:
 
 idx{Krylov solver}
 idx{preconditioner}
 
 !bc pycod
-solve(A1, u1.vector(), b1, 'bicgstab', 'ilu')
-solve(A2, p1.vector(), b2, 'bicgstab', 'ilu')
-solve(A3, u1.vector(), b3, 'bicgstab', 'ilu')
+solve(A1, u1.vector(), b1, 'bicgstab', 'hypre_amg')
+solve(A2, p1.vector(), b2, 'bicgstab', 'hypre_amg')
+solve(A3, u1.vector(), b3, 'cg', 'sor')
 !ec
 
 Finally, to be able to postprocess the computed solution in ParaView,
