@@ -89,13 +89,13 @@ pdflatex $name
 
 # Printed book
 compile --device=paper EXV=False
-cp $name.pdf fenics-tutorial${bookno}-4print.pdf
-cp $name.log fenics-tutorial${bookno}-4print.log  # save to track the no of pages!
-cp $name.dlog ${name}-4print.dlog  # for examining error messages
+cp $name.pdf fenics-tutorial-vol${bookno}.pdf
+cp $name.log fenics-tutorial-vol${bookno}.log  # save to track the no of pages!
+cp $name.dlog ${name}.dlog  # for examining error messages
 
-# PDF online ebook (exetended version with exercises etc.)
+# PDF online ebook (extended version with exercises etc.)
 compile --device=screen EXV=True
-cp $name.pdf fenics-tutorial${bookno}-4screen.pdf
+cp $name.pdf fenics-tutorial-vol${bookno}-extended-beta.pdf
 
 # Make sphinx
 rm -f *._ftut*.rst
@@ -115,12 +115,12 @@ system doconce split_html $name.html --pagination
 # Root directory for published documents
 dest=../pub
 
-# Publish PDF
+# Copy PDF to output (publication) directory
 cp fenics-tutorial*.pdf $dest/pdf
 
-# Publish HTML
+# Copy HTML to output (publication) directory
 cp -r $name.html ._*.html fig mov $dest/html
 
-# Publish Sphinx
+# Copy Sphinx to output (publication) directory
 rm -rf $dest/sphinx${bookno}
 cp -r sphinx-rootdir${bookno}/_build/html $dest/sphinx${bookno}
