@@ -28,7 +28,7 @@ rm -rf tmp_*.do.txt  # don't spellcheck old versions
 
 # EXV: Extended Version of the book (used for exercises and
 # advanced material not to appear in the 150 page printed SSBrief version)
-EXV=True
+EXV=False
 
 # We have Norwegian characters in the acknowledgement and this requires utf-8
 
