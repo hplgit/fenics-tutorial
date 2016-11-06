@@ -58,11 +58,11 @@ p_n = Function(Q)
 p_  = Function(Q)
 
 # Define expressions used in variational forms
-U   = 0.5*(u_n + u)
-n   = FacetNormal(mesh)
-f   = Constant((0, 0))
-k   = Constant(dt)
-mu  = Constant(mu)
+U  = 0.5*(u_n + u)
+n  = FacetNormal(mesh)
+f  = Constant((0, 0))
+k  = Constant(dt)
+mu = Constant(mu)
 
 # Define symmetric gradient
 def epsilon(u):
