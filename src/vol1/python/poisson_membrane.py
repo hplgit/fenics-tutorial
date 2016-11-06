@@ -46,8 +46,8 @@ solve(a == L, w, bc)
 p = interpolate(p, V)
 w.rename('w', 'deflection')
 p.rename('p', 'load')
-#plot(w, title='Deflection')
-#plot(p, title='Load')
+plot(w, title='Deflection')
+plot(p, title='Load')
 
 # Save solution to file in VTK format
 vtkfile_w = File('poisson_membrane/deflection.pvd')
