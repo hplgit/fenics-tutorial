@@ -98,15 +98,15 @@ A3 = assemble(a3)
 [bc.apply(A1) for bc in bcu]
 [bc.apply(A2) for bc in bcp]
 
-# Create VTK files for visualization output
-vtkfile_u = File('navier_stokes_cylinder/velocity.pvd')
-vtkfile_p = File('navier_stokes_cylinder/pressure.pvd')
+# Create XDMF files for visualization output
+xdmffile_u = XDMFFile('navier_stokes_cylinder/velocity.xdmf')
+xdmffile_p = XDMFFile('navier_stokes_cylinder/pressure.xdmf')
 
-# Create time series for saving solution for later
-timeseries_u = TimeSeries('navier_stokes_cylinder/velocity')
-timeseries_p = TimeSeries('navier_stokes_cylinder/pressure')
+# Create time series (for use in reaction_system.py)
+timeseries_u = TimeSeries('navier_stokes_cylinder/velocity_series')
+timeseries_p = TimeSeries('navier_stokes_cylinder/pressure_series')
 
-# Save mesh to file for later
+# Save mesh to file (for use in reaction_system.py)
 File('navier_stokes_cylinder/cylinder.xml.gz') << mesh
 
 # Create progress bar
@@ -138,11 +138,11 @@ for n in range(num_steps):
     plot(u_, title='Velocity')
     plot(p_, title='Pressure')
 
-    # Save solution to file (VTK)
-    vtkfile_u << (u_, t)
-    vtkfile_p << (p_, t)
+    # Save solution to file (XDMF/HDF5)
+    xdmffile_u.write(u_, t)
+    xdmffile_p.write(p_, t)
 
-    # Save solution to file (HDF5)
+    # Save nodal values to file
     timeseries_u.store(u_.vector(), t)
     timeseries_p.store(p_.vector(), t)
 
