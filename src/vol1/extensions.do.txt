@@ -242,177 +242,6 @@ may be modified to solve $d$-dimensional problems by replacing the
 mesh = UnitHyperCube(divisions)
 !ec
 
-% if EXV:
-===== Exercise: Solve a Poisson problem =====
-
-Solve the following problem
-
-!bt
-\begin{align}
-\nabla^2 u &= 2e^{-2x}\sin(\pi y)((4-5\pi^2)\sin(2\pi x) - 8\pi\cos(2\pi x))
-\hbox{ in }\Omega = [0,1]\times [0,1]\\
-u &= 0\quad\hbox{ on }\partial\Omega
-\end{align}
-!et
-The exact solution is given by
-
-!bt
-\[ u(x,y) = 2e^{-2x}\sin(\pi x)\sin(\pi y)\tp\]
-!et
-Compute the maximum numerical approximation error in a mesh with
-$2(N_x\times N_y)$ elements and in a mesh with double resolution:
-$4(N_x\times N_y)$ elements. Show that the doubling the resolution
-reduces the error by a factor 4 when using Lagrange elements of degree one.
-Make an illustrative plot of the solution too.
-
-!bsubex
-file=poisson_fsin_flat
-
-Base your implementation on editing the program
-"`${prog['poisson']}.py`": "${src_url}/${prog['poisson']}.py".
-
-!bhint
-In the string for an `Expression` object, `pi` is the value of
-$\pi$. Also note that $\pi^2$ must be expressed with syntax
-`pow(pi,2)` and not (the common Python syntax) `pi**2`.
-
-FEniCS will abort with a compilation error if you type the expressions
-in a wrong way syntax-wise.  Search for *error:* in the
-`/very/long/path/compile.log` file mentioned in the error message to
-see what the C++ compiler reported as error in the expressions.
-!ehint
-
-!bhint
-The result that with P1 elements, doubling the resolution reduces the error
-with a factor of four, is an
-asymptotic result so it requires a sufficiently fine mesh. Here
-one may start with $N_x=N_y=20$.
-!ehint
-
-!bsol
-Looking at the
-"`${prog['poisson']}.py`": "${src_url}/${prog['poisson']}.py"
-code, we realize that
-the following edits are required:
-
- * Modify the `mesh` computation.
- * Modify `u_b` and `f`.
- * Add expression for the exact solution.
- * Modify the computation of the numerical error.
- * Insert a loop to enable solving the problem twice.
- * Put the error reduction computation and the plot statements after the loop.
-
-Here is the modified code:
-
-@@@CODE exer/vol1/poisson_fsin_flat.py fromto: from fenics import@
-
-The number $\pi$ has the symbol `M_PI` in C and C++, but in C++
-strings in `Expression` objects, the symbol `pi` can be used directly
-(or one can use the less readable `DOLFIN_PI`).
-
-FIGURE: [fig/poisson_fsin, width=500 frac=0.8]
-
-!esol
-!esubex
-
-!bsubex
-file=poisson_fsin_func
-
-Base your implementation on a new file that imports functionality
-from the module
-"`${prog['poisson_solver']}.py`": "${src_url}/${prog['poisson_solver']}.py".
-Embed the check of the
-reduction of the numerical approximation error in a unit test.
-
-!bsol
-Solving the two problems is a matter of calling `solver` with
-different sets of arguments.
-To compute the numerical error,
-we need code that is close to what we have in `test_solver`.
-
-@@@CODE exer/vol1/poisson_fsin_func.py fromto: from poisson_solver import@
-The unit test is embedded in a proper test function `test_solver` for
-the pytest or nose testing frameworks. Visualization of the
-solution is encapsulated in the `application` function. Since we need
-`u_e`, `u_b`, and `f` in two functions, we place the definitions in a
-function `data` to avoid copies of these expressions.
-
-!esol
-!esubex
-
-!bremarks
-This exercise demonstrates that changing a flat program to solve a new
-problem requires careful editing of statements scattered around in the
-file, while
-the solution in b), based on the `solver` function, requires *no modifications*
-of the
-"`${prog['poisson_solver']}.py`": "${src_url}/${prog['poisson_solver']}.py"
-file, just
-*minimalistic additional new code* in a separate file. The Poisson solver
-remains in one place while in a) we got two
-Poisson solvers. If you decide to switch to an iterative solution method
-for linear systems, you can do so in one place in b), and all applications
-can take advantage of the extension. Hopefully, with this exercise
-you realize that embedding
-PDE solvers in functions (or classes) makes more reusable software than
-flat programs.
-!eremarks
-% endif
-
-% if EXV:
-===== Exercise: Refactor the code for membrane deflection =====
-label{ch:poisson0:exer:membrane}
-file=membrane_func
-
-The
-"`${prog['poisson_membrane']}.py`": "${src_url}/${prog['poisson_membrane']}.py"
-program simulates the deflection of a
-membrane. Refactor this code such that we have a `solver` function as
-in the program
-"`${prog['poisson_solver']}.py`": "${src_url}/${prog['poisson_solver']}.py".
-Let the user
-have the option to choose a direct or iterative solver for the linear
-system.  Also implement a unit test where you have $p=4$ (constant)
-and use P2 and P3 elements. In this case, the exact solution is
-quadratic in $x$ and $y$ and will be ``exactly'' reproduced by P2 and
-higher-order elements.
-
-!bsol
-We can use the `solver` function from
-"`${prog['poisson_solver']}.py`": "${src_url}/${prog['poisson_solver']}.py"
-right away. The major difference is that
-the domain is now a circle and not a square. We change the `solver`
-function by letting the mesh be an argument `mesh` (instead of `Nx`
-and `Ny`):
-
-!bc pycod
-def solver(
-    f, u_b, mesh, degree=1,
-    linear_solver='Krylov', # Alt: 'direct'
-    ...):
-    V = FunctionSpace(mesh, 'P', degree)
-    # code as before
-!ec
-
-The complete code becomes
-
-@@@CODE exer/vol1/membrane_func.py fromto: def application@def test_membrane
-The key function to simulate membrane deflection is named `application`.
-
-For $p=4$, we have $w=1-x^2-y^2$ as exact solution.
-The unit test for P2 and P3 goes as follows:
-
-@@@CODE exer/vol1/membrane_func.py fromto: def test_membrane@if __name
-The striking feature is that the solver does not reproduce the solution
-to an accuracy more than about 0.01 (!), regardless of the resolution and
-type of element.
-
-## Seems as this solution is exactly reproduced very quickly, but
-## with some significant inaccuracy of the size 0.01.
-
-!esol
-% endif
-
 !split
 ======= Working with linear solvers =======
 
@@ -484,12 +313,10 @@ command:
 print(parameters.linear_algebra_backend)
 !ec
 
-idx{`parameters` database}
-idx{`info` function}
+idx{`parameters`}
+idx{`info`}
 
 === Setting solver parameters ===
-
-idx{parameters}
 
 We will normally want to control the tolerance in the stopping
 criterion and the maximum number of iterations when running an
@@ -743,8 +570,7 @@ where the entries of $A$ and $b$ are given by
 !et
 
 idx{`assemble`}
-idx{linear systems (in FEniCS)}
-idx{assembly of linear systems}
+idx{linear system}
 
 The examples so far have specified the left- and right-hand sides of
 the variational formulation and then asked FEniCS to assemble the
@@ -1023,7 +849,6 @@ and then `v` to show the numbering of the vertices.
 
 FIGURE: [fig/vertex_numbering, width=600 frac=0.75]
 
-idx{compute vertex values}
 idx{vertex values}
 
 Let's instead examine the values by calling
@@ -1146,7 +971,7 @@ A call like `u.vector().array()` returns a *copy* of the data in
 
 ======= Postprocessing computations =======
 label{ftut:possion:2D:varcoeff}
-idx{Poisson's equation with variable coefficient}
+
 idx{postprocessing}
 idx{`${prog["poisson_extended"]}.py`}
 
@@ -1232,8 +1057,6 @@ No additional modifications are necessary.
 ===== Flux computations =====
 label{ch:poisson0:gradu}
 
-idx{projection}
-
 It is often of interest to compute the flux $Q = -\kappa\nabla u$.
 Since $u = \sum_{j=1}^N U_j \phi_j$, it follows that
 
@@ -1258,7 +1081,7 @@ we solve $w = \nabla u$ approximately by a finite element method,
 using the same elements for the components of $w$ as we used for
 $u$. This process is known as *projection*.
 
-idx{`project`} idx{projection}
+idx{`project`}
 
 Projection is a common operation in finite element analysis and FEniCS
 has a function for easily performing the projection:
@@ -1301,9 +1124,8 @@ returned. (The opposite, `deepcopy=False`,
 means a *shallow copy*, where
 the returned objects are just pointers to the original data.)
 
-idx{degrees of freedom array}
-idx{nodal values array}
-idx{degrees of freedom array (vector field)}
+idx{degrees of freedom}
+idx{nodal values}
 
 For data analysis of the nodal values of the flux field, we can
 grab the underlying `numpy` arrays (which demands a `deepcopy=True`
