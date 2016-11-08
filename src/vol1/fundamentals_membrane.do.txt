@@ -106,12 +106,13 @@ from fenics import *
 !bc pycod
 from mshr import *
 domain = Circle(Point(0.0, 0.0), 1.0)
-mesh = generate_mesh(domain, 20)
+mesh = generate_mesh(domain, 64)
 !ec
-The `Circle` shape from `mshr` takes the center and radius of the circle
-as the two first arguments, while `n` is the resolution. The cell size
-will be (approximately) equal to the diameter of the domain divided
-by the resolution.
+The `Circle` shape from `mshr` takes the center and radius of the
+circle as arguments. The second argument to the `generate_mesh`
+function specifies the desired mesh resolution. The cell size will be
+(approximately) equal to the diameter of the domain divided by the
+resolution.
 
 ===== Defining the load =====
 
@@ -182,11 +183,12 @@ solve(a == L, w, bc)
 ===== Plotting the solution =====
 
 It is of interest to visualize the pressure $p$ along with the
-deflection $w$ so that we can examine the membrane's response to the
+deflection $w$ so that we may examine the membrane's response to the
 pressure. We must then transform the formula (`Expression`) to a
 finite element function (`Function`). The most natural approach is to
 construct a finite element function whose degrees of freedom are
-calculated from $p$. That is, we interpolate $p$:
+calculated from $p$. That is, we interpolate $p$ to the function space
+$V$:
 
 !bc pycod
 p = interpolate(p, V)
@@ -194,23 +196,27 @@ p = interpolate(p, V)
 Note that the assignment to `p` destroys the previous `Expression`
 object `p`, so if it is of interest to still have access to this
 object, another name must be used for the `Function` object returned
-by `interpolate`.
-
-We can now plot `w` and `p` on the screen
-as well as save the fields to a file in VTK format:
+by `interpolate`. The two functions `w` and `p` may be plotted
+using the built-in plot command:
 
 !bc pycod
 plot(w, title='Deflection')
 plot(p, title='Load')
+!ec
+As before, we also export the solutions in VTK format for
+visualization Paraview:
 
+!bc pycod
 vtkfile_w = File('poisson_membrane/deflection.pvd')
 vtkfile_w << w
 vtkfile_p = File('poisson_membrane/load.pvd')
 vtkfile_p << p
 !ec
-Figure ref{ch:poisson0:membrane:fig} shows the result of the `plot` commands.
+Figure ref{fig:poisson_membrane_deflection_load} shows a visualization
+of the deflection `w` and the load `p` created with ParaView.
 
-FIGURE: [fig/membrane_fenics_viz, width=800 frac=1] Load (left) and resulting deflection (right) of a circular membrane. label{ch:poisson0:membrane:fig}
+FIGURE:[fig/poisson_membrane_deflection_load, width=800 frac=0.95] Plot of the deflection (left) and load (right) for the membrane problem created using ParaView. The plot uses 10 equispaced isolines for the solution values and the optional *jet* colormap. label{fig:poisson_membrane_deflection_load}
+
 % endif
 
 ===== Making curve plots through the domain =====
@@ -220,9 +226,9 @@ idx{curve plots}
 # Nice with some matplotlib plots in notebooks...and very useful for
 # scientific investigations.
 
-The best way to compare the load and the deflection is to make a curve plot
+Another way to compare the deflection and the load is to make a curve plot
 along the line $x=0$. This is just a matter of defining a set of points
-along the line and evaluating the finite element functions `w` and `p`
+along the $y$-axis and evaluating the finite element functions `w` and `p`
 at these points:
 
 % if FORMAT != 'ipynb':
@@ -230,98 +236,12 @@ at these points:
 This example program can be found in the file "`${prog["poisson_membrane"]}.py`": "${src_url}/${prog["poisson_membrane"]}.py".
 
 idx{`${prog["poisson_membrane"]}.py`}
-
-The resulting curve plot appears in Figure
-ref{ch:poisson0:membrane:fig2}. The localized input ($p$) is heavily
+The resulting curve plot is shown in Figure
+ref{fig:poisson_membrane_curves}. The localized input ($p$) is heavily
 damped and smoothed in the output ($w$). This reflects a typical
 property of the Poisson equation.
 
-FIGURE: [fig/membrane_curveplot_new, width=700 frac=1.0] Comparison of membrane load and deflection along the $y$-axis. label{ch:poisson0:membrane:fig2}
-
-===== Visualizing the solution in ParaView =====
-label{ftut:paraview}
-
-idx{ParaView}
-
-"ParaView": "http://www.paraview.org" is a powerful
-tool for visualizing scalar and vector fields, including those
-computed by FEniCS.
-
-Our program writes the fields $w$ and $p$ to file as finite element
-functions. We choose the names of these files to be
-`membrane_deflection.pvd` for $w$ and `membrane_load.pvd` for $p$.
-These files are in VTK format and their data can be visualized in
-ParaView. We now give a detailed account for how to visualize
-the fields $w$ and $p$ in ParaView.
-
- o Start the ParaView application.
- o Open a file with _File - Open..._. You will see a list of `.pvd` and
-   `.vtu` files. More specifically you will see `membrane_deflection.pvd`.
-   Choose this file.
- o Click on _Apply_ to the left (*Properties* pane) in the GUI, and
-   ParaView will visualize the contents of the file, here as a color image.
- o To get rid of the axis in the lower left corner of the plot area
-   and axis cross in the middle of the circle, find the *Show Orientation Axis* and *Show Center* buttons to the right in the second row of buttons at the top of the GUI. Click on these buttons to toggle axis information on/off.
- o If you want a color bar to explain the mapping between $w$ values and colors,
-   go to the *Color Map Editor* in the right of the GUI and use the
-   *Show/hide color legend* button. Alternatively, find *Coloring* in the
-   lower left part of the GUI, and toggle the *Show* button.
- o The color map, by default going from blue (low values) to red (high values),
-   can easily be changed. Find the *Coloring* menu in the left part of the
-   GUI, click *Edit*, then in the *Color Map Editor* double click at the
-   left end of the color spectrum and choose another color, say yellow, then
-   double click at the right and of the spectrum and choose pink, scroll
-   down to the bottom of the dialog and click *Update*. The color map now
-   goes from yellow to pink.
- o To save the plot to file, click on _File - Export Scene..._,
-   fill in a filename, and save.
-   See Figure ref{ftut:paraview:figwp} (middle).
- o To change the background color of plots, choose
-   _Edit - Settings..._, _Color_ tab, click on _Background Color_,
-   and choose it to be, e.g., white. Then choose _Foreground Color_ to
-   be something different.
- o To plot the mesh with colors reflecting the size of $w$, find the
-   *Representation* drop down menu in the left part of the GUI, and replace
-   *Surface* by *Wireframe*.
- o To overlay a surface plot with a wireframe plot, load $w$ and plot
-   as surface, then load $w$ again and plot as wireframe. Make sure
-   both icons in the *Pipeline Browser* in the left part of the GUI
-   are *on* for the `membrane_deflection.pvd` files you want to display.
-   See Figure ref{ftut:paraview:figwp} (left).
- o Redo the surface plot. Then we can add some contour lines.
-   Press the semi-sphere icon in the third row of buttons at the top of the
-   GUI (the so-called *filters*). A set of contour values can now be
-   specified in a dialog box in the left part of the GUI. Remove
-   the default contour (0.578808) and add 0.01, 0.02, 0.03, 0.04, 0.05.
-   Click *Apply* and see an overlay of white contour lines.
-   In the *Pipeline Browser* you can click on the icons to turn
-   a filter on or off.
- o Divide the plot window into two, say horizontally, using the top right
-   small icon. Choose the _3D View_ button. Open a new file and load
-   `membrane_load.pvd`. Click on _Apply_ to see a plot of the load.
- o To plot a 2D scalar field as a surface, load the field,
-   click _Apply_ to plot it, then select
-   from the _Filters_ pulldown menu the filter *Warp By Scalar*, click
-   _Apply_, then toggle the _2D_ button to _3D_ in the Layout `#1`
-   window (upper row of buttons in that window). Now you can rotate
-   the figure. The height of the surface is very low, so go to the
-   *Properties (Warp By Scalar1)* window to the left in the GUI and give
-   a *Scale Factor* of 20 and re-click _Apply_
-   to lift the surface by a factor of 20.
-   Figure ref{ftut:paraview:figwp} (right) shows the result.
-
-FIGURE: [fig/paraview_membrane3b, width=800 frac=1] Default visualizations in ParaView: deflection (left, middle) and pressure load (right). label{ftut:paraview:figwp}
-
-FIGURE: [fig/paraview_membrane2_3D, width=800 frac=1] Use of the Warp By Scalar filter to create lifted surfaces (with different vertical scales!) in ParaView: load (left) and deflection (right). label{ftut:paraview:figwp2}
-
-A particularly useful feature of ParaView is that you can record GUI
-clicks (_Tools - Start/Stop Trace_) and get them translated to Python
-code. This allows you automate the visualization process. You can also
-make curve plots along lines through the domain, etc.
-
-For more information, we refer to The ParaView Guide cite{Paraview}
-(free PDF available) and to the "ParaView tutorial":
-"http://www.paraview.org/Wiki/The_ParaView_Tutorial" as well as an
-"instruction video": "https://vimeo.com/34037236".
+FIGURE: [fig/poisson_membrane_curves, width=800 frac=0.95] Plot of the deflection and load for the membrane problem created using Matplotlib and sampling
+the two function along the $y$-axsis. label{fig:poisson_membrane_curves}
 
 % endif

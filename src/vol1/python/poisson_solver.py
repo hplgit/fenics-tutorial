@@ -54,7 +54,6 @@ def run_solver():
     u = solver(f, u_D, 8, 8, 1)
 
     # Plot solution and mesh
-    u.rename('u', 'solution')
     plot(u)
     plot(u.function_space().mesh())
 

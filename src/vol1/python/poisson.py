@@ -36,7 +36,6 @@ u = Function(V)
 solve(a == L, u, bc)
 
 # Plot solution and mesh
-u.rename('u', 'solution')
 plot(u)
 plot(mesh)
 

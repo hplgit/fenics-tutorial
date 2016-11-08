@@ -413,7 +413,6 @@ def flux(u, kappa):
     degree = V.ufl_element().degree()
     W = VectorFunctionSpace(mesh, 'P', degree)
     flux_u = project(-kappa*grad(u), W)
-    flux_u.rename('flux(u)', 'continuous flux field')
     return flux_u
 
 def normalize_solution(u):
@@ -497,10 +496,8 @@ def demo_flux(Nx=8, Ny=8):
     # Compute and plot flux
     flux_u = flux(u, kappa)
     flux_u_x, flux_u_y = flux_u.split(deepcopy=True)
-    flux_u_x.rename('flux(u)_x', 'x-component of flux(u)')
-    flux_u_y.rename('flux(u)_y', 'y-component of flux(u)')
     plot(u, title=u.label())
-    plot(flux_u,   title=flux_u.label())
+    plot(flux_u, title=flux_u.label())
     plot(flux_u_x, title=flux_u_x.label())
     plot(flux_u_y, title=flux_u_y.label())
 

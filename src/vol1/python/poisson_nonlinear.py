@@ -50,7 +50,6 @@ F = q(u)*dot(grad(u), grad(v))*dx - f*v*dx
 solve(F == 0, u, bc)
 
 # Plot solution
-u.rename('u', 'solution')
 plot(u)
 
 # Compute maximum error at vertices. This computation illustrates
