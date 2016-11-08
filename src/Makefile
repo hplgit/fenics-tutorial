@@ -9,3 +9,6 @@ all:
 
 simple:
 	bash scripts/make_simple.sh
+
+publish:
+	bash scripts/publish.sh

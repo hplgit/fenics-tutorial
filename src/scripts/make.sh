@@ -112,6 +112,9 @@ system doconce format html $name --encoding=utf-8 --html_style=bootswatch_journa
 cp $name.dlog ${name}-html.dlog  # for examining error messages
 system doconce split_html $name.html --pagination
 
+# Replace http by https to make Bootstrap HTML work on FEniCS server
+sed -i bak -e 's/http:/https:/g' *.html .*.html
+
 # Root directory for published documents
 dest=../pub
 
@@ -119,7 +122,8 @@ dest=../pub
 cp fenics-tutorial*.pdf $dest/pdf
 
 # Copy HTML to output (publication) directory
-cp -r $name.html ._*.html fig mov $dest/html
+#cp -r $name.html ._*.html fig mov $dest/html
+cp -r $name.html ._*.html fig $dest/html
 
 # Copy Sphinx to output (publication) directory
 rm -rf $dest/sphinx${bookno}
