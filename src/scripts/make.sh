@@ -95,7 +95,7 @@ cp $name.dlog ${name}.dlog  # for examining error messages
 
 # PDF online ebook (extended version with exercises etc.)
 compile --device=screen EXV=True
-cp $name.pdf fenics-tutorial-vol${bookno}-extended-beta.pdf
+#cp $name.pdf fenics-tutorial-vol${bookno}-extended-beta.pdf
 
 # Make sphinx
 rm -f *._ftut*.rst
