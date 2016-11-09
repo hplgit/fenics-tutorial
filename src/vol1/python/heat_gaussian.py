@@ -44,7 +44,6 @@ a, L = lhs(F), rhs(F)
 
 # Create VTK file for saving solution
 vtkfile = File('heat_gaussian/solution.pvd')
-vtkfile << (u_n, 0.0)
 
 # Time-stepping
 u = Function(V)

@@ -122,8 +122,7 @@ dest=../pub
 cp fenics-tutorial*.pdf $dest/pdf
 
 # Copy HTML to output (publication) directory
-#cp -r $name.html ._*.html fig mov $dest/html
-cp -r $name.html ._*.html fig $dest/html
+cp -r $name.html ._*.html fig mov $dest/html
 
 # Copy Sphinx to output (publication) directory
 rm -rf $dest/sphinx${bookno}

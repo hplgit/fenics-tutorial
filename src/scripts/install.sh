@@ -13,7 +13,7 @@ sudo apt-get install \
      python-future python-mako python-lxml python-sphinx
 
 # Install extra Python packages
-sudo pip install git+https://github.com/hplgit/doconce.git
-sudo pip install git+https://github.com/hplgit/preprocess.git
-sudo pip install hg+https://bitbucket.org/logg/publish
-sudo pip install python-Levenshtein
+sudo pip2 install git+https://github.com/hplgit/doconce.git
+sudo pip2 install git+https://github.com/hplgit/preprocess.git
+sudo pip2 install hg+https://bitbucket.org/logg/publish
+sudo pip2 install python-Levenshtein
