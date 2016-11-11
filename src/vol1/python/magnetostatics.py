@@ -21,8 +21,6 @@ r = 0.1   # radius of copper wires
 R = 5.0   # radius of domain
 n = 10    # number of windings
 
-# FIXME: Use 'domain' instead of 'geometry' in other examples
-
 # Define geometry for background
 domain = Circle(Point(0, 0), R)
 

@@ -21,8 +21,8 @@ rho = 1            # density
 # Create mesh
 channel = Rectangle(Point(0, 0), Point(2.2, 0.41))
 cylinder = Circle(Point(0.2, 0.2), 0.05)
-geometry = channel - cylinder
-mesh = generate_mesh(geometry, 64)
+domain = channel - cylinder
+mesh = generate_mesh(domain, 64)
 
 # Define function spaces
 V = VectorFunctionSpace(mesh, 'P', 2)

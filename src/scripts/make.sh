@@ -94,7 +94,7 @@ cp $name.log fenics-tutorial-vol${bookno}.log  # save to track the no of pages!
 cp $name.dlog ${name}.dlog  # for examining error messages
 
 # PDF online ebook (extended version with exercises etc.)
-compile --device=screen EXV=True
+#compile --device=screen EXV=True
 #cp $name.pdf fenics-tutorial-vol${bookno}-extended-beta.pdf
 
 # Make sphinx
@@ -113,7 +113,10 @@ cp $name.dlog ${name}-html.dlog  # for examining error messages
 system doconce split_html $name.html --pagination
 
 # Replace http by https to make Bootstrap HTML work on FEniCS server
-sed -i bak -e 's/http:/https:/g' *.html .*.html
+sed -i bak -e 's=http://fenicsproject=https://fenicsproject=g' *.html .*.html
+sed -i bak -e 's=http://netdna=https://netdna=g' *.html .*.html
+sed -i bak -e 's=http://ajax=https://ajax=g' *.html .*.html
+sed -i bak -e 's=http://cdn=https://cdn=g' *.html .*.html
 
 # Root directory for published documents
 dest=../pub
