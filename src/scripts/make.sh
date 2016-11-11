@@ -113,10 +113,10 @@ cp $name.dlog ${name}-html.dlog  # for examining error messages
 system doconce split_html $name.html --pagination
 
 # Replace http by https to make Bootstrap HTML work on FEniCS server
-sed -i bak -e 's=http://fenicsproject=https://fenicsproject=g' *.html .*.html
-sed -i bak -e 's=http://netdna=https://netdna=g' *.html .*.html
-sed -i bak -e 's=http://ajax=https://ajax=g' *.html .*.html
-sed -i bak -e 's=http://cdn=https://cdn=g' *.html .*.html
+sed -i.bak -e 's=http://fenicsproject=https://fenicsproject=g' *.html .*.html
+sed -i.bak -e 's=http://netdna=https://netdna=g' *.html .*.html
+sed -i.bak -e 's=http://ajax=https://ajax=g' *.html .*.html
+sed -i.bak -e 's=http://cdn=https://cdn=g' *.html .*.html
 
 # Root directory for published documents
 dest=../pub
