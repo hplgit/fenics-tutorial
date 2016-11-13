@@ -13,7 +13,7 @@ from mshr import *
 import numpy as np
 
 # Create mesh and define function space
-domain = Circle(Point(0.0, 0.0), 1.0)
+domain = Circle(Point(0, 0), 1)
 mesh = generate_mesh(domain, 64)
 V = FunctionSpace(mesh, 'P', 2)
 
@@ -28,9 +28,8 @@ bc = DirichletBC(V, w_D, boundary)
 # Define load
 beta = 8
 R0 = 0.6
-p = Expression(
-    '4*exp(-pow(beta, 2)*(pow(x[0], 2) + pow(x[1] - R0, 2)))',
-    beta=beta, R0=R0)
+p = Expression('4*exp(-pow(beta, 2)*(pow(x[0], 2) + pow(x[1] - R0, 2)))',
+               degree=1, beta=beta, R0=R0)
 
 # Define variational problem
 w = TrialFunction(V)
@@ -56,7 +55,7 @@ vtkfile_p << p
 # Curve plot along x = 0 comparing p and w
 import numpy as np
 import matplotlib.pyplot as plt
-tol = 1E-8  # avoid hitting points outside the domain
+tol = 0.001  # avoid hitting points outside the domain
 y = np.linspace(-1 + tol, 1 - tol, 101)
 points = [(0, y_) for y_ in y]  # 2D points
 w_line = np.array([w(point) for point in points])
