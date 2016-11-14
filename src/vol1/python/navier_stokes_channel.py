@@ -28,8 +28,8 @@ outflow = 'near(x[0], 1)'
 walls   = 'near(x[1], 0) || near(x[1], 1)'
 
 # Define boundary conditions
-bcu_noslip = DirichletBC(V, Constant((0, 0)), walls)
-bcp_inflow = DirichletBC(Q, Constant(8), inflow)
+bcu_noslip  = DirichletBC(V, Constant((0, 0)), walls)
+bcp_inflow  = DirichletBC(Q, Constant(8), inflow)
 bcp_outflow = DirichletBC(Q, Constant(0), outflow)
 bcu = [bcu_noslip]
 bcp = [bcp_inflow, bcp_outflow]
@@ -67,7 +67,7 @@ F1 = rho*dot((u - u_n) / k, v)*dx + \
      rho*dot(dot(u_n, nabla_grad(u_n)), v)*dx \
    + inner(sigma(U, p_n), epsilon(v))*dx \
    + dot(p_n*n, v)*ds - dot(mu*nabla_grad(U)*n, v)*ds \
-   - rho*dot(f, v)*dx
+   - dot(f, v)*dx
 a1 = lhs(F1)
 L1 = rhs(F1)
 
