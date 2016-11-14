@@ -43,7 +43,7 @@ def sigma(u):
 
 # Define variational problem
 u = TrialFunction(V)
-d = u.geometric_dimension()  # no of space dim
+d = u.geometric_dimension()  # space dimension
 v = TestFunction(V)
 f = Constant((0, 0, -rho*g))
 T = Constant((0, 0, 0))
@@ -68,7 +68,8 @@ plot(von_Mises, title='Stress intensity')
 u_magnitude = sqrt(dot(u, u))
 u_magnitude = project(u_magnitude, V)
 plot(u_magnitude, 'Displacement magnitude')
-print('min/max u:', u_magnitude.vector().array().min(),
+print('min/max u:',
+      u_magnitude.vector().array().min(),
       u_magnitude.vector().array().max())
 
 # Save solution to file in VTK format
