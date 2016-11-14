@@ -13,15 +13,14 @@ from __future__ import print_function
 from fenics import *
 
 def q(u):
-    "Return nonlinear coefficient in PDE"
+    "Return nonlinear coefficient"
     return 1 + u**2
 
-# Use SymPy to compute f given manufactured solution u
+# Use SymPy to compute f from the manufactured solution u
 import sympy as sym
 x, y = sym.symbols('x[0], x[1]')
 u = 1 + x + 2*y
-f = - sym.diff(q(u)*sym.diff(u, x), x) - \
-      sym.diff(q(u)*sym.diff(u, y), y)
+f = - sym.diff(q(u)*sym.diff(u, x), x) - sym.diff(q(u)*sym.diff(u, y), y)
 f = sym.simplify(f)
 u_code = sym.printing.ccode(u)
 f_code = sym.printing.ccode(f)
