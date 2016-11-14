@@ -8,8 +8,8 @@ So far, we have only looked briefly at how to specify boundary
 conditions. In this chapter, we look more closely at how to specify
 boundary conditions on specific parts (subdomains) of the boundary and
 how to combine multiple boundary conditions. We will also look at how to
-generate meshes with subdomains and how to define coefficients and
-variational problems that look different in different subdomains.
+generate meshes with subdomains and how to define coefficients
+with different values in different subdomains.
 !equote
 
 #========= Multiple domains and boundaries =========
@@ -17,7 +17,7 @@ variational problems that look different in different subdomains.
 ======= Combining Dirichlet and Neumann conditions =======
 label{ch:poisson0:DN}
 
-Let's return to our Poisson solver from Chapter ref{ch:fundamentals}
+Let's return to the Poisson problem from Chapter ref{ch:fundamentals}
 and see how to extend the mathematics and the implementation to handle
 a Dirichlet condition in combination with a Neumann condition. The
 domain is still the unit square, but now we set the Dirichlet
@@ -50,21 +50,22 @@ complete boundary-value problem can be written as
     - {\partial u\over\partial n} &= g &&\mbox{on } \GN  \tp
 \end{alignat}
 !et
-Again we choose $u=1+x^2 + 2y^2$ as the exact solution and adjust $f$, $g$, and
+Again, we choose $u=1+x^2 + 2y^2$ as the exact solution and adjust $f$, $g$, and
 $\ub$ accordingly:
 
 !bt
 \begin{align*}
-f &= -6,\\
-g &= \left\lbrace\begin{array}{ll}
-0, & y=0,\\
-4, & y=1,
+f(x, y) &= -6,\\
+g(x, y) &= \left\lbrace\begin{array}{ll}
+0, & \quad y=0,\\
+4, & \quad y=1,
 \end{array}\right.\\
-\ub &= 1 + x^2 + 2y^2\tp
+\ub(x, y) &= 1 + x^2 + 2y^2\tp
 \end{align*}
 !et
-For ease of programming, we may introduce a $g$ function defined over the whole
-of $\Omega$ such that $g$ takes on the right values at $y=0$ and
+
+For ease of programming, we define $g$ as a function over the whole
+domain $\Omega$ such that $g$ takes on the correct values at $y=0$ and
 $y=1$. One possible extension is
 
 !bt
@@ -75,7 +76,7 @@ g(x,y) = 4y\tp
 
 ===== Variational formulation =====
 
-The first task is to derive the variational problem. This time we cannot
+The first task is to derive the variational formulation. This time we cannot
 omit the boundary term arising from the integration by parts, because
 $v$ is only zero on $\GD$. We have
 
@@ -128,7 +129,7 @@ revisit our previous implementation
 from ref[Section ref{ch:poisson0:impl}][ in cite{ftut1}][the section
 "FEniCS implementation": "" in cite{ftut1}] and examine which changes
 we need to make to incorporate the Neumann condition. It turns out
-that only two are necessary.
+that only two changes are necessary:
 
   * The function `boundary` defining the Dirichlet boundary
     must be modified.
@@ -179,7 +180,7 @@ contribution from the Neumann boundary.
 label{ch:poisson0:multiple:Dirichlet}
 
 In the previous section, we used a single function $\ub(x,y)$ for
-setting Dirichlet conditions at two parts of the boundary.  Often it
+setting Dirichlet conditions on two parts of the boundary. Often it
 is more practical to use multiple functions, one for each subdomain of the
 boundary. Let us return to the case from Section ref{ch:poisson0:DN}
 and redefine the problem in terms of two Dirichlet conditions:
@@ -194,7 +195,9 @@ and redefine the problem in terms of two Dirichlet conditions:
 !et
 Here, $\GD^{^{\mathrm{L}}}$ is the left boundary $x=0$, while
 $\GD^{^{\mathrm{R}}}$ is the right boundary $x=1$. We note that
-$u_{_\mathrm{L}} = 1 + 2y^2$, $u_{_\mathrm{R}} = 2 + 2y^2$, and $g=4y$.
+$u_{_\mathrm{L}}(x, y) = 1 + 2y^2$,
+$u_{_\mathrm{R}}(x, y) = 2 + 2y^2$, and
+$g(x, y)=4y$.
 
 For the boundary condition on $\GD^{^{\mathrm{L}}}$, we define the
 usual triple of an expression for the boundary value, a function
@@ -270,19 +273,20 @@ encountered task. In FEniCS, these kinds of problems are handled by
 defining subdomains inside the domain. A simple example with two
 materials (subdomains) in 2D will demonstrate the idea.
 
-FIGURE: [fig/subdomains, width=400 frac=0.5] Medium with discontinuous material properties. label{fig:subdomains}
+FIGURE: [fig/subdomains, width=400 frac=0.5] Two subdomains with different material parameters. label{fig:subdomains}
 
-Suppose we want to solve
+Suppose we want to solve the PDE
 
 !bt
 \begin{equation} label{ch:poisson0:2D:2mat:varcoeff2}
     \nabla\cdot \left\lbrack \kappa(x,y)\nabla u(x,y)\right\rbrack = 0,
 \end{equation}
 !et
-in a domain $\Omega$ consisting of two subdomains where $\kappa$ takes on
+in a domain $\Omega$ consisting of two subdomains where the
+coefficient $\kappa$ takes on
 a different value in each subdomain.
 We take $\Omega = [0,1]\times [0,1]$ and divide it into two equal
-subdomains, as depicted in Figure ref{fig:subdomains}.
+subdomains, as depicted in Figure ref{fig:subdomains}:
 
 !bt
 \begin{equation*}
@@ -291,7 +295,7 @@ subdomains, as depicted in Figure ref{fig:subdomains}.
 \end{equation*}
 !et
 We define $\kappa(x,y)=\kappa_0$ in $\Omega_0$ and $\kappa(x,y)=\kappa_1$ in $\Omega_1$,
-where $\kappa_0>0$ and $\kappa_1>0$ are given constants.
+where $0 < \kappa_0 < \kappa_1$ are given constants.
 
 Physically, this problem may be viewed as a model of heat conduction,
 where the heat conduction in $\Omega_1$ is more efficient than in
@@ -301,7 +305,7 @@ fluid differ.
 
 ===== Using expressions to define subdomains =====
 
-The simplest way of implementing a variable coefficient $\kappa$ is to
+The simplest way to implement a variable coefficient $\kappa$ is to
 define an `Expression` object where we return the appropriate $\kappa$
 value depending on the position in space. Since we need some testing
 on the coordinates, the most straightforward approach is to define a
