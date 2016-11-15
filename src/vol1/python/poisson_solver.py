@@ -49,7 +49,7 @@ def run_solver():
     "Run solver to compute and post-process solution"
 
     # Set up problem parameters and call solver
-    u_D = Expression('1 + x[0]*x[0] + 2*x[1]*x[1]')
+    u_D = Expression('1 + x[0]*x[0] + 2*x[1]*x[1]', degree=2)
     f = Constant(-6.0)
     u = solver(f, u_D, 8, 8, 1)
 
@@ -66,7 +66,7 @@ def test_solver():
 
     # Set up parameters for testing
     tol = 1E-10
-    u_D = Expression('1 + x[0]*x[0] + 2*x[1]*x[1]')
+    u_D = Expression('1 + x[0]*x[0] + 2*x[1]*x[1]', degree=2)
     f = Constant(-6.0)
 
     # Iterate over mesh sizes and degrees
