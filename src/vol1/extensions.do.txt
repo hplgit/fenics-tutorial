@@ -12,7 +12,9 @@ domain, and coefficients such as material parameters. In this chapter,
 we will see how to write general solver functions to improve the
 usability of FEniCS programs. We will also discuss how to
 utilize iterative solvers with preconditioners for solving linear
-systems and how to compute derived quantities, such as, e.g., the flux on a part of the boundary.
+systems, how to compute derived quantities, such as, e.g., the flux
+on a part of the boundary, and how to compute errors and convergence
+rates.
 !equote
 
 ======= Refactoring the Poisson solver =======
@@ -20,34 +22,37 @@ label{ch:poisson0:impl2}
 
 idx{flat program}
 
-All programs created in this book so far are ``flat''; that is, they
-are not organized into logical, reusable units in terms of Python
-functions. Such flat programs are useful for quickly testing out some
-software, but not well suited for serious problem solving. We shall
-therefore look at how to *refactor* the Poisson solver from Chapter
-ref{ch:fundamentals}.  For a start, this means splitting the code into
-functions, but this is just a reordering of the existing
-statements. During refactoring, we also try make the functions we
-create as reusable as possible in other contexts. We will also
-encapsulate statements specific to a certain problem into
-(non-reusable) functions. Being able to distinguish reusable code from
-specialized code is a key issue when refactoring code, and this
-ability depends on a good mathematical understanding of the problem at
-hand (what is general, what is special?).  In a flat program, general
-and specialized code (and mathematics) are often mixed together, which
-tends to give a blurred understanding of the problem at hand.
+Most programs discussed in this book are ``flat''; that is, they are
+not organized into logical, reusable units in terms of Python
+functions. Such flat programs are useful for quickly testing ideas and
+sketching solution algorithms, but are not well suited for serious
+problem solving. We shall therefore look at how to *refactor* the
+Poisson solver from Chapter ref{ch:fundamentals}. For a start, this
+means splitting the code into functions. But refactoring is not just a
+reordering of existing statements. During refactoring, we also try to
+make the functions we create as reusable as possible in other
+contexts. We will also encapsulate statements specific to a certain
+problem into (non-reusable) functions. Being able to distinguish
+reusable code from specialized code is a key issue when refactoring
+code, and this ability depends on a good mathematical understanding of
+the problem at hand (what is general, what is special?).  In a flat
+program, general and specialized code (and mathematics) are often
+mixed together, which tends to give a blurred understanding of the
+problem at hand.
 
 ===== A more general solver function =====
 label{ch:poisson0:impl2:func}
 
-We consider the flat program developed in ref[Section
-ref{ch:poisson0:impl}][ in cite{ftut1}][the section "FEniCS
-implementation": "" in cite{ftut1}].  Some of the code in this program
+We consider the flat program
+"`${prog['poisson']}.py`": "${src_url}/${prog['poisson']}.py"
+for solving the Poisson problem developed
+in Chapter ref{ch:fundamentals}.
+Some of the code in this program
 is needed to solve any Poisson problem $-\nabla^2 u=f$ on $[0,1]\times
 [0,1]$ with $u=\ub$ on the boundary, while other statements arise from
 our simple test problem. Let us collect the general, reusable code in
 a function called `solver`. Our special test problem will then just be
-an application of `solver` with some additional statements. We limit
+an application of our `solver` with some additional statements. We limit
 the `solver` function to just *compute the numerical
 solution*. Plotting and comparing the solution with the exact solution
 are considered to be problem-specific activities to be performed
@@ -61,7 +66,7 @@ as an argument to `solver`.
 
 @@@CODE vol1/python/poisson_solver.py fromto: from fenics import@def run_solver
 
-The remaining tasks of our initial program, such as calling the `solve`
+The remaining tasks of our initial program, such as calling the `solver`
 function with problem-specific parameters and plotting,
 can be placed in a separate function. Here we choose to put this code
 in a function named `run_solver`:
@@ -82,12 +87,12 @@ reused) in other programs. This means that all statements in the main
 program that are not inside functions should appear within a test
 `if __name__ == '__main__':`. This test is true if the file is executed as
 a program, but false if the file is imported.  If we want to run this
-file in the same way as we can run `${prog['poisson_solver']}.py`, the
+file in the same way as we can run `${prog['poisson']}.py`, the
 main program is simply a call to `run_solver` followed by a call to
 `interactive` to hold the plot:
 
 @@@CODE vol1/python/poisson_solver.py fromto: if __name@
-This example program can be found in the file "`${prog['poisson_solver']}.py`": "${src_url}/${prog['poisson_solver']}.py".
+This complete program can be found in the file "`${prog['poisson_solver']}.py`": "${src_url}/${prog['poisson_solver']}.py".
 
 idx{`${prog["poisson_solver"]}.py`}
 idx{unit testing}
@@ -98,7 +103,7 @@ idx{verification}
 
 The remaining part of our first program is to compare the numerical
 and the exact solutions. Every time we edit the code we must rerun the
-test and examine that `max_error` is sufficiently small so we know
+test and examine that `error_max` is sufficiently small so we know
 that the code still works. To this end, we shall adopt *unit testing*,
 meaning that we create a mathematical test and corresponding software
 that can run all our tests automatically and check that all tests
@@ -114,13 +119,11 @@ at the vertices of the mesh.
 We have already created a code that finds the error at the vertices for
 our numerical solution. Because of rounding errors, we cannot demand this
 error to be zero, but we have to use a tolerance, which
-depends to the number of elements and the degrees of the polynomials
-in the finite element basis functions. If we want to test that the
+depends on the number of elements and the degrees of the polynomials
+in the finite element basis. If we want to test that the
 `solver` function works for meshes up to $2\times(20\times 20)$
 elements and cubic Lagrange elements, $10^{-10}$ is an appropriate
-tolerance for testing that the maximum error vanishes (see ref[Section
-ref{ch:poisson0:impl:dissect}][ in cite{ftut1}][the section
-"Dissection of the program": "" in cite{ftut1}]).
+tolerance for testing that the maximum error vanishes.
 
 To make our test case work together with pytest and nose, we have to
 make a couple of small adjustments to our program. The simple
@@ -135,7 +138,7 @@ Regarding the last point, `success` is a boolean expression that is
 written to the screen. When the test fails, `assert` raises an
 `AssertionError` exception in Python, and otherwise runs
 silently. The `msg` string is optional, so `assert success` is the
-minimal test. In our case, we will write `assert max_error < tol`,
+minimal test. In our case, we will write `assert error_max < tol`,
 where `tol` is the tolerance mentioned above.
 
 A proper *test function* for implementing this unit test in the
@@ -185,15 +188,14 @@ idx{dimension-independent code}
 idx{space dimensions}
 
 FEniCS makes it is easy to write a unified simulation code that can
-operate in 1D, 2D, and 3D. We will conveniently make use of this
-feature in forthcoming examples.  As an appetizer, go back to the
+operate in 1D, 2D, and 3D. As an appetizer, go back to the
 previous programs
 "`${prog['poisson']}.py`": "${src_url}/${prog['poisson']}.py"
 or
 "`${prog['poisson_solver']}.py`": "${src_url}/${prog['poisson_solver']}.py"
-and change the mesh construction from `UnitSquareMesh(16, 16)` to
-`UnitCubeMesh(16, 16, 16)`. Now the domain is the unit cube
-partitioned into $16\times 16\times16$|$16x16x16$ boxes, and each box
+and change the mesh construction from `UnitSquareMesh(8, 8)` to
+`UnitCubeMesh(8, 8, 8)`. Now the domain is the unit cube
+partitioned into $8\times 8\times 8$ boxes, and each box
 is divided into six tetrahedron-shaped finite elements for
 computations. Run the program and observe that we can solve a 3D
 problem without any other modifications! (In 1D, expressions must be
@@ -203,26 +205,26 @@ boundary.
 
 If we want to parameterize the creation of unit interval, unit square,
 or unit cube over dimension, we can do so by encapsulating this part
-of the code in a function. Given a list or tuple with the divisions
-into cells in the various spatial coordinates, the following function
+of the code in a function. Given a list or tuple specifying the division
+into cells in the spatial coordinates, the following function
 returns the mesh for a $d$-dimensional cube:
 
 !bc pycod
 def UnitHyperCube(divisions):
     mesh_classes = [UnitIntervalMesh, UnitSquareMesh, UnitCubeMesh]
     d = len(divisions)
-    mesh = mesh_classes[d-1](*divisions)
+    mesh = mesh_classes[d - 1](*divisions)
     return mesh
 !ec
-The construction `mesh_class[d-1]` will pick the right name of the
+The construction `mesh_class[d - 1]` will pick the right name of the
 object used to define the domain and generate the mesh.  Moreover, the
 argument `*divisions` sends all the components of the list `divisions`
 as separate arguments to the constructor of the mesh construction
-class picked out by `mesh_class[d-1]`. For example, in a 2D problem
+class picked out by `mesh_class[d - 1]`. For example, in a 2D problem
 where `divisions` has two elements, the statement
 
 !bc pycod
-mesh = mesh_classes[d-1](*divisions)
+mesh = mesh_classes[d - 1](*divisions)
 !ec
 is equivalent to
 
