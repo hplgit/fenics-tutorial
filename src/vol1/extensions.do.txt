@@ -270,12 +270,11 @@ idx{Krylov solver}
 Preconditioned Krylov solvers is a type of popular iterative methods
 that are easily accessible in FEniCS programs. The Poisson equation
 results in a symmetric, positive definite system matrix, for which the
-optimal Krylov solver is the Conjugate Gradient (CG) method. However,
-the CG method requires boundary conditions to be implemented in a
-symmetric way. This is not the case by default, so then a Krylov
-solver for non-symmetric system, such as GMRES, is a better choice.
-Incomplete LU factorization (ILU) is a popular and robust all-round
-preconditioner, so let us try the GMRES-ILU pair:
+optimal Krylov solver is the Conjugate Gradient (CG) method. For
+non-symmetric problems, a Krylov solver for non-symmetric systems,
+such as GMRES, is a better choice. Incomplete LU factorization (ILU)
+is a popular and robust all-round preconditioner, so let us try the
+GMRES-ILU pair:
 
 !bc pycod
 solve(a == L, u, bc,
@@ -373,17 +372,17 @@ defined in an XML file. To generate such a file from the current set
 of parameters in a program, run
 
 !bc pycod
-File('fenics_parameters.xml') << parameters
+File('parameters.xml') << parameters
 !ec
-If a `fenics_parameters.xml` file is found in the directory where a
+If a `dolfin_parameters.xml` file is found in the directory where a
 FEniCS program is run, this file is read and used to initialize the
 `parameters` object. Otherwise, the file
-`.config/fenics/fenics_parameters.xml` in the user's home directory is
+`.config/fenics/dolfin_parameters.xml` in the user's home directory is
 read, if it exists.  Another alternative is to load the XML file (with any
 name) manually in the program:
 
 !bc pycod
-File('fenics_parameters.xml') >> parameters
+File('parameters.xml') >> parameters
 !ec
 The XML file can also be in gzip'ed form with the extension `.xml.gz`.
 
@@ -486,7 +485,7 @@ The FEniCS interface allows different ways to access the core
 functionality, ranging from very high-level to low-level access. So
 far, we have mostly used the high-level call `solve(a == L, u, bc)` to
 solve a variational problem `a == L` with a certain boundary condition
-`bc`. However, sometimes you may need more fine-grained control over
+`bc`. However, sometimes you may need more fine-grained control of
 the solution process. In particular, the call to `solve` will create
 certain objects that are thrown away after the solution has been
 computed, and it may be practical or efficient to *reuse* those
@@ -516,7 +515,7 @@ like this:
 !bc pycod
 solver.parameters.linear_solver = 'gmres'
 solver.parameters.preconditioner = 'ilu'
-prm = solver.parameters.krylov_solver # short form
+prm = solver.parameters.krylov_solver  # short form
 prm.absolute_tolerance = 1E-7
 prm.relative_tolerance = 1E-4
 prm.maximum_iterations = 1000
@@ -701,10 +700,8 @@ solver.solve(A, U, b)
 !ec
 Note that we must both turn off the default behavior of setting the start
 vector (``initial guess'') to zero, and also set the values of the
-vector `U` to nonzero values. This is also important if we happen to
-know a good initial guess for the solution, for example when solving a
-nonlinear time-dependent problem, in which case the solution from the
-previous time step is a good choice.
+vector `U` to nonzero values. This is useful if we happen to
+know a good initial guess for the solution.
 
 Using a nonzero initial guess can be particularly important for
 time-dependent problems or when solving a linear system as part of a
@@ -737,7 +734,7 @@ before and after the `bc.apply(A, b)` call:
 !bc pycod
 A = assemble(a)
 b = assemble(L)
-if mesh.num_cells() < 16: # print for small meshes only
+if mesh.num_cells() < 16:  # print for small meshes only
     print(A.array())
     print(b.array())
 bc.apply(A, b)
@@ -769,8 +766,8 @@ small PDE problems since the `numpy` arrays or matrices in MATLAB file
 format are dense matrices. FEniCS also has an interface to the
 eigensolver package SLEPc, which is the preferred tool for computing
 the eigenvalues of large, sparse matrices of the type encountered in
-PDE problems (see `demo/documented/eigenvalue` in the FEniCS source
-code tree for a demo).
+PDE problems (see `demo/documented/eigenvalue/python/` in the
+FEniCS/DOLFIN source code tree for a demo).
 
 ===== Examining the degrees of freedom =====
 label{ch:poisson0:verify1}
@@ -793,12 +790,13 @@ be the same as the values we get by the following statement:
 !bc pycod
 vertex_values = u.compute_vertex_values(mesh)
 !ec
-Both `nodal_values` and `vertex_values` will be `numpy` arrays and they will
-be of the same length and contain the same values, but with possibly
-different ordering. The array `vertex_values` will have the same
-ordering as the vertices of the mesh, while `nodal_values` will be ordered in
-a way that (nearly) minimizes the bandwidth of the system matrix and
-thus improves the efficiency of linear solvers.
+Both `nodal_values` and `vertex_values` will be `numpy` arrays and
+they will be of the same length and contain the same values (for
+$\mathsf{P}_1$ elements), but with possibly different ordering. The
+array `vertex_values` will have the same ordering as the vertices of
+the mesh, while `nodal_values` will be ordered in a way that (nearly)
+minimizes the bandwidth of the system matrix and thus improves the
+efficiency of linear solvers.
 
 A fundamental question is: what are the
 coordinates of the vertex whose value is `nodal_values[i]`? To answer this
@@ -861,14 +859,14 @@ Let's instead examine the values by calling
 >>> for i, x in enumerate(coordinates):
 ...     print('vertex %d: vertex_values[%d] = %g\tu(%s) = %g' %
 ...           (i, i, vertex_values[i], x, u(x)))
-vertex 0: vertex_values[0] = 0  	u([ 0.  0.]) = 8.46545e-16
-vertex 1: vertex_values[1] = 0.5	u([ 0.5  0. ]) = 0.5
+vertex 0: vertex_values[0] = 0          u([ 0.  0.]) = 8.46545e-16
+vertex 1: vertex_values[1] = 0.5        u([ 0.5  0. ]) = 0.5
 vertex 2: vertex_values[2] = 1          u([ 1.  0.]) = 1
-vertex 3: vertex_values[3] = 0.5	u([ 0.   0.5]) = 0.5
+vertex 3: vertex_values[3] = 0.5        u([ 0.   0.5]) = 0.5
 vertex 4: vertex_values[4] = 1          u([ 0.5  0.5]) = 1
-vertex 5: vertex_values[5] = 1.5	u([ 1.   0.5]) = 1.5
+vertex 5: vertex_values[5] = 1.5        u([ 1.   0.5]) = 1.5
 vertex 6: vertex_values[6] = 1          u([ 0.  1.]) = 1
-vertex 7: vertex_values[7] = 1.5	u([ 0.5  1. ]) = 1.5
+vertex 7: vertex_values[7] = 1.5        u([ 0.5  1. ]) = 1.5
 vertex 8: vertex_values[8] = 2          u([ 1.  1.]) = 2
 !ec
 
@@ -881,8 +879,9 @@ freedom for a certain function space $V$:
 !bc pycod
 v2d = vertex_to_dof_map(V)
 !ec
-Now, `nodal_values[v2d[i]]` will give us the value of the degree of freedom in
-`u` corresponding to vertex `i` (`v2d[i]`). In particular, `nodal_values[v2d]`
+Now, `nodal_values[v2d[i]]` will give us the value of the degree of
+freedom
+corresponding to vertex `i` (`v2d[i]`). In particular, `nodal_values[v2d]`
 is an array with all the elements in the same (vertex numbered) order
 as `coordinates`. The inverse map, from degrees of freedom number to
 vertex number is given by `dof_to_vertex_map(V)`. This means that
@@ -912,9 +911,57 @@ for cell in cells(mesh):
     print(dofmap.cell_dofs(cell.index()))
 !ec
 
+===== Setting the degrees of freedom =====
+
+We have seen how to extract the nodal values in a `numpy` array.
+If desired, we can adjust the nodal values too. Say we want to
+normalize the solution such that $\max_j |U_j| = 1$. Then we
+must divide all $U_j$ values
+by $\max_j |U_j|$. The following function performs the task:
+
+@@@CODE vol1/python/poisson_extended.py fromto: def normalize_solution@#---
+When using Lagrange elements, this (approximately) ensures that the
+maximum value of the function $u$ is $1$.
+
+The `/=` operator implies an
+in-place modification of the object on the left-hand side: all
+elements of the array `nodal_values` are divided by the value `u_max`.
+Alternatively, we could do `nodal_values = nodal_values / u_max`, which
+implies creating a new array on the right-hand side and assigning this
+array to the name `nodal_values`.
+
+!bwarning Be careful when manipulating degrees of freedom
+A call like `u.vector().array()` returns a *copy* of the data in
+`u.vector()`. One must therefore never perform assignments like
+`u.vector.array()[:] = ...`, but instead extract the `numpy` array
+(i.e., a copy), manipulate it, and insert it back with `u.vector()[:]
+= ` or use `u.set_local(...)`.
+!ewarning
+
+===== Function evaluation =====
+
+A FEniCS `Function` object is uniquely defined in the interior
+of each element of the finite element mesh. For continuous (Lagrange)
+function spaces, the function values are also uniquely defined on
+element boundaries. A `Function` object `u` can be evaluated by simply
+calling
+
+!bc pydoc
+u(x)
+!ec
+where `x` is either a `Point` or a Python tuple of the correct space
+dimension. When a `Function` is evaluated, FEniCS must first find
+which element of the mesh that contains the given point (if any), and
+then evaluate a linear combination of basis functions at the given
+point inside the element in question. FEniCS uses efficient data
+structures (bounding box trees) to quickly find the point, but
+building the tree is a relatively expensive operation so the cost of
+evaluating a `Function` at a single point is costly. Repeated
+evaluation will reuse the computed data structures and thus be
+relatively less expensive.
+
 !bwarning Cheap vs expensive function evaluation
-Given a `Function` object `u`, we can evaluate its values in various
-ways:
+A `Function` object `u` can be evaluated in various ways:
 
  o `u(x)` for an arbitrary point `x`
  o `u.vector().array()[i]` for degree of freedom number `i`
@@ -925,8 +972,9 @@ while the other two are very efficient (but limited to certain points).
 !ewarning
 
 To demonstrate the use of point evaluation of `Function` objects, we
-write out the computed `u` at the center point of the domain and
-compare it with the exact solution:
+print the value of the computed finite element solution `u` for the
+Poisson problem at the center point of the domain and compare it with
+the exact solution:
 
 !bc pycod
 center = (0.5, 0.5)
@@ -945,31 +993,6 @@ in this particular mesh, but a point in the interior of a cell, and
 function. When the center point is a node, as in a $2\times(2\times
 2)$ or $2\times(4\times 4)$ mesh, the error is of the order
 $10^{-15}$.
-
-We have seen how to extract the nodal values in a `numpy` array.
-If desired, we can adjust the nodal values too. Say we want to
-normalize the solution such that $\max_j |U_j| = 1$. Then we
-must divide all $U_j$ values
-by $\max_j |U_j|$. The following function performs the task:
-
-@@@CODE vol1/python/poisson_extended.py fromto: def normalize_solution@#---
-When using Lagrange elements, this (approximately) ensures that the
-maximum value of the function $u$ with degrees of freedom $U$ is $1$.
-
-The `/=` operator implies an
-in-place modification of the object on the left-hand side: all
-elements of the array `nodal_values` are divided by the value `u_max`.
-Alternatively, we could do `nodal_values = nodal_values / u_max`, which
-implies creating a new array on the right-hand side and assigning this
-array to the name `nodal_values`.
-
-!bwarning Be careful when manipulating degrees of freedom
-A call like `u.vector().array()` returns a *copy* of the data in
-`u.vector()`. One must therefore never perform assignments like
-`u.vector.array()[:] = ...`, but instead extract the `numpy` array
-(i.e., a copy), manipulate it, and insert it back with `u.vector()[:]
-= ` or use `u.set_local(...)`.
-!ewarning
 
 !split
 ======= Postprocessing computations =======

@@ -418,7 +418,7 @@ def flux(u, kappa):
 def normalize_solution(u):
     "Normalize u: return u divided by max(u)"
     u_array = u.vector().array()
-    u_max = u_array.max()
+    u_max = np.max(np.abs(u_array))
     u_array /= u_max
     u.vector()[:] = u_array
     #u.vector().set_local(u_array)  # alternative
