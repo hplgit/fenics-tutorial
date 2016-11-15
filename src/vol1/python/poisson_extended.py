@@ -258,14 +258,14 @@ def solver_bcs(kappa, f, boundary_conditions, Nx, Ny,
         if V.ufl_element().degree() == 1:  # P1 elements
             d2v = dof_to_vertex_map(V)
             coor = mesh.coordinates()
-        for i, bc in enumerate(bcs):
-            print('Dirichlet condition %d' % i)
-            boundary_values = bc.get_boundary_values()
-            for dof in boundary_values:
-                print('   dof %2d: u = %g' % (dof, boundary_values[dof]))
-                if V.ufl_element().degree() == 1:
-                    print('    at point %s' %
-                          (str(tuple(coor[d2v[dof]].tolist()))))
+            for i, bc in enumerate(bcs):
+                print('Dirichlet condition %d' % i)
+                boundary_values = bc.get_boundary_values()
+                for dof in boundary_values:
+                    print('   dof %2d: u = %g' % (dof, boundary_values[dof]))
+                    if V.ufl_element().degree() == 1:
+                        print('    at point %s' %
+                              (str(tuple(coor[d2v[dof]].tolist()))))
 
     # Define trial and test functions
     u = TrialFunction(V)

@@ -304,7 +304,7 @@ FIGURE: [fig/subdomains, width=400 frac=0.5] Two subdomains with different mater
 The variational formulation may be easily expressed in FEniCS as
 follows:
 !bc pycod
-a = k*dot(grad(u), grad(v))*dx
+a = kappa*dot(grad(u), grad(v))*dx
 L = f*v*dx
 !ec
 In the remainder of this section, we will discuss different strategies
@@ -334,9 +334,9 @@ class K(Expression):
         else:
             value[0] = self.k_1
 
-# Initialize k
-k = K()
-k.set_k_values(1, 0.01)
+# Initialize kappa
+kappa = K()
+kappa.set_k_values(1, 0.01)
 !ec
 The `eval` method gives great flexibility in defining functions, but a
 downside is that FEniCS will call `eval` in Python for each node `x`,
@@ -350,7 +350,7 @@ using an inline if test:
 tol = 1E-14
 k_0 = 1.0
 k_1 = 0.01
-k = Expression('x[1] <= 0.5 + tol ? k_0 : k_1', degree=0,
+kappa = Expression('x[1] <= 0.5 + tol ? k_0 : k_1', degree=0,
                tol=tol, k_0=k_0, k_1=k_1)
 !ec
 
@@ -517,7 +517,7 @@ def eval_cell(self, values, x, cell):
         else:
             values[0] = self.k_1
 
-k = K(materials, k_0, k_1, degree=0)
+kappa = K(materials, k_0, k_1, degree=0)
 !ec
 
 This is similar to the `Expression` subclass we defined above, but we
@@ -629,10 +629,10 @@ public:
 };
 """
 
-k = Expression(cppcode=cppcode, degree=0)
-k.materials = materials
-k.k_0 = k_0
-k.k_1 = k_1
+kappa = Expression(cppcode=cppcode, degree=0)
+kappa.materials = materials
+kappa.k_0 = k_0
+kappa.k_1 = k_1
 !ec
 
 % if EXV:
@@ -683,23 +683,10 @@ idx{Neumann boundary condition}
 idx{Robin boundary condition}
 idx{boundary conditions}
 
-Consider again the model problem from Section
-ref{ch:poisson0:multiple:Dirichlet} which features a combination of
-Dirichlet and Neumann conditions. The term `g*v*ds` in the expression
-for `L` implies a boundary integral over the complete boundary, or in
-FEniCS terms, an integral over all *exterior facets*. This means that
-the boundary integral extends also over the part of the boundary $\GD$
-where we have Dirichlet conditions. However, only the integral over
-$\GN$ will contribute since $v = 0$ on $\GD$ (which happens when we
-apply the Dirichlet boundary condition).
-
-From an efficiency point of view, we would like to compute the
-integral `g*v*ds` only over the part of the boundary where we actually
-have Neumann conditions. More importantly, in other problems one may
-want to define multiple Neumann conditions or other conditions like a
-Robin type condition. This can be handled in FEniCS by defining a
-`MeshFunction` that marks different portions of the boundary. The same
-technique can also be used to treat multiple Dirichlet conditions.
+Consider again the variable-coefficient Poisson problem
+from Section ref{ftut:possion:2D:2mat:impl}. We will now discuss
+how to implement general combinations of boundary conditions of
+Dirichlet, Neumann, and Robin type for this model problem.
 
 ===== Three types of boundary conditions =====
 
@@ -774,8 +761,8 @@ As usual, we multiply by a test function $v$ and integrate by parts:
 !et
 On the Dirichlet part of the boundary ($\GD^i$), the boundary integral
 vanishes since $v = 0$. On the remaining part of the boundary, we
-split the boundary integral into contributions from the Neumann part
-($\GN^i$) and Robin part ($\GR^i$). Inserting the boundary conditions,
+split the boundary integral into contributions from the Neumann parts
+($\GN^i$) and Robin parts ($\GR^i$). Inserting the boundary conditions,
 we obtain
 
 !bt
@@ -803,10 +790,9 @@ label{ch:poisson0:multi:bc:varform}
 
 We have been used to writing this variational formulation in the
 standard notation $a(u,v)=L(v)$, which requires that we identify all
-integrals with *both* $u$ and $v$, and collect these in $a(u,v)$,
-while the remaining integrals with $v$ and not $u$ go into $L(v)$. The
-integrals from the Robin condition must for this reason be split in
-two parts:
+integral depending on the trial function $u$, and collect these in
+$a(u,v)$, while the remaining integrals go into $L(v)$. The integrals
+from the Robin condition must for this reason be split into two parts:
 
 !bt
 \begin{equation*}
@@ -836,7 +822,7 @@ functions `lhs` and `rhs` to extract the bilinear and linear parts of
 a = lhs(F)
 L = rhs(F)
 !ec
-Note that if we choose the solve this linear problem as a nonlinear
+Note that if we choose to solve this linear problem as a nonlinear
 problem, the Newton iteration will converge in a single iteration.
 
 ## /usr/share/fenics/demo/documented/subdomains/python/demo_subdomains.py
@@ -868,7 +854,8 @@ As in Section ref{ftut:possion:2D:2mat:impl} we use a subclass of
 `SubDomain` to identify the various parts of the mesh
 function. Problems with domains of more complicated geometries may set
 the mesh function for marking boundaries as part of the mesh
-generation.  In our case, the $x=0$ boundary can be marked by
+generation.  In our case, the boundary $x = 0$ can be marked
+as follows:
 
 !bc pycod
 class BoundaryX0(SubDomain):
@@ -879,9 +866,9 @@ class BoundaryX0(SubDomain):
 bx0 = BoundaryX0()
 bx0.mark(boundary_markers, 0)
 !ec
-Similarly, we make the classes `BoundaryX1` for the $x=1$ boundary,
-`BoundaryY0` for the $y=0$ boundary, and `BoundaryY1` for the $y=1$
-boundary, and mark these as subdomains 1, 2, and 3, respectively.
+Similarly, we create the classes `BoundaryX1` ($x=1$), `BoundaryY0`
+($y=0$), and `BoundaryY1` ($y=1$) boundary, and mark these as
+subdomains 1, 2, and 3, respectively.
 
 For generality of the implementation, we let the user specify
 what kind of boundary condition that applies to each of the four
@@ -936,7 +923,7 @@ dx = Measure('dx', domain=mesh, subdomain_data=domain_markers)
 where `domain_markers` is a `CellFunction` defining subdomains in $\Omega$.
 
 Suppose we have a Robin condition with values `r` and `s` on subdomain
-`R`, a Neumann condition with value `g` on subdomain `N`. The
+`R`, and a Neumann condition with value `g` on subdomain `N`. The
 variational form can then be written
 
 !bc pycod
@@ -997,13 +984,13 @@ idx{`${prog["poisson_extended"]}.py`}
 We will use the same exact solution $\uex=1+x^2+2y^2$ as in Chapter
 ref{ch:fundamentals}, and thus take $\kappa=1$ and $f=-6$. Our domain
 is the unit square, and we assign Dirichlet conditions at $x=0$ and
-$x=1$, a Neumann condition at $y=1$, and a Robin condition at
-$y=0$. With the given $\uex$, we realize that the Neumann condition is
-$-\partial u / \partial n = - \partial u / \partial y = 4y = 4$, while
-the Robin condition can be selected in many ways. Since $\partial
-u/\partial n=-\partial u/\partial y=0$ at $y=0$, we can select $s=u$
-and specify $r \neq 0$ arbitrarily in the Robin condition. We will set
-$r = 1000$ and $s = u$.
+$x=1$, a Robin condition at $y=0$, and a Neumann condition at
+$y=1$. With the given exact solution $\uex$, we realize that the
+Neumann condition at $y=1$ is $-\partial u / \partial n = - \partial u /
+\partial y = 4y = 4$, while the Robin condition at $y=0$ can be selected in
+many ways. Since $-\partial u/\partial n=\partial u/\partial y=0$ at
+$y=0$, we can select $s=\uex$ and specify $r \neq 0$ arbitrarily in the
+Robin condition. We will set $r = 1000$ and $s = \uex$.
 
 The boundary parts are thus $\GD^0$: $x=0$, $\GD^1$: $x=1$,
 $\GR^0$: $y=0$, and $\GN^0$: $y=1$.
@@ -1013,22 +1000,25 @@ problems with more complicated expressions, it is advantageous to use
 symbolic computing. Below we define the exact solution as a `sympy`
 expression and derive other functions from their mathematical
 definitions.  Then we turn these expressions into C/C++ code, which
-can be fed into `Expression` objects.
+can then be used to define `Expression` objects.
 
 @@@CODE-4 vol1/python/poisson_extended.py fromto: # Define manufactured solution in sympy and derive f, g, etc@# Compute solution
-This simple test problem is turned into a real unit test for different
-function spaces in the function `test_solver_bc`.
+
+The complete code can be found in the function
+`demo_bcs` in the program
+"`${prog["poisson_extended"]}.py`": "${src_url}/${prog["poisson_extended"]}.py".
 
 ===== Debugging boundary conditions =====
 
 It is easy to make mistakes when implementing a problem with many
-different types of boundary conditions, as in the present case. Some
-helpful debugging output is to run through all vertex coordinates and
-check if the `SubDomain.inside` method marks the vertex as on the
-boundary. Another useful printout is to list which degrees of freedom
-that are subject to Dirichlet conditions, and for first-order Lagrange
-($\mathsf{P}_1$) elements, add the corresponding vertex coordinate to the
-output.
+different types of boundary conditions, as in the present case. One
+method to debug boundary conditions is to run through all vertex
+coordinates and check if the `SubDomain.inside` method marks the
+vertex as on the boundary. Another useful method is to list which
+degrees of freedom that are subject to Dirichlet conditions, and for
+first-order Lagrange ($\mathsf{P}_1$) elements, print the
+corresponding vertex coordinates as illustrated by the following
+code snippet:
 
 @@@CODE-4 vol1/python/poisson_extended.py fromto: if debug1:@# Define trial and test functions
 
