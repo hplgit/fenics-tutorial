@@ -941,9 +941,9 @@ A call like `u.vector().array()` returns a *copy* of the data in
 ===== Function evaluation =====
 
 A FEniCS `Function` object is uniquely defined in the interior
-of each element of the finite element mesh. For continuous (Lagrange)
+of each cell of the finite element mesh. For continuous (Lagrange)
 function spaces, the function values are also uniquely defined on
-element boundaries. A `Function` object `u` can be evaluated by simply
+cell boundaries. A `Function` object `u` can be evaluated by simply
 calling
 
 !bc pydoc
@@ -951,9 +951,9 @@ u(x)
 !ec
 where `x` is either a `Point` or a Python tuple of the correct space
 dimension. When a `Function` is evaluated, FEniCS must first find
-which element of the mesh that contains the given point (if any), and
+which cell of the mesh that contains the given point (if any), and
 then evaluate a linear combination of basis functions at the given
-point inside the element in question. FEniCS uses efficient data
+point inside the cell in question. FEniCS uses efficient data
 structures (bounding box trees) to quickly find the point, but
 building the tree is a relatively expensive operation so the cost of
 evaluating a `Function` at a single point is costly. Repeated
@@ -1010,75 +1010,35 @@ a PDE to compute a specific quantity that derives from the solution,
 such as, e.g., the flux, a point-value, or some average of the
 solution.
 
-===== A variable-coefficient Poisson problem =====
+===== Test problem =====
 
-As a test problem, we will extend the Poisson problem from Chapter
-ref{ch:fundamentals} with a variable coefficient $\kappa(x,y)$ in the
-Laplace operator:
+As a test problem, we consider again the variable-coefficient Poisson
+problem with a single Dirichlet boundary condition:
 
 !bt
 \begin{alignat}{2}
-    - \nabla\cdot \left\lbrack
-\kappa(x,y)\nabla u(x,y)\right\rbrack &= f(x,y) \quad &&\mbox{in } \Omega,
+    - \nabla\cdot(\kappa\nabla u) &= f \quad &&\mbox{in } \Omega,
 label{ch:poisson0:2D:varcoeff} \\
-    u(x,y) &= \ub(x,y) \quad &&\mbox{on}\  \partial\Omega\tp
+    u &= \ub \quad &&\mbox{on}\  \partial\Omega\tp
 \end{alignat}
 !et
 Let us continue to use our favorite solution $u(x,y)=1+x^2+2y^2$ and
 then prescribe $\kappa(x,y)=x+y$. It follows that
 $\ub(x,y) = 1 + x^2 + 2y^2$ and $f(x,y)=-8x-10y$.
 
-We shall quickly demonstrate that this simple extension of our model
-problem only requires an equally simple extension of the FEniCS
-program. The following simple changes must be made to the previously
-shown codes:
-
-  * the `solver` function must take `k` ($\kappa$) as an argument,
-  * a new `Expression k` must be defined for the variable coefficient,
-  * the right-hand side `f`
-    must be an `Expression` since it is no longer a constant,
-  * the formula for $a(u,v)$ in the variational problem must be updated.
-
-We first address the modified variational problem. Multiplying the PDE
-by a test function $v$ and integrating by parts now results in
-
-!bt
-\begin{equation*}
-\int_\Omega \kappa\nabla u\cdot\nabla v \dx -
-\int_{\partial\Omega} \kappa{\partial u\over
-\partial n}v \ds = \int_\Omega fv \dx\tp
-\end{equation*}
-!et
-The function spaces for $u$ and $v$ are the same as in
-the problem with $\kappa=1$, implying that the boundary integral
-vanishes since $v=0$ on $\partial\Omega$ where we have Dirichlet conditions.
-The variational forms $a$ and $L$ in the variational problem
-$a(u,v)=L(v)$ then become
-
-!bt
-\begin{equation}
-a(u,v) = \int_\Omega \kappa\nabla u\cdot\nabla v \dx,\quad
-L(v) = \int_\Omega fv \dx\tp
-\end{equation}
-!et
-We must thus replace
+As before, the variational formulation for this model problem
+can be specified in FEniCS as
 
 !bc pycod
-a = dot(grad(u), grad(v))*dx
+a = kappa*dot(grad(u), grad(v))*dx
+L = f*v*dx
 !ec
-by
+with the coefficient $\kappa$ and right-hand side $f$ given by
 
 !bc pycod
-a = k*dot(grad(u), grad(v))*dx
-!ec
-Moreover,
-the definitions of `k` and `f` in the test problem read
-
-!bc pycod
-k = Expression('x[0] + x[1]', degree=1)
+kappa = Expression('x[0] + x[1]', degree=1)
 f = Expression('-8*x[0] - 10*x[1]', degree=1)
 !ec
-No additional modifications are necessary.
 
 ===== Flux computations =====
 label{ch:poisson0:gradu}
@@ -1091,8 +1051,7 @@ Since $u = \sum_{j=1}^N U_j \phi_j$, it follows that
 Q = -\kappa\sum_{j=1}^N U_j \nabla \phi_j\tp
 \end{equation*}
 !et
-
-However, the gradient of a piecewise continuous finite element scalar
+We note that the gradient of a piecewise continuous finite element scalar
 field is a discontinuous vector field since the basis functions
 $\{\phi_j\}$ have discontinuous derivatives at the boundaries of the
 cells. For example, using Lagrange elements of degree 1, $u$ is linear
@@ -1109,7 +1068,8 @@ $u$. This process is known as *projection*.
 
 idx{`project`}
 
-Projection is a common operation in finite element analysis and FEniCS
+Projection is a common operation in finite element analysis and, as
+we have already seen, FEniCS
 has a function for easily performing the projection:
 `project(expression, W)`, which returns the projection of some
 expression into the space `W`.
@@ -1140,7 +1100,7 @@ anything else:
 !bc pycod
 plot(flux_u, title='flux field')
 
-flux_x, flux_y = flux_u.split(deepcopy=True) # extract components
+flux_x, flux_y = flux_u.split(deepcopy=True)  # extract components
 plot(flux_x, title='x-component of flux (-kappa*grad(u))')
 plot(flux_y, title='y-component of flux (-kappa*grad(u))')
 !ec
@@ -1207,8 +1167,8 @@ The variational problem is easy to define in FEniCS.
 w = TrialFunction(W)
 v = TestFunction(W)
 
-a = w*v*dx # or dot(w, v)*dx when w is vector-valued
-L = g*v*dx # or dot(g, v)*dx when g is vector-valued
+a = w*v*dx  # or dot(w, v)*dx when w is vector-valued
+L = g*v*dx  # or dot(g, v)*dx when g is vector-valued
 w = Function(W)
 solve(a == L, w)
 !ec
@@ -1250,60 +1210,12 @@ F = -\int_\Gamma \kappa\nabla u\cdot n \ds,
 label{ch:poisson0:functionals:flux}
 \end{equation}
 !et
-where $n$ is an outward unit normal at $\Gamma$ and $\kappa$ is a
-coefficient (see the problem in Section ref{ftut:possion:2D:varcoeff}
-for a specific example).
+where $n$ is the outward-pointing unit normal on $\Gamma$.
 
 All these functionals are easy to compute with FEniCS, as we shall see
 in the examples below.
 
 idx{energy functional}
-
-!bnotice A note on interpolation and integration of `Expressions`
-As we have seen before, FEniCS `Expressions` must be defined using
-a particular `degree`. The degree tells FEniCS into which local
-finite element space the expression should be interpolated when
-performing local computations (integration). As an illustration,
-consider the computation of the integral $\int_0^1 \cos x \dx = \sin
-1$. This may be computed in FEniCS by
-!bc
-mesh = UnitIntervalMesh(1)
-I = assemble(Expression('cos(x[0])', degree=degree)*dx(domain=mesh))
-!ec
-Varying the degree between 0 and 5, the value of $|\sin(1) - I|$ is
-`0.036`,
-`0.071`,
-`0.00030`,
-`0.00013`,
-`4.5E-07`, and
-`2.5E-07`.
-
-FEniCS also allows expressions to be expressed directly as part of
-a form. This requires the creation of a `SpatialCoordinate`.
-In this case, the accuracy is dictated by the accuracy of the
-integration, which may be controlled by a `degree` argument to
-the integration measure `dx`. The `degree` argument specifies
-that the integration should be exact for polynomials of that degree.
-
-The following code snippet shows
-how to compute the integral $\int_0^1 \cos x \dx$ using this approach:
-!bc
-mesh = UnitIntervalMesh(1)
-x = SpatialCoordinate(mesh)
-I = assemble(cos(x[0])*dx(degree=degree))
-!ec
-Varying the degree between 0 and 5, the value of $|\sin(1) - I|$ is
-`0.036`,
-`0.036`,
-`0.00020`,
-`0.00020`,
-`4.3E-07`,
-`4.3E-07`.
-Note that the quadrature degrees are only available for
-odd degrees so that degree $0$ will use the same quadrature
-rule as degree $1$,
-degree $2$ will give the same quadrature rule as degree $3$ and so on.
-!enotice
 
 === Energy functional ===
 
@@ -1352,31 +1264,27 @@ idx{error functional}
 
 === Error functional ===
 
-Computing the functional (ref{ch:poisson0:functionals:error}) can be
-done as follows:
-by
+The functional (ref{ch:poisson0:functionals:error}) can be
+computed as follows:
 
 !bc pycod
 error = (u_e - u)**2*dx
 E = sqrt(abs(assemble(error)))
 !ec
-The exact solution $\uex$ is here in a `Function` or `Expression`
-object `u_e`, while `u` is the finite element approximation (and
-thus a `Function`).
-Sometimes, for very small error values, the result of
-`assemble(error)` can be a (very small) negative number, so we have
-used `abs` in the expression for `E` above to ensure a positive value
-for the `sqrt` function.
+The exact solution $\uex$ is here represented by a `Function` or
+`Expression` object `u_e`, while `u` is the finite element
+approximation (and thus a `Function`). Sometimes, for very small
+error values, the result of `assemble(error)` can be a (very small)
+negative number, so we have used `abs` in the expression for `E` above
+to ensure a positive value for the `sqrt` function.
 
 idx{`errornorm`}
 
 As will be explained and demonstrated in Section
 ref{ch:poisson0:convrates}, the integration of `(u_e - u)**2*dx`
 can result in too optimistic convergence rates unless one is careful
-how `u_e` is transferred onto a mesh. The general recommendation
-for reliable error computation is to use the `errornorm` function (see
-`help(errornorm)` and Section ref{ch:poisson0:convrates} for
-more information):
+how the difference `u_e - u` is evaluated. The general recommendation
+for reliable error computation is to use the `errornorm` function:
 
 !bc pycod
 E = errornorm(u_e, u)
@@ -1388,7 +1296,7 @@ idx{flux functional}
 
 To compute flux integrals like $F = -\int_\Gamma \kappa\nabla
 u\cdot n \ds$, we need to define the $n$ vector,
-referred to as *facet normal* in FEniCS. If the surface domain
+referred to as a *facet normal* in FEniCS. If the surface domain
 $\Gamma$ in the flux integral is the complete boundary, we can perform
 the flux computation by
 
@@ -1400,7 +1308,7 @@ total_flux = assemble(flux)
 Although `grad(u)` and `nabla_grad(u)` are interchangeable in the above
 expression when `u` is a scalar function, we have chosen to write
 `grad(u)` because this is the right expression if we generalize the
-underlying equation to a vector Laplace/Poisson PDE. With `nabla_grad(u)` we
+underlying equation to a vector PDE. With `nabla_grad(u)` we
 must in that case write `dot(n, nabla_grad(u))`.
 
 It is possible to restrict the integration to a part of the boundary
@@ -1408,6 +1316,58 @@ by using a mesh function to mark the relevant part, as explained in
 Section ref{ch:poisson0:multi:bc}. Assuming that the part corresponds
 to subdomain number `i`, the relevant syntax for the variational
 formulation of the flux is `-k*dot(grad(u), n)*ds(i)`.
+
+!bnotice A note on the accuracy of integration
+As we have seen before, FEniCS `Expressions` must be defined using
+a particular `degree`. The degree tells FEniCS into which local
+finite element space the expression should be interpolated when
+performing local computations (integration). As an illustration,
+consider the computation of the integral $\int_0^1 \cos x \dx = \sin
+1$. This may be computed in FEniCS by
+!bc
+mesh = UnitIntervalMesh(1)
+I = assemble(Expression('cos(x[0])', degree=degree)*dx(domain=mesh))
+!ec
+Note that we must here specify the argument `domain=mesh` to the
+measure `dx`. This is normally not necessary when defining forms
+in FEniCS but is necessary here since `cos(x[0])` is not associated
+with any domain (as is the case when we integrate a `Function`
+from some `FunctionSpace` defined on some `Mesh`).
+
+Varying the degree between 0 and 5, the value of $|\sin(1) - I|$ is
+`0.036`,
+`0.071`,
+`0.00030`,
+`0.00013`,
+`4.5E-07`, and
+`2.5E-07`.
+
+FEniCS also allows expressions to be expressed directly as part of
+a form. This requires the creation of a `SpatialCoordinate`.
+In this case, the accuracy is dictated by the accuracy of the
+integration, which may be controlled by a `degree` argument to
+the integration measure `dx`. The `degree` argument specifies
+that the integration should be exact for polynomials of that degree.
+
+The following code snippet shows
+how to compute the integral $\int_0^1 \cos x \dx$ using this approach:
+!bc
+mesh = UnitIntervalMesh(1)
+x = SpatialCoordinate(mesh)
+I = assemble(cos(x[0])*dx(degree=degree))
+!ec
+Varying the degree between 0 and 5, the value of $|\sin(1) - I|$ is
+`0.036`,
+`0.036`,
+`0.00020`,
+`0.00020`,
+`4.3E-07`,
+`4.3E-07`.
+Note that the quadrature degrees are only available for
+odd degrees so that degree $0$ will use the same quadrature
+rule as degree $1$,
+degree $2$ will give the same quadrature rule as degree $3$ and so on.
+!enotice
 
 ===== Computing convergence rates =====
 label{ch:poisson0:convrates}
@@ -1488,8 +1448,8 @@ way. First, both `u_e` and `u` are interpolated into a higher-order
 function space. Then, the degrees of freedom of `u_e` and `u` are
 subtracted to produce a new function in the higher-order function
 space. Finally, FEniCS integrates the square of the difference
-function to get the value of the error norm. Using the `errornorm`
-function is simple:
+function and then takes the square root to get the value of the error
+norm. Using the `errornorm` function is simple:
 
 !bc pycod
 E = errornorm(u_e, u, normtype='L2')
@@ -1537,7 +1497,7 @@ The `solver` function in
 allows us to easily compute solutions for finer and finer meshes and
 enables us to study the convergence rate. Define the element size
 $h=1/n$, where $n$ is the number of cell divisions in the $x$ and $y$
-directions (`n=Nx=Ny` in the code). We perform experiments with
+directions (`n = Nx = Ny` in the code). We perform experiments with
 $h_0>h_1>h_2>\cdots$ and compute the corresponding errors $E_0, E_1,
 E_2$ and so forth. Assuming $E_i=Ch_i^r$ for unknown constants $C$ and
 $r$, we can compare two consecutive experiments, $E_{i-1}=Ch_{i-1}^r$
@@ -1554,7 +1514,7 @@ increases.
 
 The procedure above can easily be turned into Python code. Here
 we run through a list of element degrees ($\mathsf{P}_1$,
-$\mathsf{P}_2$, and $\mathsf{P}_3$,
+$\mathsf{P}_2$, and $\mathsf{P}_3$),
 perform experiments over a series of refined meshes, and for
 each experiment report the six error types as returned by `compute_errors`.
 
@@ -1694,13 +1654,6 @@ from boxfield import *
 u_box = FEniCSBoxField(u, (nx, ny))
 !ec
 
-Note that we can only turn functions on meshes with $\mathsf{P}_1$ elements into
-`BoxField` objects, so if `u` is based on another element type, we first
-interpolate the scalar field onto a mesh with $\mathsf{P}_1$ elements. Also note
-that to use the
-function, we need to know the divisions into cells in the various
-spatial directions (`divisions`).
-
 The `u_box` object contains several useful data structures:
 
  * `u_box.grid`: object for the structured mesh
@@ -1708,7 +1661,6 @@ The `u_box` object contains several useful data structures:
  * `u_box.grid.coor[Y]`: grid coordinates in `Y=1` direction
  * `u_box.grid.coor[Z]`: grid coordinates in `Z=2` direction
  * `u_box.grid.coorv[X]`: vectorized version of `u_box.grid.coor[X]`
-   (for vectorized computations or surface plotting)
  * `u_box.grid.coorv[Y]`: vectorized version of `u_box.grid.coor[Y]`
  * `u_box.grid.coorv[Z]`: vectorized version of `u_box.grid.coor[Z]`
  * `u_box.values`: `numpy` array holding the `u` values;
@@ -1717,11 +1669,11 @@ The `u_box` object contains several useful data structures:
 
 === Iterating over points and values ===
 
-Let us go back to the `solver` function in the
+Let us now use the `solver` function from the
 "`${prog['poisson_extended']}.py`": "${src_url}/${prog['poisson_extended']}.py"
-code from Section ref{ftut:possion:2D:varcoeff}, compute `u`, map it
-onto a `BoxField` object for a structured mesh representation, and
-write out the coordinates and function values at all mesh points:
+code to compute `u`, map it onto a `BoxField` object for a structured
+mesh representation, and print the coordinates and function values
+at all mesh points:
 
 !bc pycod
 u = solver(p, f, u_b, nx, ny, 1, linear_solver='direct')
@@ -1810,10 +1762,10 @@ along this line, `u_val`, can be extracted by
 start = (0, 0.4)
 x, u_val, y_fixed, snapped = u_box.gridline(start, direction=X)
 !ec
-The variable `snapped` is true if the line is snapped onto to nearst
+The variable `snapped` is true if the line is snapped onto to nearest
 gridline and in that case `y_fixed` holds the snapped
-(altered) $y$ value. (A keyword argument `snap` is by default `True`
-to avoid interpolation and force snapping.)
+(altered) $y$ value. The keyword argument `snap` is by default `True`
+to avoid interpolation and force snapping.
 
 A comparison of the numerical and exact solution along the line
 $y\approx 0.41$ (snapped from $y=0.4$) is made by the following code:
@@ -1824,7 +1776,7 @@ See Figure ref{ftut:structviz:fig1} (lower left) for the resulting curve plot.
 === Making curve plots of the flux ===
 
 Let us also compare the numerical and
-exact flux $-\kappa\partial u/\partial x$ along the same line as above:
+exact fluxes $-\kappa\partial u/\partial x$ along the same line as above:
 
 @@@CODE vol1/python/poisson_extended.py fromto: # Plot the numerical@plt.savefig
 
@@ -1871,12 +1823,12 @@ x, y = sym.symbols('x[0], x[1]')
 u = H(x)*H(y)
 !ec
 Turning the expression for `u` into C or C++ syntax for `Expression` objects
-needs two steps. First we ask for the C code of the expression,
+needs two steps. First we ask for the C code of the expression:
 
 !bc pycod
-u_c = sym.printing.ccode(u)
+u_code = sym.printing.ccode(u)
 !ec
-Printing out `u_c` gives (the output is here manually broken into two
+Printing `u_code` gives (the output is here manually broken into two
 lines):
 
 !bc
@@ -1887,8 +1839,8 @@ The necessary syntax adjustment is replacing
 the symbol `M_PI` for $\pi$ in C/C++ by `pi` (or `DOLFIN_PI`):
 
 !bc pycod
-u_c = u_c.replace('M_PI', 'pi')
-u_b = Expression(u_c, degree=1)
+u_code = u_code.replace('M_PI', 'pi')
+u_b = Expression(u_code, degree=1)
 !ec
 Thereafter, we can progress with the computation of
 $f = -\nabla\cdot(\kappa\nabla u)$:
@@ -1898,9 +1850,9 @@ kappa = 1
 f = sym.diff(-kappa*sym.diff(u, x), x) + \
     sym.diff(-kappa*sym.diff(u, y), y)
 f = sym.simplify(f)
-f_c = sym.printing.ccode(f)
-f_c = f_c.replace('M_PI', 'pi')
-f = Expression(f_c, degree=1)
+f_code = sym.printing.ccode(f)
+f_code = f_code.replace('M_PI', 'pi')
+f = Expression(f_code, degree=1)
 !ec
 We also need a Python function for the exact flux
 $-\kappa\partial u/\partial x$:

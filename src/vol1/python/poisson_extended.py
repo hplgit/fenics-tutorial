@@ -542,20 +542,20 @@ def demo_structured_mesh():
     H = lambda x: exp(-16*(x-0.5)**2)*sin(3*pi*x)
     x, y = sym.symbols('x[0], x[1]')
     u = H(x)*H(y)
-    u_c = sym.printing.ccode(u)
-    u_c = u_c.replace('M_PI', 'pi')
-    print('C code for u:', u_c)
-    u_D = Expression(u_c)
+    u_code = sym.printing.ccode(u)
+    u_code = u_code.replace('M_PI', 'pi')
+    print('C code for u:', u_code)
+    u_D = Expression(u_code)
     kappa = 1  # Note: Can't use Constant(1) here because of sym.diff (!)
     f = sym.diff(-kappa*sym.diff(u, x), x) + \
         sym.diff(-kappa*sym.diff(u, y), y)
     f = sym.simplify(f)
-    f_c = sym.printing.ccode(f)
-    f_c = f_c.replace('M_PI', 'pi')
-    f = Expression(f_c)
+    f_code = sym.printing.ccode(f)
+    f_code = f_code.replace('M_PI', 'pi')
+    f = Expression(f_code)
     flux_u_x_exact = sym.lambdify([x, y], -kappa*sym.diff(u, x),
                                   modules='numpy')
-    print('C code for f:', f_c)
+    print('C code for f:', f_code)
     kappa = Constant(1)
     nx = 22;  ny = 22
 
