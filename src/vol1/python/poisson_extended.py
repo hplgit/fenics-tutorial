@@ -435,9 +435,9 @@ def test_solvers():
     solver_functions = (solver, solver_objects, solver_linalg)
     tol = {'direct': {1: 1E-11, 2: 1E-11, 3: 1E-11},
            'Krylov': {1: 1E-14, 2: 1E-05, 3: 1E-03}}
-    u_D = Expression('1 + x[0]*x[0] + 2*x[1]*x[1]')
-    kappa = Expression('x[0] + x[1]')
-    f = Expression('-8*x[0] - 10*x[1]')
+    u_D = Expression('1 + x[0]*x[0] + 2*x[1]*x[1]', degree=2)
+    kappa = Expression('x[0] + x[1]', degree=1)
+    f = Expression('-8*x[0] - 10*x[1]', degree=1)
     for Nx, Ny in [(3, 3), (3, 5), (5 ,3)]:
         for degree in 1, 2, 3:
             for linear_solver in 'direct', 'Krylov':
@@ -462,7 +462,7 @@ def test_solvers():
                     assert error_max < tol[linear_solver][degree], msg
 
 def test_normalize_solution():
-    u_D = Expression('1 + x[0]*x[0] + 2*x[1]*x[1]')
+    u_D = Expression('1 + x[0]*x[0] + 2*x[1]*x[1]', degree=2)
     f = Constant(-6.0)
     u = solver(f, u_D, 4, 2, 1, linear_solver='direct')
     u = normalize_solution(u)
@@ -476,9 +476,9 @@ def test_normalize_solution():
 
 def demo_test():
     "Solve test problem and plot solution"
-    u_D = Expression('1 + x[0]*x[0] + 2*x[1]*x[1]')
-    kappa = Expression('x[0] + x[1]')
-    f = Expression('-8*x[0] - 10*x[1]')
+    u_D = Expression('1 + x[0]*x[0] + 2*x[1]*x[1]', degree=2)
+    kappa = Expression('x[0] + x[1]', degree=1)
+    f = Expression('-8*x[0] - 10*x[1]', degree=1)
     u = solver(kappa, f, u_D, 8, 8, 1)
     vtkfile = File('poisson_extended/solution_test.pvd')
     vtkfile << u
@@ -488,9 +488,9 @@ def demo_flux(Nx=8, Ny=8):
     "Solve test problem and compute flux"
 
     # Compute solution
-    u_D = Expression('1 + x[0]*x[0] + 2*x[1]*x[1]')
-    kappa = Expression('x[0] + x[1]')
-    f = Expression('-8*x[0] - 10*x[1]')
+    u_D = Expression('1 + x[0]*x[0] + 2*x[1]*x[1]', degree=2)
+    kappa = Expression('x[0] + x[1]', degree=1)
+    f = Expression('-8*x[0] - 10*x[1]', degree=1)
     u = solver(kappa, f, u_D, Nx, Ny, 1, linear_solver='direct')
 
     # Compute and plot flux
