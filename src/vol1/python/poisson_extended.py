@@ -690,45 +690,30 @@ def demo_bcs():
 def demo_solvers():
     "Reproduce exact solution to machine precision with different linear solvers"
 
-    # Define exact solution and coefficients
+    # Tolerance for tests
     tol = 1E-10
+
+    # Define exact solution and coefficients
     import sympy as sym
     x, y = sym.symbols('x[0], x[1]')
     u = 1 + x**2 + 2*y**2
     f = -sym.diff(u, x, 2) - sym.diff(u, y, 2)
     f = sym.simplify(f)
-    u_00 = u.subs(x, 0)
-    u_01 = u.subs(x, 1)
-    g = -sym.diff(u, y).subs(y, 1)
-    r = 1000
-    s = u
 
     # Generate C/C++ code for UFL expressions
-    f = sym.printing.ccode(f)
-    u_00 = sym.printing.ccode(u_00)
-    u_01 = sym.printing.ccode(u_01)
-    g = sym.printing.ccode(g)
-    r = sym.printing.ccode(r)
-    s = sym.printing.ccode(s)
-    print('Test problem (C/C++):\nu = %s\nf = %s' % (u, f))
-    print('u_00: %s\nu_01: %s\ng = %s\nr = %s\ns = %s' %
-          (u_00, u_01, g, r, s))
+    u_code = sym.printing.ccode(u)
+    f_code = sym.printing.ccode(f)
 
     # Define FEniCS Expressions
-    u_00 = Expression(u_00, degree=2)
-    u_01 = Expression(u_01, degree=2)
-    f = Expression(f, degree=2)
-    g = Expression(g, degree=2)
-    r = Expression(r, degree=2)
-    s = Expression(s, degree=2)
-    u_e = Expression(sym.printing.ccode(u), degree=2)
+    u_e = Expression(u_code, degree=2)
+    f = Expression(f_code, degree=2)
     kappa = Constant(1)
 
     # Define boundary conditions
-    boundary_conditions = {0: {'Dirichlet': u_00},
-                           1: {'Dirichlet': u_01},
-                           2: {'Robin':     (r, s)},
-                           3: {'Neumann':   g}}
+    boundary_conditions = {0: {'Dirichlet': u_e},
+                           1: {'Dirichlet': u_e},
+                           2: {'Dirichlet': u_e},
+                           3: {'Dirichlet': u_e}}
 
     # Iterate over meshes and degrees
     for Nx, Ny in [(3, 3), (3, 5), (5, 3), (20, 20)]:
