@@ -545,14 +545,14 @@ def demo_structured_mesh():
     u_code = sym.printing.ccode(u)
     u_code = u_code.replace('M_PI', 'pi')
     print('C code for u:', u_code)
-    u_D = Expression(u_code)
+    u_D = Expression(u_code, degree=1)
     kappa = 1  # Note: Can't use Constant(1) here because of sym.diff (!)
     f = sym.diff(-kappa*sym.diff(u, x), x) + \
         sym.diff(-kappa*sym.diff(u, y), y)
     f = sym.simplify(f)
     f_code = sym.printing.ccode(f)
     f_code = f_code.replace('M_PI', 'pi')
-    f = Expression(f_code)
+    f = Expression(f_code, degree=1)
     flux_u_x_exact = sym.lambdify([x, y], -kappa*sym.diff(u, x),
                                   modules='numpy')
     print('C code for f:', f_code)
@@ -715,13 +715,13 @@ def demo_solvers():
           (u_00, u_01, g, r, s))
 
     # Define FEniCS Expressions
-    u_00 = Expression(u_00)
-    u_01 = Expression(u_01)
-    f = Expression(f)
-    g = Expression(g)
-    r = Expression(r)
-    s = Expression(s)
-    u_e = Expression(sym.printing.ccode(u))
+    u_00 = Expression(u_00, degree=2)
+    u_01 = Expression(u_01, degree=2)
+    f = Expression(f, degree=2)
+    g = Expression(g, degree=2)
+    r = Expression(r, degree=2)
+    s = Expression(s, degree=2)
+    u_e = Expression(sym.printing.ccode(u), degree=2)
     kappa = Constant(1)
 
     # Define boundary conditions
