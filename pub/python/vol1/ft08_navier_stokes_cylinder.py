@@ -21,8 +21,8 @@ rho = 1            # density
 # Create mesh
 channel = Rectangle(Point(0, 0), Point(2.2, 0.41))
 cylinder = Circle(Point(0.2, 0.2), 0.05)
-geometry = channel - cylinder
-mesh = generate_mesh(geometry, 64)
+domain = channel - cylinder
+mesh = generate_mesh(domain, 64)
 
 # Define function spaces
 V = VectorFunctionSpace(mesh, 'P', 2)
@@ -58,11 +58,11 @@ p_n = Function(Q)
 p_  = Function(Q)
 
 # Define expressions used in variational forms
-U   = 0.5*(u_n + u)
-n   = FacetNormal(mesh)
-f   = Constant((0, 0))
-k   = Constant(dt)
-mu  = Constant(mu)
+U  = 0.5*(u_n + u)
+n  = FacetNormal(mesh)
+f  = Constant((0, 0))
+k  = Constant(dt)
+mu = Constant(mu)
 
 # Define symmetric gradient
 def epsilon(u):
@@ -77,7 +77,7 @@ F1 = rho*dot((u - u_n) / k, v)*dx \
    + rho*dot(dot(u_n, nabla_grad(u_n)), v)*dx \
    + inner(sigma(U, p_n), epsilon(v))*dx \
    + dot(p_n*n, v)*ds - dot(mu*nabla_grad(U)*n, v)*ds \
-   - rho*dot(f, v)*dx
+   - dot(f, v)*dx
 a1 = lhs(F1)
 L1 = rhs(F1)
 
@@ -98,15 +98,15 @@ A3 = assemble(a3)
 [bc.apply(A1) for bc in bcu]
 [bc.apply(A2) for bc in bcp]
 
-# Create VTK files for visualization output
-vtkfile_u = File('navier_stokes_cylinder/velocity.pvd')
-vtkfile_p = File('navier_stokes_cylinder/pressure.pvd')
+# Create XDMF files for visualization output
+xdmffile_u = XDMFFile('navier_stokes_cylinder/velocity.xdmf')
+xdmffile_p = XDMFFile('navier_stokes_cylinder/pressure.xdmf')
 
-# Create time series for saving solution for later
-timeseries_u = TimeSeries('navier_stokes_cylinder/velocity')
-timeseries_p = TimeSeries('navier_stokes_cylinder/pressure')
+# Create time series (for use in reaction_system.py)
+timeseries_u = TimeSeries('navier_stokes_cylinder/velocity_series')
+timeseries_p = TimeSeries('navier_stokes_cylinder/pressure_series')
 
-# Save mesh to file for later
+# Save mesh to file (for use in reaction_system.py)
 File('navier_stokes_cylinder/cylinder.xml.gz') << mesh
 
 # Create progress bar
@@ -123,26 +123,26 @@ for n in range(num_steps):
     # Step 1: Tentative velocity step
     b1 = assemble(L1)
     [bc.apply(b1) for bc in bcu]
-    solve(A1, u_.vector(), b1, 'bicgstab', 'ilu')
+    solve(A1, u_.vector(), b1, 'bicgstab', 'hypre_amg')
 
     # Step 2: Pressure correction step
     b2 = assemble(L2)
     [bc.apply(b2) for bc in bcp]
-    solve(A2, p_.vector(), b2, 'bicgstab', 'ilu')
+    solve(A2, p_.vector(), b2, 'bicgstab', 'hypre_amg')
 
     # Step 3: Velocity correction step
     b3 = assemble(L3)
-    solve(A3, u_.vector(), b3, 'bicgstab')
+    solve(A3, u_.vector(), b3, 'cg', 'sor')
 
     # Plot solution
     plot(u_, title='Velocity')
     plot(p_, title='Pressure')
 
-    # Save solution to file (VTK)
-    vtkfile_u << (u_, t)
-    vtkfile_p << (p_, t)
+    # Save solution to file (XDMF/HDF5)
+    xdmffile_u.write(u_, t)
+    xdmffile_p.write(p_, t)
 
-    # Save solution to file (HDF5)
+    # Save nodal values to file
     timeseries_u.store(u_.vector(), t)
     timeseries_p.store(p_.vector(), t)
 

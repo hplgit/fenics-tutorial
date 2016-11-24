@@ -130,3 +130,6 @@ cp -r $name.html ._*.html fig mov $dest/html
 # Copy Sphinx to output (publication) directory
 rm -rf $dest/sphinx${bookno}
 cp -r sphinx-rootdir${bookno}/_build/html $dest/sphinx${bookno}
+
+# Copy tutorial programs to output (publication) directory
+python scripts/number_src_files.py

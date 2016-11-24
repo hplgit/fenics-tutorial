@@ -21,8 +21,6 @@ r = 0.1   # radius of copper wires
 R = 5.0   # radius of domain
 n = 10    # number of windings
 
-# FIXME: Use 'domain' instead of 'geometry' in other examples
-
 # Define geometry for background
 domain = Circle(Point(0, 0), R)
 
@@ -65,13 +63,13 @@ J_S = Constant(-1.0)
 class Permeability(Expression):
     def __init__(self, mesh, **kwargs):
         self.markers = markers
-    def eval_cell(self, values, x, ufc_cell):
-        if markers[ufc_cell.index] == 0:
+    def eval_cell(self, values, x, cell):
+        if markers[cell.index] == 0:
             values[0] = 4*pi*1e-7 # vacuum
-        elif markers[ufc_cell.index] == 1:
+        elif markers[cell.index] == 1:
             values[0] = 1e-5      # iron (should really be 2.5e-1)
         else:
-            values[0] = -6.4e-6   # copper
+            values[0] = -6.4e-6   # copper (yes, it's negative!)
 
 mu = Permeability(mesh, degree=1)
 
@@ -101,4 +99,5 @@ vtkfile_B = File('magnetostatics/field.pvd')
 vtkfile_A_z << A_z
 vtkfile_B << B
 
+# Hold plot
 interactive()

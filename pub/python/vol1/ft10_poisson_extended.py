@@ -201,7 +201,7 @@ def solver_bcs(kappa, f, boundary_conditions, Nx, Ny,
                 'kappa is type %s, must be Expression or Constant'
                 % type(kappa))
 
-    # Defie boundary subdomains
+    # Define boundary subdomains
     tol = 1e-14
 
     class BoundaryX0(SubDomain):
@@ -258,14 +258,14 @@ def solver_bcs(kappa, f, boundary_conditions, Nx, Ny,
         if V.ufl_element().degree() == 1:  # P1 elements
             d2v = dof_to_vertex_map(V)
             coor = mesh.coordinates()
-        for i, bc in enumerate(bcs):
-            print('Dirichlet condition %d' % i)
-            boundary_values = bc.get_boundary_values()
-            for dof in boundary_values:
-                print('   dof %2d: u = %g' % (dof, boundary_values[dof]))
-                if V.ufl_element().degree() == 1:
-                    print('    at point %s' %
-                          (str(tuple(coor[d2v[dof]].tolist()))))
+            for i, bc in enumerate(bcs):
+                print('Dirichlet condition %d' % i)
+                boundary_values = bc.get_boundary_values()
+                for dof in boundary_values:
+                    print('   dof %2d: u = %g' % (dof, boundary_values[dof]))
+                    if V.ufl_element().degree() == 1:
+                        print('    at point %s' %
+                              (str(tuple(coor[d2v[dof]].tolist()))))
 
     # Define trial and test functions
     u = TrialFunction(V)
@@ -378,17 +378,17 @@ def compute_convergence_rates(u_e, f, u_D, kappa,
     # Iterate over degrees and mesh refinement levels
     degrees = range(1, max_degree + 1)
     for degree in degrees:
-        n = 4  # coarsest mesh division
+        n = 8  # coarsest mesh division
         h[degree] = []
         E[degree] = []
         for i in range(num_levels):
-            n *= 2
             h[degree].append(1.0 / n)
             u = solver(kappa, f, u_D, n, n, degree, linear_solver='direct')
             errors = compute_errors(u_e, u)
             E[degree].append(errors)
             print('2 x (%d x %d) P%d mesh, %d unknowns, E1 = %g' %
               (n, n, degree, u.function_space().dim(), errors['u - u_e']))
+            n *= 2
 
     # Compute convergence rates
     from math import log as ln  # log is a fenics name too
@@ -398,7 +398,7 @@ def compute_convergence_rates(u_e, f, u_D, kappa,
         rates[degree] = {}
         for error_type in sorted(etypes):
             rates[degree][error_type] = []
-            for i in range(num_levels):
+            for i in range(1, num_levels):
                 Ei = E[degree][i][error_type]
                 Eim1 = E[degree][i - 1][error_type]
                 r = ln(Ei / Eim1) / ln(h[degree][i] / h[degree][i - 1])
@@ -413,16 +413,15 @@ def flux(u, kappa):
     degree = V.ufl_element().degree()
     W = VectorFunctionSpace(mesh, 'P', degree)
     flux_u = project(-kappa*grad(u), W)
-    flux_u.rename('flux(u)', 'continuous flux field')
     return flux_u
 
 def normalize_solution(u):
     "Normalize u: return u divided by max(u)"
     u_array = u.vector().array()
-    u_max = u_array.max()
+    u_max = np.max(np.abs(u_array))
     u_array /= u_max
     u.vector()[:] = u_array
-    u.vector().set_local(u_array)  # alternative
+    #u.vector().set_local(u_array)  # alternative
     return u
 
 #---------------------------------------------------------------------
@@ -436,9 +435,9 @@ def test_solvers():
     solver_functions = (solver, solver_objects, solver_linalg)
     tol = {'direct': {1: 1E-11, 2: 1E-11, 3: 1E-11},
            'Krylov': {1: 1E-14, 2: 1E-05, 3: 1E-03}}
-    u_D = Expression('1 + x[0]*x[0] + 2*x[1]*x[1]')
-    kappa = Expression('x[0] + x[1]')
-    f = Expression('-8*x[0] - 10*x[1]')
+    u_D = Expression('1 + x[0]*x[0] + 2*x[1]*x[1]', degree=2)
+    kappa = Expression('x[0] + x[1]', degree=1)
+    f = Expression('-8*x[0] - 10*x[1]', degree=1)
     for Nx, Ny in [(3, 3), (3, 5), (5 ,3)]:
         for degree in 1, 2, 3:
             for linear_solver in 'direct', 'Krylov':
@@ -463,7 +462,7 @@ def test_solvers():
                     assert error_max < tol[linear_solver][degree], msg
 
 def test_normalize_solution():
-    u_D = Expression('1 + x[0]*x[0] + 2*x[1]*x[1]')
+    u_D = Expression('1 + x[0]*x[0] + 2*x[1]*x[1]', degree=2)
     f = Constant(-6.0)
     u = solver(f, u_D, 4, 2, 1, linear_solver='direct')
     u = normalize_solution(u)
@@ -477,9 +476,9 @@ def test_normalize_solution():
 
 def demo_test():
     "Solve test problem and plot solution"
-    u_D = Expression('1 + x[0]*x[0] + 2*x[1]*x[1]')
-    kappa = Expression('x[0] + x[1]')
-    f = Expression('-8*x[0] - 10*x[1]')
+    u_D = Expression('1 + x[0]*x[0] + 2*x[1]*x[1]', degree=2)
+    kappa = Expression('x[0] + x[1]', degree=1)
+    f = Expression('-8*x[0] - 10*x[1]', degree=1)
     u = solver(kappa, f, u_D, 8, 8, 1)
     vtkfile = File('poisson_extended/solution_test.pvd')
     vtkfile << u
@@ -489,18 +488,16 @@ def demo_flux(Nx=8, Ny=8):
     "Solve test problem and compute flux"
 
     # Compute solution
-    u_D = Expression('1 + x[0]*x[0] + 2*x[1]*x[1]')
-    kappa = Expression('x[0] + x[1]')
-    f = Expression('-8*x[0] - 10*x[1]')
+    u_D = Expression('1 + x[0]*x[0] + 2*x[1]*x[1]', degree=2)
+    kappa = Expression('x[0] + x[1]', degree=1)
+    f = Expression('-8*x[0] - 10*x[1]', degree=1)
     u = solver(kappa, f, u_D, Nx, Ny, 1, linear_solver='direct')
 
     # Compute and plot flux
     flux_u = flux(u, kappa)
     flux_u_x, flux_u_y = flux_u.split(deepcopy=True)
-    flux_u_x.rename('flux(u)_x', 'x-component of flux(u)')
-    flux_u_y.rename('flux(u)_y', 'y-component of flux(u)')
     plot(u, title=u.label())
-    plot(flux_u,   title=flux_u.label())
+    plot(flux_u, title=flux_u.label())
     plot(flux_u_x, title=flux_u_x.label())
     plot(flux_u_y, title=flux_u_y.label())
 
@@ -545,20 +542,20 @@ def demo_structured_mesh():
     H = lambda x: exp(-16*(x-0.5)**2)*sin(3*pi*x)
     x, y = sym.symbols('x[0], x[1]')
     u = H(x)*H(y)
-    u_c = sym.printing.ccode(u)
-    u_c = u_c.replace('M_PI', 'pi')
-    print('C code for u:', u_c)
-    u_D = Expression(u_c)
+    u_code = sym.printing.ccode(u)
+    u_code = u_code.replace('M_PI', 'pi')
+    print('C code for u:', u_code)
+    u_D = Expression(u_code, degree=1)
     kappa = 1  # Note: Can't use Constant(1) here because of sym.diff (!)
     f = sym.diff(-kappa*sym.diff(u, x), x) + \
         sym.diff(-kappa*sym.diff(u, y), y)
     f = sym.simplify(f)
-    f_c = sym.printing.ccode(f)
-    f_c = f_c.replace('M_PI', 'pi')
-    f = Expression(f_c)
+    f_code = sym.printing.ccode(f)
+    f_code = f_code.replace('M_PI', 'pi')
+    f = Expression(f_code, degree=1)
     flux_u_x_exact = sym.lambdify([x, y], -kappa*sym.diff(u, x),
                                   modules='numpy')
-    print('C code for f:', f_c)
+    print('C code for f:', f_code)
     kappa = Constant(1)
     nx = 22;  ny = 22
 
@@ -693,45 +690,30 @@ def demo_bcs():
 def demo_solvers():
     "Reproduce exact solution to machine precision with different linear solvers"
 
-    # Define exact solution and coefficients
+    # Tolerance for tests
     tol = 1E-10
+
+    # Define exact solution and coefficients
     import sympy as sym
     x, y = sym.symbols('x[0], x[1]')
     u = 1 + x**2 + 2*y**2
     f = -sym.diff(u, x, 2) - sym.diff(u, y, 2)
     f = sym.simplify(f)
-    u_00 = u.subs(x, 0)
-    u_01 = u.subs(x, 1)
-    g = -sym.diff(u, y).subs(y, 1)
-    r = 1000
-    s = u
 
     # Generate C/C++ code for UFL expressions
-    f = sym.printing.ccode(f)
-    u_00 = sym.printing.ccode(u_00)
-    u_01 = sym.printing.ccode(u_01)
-    g = sym.printing.ccode(g)
-    r = sym.printing.ccode(r)
-    s = sym.printing.ccode(s)
-    print('Test problem (C/C++):\nu = %s\nf = %s' % (u, f))
-    print('u_00: %s\nu_01: %s\ng = %s\nr = %s\ns = %s' %
-          (u_00, u_01, g, r, s))
+    u_code = sym.printing.ccode(u)
+    f_code = sym.printing.ccode(f)
 
     # Define FEniCS Expressions
-    u_00 = Expression(u_00)
-    u_01 = Expression(u_01)
-    f = Expression(f)
-    g = Expression(g)
-    r = Expression(r)
-    s = Expression(s)
-    u_e = Expression(sym.printing.ccode(u))
+    u_e = Expression(u_code, degree=2)
+    f = Expression(f_code, degree=2)
     kappa = Constant(1)
 
     # Define boundary conditions
-    boundary_conditions = {0: {'Dirichlet': u_00},
-                           1: {'Dirichlet': u_01},
-                           2: {'Robin':     (r, s)},
-                           3: {'Neumann':   g}}
+    boundary_conditions = {0: {'Dirichlet': u_e},
+                           1: {'Dirichlet': u_e},
+                           2: {'Dirichlet': u_e},
+                           3: {'Dirichlet': u_e}}
 
     # Iterate over meshes and degrees
     for Nx, Ny in [(3, 3), (3, 5), (5, 3), (20, 20)]:

@@ -13,8 +13,8 @@ from mshr import *
 import numpy as np
 
 # Create mesh and define function space
-domain = Circle(Point(0.0, 0.0), 1.0)
-mesh = generate_mesh(domain, 20)
+domain = Circle(Point(0, 0), 1)
+mesh = generate_mesh(domain, 64)
 V = FunctionSpace(mesh, 'P', 2)
 
 # Define boundary condition
@@ -28,9 +28,8 @@ bc = DirichletBC(V, w_D, boundary)
 # Define load
 beta = 8
 R0 = 0.6
-p = Expression(
-    '4*exp(-pow(beta, 2)*(pow(x[0], 2) + pow(x[1] - R0, 2)))',
-    beta=beta, R0=R0)
+p = Expression('4*exp(-pow(beta, 2)*(pow(x[0], 2) + pow(x[1] - R0, 2)))',
+               degree=1, beta=beta, R0=R0)
 
 # Define variational problem
 w = TrialFunction(V)
@@ -44,8 +43,6 @@ solve(a == L, w, bc)
 
 # Plot solution
 p = interpolate(p, V)
-w.rename('w', 'deflection')
-p.rename('p', 'load')
 plot(w, title='Deflection')
 plot(p, title='Load')
 
@@ -58,16 +55,18 @@ vtkfile_p << p
 # Curve plot along x = 0 comparing p and w
 import numpy as np
 import matplotlib.pyplot as plt
-tol = 1E-8  # avoid hitting points outside the domain
-y = np.linspace(-1+tol, 1-tol, 101)
+tol = 0.001  # avoid hitting points outside the domain
+y = np.linspace(-1 + tol, 1 - tol, 101)
 points = [(0, y_) for y_ in y]  # 2D points
 w_line = np.array([w(point) for point in points])
 p_line = np.array([p(point) for point in points])
-plt.plot(y, 100*w_line, 'r-', y, p_line, 'b--') # magnify w
-plt.legend(['100 x deflection', 'load'], loc='upper left')
-plt.xlabel('y'); plt.ylabel('$p$ and $100u$')
-plt.savefig('poisson_membrane/plot.pdf')
-plt.savefig('poisson_membrane/plot.png')
+plt.plot(y, 50*w_line, 'k', linewidth=2)  # magnify w
+plt.plot(y, p_line, 'b--', linewidth=2)
+plt.grid(True)
+plt.xlabel('$y$')
+plt.legend(['Deflection ($\\times 50$)', 'Load'], loc='upper left')
+plt.savefig('poisson_membrane/curves.pdf')
+plt.savefig('poisson_membrane/curves.png')
 
 # Hold plots
 interactive()

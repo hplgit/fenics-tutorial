@@ -14,6 +14,7 @@ encapsulates the solver as a Python function.
 
 from __future__ import print_function
 from fenics import *
+import numpy as np
 
 def solver(f, u_D, Nx, Ny, degree=1):
     """
@@ -48,12 +49,11 @@ def run_solver():
     "Run solver to compute and post-process solution"
 
     # Set up problem parameters and call solver
-    u_D = Expression('1 + x[0]*x[0] + 2*x[1]*x[1]')
+    u_D = Expression('1 + x[0]*x[0] + 2*x[1]*x[1]', degree=2)
     f = Constant(-6.0)
     u = solver(f, u_D, 8, 8, 1)
 
     # Plot solution and mesh
-    u.rename('u', 'solution')
     plot(u)
     plot(u.function_space().mesh())
 
@@ -66,7 +66,7 @@ def test_solver():
 
     # Set up parameters for testing
     tol = 1E-10
-    u_D = Expression('1 + x[0]*x[0] + 2*x[1]*x[1]')
+    u_D = Expression('1 + x[0]*x[0] + 2*x[1]*x[1]', degree=2)
     f = Constant(-6.0)
 
     # Iterate over mesh sizes and degrees
@@ -84,7 +84,6 @@ def test_solver():
             # Compute maximum error at vertices
             vertex_values_u_D = u_D.compute_vertex_values(mesh)
             vertex_values_u  = u.compute_vertex_values(mesh)
-            import numpy as np
             error_max = np.max(np.abs(vertex_values_u_D - \
                                       vertex_values_u))
 

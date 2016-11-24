@@ -64,7 +64,7 @@ F = ((u_1 - u_n1) / k)*v_1*dx + dot(w, grad(u_1))*v_1*dx \
   - f_1*v_1*dx - f_2*v_2*dx - f_3*v_3*dx
 
 # Create time series for reading velocity data
-timeseries_w = TimeSeries('navier_stokes_cylinder/velocity')
+timeseries_w = TimeSeries('navier_stokes_cylinder/velocity_series')
 
 # Create VTK files for visualization output
 vtkfile_u_1 = File('reaction_system/u_1.pvd')

@@ -46,10 +46,6 @@ f = Constant(beta - 2 - 2*alpha)
 F = u*v*dx + dt*dot(grad(u), grad(v))*dx - (u_n + dt*f)*v*dx
 a, L = lhs(F), rhs(F)
 
-# Create VTK file for saving solution
-vtkfile = File('heat/solution.pvd')
-vtkfile << (u_n, 0)
-
 # Time-stepping
 u = Function(V)
 t = 0
@@ -57,13 +53,12 @@ for n in range(num_steps):
 
     # Update current time
     t += dt
-    u_D.t = t # update for bc
+    u_D.t = t
 
     # Compute solution
     solve(a == L, u, bc)
 
-    # Save solution to file and plot solution
-    vtkfile << (u, t)
+    # Plot solution
     plot(u)
 
     # Compute error at vertices
