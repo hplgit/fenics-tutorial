@@ -63,6 +63,7 @@ n  = FacetNormal(mesh)
 f  = Constant((0, 0))
 k  = Constant(dt)
 mu = Constant(mu)
+rho = Constant(rho)
 
 # Define symmetric gradient
 def epsilon(u):
