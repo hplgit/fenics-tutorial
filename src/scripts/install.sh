@@ -13,7 +13,7 @@ sudo apt-get install texlive-lang-chinese
 
 # Install standard Python packages
 sudo apt-get install \
-     python-future python-mako python-lxml python-sphinx ipython pip
+     python-future python-mako python-lxml python-sphinx python-pip ipython
 
 # Install extra Python packages
 sudo pip2 install git+https://github.com/hplgit/doconce.git

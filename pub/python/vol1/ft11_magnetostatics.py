@@ -43,7 +43,7 @@ for (i, wire) in enumerate(wires_S):
     domain.set_subdomain(2 + n + i, wire)
 
 # Create mesh
-mesh = generate_mesh(domain, 32)
+mesh = generate_mesh(domain, 128)
 
 # Define function space
 V = FunctionSpace(mesh, 'P', 1)
@@ -67,9 +67,9 @@ class Permeability(Expression):
         if markers[cell.index] == 0:
             values[0] = 4*pi*1e-7 # vacuum
         elif markers[cell.index] == 1:
-            values[0] = 1e-5      # iron (should really be 2.5e-1)
+            values[0] = 1e-5      # iron (should really be 6.3e-3)
         else:
-            values[0] = -6.4e-6   # copper (yes, it's negative!)
+            values[0] = 1.26e-6   # copper
 
 mu = Permeability(mesh, degree=1)
 
