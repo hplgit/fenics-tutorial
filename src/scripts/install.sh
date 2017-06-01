@@ -8,9 +8,12 @@ sudo apt-get update
 sudo apt-get install \
      git mercurial texlive texlive-latex-extra ispell
 
+# Install Chinese LaTeX
+sudo apt-get install texlive-lang-chinese
+
 # Install standard Python packages
 sudo apt-get install \
-     python-future python-mako python-lxml python-sphinx
+     python-future python-mako python-lxml python-sphinx ipython pip
 
 # Install extra Python packages
 sudo pip2 install git+https://github.com/hplgit/doconce.git
