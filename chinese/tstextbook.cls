@@ -108,7 +108,7 @@ contents={\includegraphics[width=\paperwidth,height=\paperheight]{cover}}}
     \end{tikzpicture}
   };
 \end{tikzpicture}
-\vspace{7.5cm}
+\vspace{8.5cm}
 }
 
 % Unnumbered chapters (without minitoc)
@@ -133,7 +133,7 @@ contents={\includegraphics[width=\paperwidth,height=\paperheight]{cover}}}
     \end{tikzpicture}
   };
 \end{tikzpicture}
-\vspace{8cm}
+\vspace{9cm}
 }
 
 % Minitoc styling
