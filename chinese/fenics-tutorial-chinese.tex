@@ -1,0 +1,285 @@
+\documentclass{tstextbook}
+
+\begin{document}
+
+\tsbook{在Python中解决PDE \\
+ FEniCS教程}
+       {Hans Petter Langtangen \& Anders Logg}
+       {}
+       {2017}
+       {xxxxx}{xxx--xx--xxxx--xx--x}{0.0}
+       {Chinese translation by FNK InfoTech}
+       {Wuxi, China}
+
+\input{newcommands}
+
+%---------------------------------------------------------------------------
+% Chapters
+%---------------------------------------------------------------------------
+
+%---------------------------------------------------------------------------
+\chapter{基本原理：解决泊松方程}
+
+\bigskip
+
+\begin{summary}
+本章的目标是展示泊松方程如何
+所有 PDE 中最基本的都可以用几行快速解决
+的 FEniCS 代码。 我们介绍最多
+基本 FEniCS 对象：
+\texttt{Mesh}, \texttt{Function}, \texttt{FunctionSpace}, \texttt{TrialFunction}, \texttt{TestFunction}。
+了解如何编写基本的 PDE 求解器，
+包括如何制定数学变分问题，
+应用边界条件，调用 FEniCS 求解器和绘图
+解决方案。
+\end{summary}
+
+
+\section{数学问题的制定}
+
+许多关于编程语言的书籍都以HelloWorld开头
+程序。 读者好奇知道基本的任务是什么
+用语言表达，并将文字打印到屏幕上即可
+这样的一个任务。 在有限元方法的世界，PDE，
+最基本的任务是解决泊松方程。 我们的
+因此对应于古典HelloWorld程序
+解决以下边界值问题：
+
+\begin{alignat}{2}
+- \nabla^2 u(\x) &= f(\x),\quad &&\x\mbox{ in } \Omega,
+\label{ftut:poisson1}\\
+u(\x) &= \ub(\x),\quad &&\x\mbox{ on } \partial \Omega\tp \label{ch:poisson0:bc}
+\end{alignat}
+
+这里，$u = u(\x)$是未知函数，$f = f(\x)$是
+规定的函数，$\nabla^2$是Laplace算子
+（通常写为$\Delta$），$\Omega$是空间域，而
+$\partial \Omega$是$\Omega$的边界。 Poisson问题，
+包括PDE $-\nabla^2u = f$和边界条件
+$u = \ub$ on $\partial \Omega$，是边界值的一个例子
+问题，必须在之前精确地陈述
+使用FEniCS开始解决它是有意义的。
+
+在具有坐标$x$和$y$的两个空间维度中，我们可以写出来
+Poisson方程为
+
+\begin{equation}
+- {\partial^2 u\over\partial x^2} -
+{\partial^2 u\over\partial y^2} = f(x,y)\tp
+\end{equation}
+
+未知的$u$现在是两个变量$u = u(x,y)$的函数
+在二维域$\Omega$。
+
+Poisson方程出现在许多物理环境中，包括
+热传导，静电，物质扩散，扭转
+弹性棒，非粘性流体流和水波。 而且，
+方程出现在数值分割策略中更为复杂
+PDE系统，特别是Navier-Stokes方程。
+
+解决边界值问题，如Poisson方程
+FEniCS包括以下步骤：
+
+\begin{enumerate}
+\item 识别计算域（$\Omega$），PDE，它 边界条件和源项（$f$）。
+\item 将PDE重新定义为有限元变分问题。
+\item 编写一个定义计算域的Python程序，变分问题，边界条件和来源
+  条款，使用相应的FEniCS抽象。
+\item 调用FEniCS来解决边界值问题，并且可选地，扩展程序
+计算衍生量，如通量和平均值，以及 可视化结果。
+\end{enumerate}
+
+\noindent
+现在我们将详细介绍第2--4步。 的主要特点
+FEniCS是步骤3和4导致相当短的代码，而a
+大多数其他PDE软件框架中的类似程序都需要
+更多的代码和技术上困难的编程。
+
+\begin{notice}[什么使FEniCS有吸引力？]
+虽然许多软件框架都非常优雅
+HelloWorld 的例子
+Poisson方程式，FEniCS是我们知道的唯一框架
+代码保持紧凑和美观，非常接近数学
+即使是数学和算法的复杂性
+从笔记本电脑转移到高性能时会增加
+计算服务器（集群）。
+\end{notice}
+
+\subsection{有限元变分法}
+FEniCS是基于有限元法，它是一般的和
+高效数学机械的数值解
+PDE。 有限元方法的出发点是PDE
+以变体形式表达。 不熟悉的读者
+变数问题将会简要介绍一下这个话题
+在本教程中，但阅读有限元上的正确书
+鼓励方法。 经验表明，您可以使用
+FEniCS作为解决PDE的工具，即使没有深入的了解
+有限元法，只要你有人帮你
+将PDE作为变分问题。
+
+将PDE转化为变分问题的基本方法是
+将PDE乘以函数$v$，整合得到的等式
+通过域$\Omega$，并按部分条款执行整合
+与二阶导数。 函数$v$乘以
+PDE称为测试功能。 未知函数$u$为
+近似被称为试验函数。 试用版和
+测试功能也用于FEniCS程序。 试用和测试
+功能属于指定的所谓功能空间
+功能的属性。
+
+在这种情况下，我们先乘以Poisson方程
+通过测试函数$v$并集成$\Omega$：
+
+\begin{equation}
+\label{ch:poisson0:multbyv}
+-\int_\Omega (\nabla^2 u)v \dx = \int_\Omega fv \dx\tp
+\end{equation}
+我们这里让$\dx$表示用于集成的差分元素
+域$\Omega$。 我们稍后会让$\ds$表示差分
+在$\Omega$的边界上整合的元素。
+
+当我们得出变分公式时，一个常见的规则就是我们尝试
+保持$u$和$v$的衍生工具的顺序尽可能小
+可能。 在这里，我们有一个$u$的二阶空间导数，
+这可以转换为$u$和$v$的一阶导数
+应用零件整合技术。 公式
+读
+
+\begin{equation}
+\label{ch:poisson0:eqbyparts}
+ -\int_\Omega (\nabla^2 u)v \dx
+= \int_\Omega\nabla u\cdot\nabla v \dx - \int_{\partial\Omega}{\partial u\over
+\partial n}v \ds,
+\end{equation}
+
+其中$\frac{\partial u}{\partial n} = \nabla u \cdot n$是
+$u$的衍生物向外向正方向$n$
+边界。
+
+变分配方的另一个特点是
+测试函数$v$需要在部分消失
+解决方案$u$的边界已知。
+在现在
+问题，这意味着$v = 0$在整个边界$\partial \Omega$。
+第二个术语在右边
+（\ref{ch:poisson0:eqbyparts}）因此消失。 从
+（\ref{ch:poisson0:multbyv}）和（\ref{ch:poisson0:eqbyparts}）
+遵循
+
+\begin{equation}
+\int_\Omega\nabla u\cdot\nabla v \dx = \int_\Omega fv \dx\tp
+\label{ch:poisson0:weak1}
+\end{equation}
+
+如果我们要求该方程适用于所有测试函数$v$
+一些合适的空间$\hat V$，所谓的测试空间，我们获得一个
+明确的数学问题，唯一地决定了
+解决方案$u$在于一些可能不同的功能空间
+$V$，所谓的试验空间。 我们参考
+(\ref{ch:poisson0:weak1})作为弱形式或变体形式
+原边界值问题
+(\ref{ftut:poisson1})--(\ref{ch:poisson0:bc})。
+
+适当的陈述
+我们的变分问题现在如下：
+找到$u \in V$这样
+
+\begin{equation} \label{ch:poisson0:var}
+  \int_{\Omega} \nabla u \cdot \nabla v \dx =
+  \int_{\Omega} fv \dx
+  \quad \forall v \in \hat{V}\tp
+\end{equation}
+
+现在试用和测试空间$V$和$\hat V$
+问题定义为
+
+\begin{align*}
+     V      &= \{v \in H^1(\Omega) : v = \ub \mbox{ on } \partial\Omega\}, \\
+    \hat{V} &= \{v \in H^1(\Omega) : v = 0 \mbox{ on } \partial\Omega\}\tp
+\end{align*}
+简而言之，$H^1(\Omega)$是数学上众所周知的Sobolev空间
+包含函数$v$，使$v^2$和$|\nabla v|^2$有
+有限积分超过$\Omega$（基本上意味着函数
+是连续的）。 底层PDE的解决方案必须在于
+函数空间中的衍生物也是连续的，但是
+Sobolev空间$H^1(\Omega)$允许不连续的函数
+衍生物。 $u$的连续性要求较弱
+变量语句(\ref{ch:poisson0:var})，作为结果
+整合部分，具有很大的实际后果
+构造有限元函数空间。 特别是它
+允许使用分段多项式函数空间; 即功能
+通过简单地将多项式函数拼接在一起构成的空间
+域，如间隔，三角形或四面体。
+
+变量问题(\ref{ch:poisson0:var})是连续的
+问题：它定义了无穷维的解$u$
+功能空间$V$。 Poisson方程的有限元法
+找出变分问题的近似解
+(\ref{ch:poisson0:var})替换无限维函数
+空间$V$和$\hat{V}$通过离散（有限维）试验
+测试空间$V_h\subset{V}$和$\hat{V}_h\subset\hat{V}$。 离散变分问题如下：
+找到$u_h \in V_h \subset V$这样
+
+\begin{equation} \label{ch:poisson0:vard}
+  \int_{\Omega} \nabla u_h \cdot \nabla v \dx =
+  \int_{\Omega} fv \dx
+  \quad \forall v \in \hat{V}_h \subset \hat{V}\tp
+\end{equation}
+
+这个变分问题，连同一个合适的定义
+函数空间$V_h$和$\hat{V}_h$，唯一地定义我们的近似值
+Poisson方程的数值解(\ref{ftut:poisson1})。 注意
+边界条件被编码为试验和测试的一部分
+空间。 起初，数学框架可能看起来很复杂
+一瞥，但好消息是有限元变分
+问题(\ref{ch:poisson0:vard})看起来和连续的一样
+变分问题(\ref{ch:poisson0:var})和FEniCS可以
+自动解决变量问题，如(\ref{ch:poisson0:vard})！
+
+\begin{notice}[我们的意思是符号$u$和$V$]
+关于变数问题的数学文献写了$u_h$
+解的离散问题和$u$的解决方案
+连续问题 获得（几乎）一对一的关系
+在一个问题的数学表达与之间
+相应的FEniCS程序，我们将下拉$_h$和使用
+$u$用于解决离散问题。
+我们将使用$\uex$来确定
+解决连续问题，如果我们需要明确区分
+两者之间。 类似地，我们将让$V$表示离散有限
+元素功能空间，我们寻求我们的解决方案。
+\end{notice}
+
+\subsection{抽象有限元变分公式}
+\label{ch:poisson0:abstrat}
+\index{abstract variational formulation}
+
+原来是方便的介绍下列规范
+变量问题的符号：找到$u \in V$这样
+
+\begin{equation}
+a(u, v) = L(v) \quad \forall v \in \hat{V}.
+\end{equation}
+
+对于Poisson方程，我们有：
+
+\begin{align}
+a(u, v) &= \int_{\Omega} \nabla u \cdot \nabla v \dx,
+\label{ch:poisson0:vard:a}\\
+L(v) &= \int_{\Omega} fv \dx\tp  \label{ch:poisson0:vard:L}
+\end{align}
+
+
+%---------------------------------------------------------------------------
+% Bibliography
+%---------------------------------------------------------------------------
+
+%\addcontentsline{toc}{chapter}{\textcolor{tssteelblue}{Literature}}
+%\printbibliography{}
+
+%---------------------------------------------------------------------------
+% Index
+%---------------------------------------------------------------------------
+
+\printindex
+
+\end{document}
