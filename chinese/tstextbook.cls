@@ -197,8 +197,8 @@ contents={\includegraphics[width=\paperwidth,height=\paperheight]{cover}}}
   \smallskip
 
   \LARGE
-  \textsc{\@tsauthor} \\[1em]
-  \Large
+  \textsf{\@tsauthor} \\[1em]
+  \LARGE
   \textsc{\@tspublished}
 \end{center}
 
