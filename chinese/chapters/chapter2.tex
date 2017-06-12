@@ -352,7 +352,7 @@ degree $r$可以重现度为$r$的多项式，所以这样
 在2D中，给定的$\Omega$，$\ub$和$f$的选项可能看起来像
 如下:
 
-\begin{bash}
+\begin{python}
 from fenics import *
 
 # Create mesh and define function space
@@ -401,7 +401,7 @@ print('error_max =', error_max)
 
 # Hold plot
 interactive()
-\end{bash}
+\end{python}
 
 该示例程序可以在文件中找到{\nolinkurl{ft01_poisson.py}}。
 \begin{center}
@@ -504,9 +504,9 @@ $V$在此网格上，边界条件为$u$（函数$\ub$），
 
 \subsection{重要的第一行}
 程序的第一行，
-\begin{bash}
+\begin{python}
 from fenics import *
-\end{bash}
+\end{python}
 导入关键类\texttt{UnitSquareMesh}，\texttt{FunctionSpace}，\texttt{Function}，
 等等，从FEniCS图书馆。 所有FEniCS程序
 通过有限元法解决PDE通常从这开始
@@ -517,9 +517,9 @@ from fenics import *
 
 \subsection{生成简单的网格}
 该声明
-\begin{bash}
+\begin{python}
 mesh = UnitSquareMesh(8, 8)
-\end{bash}
+\end{python}
 在单位平方上定义均匀的有限元网格
 $[0,1]\times [0,1]$。 网格由\emph{cells}组成，其中2D是三角形
 有直边。 参数8和8指定正方形
@@ -540,9 +540,9 @@ $[0,1]\times [0,1]$。 网格由\emph{cells}组成，其中2D是三角形
 一旦创建了网格，就可以创建一个有限元的功能空间
 \texttt{V}:
 
-\begin{bash}
+\begin{python}
 V = FunctionSpace(mesh, 'P', 1)
-\end{bash}
+\end{python}
 
 第二个参数\texttt{'P'}指定元素的类型。 的类型
 这里的元素是$\mathsf{P}$，意味着标准的Lagrange系列
@@ -570,3 +570,341 @@ V = FunctionSpace(mesh, 'P', 1)
 \index{TestFunction@{\rm\texttt{TestFunction}}} \index{TrialFunction@{\rm\texttt{TrialFunction}}}
 \index{DirichletBC@{\rm\texttt{DirichletBC}}}
 \index{Dirichlet boundary conditions}
+
+\subsection{定义试用和测试功能}
+在数学中，我们区分试验空间$V$
+和$\hat{V}$。 目前问题的唯一区别是
+边界条件。 在FEniCS中，我们没有指定边界
+条件作为功能空间的一部分，所以这是足够的工作
+其中一个公共空间\texttt{V}用于试用和测试功能
+程序：
+\begin{python}
+u = TrialFunction(V)
+v = TestFunction(V)
+\end{python}
+
+\index{boundary specification (function)}
+
+\subsection{定义边界条件}
+下一步是指定边界条件：$u=\ub$ on
+$\partial\Omega$。 这是完成的
+
+\begin{python}
+bc = DirichletBC(V, u_D, boundary)
+\end{python}
+
+\verb!u_D! 是定义解决方案值的表达式
+boundary和\texttt{boundary}是定义的一个函数（或对象）
+哪些点属于边界。
+
+$u=\ub$类型的边界条件称为\emph{Dirichlet
+条件}。 对于Poisson的当前有限元方法
+问题，他们也被称为必需边界条件，因为它们
+需要作为审判空间的一部分明确强加（相比之下）
+被隐含地定义为变分公式的一部分）。
+自然地，FEniCS类用于定义Dirichlet边界
+条件命名为\texttt{DirichletBC}。
+
+\index{Expression@{\rm\texttt{Expression}}}
+
+变量\verb!u_D! 指的是一个\texttt{Expression}对象，用于
+代表数学函数。 典型的建筑是
+
+\begin{python}
+u_D = Expression(formula, degree=1)
+\end{python}
+
+其中\emph{formula}是一个包含数学表达式的字符串。
+公式必须用C ++语法编写
+自动变成一个高效的，编译的C ++函数。
+
+\begin{notice}[表达和准确性]
+当定义一个\texttt{Expression}时，第二个参数\texttt{degree}是一个
+指定应该如何处理表达式的参数
+计算。 在每个本地元素上，FEniCS将内插
+表达为有限元空间
+的指定程度。 获得最佳
+（顺序）计算的准确性，通常是一个很好的选择
+使用与用于审判的空间$ V $相同的程度
+和测试功能。 但是，如果使用\texttt{Expression}表示
+一个精确的解决方案，用于评估计算的准确性
+解决方案，更高的程度必须用于表达（一个或两个
+度以上）。
+\end{notice}
+
+该表达式可能取决于变量\texttt{x[0]}和\texttt{x[1]}
+对应于$x$和$y$坐标。 在3D中，表达式
+也可能依赖于对应于$z$的变量\texttt{x[2]}
+坐标。 我们选择$\ub(x,y)=1 + x^2 + 2y^2$，公式
+字符串可以写为\texttt{1 + x[0]*x[0] + 2*x[1]*x[1]}:
+
+\begin{python}
+u_D = Expression('1 + x[0]*x[0] + 2*x[1]*x[1]', degree=2)
+\end{python}
+
+我们将学位设置为$2$，以便\verb!u_D! 可能代表确切的
+二次解决我们的测试问题。
+
+\index{C++ expression syntax}
+\index{expression syntax (C++)}
+
+\begin{notice}[字符串表达式必须具有有效的C++语法!]
+\texttt{Expression}对象的字符串参数必须遵守C++语法。
+数学表达式的大多数Python语法也是有效的C++语法，
+但是权力表达式是一个例外:\texttt{p**a}必须写为
+C++中的\texttt{pow(p, a)}（这也是一个替代的Python语法）。
+以下数学函数可以直接使用
+在C++中
+定义\texttt{Expression}对象时的表达式:
+\texttt{cos}, \texttt{sin}, \texttt{tan}, \texttt{acos}, \texttt{asin},
+\texttt{atan}, \texttt{atan2}, \texttt{cosh}, \texttt{sinh}, \texttt{tanh}, \texttt{exp},
+\texttt{frexp}, \texttt{ldexp}, \texttt{log}, \texttt{log10}, \texttt{modf},
+\texttt{pow}, \texttt{sqrt}, \texttt{ceil}, \texttt{fabs}, \texttt{floor}, and \texttt{fmod}.
+此外，数字$\pi$可用作符号\texttt{pi}。
+所有列出的函数取自\texttt{cmath} C++头文件，和
+因此可能
+请参阅\texttt{cmath}的文档了解更多信息
+各种功能。
+
+If/else可以使用C语法进行内联分支。该
+功能
+
+\[ f(x,y) = \left\lbrace\begin{array}{ll} x^2, & x, y\geq 0,\\
+2, & \hbox{otherwise},\end{array}\right.\]
+被实现为
+
+\begin{python}
+f = Expression('x[0]>=0 && x[1]>=0 ? pow(x[0], 2) : 2', degree=2)
+\end{python}
+
+表达式字符串中的参数是允许的，但是
+必须通过关键字初始化
+创建\texttt{Expression}对象时的参数。 例如，
+函数$f(x)=e^{-\kappa\pi^2t}\sin(\pi k x)$可以编码为
+
+\begin{python}
+f = Expression('exp(-kappa*pow(pi, 2)*t)*sin(pi*k*x[0])', degree=2,
+               kappa=1.0, t=0, k=4)
+\end{python}
+随时可以更新参数:
+
+\begin{python}
+f.t += dt
+f.k = 10
+\end{python}
+\end{notice}
+
+\index{boundary specification (function)}
+
+函数\texttt{boundary}指定属于哪些点
+应用边界条件的边界的一部分:
+
+\begin{python}
+def boundary(x, on_boundary):
+    return on_boundary
+\end{python}
+用于标记边界的\texttt{boundary}的函数必须返回
+布尔值:\texttt{True}如果给定点\texttt{x}位于Dirichlet上
+boundary和\texttt{False}否则。 参数\verb!on_boundary! 是\texttt{True}
+如果\texttt{x}在网格的物理边界上，那么在现在
+情况下，我们应该为所有的点返回\texttt{True}
+边界，我们可以返回\verb!on_boundary!的提供值。该
+将为每个离散点调用\texttt{boundary}函数
+网格，这意味着我们可以定义$u$的边界
+如果需要，在域内知道。
+
+考虑FEniCS边界规范的一种方法是
+FEniCS会问你（或者说是函数\texttt{boundary}哪个
+你已经实现了）某个特定点\texttt{x}是否是其中的一部分
+边界。 FEniCS已经知道该点是否属于
+实际边界（域的数学边界）和善意
+在变量\verb!on_boundary!中与您共享此信息。 您
+可以选择使用这些信息（如我们在这里），或忽略它
+完全。
+
+参数\verb!on_boundary! 也可以省略，但在这种情况下，我们需要
+测试\texttt{x}中的坐标值:
+
+\begin{python}
+def boundary(x):
+    return x[0] == 0 or x[1] == 0 or x[0] == 1 or x[1] == 1
+\end{python}
+
+使用完全匹配测试比较浮点值
+\texttt{==}不是很好的编程实践，因为小的舍入误差
+在\texttt{x}值的计算中可以进行测试\texttt{x [0] == 1}
+即使\texttt{x}位于边界上也变为虚假。 一个更好的考验是
+明确地检查公平的公平
+
+\begin{python}
+tol = 1E-14
+def boundary(x):
+    return abs(x[0]) < tol or abs(x[1]) < tol \
+        or abs(x[0] - 1) < tol or abs(x[1] - 1) < tol
+\end{python}
+或在FEniCS中使用\texttt{near}命令:
+
+\begin{python}
+def boundary(x):
+    return near(x[0], 0, tol) or near(x[1], 0, tol) \
+        or near(x[0], 1, tol) or near(x[1], 1, tol)
+\end{python}
+
+\index{tolerance}
+\index{rounding errors}
+
+\begin{notice}[不要使用\texttt{==}来比较实数!]
+如果\texttt{x[0]}是真实的，则不应该使用像\texttt{x[0] == 1}的比较
+number，因为\texttt{x[0]}中的舍入误差可能会使测试失败
+当它在数学上是正确的。 考虑以下计算
+在Python中:
+
+\begin{python}
+>>> 0.1 + 0.2 == 0.3
+False
+>>> 0.1 + 0.2
+0.30000000000000004
+\end{python}
+
+需要使用公差进行实数比较!该
+公差的值取决于所涉及的数字的大小
+算术运算:
+
+\begin{python}
+>>> abs(0.1 + 0.2 - 0.3)
+5.551115123125783e-17
+>>> abs(1.1 + 1.2 - 2.3)
+0.0
+>>> abs(10.1 + 10.2 - 20.3)
+3.552713678800501e-15
+>>> abs(100.1 + 100.2 - 200.3)
+0.0
+>>> abs(1000.1 + 1000.2 - 2000.3)
+2.2737367544323206e-13
+>>> abs(10000.1 + 10000.2 - 20000.3)
+3.637978807091713e-12
+\end{python}
+对于单位大小的数量，可以使用低至$3\cdot 10^{-16}$的公差
+(实际上，这个容差在FEniCS中被称为常数\verb!DOLFIN_EPS!)。
+否则，必须使用适当缩放的公差。
+\end{notice}
+
+\index{UFL}
+
+\subsection{定义源术语}
+
+在定义双线性和线性形式$a(u,v)$和$L(v)$ 之前
+必须指定源术语$f$:
+
+\begin{python}
+f = Expression('-6', degree=0)
+\end{python}
+当$f$在域上是恒定的，\texttt{f}可以
+更有效地表示为\texttt{Constant}:
+
+\begin{python}
+f = Constant(-6)
+\end{python}
+
+\subsection{定义变分问题}
+
+我们现在有了我们需要定义的所有成分
+变分问题:
+
+\begin{python}
+a = dot(grad(u), grad(v))*dx
+L = f*v*dx
+\end{python}
+实质上，这两行指定要解决的PDE。 注意
+Python语法之间非常接近的对应关系
+数学公式$\nabla u\cdot\nabla v \dx$和$fv \dx$。 这个
+是FEniCS的关键优势：变分中的公式
+配方将直接转换为非常类似的Python代码，一个功能
+这使得容易指定和解决复杂的PDE问题。该
+用于表达弱表单的语言称为UFL (Unified Form Language)\cite{UFL_2014，FEniCS}
+，并且是FEniCS的组成部分。
+
+\begin{notice}[表达内在产品]
+内部产品$\int_{\ Omega} \nabla u \cdot \nabla v \dx$
+可以在FEniCS中以各种方式表达。 以上，我们用过
+符号\texttt{dot(grad(u), grad(v))*dx}。 点产品在
+FEniCS/UFL计算最后一个索引的总和（收缩）
+的第一个因素和第二个因素的第一个指标。
+在这种情况下，这两个因素都是一级（向量）和
+所以这个总和刚刚超过$\nabla u$的一个单一的索引
+和$\nabla v$。 计算矩阵的内积（与
+两个索引），一个必须代替\texttt{dot}使用函数\texttt{inner}。
+对于向量，\texttt{dot}和\texttt{inner}是等效的。
+\end{notice}
+
+\subsection{形成和求解线性系统}
+
+定义了有限元变分问题和边界
+条件下，我们现在可以要求FEniCS计算解决方案:
+
+\begin{python}
+u = Function(V)
+solve(a == L, u, bc)
+\end{python}
+
+请注意，我们首先将变量\texttt{u}定义为\texttt{TrialFunction}和
+用它来表示\texttt{a}中的未知数。 其后，我们
+重新定义\texttt{u}成为表示解决方案的\texttt{Function}对象;
+即计算的有限元函数$u$。 这个重新定义
+变量\texttt{u}在Python中是可行的，通常用于FEniCS
+线性问题的应用。 \texttt{u}的两种类型的对象
+指的是从数学角度来看是相等的，因此是
+对两个对象使用相同的变量名称是自然的。
+
+\index{degrees of freedom}
+
+\subsection{使用\texttt{plot}命令绘制解决方案}
+
+\index{plotting}
+\index{plot@{\rm\texttt{plot}}}
+
+一旦解决方案被计算出来，它就可以被可视化
+\texttt{plot}命令:
+
+\begin{python}
+plot(u)
+plot(mesh)
+interactive()
+\end{python}
+注意在\texttt{plot}命令之后调用函数\texttt{interactive}。
+这个呼叫可以与地块（旋转和
+变焦）。 对\texttt{interactive}的调用通常放在a的末尾
+创建地块的程序。 Figure~\ref{fig:poisson_plot}显示
+两个地块。
+
+%\begin{figure}[!ht]  % fig:poisson_plot
+%  \centerline{\includegraphics[width=0.95\linewidth]{fig/poisson_plot.png}}
+%  \caption{
+%  Plot of the mesh and the solution for the Poisson problem created using the built-in FEniCS visualization tool (\texttt{plot} command). \label{fig:poisson_plot}
+%  }
+%\end{figure}
+
+\texttt{plot}命令对调试和初步科学有用
+调查。 更高级的可视化更好地创建
+将解决方案导出到文件并使用高级可视化
+像ParaView这样的工具，如下一节所述。
+
+通过在绘图窗口中单击鼠标左键，您可以旋转
+解决方案，而鼠标右键用于缩放。 点
+鼠标到\texttt{Help}文本左下角显示一个
+列出所有可用的快捷命令。 帮助菜单可能
+或者通过在绘图窗口中键入\textbf{h}来激活。该
+\texttt{plot}命令也接受一些额外的参数，如
+例如设置绘图窗口的标题:
+
+\begin{python}
+plot(u, title='Finite element solution')
+plot(mesh, title='Finite element mesh')
+\end{python}
+
+有关详细的文档，请运行命令\texttt{help(plot)}
+Python或\texttt{pydoc fenics.plot}从终端窗口。
+
+\begin{notice}[Mac OS X和Docker内置绘图]
+
+  \end{notice}
