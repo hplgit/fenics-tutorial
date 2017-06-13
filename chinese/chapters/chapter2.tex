@@ -906,5 +906,129 @@ plot(mesh, title='Finite element mesh')
 Python或\texttt{pydoc fenics.plot}从终端窗口。
 
 \begin{notice}[Mac OS X和Docker内置绘图]
+FEniCS中的内置绘图可能无法按预期方式工作
+在Mac OS X上运行或在FEniCS Docker容器内运行时。
+FEniCS支持使用Mac OS X上的\texttt{plot}命令进行绘图
+但是，键盘快捷键可能会失败
+上班。 当在Docker容器内运行时，绘图不是
+因为Docker不与您的窗口系统进行交互。
+对于需要绘图的Docker用户，建议您进行任何工作
+在Jupyter/FEniCS notebook中(命令\texttt{fenicsproject notebook})
+或依靠ParaView或其他外部工具进行可视化。
+\end{notice}
 
-  \end{notice}
+\subsection{使用ParaView绘制解决方案}
+
+\index{exporting solutions}
+\index{postprocessing}
+\index{ParaView}
+
+简单的\texttt{plot}命令对于快速可视化是有用的，但是对于
+更高级的可视化必须使用外部工具。 在这个
+我们演示如何在ParaView中可视化解决方案。
+\begin{center}
+  \url{http://www.paraview.org}\footnote{\texttt{http://www.paraview.org}}
+\end{center}
+Paraview是一个强大的
+用于可视化标量和矢量场的工具，包括那些
+由FEniCS计算。
+
+第一步是以VTK格式导出解决方案:
+
+\begin{python}
+vtkfile = File('poisson/solution.pvd')
+vtkfile << u
+\end{python}
+
+以下步骤演示如何创建解决方案
+我们在ParaView中的Poisson问题。 得到的情节显示在
+Figure~\ref{fig:poisson_paraview}。
+
+\begin{enumerate}
+\item 启动ParaView应用程序。
+
+\item 单击顶部菜单中的\textbf{File--Open...}，导航到包含导出解决方案的目录。 这应该在FEniCS Python程序启动目录下面的名为\texttt{poisson}的子目录中。 选择文件\texttt{solution.pvd}，然后单击\textbf{OK}。
+
+\item 在左侧的Properties窗格中单击\textbf{Apply}。 这将提出解决方案。
+
+\item 要制作解决方案的3D图，我们将使用ParaView的许多\emph{filters}之一。 单击顶部菜单中的\textbf{Filters--Alphabetical--Warp By Scalar}，然后在左侧的Properties窗格中单击\textbf{Apply}。 这产生了由解值确定的高度的高架表面。
+
+\item 要在升高的表面下显示原始图表，请单击左侧Pipeline浏览器窗格中\texttt{solution.pvd}左侧的小眼图标。 还可以点击绘图窗口顶部的小2D按钮，将可视化文件更改为3D。 这可以通过旋转 (鼠标左键) 和缩放 (Ctrl +鼠标左键) 与图形交互。
+
+\item 要显示有限元网格，请在Pipeline浏览器中单击\texttt{solution.pvd}，导航到Properties窗格中的\textbf{Representation}，然后选择\textbf{Surface With Edges}。 这应该使有限元网格可见。
+
+\item 要更改绘图的宽高比，请单击Pipeline浏览器中的\textbf{WarpByScalar1}，然后导航到Properties窗格中的\textbf{Scale Factor}。 将值更改为0.2，然后单击\textbf{Apply}。 这将改变扭曲情节的规模。 我们还在Properties窗格的底部单击\textbf{Orientation Axis Visibility}，以删除绘图窗口左下角的小3D轴。 你现在应该看到类似于Figure~\ref{fig:poisson_paraview}的情节。
+
+\item 最后，要将可视化文件导出到文件中，请单击\textbf{File--Save Screenshot...}，然后选择一个合适的文件名，如\texttt{poisson.png}。
+\end{enumerate}
+
+\noindent
+有关更多信息，请参阅ParaView指南\cite{Paraview}
+（免费PDF可用），
+\begin{center}
+  \url{http://www.paraview.org/Wiki/The_ParaView_Tutorial} {ParaView tutorial} \footnote{\texttt{http://www.paraview.org/Wiki/The\_ParaView\_Tutorial}}
+\end{center}
+  和指令video
+\begin{center}
+  \url{https://vimeo.com/34037236} {ParaView简介} \footnote{\texttt{https://vimeo.com/34037236}}。
+\end{center}
+
+%\begin{figure}[!ht]  % fig:poisson_paraview
+%  \centerline{\includegraphics[width=0.95\linewidth]{fig/poisson_paraview.png}}
+%  \caption{
+%  Plot of the mesh and the solution for the Poisson problem created using ParaView. \label{fig:poisson_paraview}
+%  }
+%\end{figure}
+
+\subsection{计算错误}
+
+\index{error}
+
+最后，我们计算错误以检查解决方案的准确性。
+我们通过将有限元解决方案\texttt{u}与确切的比较来做到这一点
+解决方案，在这个例子中恰好与之相同
+表达\verb!u_D! 用于设置边界条件。 我们计算
+错误有两种不同的方式。 首先，我们计算$L^2$ norm
+错误，由...定义
+
+\[ E = \sqrt{\int_\Omega (\ub - u)^2\dx}\tp\]
+由于确切的解是二次方程和有限元解
+是分段线性的，这个错误将是非零。 计算此错误
+在FEniCS中，我们简单地写道
+
+\begin{python}
+error_L2 = errornorm(u_D, u, 'L2')
+\end{python}
+\texttt{errornorm}函数也可以计算其他错误规范
+作为$H^1$标准。 在终端窗口中键入\texttt{pydoc fenics.errornorm}
+详细信息。
+
+我们还计算所有顶点的误差的最大值
+有限元网格。 如上所述，我们期待这个错误
+对于该特定示例，对于机器内部的精度为零。 至
+计算顶点的误差，我们先要求FEniCS来计算
+两个\verb!u_D!的值 和\texttt{u}在所有顶点，然后减去
+结果:
+
+\begin{python}
+vertex_values_u_D = u_D.compute_vertex_values(mesh)
+vertex_values_u = u.compute_vertex_values(mesh)
+import numpy as np
+error_max = np.max(np.abs(vertex_values_u_D - vertex_values_u))
+\end{python}
+我们在这里使用\texttt{numpy}的最大和绝对值函数，
+因为这些对于大型阵列（因子为30）要高得多，
+比Python的内置\texttt{max}和\texttt{abs}函数。
+
+\begin{notice}[如何检查错误消失]
+用不精确（浮点）算术，最大
+顶点的错误不是零，而应该是一个小数字。该
+机器精度约为$10^{-16}$，但在有限元中
+计算，这个大小的舍入误差可能会累积，产生
+大于$10^{-16}$的错误。 实验表明，增加
+元素数量增加有限元的程度
+多项式增加误差。 对于一个网格
+$2\times(20\times20)$ cubic xxxLagrange元素（3级），错误大约是$2\cdot
+10^{-12}$，而对于128个线性元素，错误大约是$2\cdot
+10^{-15}$。
+\end{notice}
