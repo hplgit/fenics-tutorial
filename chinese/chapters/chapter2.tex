@@ -1149,3 +1149,179 @@ p(x,y) = {A\over 2\pi\sigma}\exp{\left(
 哪里
 
 \[ \alpha = \frac{R^2A}{2\pi T D_c\sigma},\quad\beta = \frac{R}{\sqrt{2}\sigma}\tp\]
+通过适当的缩放，$w$及其衍生物的大小
+统一，所以缩放PDE的左侧是大小统一，
+而右侧则有$\alpha$作为其特征尺寸。
+这表明选择$\alpha$是统一的，或者是统一的。 我们应该
+在这种特殊情况下，选择$\alpha=4$。 (也可以找到
+分析解决方案在缩放坐标并显示最大值
+偏差$D(0,0)$是$D_c$，如果我们选择$\alpha=4$来确定
+$D_c$。)使用$D_c=AR^2/(8\pi\sigma T)$并放弃我们获得的条
+缩放的问题
+
+\begin{equation}
+-\nabla^2w = 4\exp{\left(
+- \beta^2(x^2
++ (y-R_0)^2)\right)},
+\label{ch:poisson0:membrane:scaled:eq}
+\end{equation}
+在边界上用$w=0$在单位盘上解决。 现在
+只有两个参数可以改变:无量纲的程度
+压力，$\beta$和本地化的压力峰值$R_0\in
+[0,1]$。 作为$\beta\rightarrow 0$，解决方案将接近
+特殊情况$w=1-x^2-y^2$。
+
+给定一个计算的缩放解$w$，物理偏差可以通过计算
+
+\[ D = \frac{AR^2}{8\pi\sigma T}w\tp\]
+
+我们以前的程序需要进行一些修改才能解决
+这个新问题。
+
+\subsection{定义网格}
+
+单元磁盘上的网格可以由\texttt{mshr}工具创建
+FENICS:
+
+\begin{python}
+from mshr import *
+domain = Circle(Point(0, 0), 1)
+mesh = generate_mesh(domain, 64)
+\end{python}
+
+\texttt{mshr}中的\texttt{Circle}形状占据了中心和半径
+圈作为参数。 第二个参数为\verb!generate_mesh!
+函数指定所需的网格分辨率。 单元格大小将是
+（大约）等于域的直径除以
+解析度。
+
+\subsection{定义负载}
+
+\index{Expression@{\rm\texttt{Expression}}}
+
+右侧压力功能
+由\texttt{Expression}对象表示。 那里
+是$f$的公式中的两个物理参数
+表达式字符串和这些参数必须设置它们的值
+按关键词参数:
+
+\begin{python}
+beta = 8
+R0 = 0.6
+p = Expression('4*exp(-pow(beta, 2)*(pow(x[0], 2) + pow(x[1] - R0, 2)))',
+               degree=1, beta=beta, R0=R0)
+\end{python}
+\texttt{Expression}对象中的坐标总是一个数组
+\texttt{x}与components \texttt{x[0]}，\texttt{x[1]}和\texttt{x[2]}对应
+$x$，$y$和$z$。
+否则我们可以自由地介绍参数的名称
+这些是通过关键字参数给出的默认值。 一切
+由关键字参数初始化的参数可以随时拥有
+值修改。 例如，我们可以设置
+
+\begin{python}
+p.beta = 12
+p.R0 = 0.3
+\end{python}
+
+\subsection{定义变分问题}
+
+变分问题和边界条件与
+我们的第一个Poisson问题，但是我们可能会引用\texttt{w}而不是\texttt{u}
+primary unknown和\texttt{p}而不是\texttt{f}作为右侧功能:
+
+\begin{python}
+w = TrialFunction(V)
+v = TestFunction(V)
+a = dot(grad(w), grad(v))*dx
+L = p*v*dx
+
+w = Function(V)
+solve(a == L, w, bc)
+\end{python}
+
+\subsection{绘制解决方案}
+
+有兴趣的可视化压力$p$以及
+偏移$w$，以便我们可以检查膜对于的反应
+压力。 我们必须将公式(\texttt{Expression})转换为a
+有限元函数(\texttt{Function})。 最自然的方法是
+构造自由度有限元函数
+从$p$计算。 也就是说，我们将$p$内插到函数空间
+$V$:
+
+\begin{python}
+p = interpolate(p, V)
+\end{python}
+请注意，\texttt{p}的赋值会破坏以前的\texttt{Expression}
+object \texttt{p}，所以如果有兴趣还可以访问这个
+对象，返回的\texttt{Function}对象必须使用另一个名称
+通过\texttt{interpolate}。 可以绘制两个函数\texttt{w}和\texttt{p}
+使用内置绘图命令:
+
+\begin{python}
+plot(w, title='Deflection')
+plot(p, title='Load')
+\end{python}
+像以前一样，我们还以VTK格式导出解决方案
+ParaView中的可视化
+
+\begin{python}
+vtkfile_w = File('poisson_membrane/deflection.pvd')
+vtkfile_w << w
+vtkfile_p = File('poisson_membrane/load.pvd')
+vtkfile_p << p
+\end{python}
+图~\ref{fig:poisson_membrane_deflection_load}显示可视化
+的偏移\texttt{w}和使用ParaView创建的load \texttt{p}。
+
+%\begin{figure}[!ht]  % fig:poisson_membrane_deflection_load
+%  \centerline{\includegraphics[width=0.95\linewidth]{fig/poisson_membrane_deflection_load.png}}
+%  \caption{
+%  Plot of the deflection (left) and load (right) for the membrane problem created using ParaView. The plot uses 10 equispaced isolines for the solution values and the optional \emph{jet} colormap. \label{fig:poisson_membrane_deflection_load}
+%  }
+%\end{figure}
+
+\subsection{通过域进行曲线图}
+
+\index{curve plots}
+
+比较偏转和负载的另一种方法是制作曲线图
+沿线$x=0$。 这只是定义一组点的问题
+沿着$y$-axis并评估有限元函数\texttt{w}和\texttt{p}
+在这些点上:
+
+\begin{python}
+# Curve plot along x = 0 comparing p and w
+import numpy as np
+import matplotlib.pyplot as plt
+tol = 0.001  # avoid hitting points outside the domain
+y = np.linspace(-1 + tol, 1 - tol, 101)
+points = [(0, y_) for y_ in y]  # 2D points
+w_line = np.array([w(point) for point in points])
+p_line = np.array([p(point) for point in points])
+plt.plot(y, 50*w_line, 'k', linewidth=2)  # magnify w
+plt.plot(y, p_line, 'b--', linewidth=2)
+plt.grid(True)
+plt.xlabel('$y$')
+plt.legend(['Deflection ($\\times 50$)', 'Load'], loc='upper left')
+plt.savefig('poisson_membrane/curves.pdf')
+plt.savefig('poisson_membrane/curves.png')
+\end{python}
+该示例程序可以在文件
+\begin{center}
+  \url{{https://fenicsproject.org/pub/tutorial/python/vol1/ft02_poisson_membrane.py}} {\nolinkurl {ft02_poisson_membrane.py}}
+\end{center}
+中找到。
+
+\index{ft02\_poisson\_membrane.py@{\rm\texttt{ft02\_poisson\_membrane.py}}}
+得到的曲线图如图~\ref{fig:poisson_membrane_curves}所示。 本地化输入($p$)很大
+在输出中减弱和平滑($w$)。 这反映了一个典型的
+Poisson方程的属性。
+
+%\begin{figure}[!ht]  % fig:poisson_membrane_curves
+%  \centerline{\includegraphics[width=0.95\linewidth]{fig/poisson_membrane_curves.png}}
+%  \caption{
+%  Plot of the deflection and load for the membrane problem created using Matplotlib and sampling of the two functions along the $y$-axsis. \label{fig:poisson_membrane_curves}
+%  }
+%\end{figure}
