@@ -159,3 +159,376 @@ F_{n+1}(u; v) = \int_\Omega \left(uv + {\dt}
 a_0(u,v) &= \int_\Omega uv \dx, \label{ch:diffusion0:pde1:a0}\\
 L_0(v) &= \int_\Omega \uI v \dx\tp \label{ch:diffusion0:pde1:L0}
 \end{align}
+当解决这个变分问题时，$u^0$成为$L^2$
+将给定的初始值$\uI$投影到有限元中
+空间。 另一种方式是通过内插来构造$u^0$
+初始值$\uI$; 也就是说，如果$u^0=\sum_{j=1}^N U^0_j\phi_j$，我们
+只需设置$U_j=\uI(x_j,y_j)$，其中$(x_j,y_j)$是坐标
+节点编号$j$。 我们将这两个策略称为计算
+初始条件通过投影或插值。 都
+在FEniCS中通过单一语句轻松计算操作，
+使用\texttt{project}或\texttt{interpolate}函数。 最常见的
+选择是\texttt{project}，它计算一个近似值为$\uI$，但是在
+一些我们想通过再现来验证代码的应用程序
+确切的解决方案，必须使用\texttt{interpolate}(我们使用这样的测试
+这里的问题!)。
+
+\index{interpolate@{\rm\texttt{interpolate}}}
+\index{project@{\rm\texttt{project}}}
+
+总之，我们需要解决以下变分序列
+计算热方程有限元解的问题:
+找到$u^0\in V$，以便$a_0(u^0,v)=L_0(v)$对于所有$v\in\hat V$，
+然后找到$u^{n+1}\in V$
+使得$a(u^{n+1},v)=L_{n+1}(v)$对于$v\in\hat V$，
+或者，对于$v\in\hat V$中的$F_{n+1}(u^{n+1},v)=0$，
+$n=0,1,2,\ldots$。
+
+\subsection{FEniCS实现}
+\label{ftut:timedep:diffusion1:impl}
+
+我们的程序需要手动实现时间步伐，但可以
+依靠FEniCS轻松计算$a_0$，$L_0$，$a$和$L$(或
+$F_{n+1}$)，并解决未知数的线性系统。
+
+\paragraph{测试问题1：一个已知的分析解决方案。}
+就像前一章的Poisson问题一样，我们
+构建一个测试问题，使其容易确定是否
+计算正确。 既然我们知道我们的一流
+时间步长方案对于线性函数是精确的，我们创建一个测试
+时间线性变化的问题。 我们把这与一个
+空间二次变化。 我们因此而来
+
+\begin{equation} u = 1 + x^2 + \alpha y^2 + \beta t,
+\label{ch:diffusion0:pde1:u0test}
+\end{equation}
+其产生了在节点处的计算值将是的函数
+确切的，不管元素的大小和$\dt$，只要
+网格被均匀分割。 插入
+(\ref{ch:diffusion0:pde1:u0test})转换为热方程
+(\ref{ch:diffusion0:pde1})，我们发现右边的$f$必须
+由$f(x,y,t)=\beta - 2 - 2\alpha$给出。 边界值
+是$\ub(x,y,t)= 1 + x^2 + \alpha y^2 + \beta t$和初始
+值为$\uI(x,y)= 1 + x^2 + \alpha y^2$。
+
+\paragraph{FEniCS实现。}
+一个新的编程问题是如何处理不同的功能
+空间和时间，如边界条件$\ub(x,y,
+t)= 1 + x^2 + \alpha y^2 + \beta t$。 一个自然的解决方案是使用
+FEniCS \texttt{Expression}与time $t$作为参数，除了
+参数$\alpha$和$\beta$:
+
+\index{time-dependent expression}
+
+\begin{python}
+alpha = 3; beta = 1.2
+u_D = Expression('1 + x[0]*x[0] + alpha*x[1]*x[1] + beta*t',
+                 degree=2, alpha=alpha, beta=beta, t=0)
+\end{python}
+\texttt{Expression}将\texttt{x}的组件用作独立的
+变量，而\texttt{alpha}，\texttt{beta}和\texttt{t}是参数。该
+time \texttt{t}可以稍后更新
+
+\begin{python}
+u_D.t = t
+\end{python}
+
+在这种情况下，沿着整个边界的基本边界条件，
+以与我们以前实施的相同的方式实施
+泊松问题的边界条件:
+
+\begin{python}
+def boundary(x, on_boundary):
+    return on_boundary
+
+bc = DirichletBC(V, u_D, boundary)
+\end{python}
+
+我们将使用变量\texttt{u}作为新的未知$u^{n+1}$
+时间步长和变量\verb!u_n! 对于上一次的$u^n$
+步。 \verb!u_n!的初始值可以通过任一投影来计算
+或插值$\uI$。 由于我们为边界值设置了\texttt{t = 0}
+\verb!u_D!,我们可以使用\verb!u_D! 指定初始条件:
+
+\begin{python}
+u_n = project(u_D, V)
+# or
+u_n = interpolate(u_D, V)
+\end{python}
+
+\begin{notice}[投影与内插初始条件]
+实际恢复确切的解决方案
+(\ref{ch:diffusion0:pde1:u0test})到机器精度，这很重要
+通过内插$\uI$来计算离散的初始条件。 这个
+确保自由度是准确的（机器精度）
+在$t=0$。 投影导致节点处的近似值。
+\end{notice}
+
+\index{lhs@{\rm\texttt{lhs}}}
+\index{rhs@{\rm\texttt{rhs}}}
+\index{projection}
+\index{interpolation}
+
+我们可以根据上述公式定义$a$或$L$，或者我们
+可能只是定义$F$，并要求FEniCS找出哪些术语应该去
+进入双线性形式$a$，并且应该进入线性形式
+$L$。 后者是方便的，特别是在更复杂的
+问题，所以我们说明了建设$a$和$L$:
+
+\begin{python}
+u = TrialFunction(V)
+v = TestFunction(V)
+f = Constant(beta - 2 - 2*alpha)
+
+F = u*v*dx + dt*dot(grad(u), grad(v))*dx - (u_n + dt*f)*v*dx
+a, L = lhs(F), rhs(F)
+\end{python}
+
+最后，我们在循环中执行时间步长:
+
+\begin{python}
+u = Function(V)
+t = 0
+for n in range(num_steps):
+
+    # Update current time
+    t += dt
+    u_D.t = t
+
+    # Solve variational problem
+    solve(a == L, u, bc)
+
+    # Update previous solution
+    u_n.assign(u)
+\end{python}
+在时间步长循环的最后一步，我们分配值
+变量\texttt{u}(新计算的解决方案)变量\verb!u_n!
+包含上一个时间步长的值。 必须这样做
+使用\texttt{assign}成员函数。 如果我们反而尝试做\verb!u_n = u!,
+我们将设置\verb!u_n! 变量与\texttt{u}变量相同
+这不是我们想要的。 (我们需要两个变量，一个是值
+在前一个时间步长，另一个是当前时间的值
+步。)
+
+\begin{notice}[记住用当前时间更新表达式对象!]
+在时间循环内，观察\verb!u_D.t! 必须在之前更新
+\texttt{solve}语句强制执行Dirichlet条件的计算
+当前时间步长。 一个Dirichlet条件定义为a
+\texttt{Expression}查找并应用参数的值，如\texttt{t}
+当它被评估并应用于线性系统时。
+\end{notice}
+
+上面的时间步进循环不包含任何比较
+数字和确切的解决方案，我们必须包括为了
+验证实施。 至于Poisson方程式
+部分~\ref{ch:poisson0:impl:dissect}，我们计算差异
+在\texttt{u}的节点数组和节点数组之间
+内插精确解的值。 这可以做到
+如下:
+
+\begin{python}
+u_e = interpolate(u_D, V)
+error = np.abs(u_e.vector().array() - u.vector().array()).max()
+print('t = %.2f: error = %.3g' % (t, error))
+\end{python}
+对于Poisson示例，我们使用了这个函数
+\verb!compute_vertex_values! 提取功能值
+顶点。 这里我们举例说明一种提取方法
+顶点值，通过调用函数\texttt{vector}返回
+自由度向量。 对于$\mathsf{P}_1$
+功能空间，这个矢量的自由度将等于
+通过调用获得的顶点值数组
+\verb!compute_vertex_values!,虽然可能有不同的顺序。
+
+解决热方程的完整程序如下:
+
+\begin{python}
+from fenics import *
+import numpy as np
+
+T = 2.0            # final time
+num_steps = 10     # number of time steps
+dt = T / num_steps # time step size
+alpha = 3          # parameter alpha
+beta = 1.2         # parameter beta
+
+# Create mesh and define function space
+nx = ny = 8
+mesh = UnitSquareMesh(nx, ny)
+V = FunctionSpace(mesh, 'P', 1)
+
+# Define boundary condition
+u_D = Expression('1 + x[0]*x[0] + alpha*x[1]*x[1] + beta*t',
+                 degree=2, alpha=alpha, beta=beta, t=0)
+
+def boundary(x, on_boundary):
+    return on_boundary
+
+bc = DirichletBC(V, u_D, boundary)
+
+# Define initial value
+u_n = interpolate(u_D, V)
+#u_n = project(u_D, V)
+
+# Define variational problem
+u = TrialFunction(V)
+v = TestFunction(V)
+f = Constant(beta - 2 - 2*alpha)
+
+F = u*v*dx + dt*dot(grad(u), grad(v))*dx - (u_n + dt*f)*v*dx
+a, L = lhs(F), rhs(F)
+
+# Time-stepping
+u = Function(V)
+t = 0
+for n in range(num_steps):
+
+    # Update current time
+    t += dt
+    u_D.t = t
+
+    # Compute solution
+    solve(a == L, u, bc)
+
+    # Plot solution
+    plot(u)
+
+    # Compute error at vertices
+    u_e = interpolate(u_D, V)
+    error = np.abs(u_e.vector().array() - u.vector().array()).max()
+    print('t = %.2f: error = %.3g' % (t, error))
+
+    # Update previous solution
+    u_n.assign(u)
+
+# Hold plot
+interactive()
+\end{python}
+该示例程序可以在文件中找到
+\begin{center}
+  \url{https://fenicsproject.org/pub/tutorial/python/vol1/ft03_heat.py}
+\end{center}
+\begin{center}
+  {\nolinkurl{ft03_heat.py}}
+\end{center}
+
+\index{ft03\_heat.py@{\rm\texttt{ft03\_heat.py}}}
+
+\paragraph{测试问题2:Gaussian函数的扩散。}
+让我们现在解决一个更有趣的测试问题，即扩散
+一个Gaussian山。 我们以初始值为准
+
+\[ \uI(x,y)= e^{-ax^2 - ay^2}\]
+在$a = 5$的域$[-2,2]\times [2,2]$。 为了这
+问题我们将使用均匀的Dirichlet边界条件($\ub = 0$)。
+
+\paragraph{FEniCS实现。}
+以前的程序需要修改哪些? 一个专业
+更改是域不再是单位平方。 新域名可以
+使用\texttt{RectangleMesh}在FEniCS中轻松创建:
+
+\begin{python}
+nx = ny = 30
+mesh = RectangleMesh(Point(-2, -2), Point(2, 2), nx, ny)
+\end{python}
+请注意，我们比以前使用了比以前更高的分辨率
+解决解决方案的功能。 我们还需要重新定义
+初始条件和边界条件。 两者都很容易改变
+定义一个新的\texttt{Expression}，并在边界上设置$u = 0$。
+
+能够在外部程序中可视化解决方案，如
+ParaView，我们将每次将解决方案保存为VTK格式的文件
+步。 我们首先用后缀\texttt{.pvd}创建一个\texttt{File}:
+
+\begin{python}
+vtkfile = File('heat_gaussian/solution.pvd')
+\end{python}
+在时间循环中，我们可能会将解值附加到
+这个文件:
+
+\begin{python}
+vtkfile << (u, t)
+\end{python}
+在每个时间步骤中调用此行，从而创建
+一个包含后缀\texttt{.vtu}的新文件，其中包含时间步长的所有数据
+(网格和顶点值)。 文件
+\verb!heat_gaussian/solution.pvd! 将包含时间值和
+引用\texttt{.vtu}文件，这意味着\texttt{.pvd}文件将是
+单个小文件指向大量\texttt{.vtu}文件
+包含实际数据。 请注意，我们选择存储解决方案
+到一个名为\verb!heat_gaussian!的子目录。 这是为了避免混乱
+我们的源目录与所有生成的数据文件。
+在运行之前不需要创建目录
+程序将由FEniCS自动创建。
+
+\index{VTK format}
+\index{.pvd@{\rm\texttt{.pvd}} file}
+\index{.vtu@{\rm\texttt{.vtu}} file}
+
+完整的程序如下所示。
+
+\begin{python}
+from fenics import *
+import time
+
+T = 2.0            # final time
+num_steps = 50     # number of time steps
+dt = T / num_steps # time step size
+
+# Create mesh and define function space
+nx = ny = 30
+mesh = RectangleMesh(Point(-2, -2), Point(2, 2), nx, ny)
+V = FunctionSpace(mesh, 'P', 1)
+
+# Define boundary condition
+def boundary(x, on_boundary):
+    return on_boundary
+
+bc = DirichletBC(V, Constant(0), boundary)
+
+# Define initial value
+u_0 = Expression('exp(-a*pow(x[0], 2) - a*pow(x[1], 2))',
+                 degree=2, a=5)
+u_n = interpolate(u_0, V)
+
+# Define variational problem
+u = TrialFunction(V)
+v = TestFunction(V)
+f = Constant(0)
+
+F = u*v*dx + dt*dot(grad(u), grad(v))*dx - (u_n + dt*f)*v*dx
+a, L = lhs(F), rhs(F)
+
+# Create VTK file for saving solution
+vtkfile = File('heat_gaussian/solution.pvd')
+
+# Time-stepping
+u = Function(V)
+t = 0
+for n in range(num_steps):
+
+    # Update current time
+    t += dt
+
+    # Compute solution
+    solve(a == L, u, bc)
+
+    # Save to file and plot solution
+    vtkfile << (u, t)
+    plot(u)
+
+    # Update previous solution
+    u_n.assign(u)
+
+# Hold plot
+interactive()
+\end{python}
+该示例程序可以在文件中找到
+\begin{center}
+  \url{https://fenicsproject.org/pub/tutorial/python/vol1/ft04_heat_gaussian.py}
+\end{center}
+\begin{center}
+  {\nolinkurl{ft04_heat_gaussian.py}}
+\end{center}
+
+\index{ft04\_heat\_gaussian.py@{\rm\texttt{ft04\_heat\_gaussian.py}}}
