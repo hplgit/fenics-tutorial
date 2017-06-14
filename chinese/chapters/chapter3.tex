@@ -1,0 +1,161 @@
+\chapter{有限元求解器画廊}
+\label{ch:gallery}
+
+\begin{quote}
+本章的目标是展示一系列重要的内容
+科学与工程学院的PDEs可以很快得到解决
+FEniCS代码行。 我们从热方程开始，继续
+用非线性Poisson方程，线性方程
+弹性，Navier-Stokes方程式，最后看看如何
+解决非线性对流 - 扩散反应的系统
+方程。 这些问题说明了如何解决时间依赖性问题
+问题，非线性问题，向量值问题和系统
+PDEs。 对于每个问题，我们得出变分公式
+在Python中以非常类似的方式表达问题
+数学。
+\end{quote}
+
+\section{热方程式}
+\label{ch:fundamentals:diffusion}
+
+\index{heat equation}
+\index{time-dependent problem}
+
+作为前一章的Poisson问题的第一个扩展，
+我们考虑时间依赖热方程，或时间依赖性
+扩散方程。 这是Poisson的自然延伸
+描述体内热量的固定分布的方程式
+时间依赖的问题。
+
+我们会看到，通过将时间离散成小时间间隔
+采用标准时间步法，可以解决热量
+通过求解一系列变分问题的方程式，很像
+一个我们遇到的Poisson方程。
+
+\subsection{PDE问题}
+
+我们的时间依赖型PDE的模型问题读取
+
+\begin{alignat}{2}
+{\partial u\over\partial t} &= \nabla^2 u + f \quad &&\hbox{in }\Omega\times(0, T],
+\label{ch:diffusion0:pde1}\\
+u &= \ub &&\hbox{on } \partial \Omega\times(0, T],
+\label{ch:diffusion0:pde1:bc}\\
+u &= \uI &&\mbox{at } t=0\tp
+\label{ch:diffusion0:pde1:ic}
+\end{alignat}
+在这里，$u$随空间和时间而变化，例如，如果空间，则$u=u(x,y,t)$
+域$\Omega$是二维的。 源函数$f$和
+边界值$\ub$也可能因空间和时间而异。
+初始条件$\uI$仅是空间的函数。
+
+\subsection{变化公式}
+\label{ftut:timedep:diffusion1}
+
+一个简单的方法来解决时间依赖的PDEs
+有限元方法是首先离散时间导数a
+有限差分近似，产生一个序列
+固定问题，然后将每个静止问题转化为
+变分公式
+
+让上标$n$表示时间$t_n$的数量，其中$n$是一个
+整数计数时间级别。 例如，$u^n$表示$u$在时间
+级$n$。 时间上的有限差分离散化包括
+在某个时间级别对PDE进行采样，说$t_{n + 1}$:
+
+\index{time step}
+
+\begin{equation}
+\left({\partial u \over\partial t}\right)^{n+1} = \nabla^2 u^{n+1} + f^{n+1}\tp
+\label{ch:diffusion0:pde1:tk}
+\end{equation}
+时间导数可以通过差商近似。
+为了简单和稳定的原因，我们选择一个
+简单向后的差异:
+
+\index{implicit Euler}
+\index{backward difference}
+
+\begin{equation}
+\left({\partial u\over\partial t}\right)^{n+1}\approx {{u^{n+1} - u^n}\over{\dt}},
+\label{ch:diffusion0:BE}
+\end{equation}
+其中$\dt$是时间离散参数。
+(\ref{ch:diffusion0:pde1:tk})插入(\ref{ch:diffusion0:BE})产生
+
+\begin{equation}
+{{u^{n+1} - u^n}\over{\dt}} = \nabla^2 u^{n+1} + f^{n+1}\tp
+\label{ch:diffusion0:pde1:BE}
+\end{equation}
+这是我们的时间离散版本的热方程
+(\ref{ch:diffusion0:pde1})，所谓的\emph{backward Euler}或\emph{implicit
+  Euler}离散化。
+
+我们可以重新排序(\ref{ch:diffusion0:pde1:BE})
+左侧包含未知$u^{n+1}$的条款
+右侧仅包含计算的条件。 结果
+是假设为$u^{n+1}$的空间（静态）问题的序列
+$u^n$从以前的时间步长是已知的:
+
+\begin{align}
+u^0 &= \uI, \label{ch:diffusion0:pde1:u0}\\
+u^{n+1} - {\dt}\nabla^2 u^{n+1} &=  u^n + {\dt} f^{n+1},\quad n=0,1,2,\ldots
+\label{ch:diffusion0:pde1:uk}
+\end{align}
+
+给定$\uI$，我们可以解决$u^0$，$u^1$，$u^2$等。
+
+(\ref{ch:diffusion0:pde1:uk})的替代方法，可以是
+方便实施，是收集
+平等标志一方的所有术语:
+
+\begin{equation}
+u^{n+1} - {\dt}\nabla^2 u^{n+1} -  u^{n} - {\dt} f^{n+1} = 0,\quad n=0,1,2,\ldots
+\label{ch:diffusion0:pde1:uk2}
+\end{equation}
+
+我们使用有限元方法来解决
+(\ref{ch:diffusion0:pde1:u0})和任一方程式
+(\ref{ch:diffusion0:pde1:uk})或(\ref{ch:diffusion0:pde1:uk2})。 这个
+需要将方程式变为弱形式。 像往常一样，我们倍增
+通过一个测试函数$v\in \hat V$并将二阶导数合并
+部分。 在$u^{n+1}$（这是自然的）中引入符号$u$
+程序），由此产生的弱势形式
+配方(\ref{ch:diffusion0:pde1:uk})
+可以方便地写入
+标准符号:
+
+\[ a(u,v)=L_{n+1}(v),\]
+哪里
+
+\begin{align}
+a(u,v) &= \int_\Omega\left(uv + {\dt}
+\nabla u\cdot \nabla v\right) \dx, \label{ch:diffusion0:pde1:a}\\
+L_{n+1}(v) &= \int_\Omega \left(u^n + {\dt}  f^{n+1}\right)v \dx\tp
+\label{ch:diffusion0:pde1:L}
+\end{align}
+替代形式(\ref{ch:diffusion0:pde1:uk2})有一个
+抽象配方
+
+\[ F_{n+1}(u;v) = 0,\]
+哪里
+
+\begin{equation}
+F_{n+1}(u; v) = \int_\Omega \left(uv + {\dt}
+\nabla u\cdot \nabla v -
+(u^n + {\dt} f^{n+1})v\right) \dx\tp
+\label{ch:diffusion0:pde1:F}
+\end{equation}
+
+除了每个时间步长要解决的变化问题外，
+我们还需要近似初始条件
+(\ref{ch:diffusion0:pde1:u0})。 这个方程也可以变成a
+变分问题:
+
+\[ a_0(u,v)=L_0(v),\]
+哪里
+
+\begin{align}
+a_0(u,v) &= \int_\Omega uv \dx, \label{ch:diffusion0:pde1:a0}\\
+L_0(v) &= \int_\Omega \uI v \dx\tp \label{ch:diffusion0:pde1:L0}
+\end{align}
