@@ -717,3 +717,122 @@ f = Expression(f_code, degree=1)
 我们所需要做的就是说明$F$和调用的公式
 \texttt{solve(F == 0,u,bc)}，而不是\texttt{solve(a == L,u,bc)}
 在线性情况下。 这是一个简约代码:
+
+\begin{python}
+from fenics import *
+
+def q(u):
+    return 1 + u**2
+
+mesh = UnitSquareMesh(8, 8)
+V = FunctionSpace(mesh, 'P', 1)
+u_D = Expression(u_code, degree=1)
+
+def boundary(x, on_boundary):
+    return on_boundary
+
+bc = DirichletBC(V, u_D, boundary)
+
+u = Function(V)
+v = TestFunction(V)
+f = Expression(f_code, degree=1)
+F = q(u)*dot(grad(u), grad(v))*dx - f*v*dx
+
+solve(F == 0, u, bc)
+\end{python}
+
+该示例程序的完整版本可以在该文件中找到
+\begin{center}
+\url{https://fenicsproject.org/pub/tutorial/python/vol1/ft05_poisson_nonlinear.py}
+\end{center}
+\begin{center}
+{\nolinkurl{ft05_poisson_nonlinear.py}}
+\end{center}
+
+\index{ft05\_poisson\_nonlinear.py@{\rm\texttt{ft05\_poisson\_nonlinear.py}}}
+
+与线性问题的主要区别在于未知功能
+\texttt{u}在非线性情况下的变分形式
+必须定义为\texttt{Function}，而不是\texttt{TrialFunction}。 在某种意义上
+这是从线性情况的简化，我们必须定义\texttt{u}
+首先作为\texttt{TrialFunction}然后作为\texttt{Function}。
+
+\index{Newton's method}
+\index{Jacobian}
+
+\texttt{solve}函数采用非线性方程，从符号出发
+Jacobian矩阵，并运行一个Newton方法来计算解。
+
+当我们运行代码时，FEniCS会报告Newton的进度
+迭代。 以$2\cdot(8\times 8)$单元格，我们达到8的收敛
+具有容忍度$10^{-9}$的迭代，以及错误
+数值解约为$10^{-16}$。 这些结果带来了证据
+为正确的实施。 思考有限差异
+在均匀网格上，$\mathsf{P}_1$元素模拟标准
+二阶差分，其计算线性的导数或
+二次函数。 在这里，$\nabla u$是一个常量向量，但是
+然后乘以$(1+u^2)$，它是二阶多项式
+$x$和$y$，分歧“差异运算符”应该是
+准确计算。 因此，我们可以使用$\mathcal{P}_1$
+元素，期望制造的$u$被转载
+数值方法。 像$1+u^4$这样的非线性，这不会是
+情况，我们需要验证收敛率。
+
+目前的例子显示了解决非线性问题的难易程度
+在FEniCS。 但是，专家对非线性的数值解
+PDEs非常了解，非线性的自动化程序可能会失败
+问题，通常需要有更好的手册
+解决方案的流程控制比我们目前的流程要好
+案件。 我们在\cite{ftut2}中返回此问题，并显示如何
+实现非线性方程式的定制解算法
+我们如何引导使用的自动化Newton方法中的参数
+以上。
+
+\section{线性弹性方程}
+\label{ftut:elast}
+
+\index{elasticity}
+\index{system of PDEs}
+
+结构分析是现代主要活动之一
+工程，这可能使PDE建模变形
+弹性体是世界上最流行的PDE。 只需一个
+用于解决FEniCS中2D或3D弹性方程的代码页，
+具体细节如下。
+
+\subsection{PDE问题}
+
+\index{stress tensor}
+\index{tensor}
+
+控制身体的小弹性变形的方程式$\Omega$的方程式
+可以写成
+
+\begin{align}
+-\nabla\cdot\sigma &= f\hbox{ in }\Omega,
+\label{ftut:elast:varform:equilibrium}\\
+\sigma &= \lambda\,\hbox{tr}\,(\varepsilon) I + 2\mu\varepsilon,
+\label{ftut:elast:varform:stresstrain}\\
+\varepsilon &= \frac{1}{2}\left(\nabla u + (\nabla u)^{\top}\right),
+\label{ftut:elast:varform:strainu}
+\end{align}
+其中$\sigma$是压力张量，$f$是每单位的身体力量
+卷，$\lambda$和$\mu$是$\text{Lam\'e's}$弹性参数为
+物品在$\Omega$，$I$是身份张量，$\mathrm{tr}$是
+跟踪运算符在张量上，$\varepsilon$是对称应变率
+张量（对称梯度），$u$是位移矢量场。
+我们这里假设各向同性弹性条件。
+
+我们结合在一起 (\ref{ftut:elast:varform:stresstrain}) 和
+(\ref{ftut:elast:varform:strainu}) 获得
+
+\begin{equation}
+\sigma = \lambda(\nabla\cdot u)I + \mu(\nabla u + (\nabla u)^{\top})\tp
+\label{ftut:elast:varform:stressu}
+\end{equation}
+注意
+(\ref{ftut:elast:varform:equilibrium})--(\ref{ftut:elast:varform:strainu})
+可以轻松地转换为$u$的单个向量PDE，这是
+管理未知$u$(Navier方程)的PDE。 在里面
+然而，变分式的推导是方便的
+保持方程式如上所述。
