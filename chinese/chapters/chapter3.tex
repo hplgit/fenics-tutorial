@@ -532,3 +532,188 @@ interactive()
 \end{center}
 
 \index{ft04\_heat\_gaussian.py@{\rm\texttt{ft04\_heat\_gaussian.py}}}
+
+\paragraph{ParaView中的可视化。}
+为了可视化高斯山的扩散，启动ParaView，
+选择\textbf{File--Open...}，打开
+\verb!heat_gaussian/solution.pvd!,然后点击
+\textbf{Apply}在Properties窗格中。 点击播放按钮进行显示
+解决方案的动画。 要将动画保存到文件中，请单击
+\textbf{File--Save Animation...}并将文件保存为所需的文件格式，
+例如AVI或Ogg/Theora。
+动画一旦保存到文件中，就可以播放动画
+离线使用播放器，如mplayer或VLC，或上传您的
+动画到YouTube。 图~\ref{fig:snapshots}显示了一个序列
+的解决方案的快照。
+
+%\begin{figure}[!ht]  % fig:snapshots
+%  \centerline{\includegraphics[width=0.95\linewidth]{fig/heat.png}}
+%  \caption{
+%  A sequence of snapshots of the solution of the Gaussian hill problem created with ParaView. \label{fig:snapshots}
+%  }
+%\end{figure}
+
+\section{非线性Poisson方程}
+\label{ftut1:gallery:nonlinearpoisson}
+
+\index{nonlinear problem}
+
+现在我们将介绍如何解决非线性PDE问题。 我们会看到
+非线性问题可以像线性问题那样容易地解决
+FEniCS，通过简单地定义非线性变分问题和调用
+\texttt{solve}功能。 当这样做时，我们会遇到一个微妙的
+变分问题如何定义的差异。
+
+\subsection{PDE问题}
+
+作为解决非线性PDE的模型问题，我们
+取以下非线性Poisson方程:
+
+\begin{equation}
+-\nabla\cdot\left(q(u)\nabla u\right) = f,
+\end{equation}
+在$\Omega$中，$u=\ub$在边界$\partial\Omega$上。
+系数$q = q(u)$使得方程非线性(除非$q(u)$
+在$u$中是不变的)。
+
+\subsection{变化公式}
+
+像往常一样，我们的PDE乘以一个测试函数$v\in\hat V$，
+整合域，并整合二阶导数
+按部件。 由零件整合产生的边界积分
+无论我们使用Dirichlet条件，都会消失。 所结果的
+我们的模型问题的变分公式变成:找到$u \in V$
+就这样
+
+\begin{equation}
+F(u; v) = 0 \quad \forall v \in \hat{V},
+\label{ch:poisson0:nonlinear1}
+\end{equation}
+哪里
+
+\begin{equation}
+F(u; v) = \int_\Omega (q(u)\nabla u\cdot \nabla v - fv) \dx,
+\label{ch:poisson0:nonlinear2}
+\end{equation}
+和
+
+\begin{align*}
+     V      &= \{v \in H^1(\Omega) : v = \ub \mbox{ on } \partial\Omega\},\\
+    \hat{V} &= \{v \in H^1(\Omega) : v = 0 \mbox{ on } \partial\Omega\}\tp
+\end{align*}
+
+离散的问题像往常一样通过限制$V$和$\hat V$出现
+到一对离散空间。 像以前一样，我们省略了任何下标
+离散空间和离散解。
+然后将离散的非线性问题写为:找到$u \in V$
+
+\begin{equation}
+  F(u; v) = 0 \quad \forall v \in \hat{V},
+\label{ch:poisson0:nonlinear:d}
+\end{equation}
+与$u = \sum_{j=1}^N U_j \phi_j$。 由于$F$是非线性的
+$u$，变量语句产生一个系统
+未知数$U_1,\ldots,U_N$中的非线性代数方程。
+
+\subsection{FEniCS实现}
+\label{ftut:nonlinear:Newton:auto}
+
+\paragraph{测试问题。}
+为了解决测试问题，我们需要选择右边的$f$，
+系数$q(u)$和边界值$\ub$。 以前，我们
+与制造的解决方案一起工作，可以无需复制
+近似误差 这在非线性问题上更为困难，
+代数更加繁琐。 但是，我们可以利用SymPy
+符号计算，并将这些计算集成到FEniCS中
+求解。 这允许我们轻松地尝试不同的
+制造解决方案。 SymPy的即将到来的代码需要一些
+基本熟悉这个包。 特别是我们会用
+SymPy函数\texttt{diff}用于符号区分和\texttt{ccode} for
+C/C++代码生成。
+
+我们取$q(u) = 1 + u^2$并定义二维制造
+$x$和$y$中的线性解决方案:
+
+\begin{python}
+# Warning: from fenics import * will import both `sym` and
+# `q` from FEniCS. We therefore import FEniCS first and then
+# overwrite these objects.
+from fenics import *
+
+def q(u):
+    "Return nonlinear coefficient"
+    return 1 + u**2
+
+# Use SymPy to compute f from the manufactured solution u
+import sympy as sym
+x, y = sym.symbols('x[0], x[1]')
+u = 1 + x + 2*y
+f = - sym.diff(q(u)*sym.diff(u, x), x) - sym.diff(q(u)*sym.diff(u, y), y)
+f = sym.simplify(f)
+u_code = sym.printing.ccode(u)
+f_code = sym.printing.ccode(f)
+print('u =', u_code)
+print('f =', f_code)
+\end{python}
+
+\index{SymPy}
+\index{method of manufactured solutions}
+
+\begin{notice}[在\texttt{Expression}对象中根据需要定义符号坐标]
+请注意，我们通常会写\texttt{x,y = sym.symbols('x,y')}，但是
+如果我们希望生成的表达式具有有效的语法
+FEniCS \texttt{Expression}对象，我们必须使用\texttt{x[0]}和\texttt{x[1]}。
+通过定义\texttt{x}的名称，\texttt{sympy}可以轻松实现这一点
+\texttt{y} as \texttt{x[0]}和\texttt{x[1]}:\texttt{x,y = sym.symbols('x[0], x[1]')}。
+\end{notice}
+
+将\texttt{u}和\texttt{f}的表达式转换为C或C ++语法
+FEniCS \texttt{Expression}对象需要两个步骤。 首先，我们要求C
+表达式的代码:
+
+\begin{python}
+u_code = sym.printing.ccode(u)
+f_code = sym.printing.ccode(f)
+\end{python}
+在某些情况下，需要编辑结果以匹配所需的结果
+\texttt{Expression}对象的语法，但不是这种情况。 (首要的
+例如\verb!M_PI! 对于$\pi$在C/C++中必须由\texttt{pi}替代
+\texttt{Expression}对象。)在本例中，\verb!u_code!的输出 和
+\verb!f_code!是
+
+\begin{c}
+x[0] + 2*x[1] + 1
+-10*x[0] - 20*x[1] - 10
+\end{c}
+定义网格，功能空间和边界后，
+我们定义边界值\verb!u_D! 如
+
+\begin{python}
+u_D = Expression(u_code, degree=1)
+\end{python}
+类似地，我们定义右边的函数
+
+\begin{python}
+f = Expression(f_code, degree=1)
+\end{python}
+
+\begin{notice}[命名FEniCS与程序变量之间的冲突]
+在上面的程序中，可能会出现奇怪的错误
+名字冲突。 如果在做之前定义\texttt{sym}和\texttt{q}
+\texttt{from fenics import *}，后一个语句也会导入
+变量名为\texttt{sym}和\texttt{q}，覆盖
+你以前定义的对象! 这可能会导致奇怪
+错误。 最安全的解决方案是做\texttt{import fenics}而不是
+\texttt{from fenics import *}，然后前缀所有FEniCS
+\texttt{fenics}的对象名称。 下一个最好的解决办法就是做
+\texttt{from fenics import *}首先定义你自己的变量
+覆盖从\texttt{fenics}导入的那些。 这是可以接受的
+如果我们不需要\texttt{fenics}中的\texttt{sym}和\texttt{q}。
+\end{notice}
+
+\paragraph{FEniCS实现。}
+非线性Poisson方程的求解器很容易
+实现线性Poisson方程的求解器。
+我们所需要做的就是说明$F$和调用的公式
+\texttt{solve(F == 0,u,bc)}，而不是\texttt{solve(a == L,u,bc)}
+在线性情况下。 这是一个简约代码:
