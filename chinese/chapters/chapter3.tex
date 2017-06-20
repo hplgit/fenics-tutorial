@@ -2216,3 +2216,336 @@ $A$和$B$通过指定非零源术语$f_1$到系统中
 读回以前计算的速度场$w$并将其输入
 我们的方程式 但是我们需要学习如何读写
 时间依赖PDE问题的解决方案。
+
+\subsection{变化公式}
+
+我们通过乘法获得我们系统的变分公式
+每个方程通过一个测试函数，整合二阶项
+$-\nabla\cdot(\epsilon\nabla u_i)$部分，并总结
+方程。 当与FEniCS合作时，可以方便的考虑
+PDE系统作为方程的向量。 测试功能收集在
+矢量也是，变分公式是内在的产物
+矢量PDE和矢量测试功能。
+
+我们还需要及时介绍一些离散化。 我们会用
+反向Euler方法与以前一样，当我们解决热方程和
+通过$(u_i^{n+1}-u_i^n) / \dt$近似时间导数。 让
+$v_1$，$v_2$和$v_3$是测试功能或组件
+测试向量函数。 内部产品产生
+
+\begin{align}
+  \label{ftut1:reactionsystem:varproblem}
+  & \int_{\Omega}
+  (\dt^{-1} (u_1^{n+1} - u_1^n) v_1 + w \cdot \nabla u^{n+1}_1 \, v_1
+  + \epsilon \nabla u^{n+1}_1 \cdot \nabla v_1) \dx \\
+  + & \int_{\Omega} (\dt^{-1} (u_2^{n+1} - u_2^n) v_2
+  + w \cdot \nabla u^{n+1}_2 \, v_2
+  + \epsilon \nabla u^{n+1}_2 \cdot \nabla v_2) \dx \nonumber \\
+  + & \int_{\Omega} (\dt^{-1} (u_3^{n+1} - u_3^n) v_3
+  + w \cdot \nabla u^{n+1}_3 \, v_3
+  + \epsilon \nabla u^{n+1}_3 \cdot \nabla v_3) \dx \nonumber \\
+  - & \int_{\Omega} (f_1 v_1 + f_2 v_2 + f_3 v_3) \dx \nonumber \\
+  - & \int_{\Omega} (-K u^{n+1}_1 u^{n+1}_2 v_1 - K u^{n+1}_1
+  u^{n+1}_2 v_2 + K u^{n+1}_1 u^{n+1}_2 v_3 - K u^{n+1}_3 v_3) \dx = 0.
+  \nonumber
+\end{align}
+对于这个问题，很自然地假设均匀的xxNeumann边界
+$u_1$，$u_2$和$u_3$的整个边界条件; 那
+是，$\partial u_i/\partial n = 0$对于$i = 1, 2, 3$。 这意味着
+当我们通过零件整合时，边界条件消失。
+
+\subsection{FEniCS实现}
+
+第一步是从文件中读取网格。 幸运的是，我们确信
+将网格保存到Navier--Stokes示例中，现在可以轻松实现
+从文件读取:
+
+\begin{python}
+mesh = Mesh('navier_stokes_cylinder/cylinder.xml.gz')
+\end{python}
+网格以本地FEniCS XML格式存储(附加
+gzipping减少文件大小)。
+
+接下来，我们需要定义有限元函数空间。 为了这
+问题，我们需要定义几个空格。 我们创建的第一个空间
+是Navier--Stokes的速度场$w$的空间
+模拟。 我们称这个空格为$W$并定义空格
+
+\begin{python}
+W = VectorFunctionSpace(mesh, 'P', 2)
+\end{python}
+重要的是这个空间与我们的空间完全一样
+用于Navier--Stokes求解器中的速度场。 阅读
+值为速度字段，我们使用\texttt{TimeSeries}:
+
+\index{TimeSeries@{\rm\texttt{TimeSeries}}}
+
+\begin{python}
+timeseries_w = TimeSeries('navier_stokes_cylinder/velocity_series')
+\end{python}
+这将初始化对象\verb!timeseries_w! 我们会打电话给我们
+后来在时间循环中从中检索值
+文件\verb!velocity_series.h5! (二进制HDF5格式)。
+
+\index{mixed function space}
+\index{mixed finite element}
+\index{MixedElement@{\rm\texttt{MixedElement}}}
+
+对于三个浓度$u_1$，$u_2$和$u_3$，我们想要
+使用表示完整系统的函数创建混合空间
+$(u_1, u_2, u_3)$作为单个实体。 为此，我们需要定义一个
+\texttt{MixedElement}作为三个简单有限元素的乘积空间
+然后使用混合元素定义函数空间:
+
+\begin{python}
+P1 = FiniteElement('P', triangle, 1)
+element = MixedElement([P1, P1, P1])
+V = FunctionSpace(mesh, element)
+\end{python}
+
+\begin{notice}[混合元素作为元素的产物]
+FEniCS还允许将有限元素定义为简单的产品
+元素(或混合元素)。 例如，众所周知的Taylor-Hood
+元素，具有二次速度分量和线性压力函数，
+可以定义如下:
+
+\begin{python}
+P2 = VectorElement('P', triangle, 2)
+P1 = FiniteElement('P', triangle, 1)
+TH = P2 * P1
+\end{python}
+这个语法对于两个元素是非常有用的，但是对于三个或更多个这样的语法是非常有用的
+我们遇到Python解释器处理的一个微妙问题
+\texttt{*}运算符。 对于反应体系，我们创建混合元素
+通过\texttt{element = MixedElement([P1，P1，P1])}，一个将被诱惑
+写
+
+\begin{python}
+element = P1 * P1 * P1
+\end{python}
+但是，这相当于写入\texttt{element = (P1 * P1) * P1}
+结果将是由两个子系统组成的混合元素
+其中首先由两个标量子系统组成。
+
+最后，我们说一个混合系统的简单情况
+由反应体系的三个标量元素组成
+定义实际上等同于使用标准向量值
+元件:
+
+\index{VectorElement@{\rm\texttt{VectorElement}}}
+
+\begin{python}
+element = VectorElement('P', triangle, 1, dim=3)
+V = FunctionSpace(mesh, element)
+\end{python}
+\end{notice}
+
+一旦创建空间，我们需要定义我们的测试功能
+和有限元函数。 混合功能的测试功能
+可以通过将\texttt{TestFunction}替换为\texttt{TestFunctions}来创建空格:
+
+\begin{python}
+v_1, v_2, v_3 = TestFunctions(V)
+\end{python}
+
+由于这个问题是非线性的，所以我们需要使用功能
+比未知数的试验功能。 这可以通过使用
+FEniCS中对应的\texttt{Functions}构造。 但是，我们将会
+我们首先需要访问整个系统本身的\texttt{Function}
+需要创建该函数，然后访问其组件:
+
+\begin{python}
+u = Function(V)
+u_1, u_2, u_3 = split(u)
+\end{python}
+这些函数将用于表示未知数$u_1$，$u_2$和$u_3$
+在新的时间级别$n+1$。 前一个相应的值
+时间级别$n$由\verb!u_n1!，\verb!u_n2!，和\verb!u_n3!表示 在我们的程序中。
+
+现在所有功能和测试功能都已经定义了，我们可以
+表达非线性变分问题
+(\ref{ftut1:reactionsystem:varproblem}):
+
+\begin{python}
+F = ((u_1 - u_n1) / k)*v_1*dx + dot(w, grad(u_1))*v_1*dx \
+  + eps*dot(grad(u_1), grad(v_1))*dx + K*u_1*u_2*v_1*dx  \
+  + ((u_2 - u_n2) / k)*v_2*dx + dot(w, grad(u_2))*v_2*dx \
+  + eps*dot(grad(u_2), grad(v_2))*dx + K*u_1*u_2*v_2*dx  \
+  + ((u_3 - u_n3) / k)*v_3*dx + dot(w, grad(u_3))*v_3*dx \
+  + eps*dot(grad(u_3), grad(v_3))*dx - K*u_1*u_2*v_3*dx + K*u_3*v_3*dx \
+  - f_1*v_1*dx - f_2*v_2*dx - f_3*v_3*dx
+\end{python}
+
+时间步长只是解决这个变分问题
+在每个时间段中通过调用\texttt{solve}函数:
+
+\begin{python}
+t = 0
+for n in range(num_steps):
+    t += dt
+    timeseries_w.retrieve(w.vector(), t)
+    solve(F == 0, u)
+    u_n.assign(u)
+\end{python}
+在每个时间步长中，我们首先读取速度的当前值
+字段从我们以前存储的时间序列。 然后我们解决
+非线性系统，并将计算的值分配给左侧
+下一个时间间隔的边值。 从a检索值时
+\texttt{TimeSeries}，默认情况下将内插(线性)到
+给定的时间\texttt{t}如果时间不完全匹配的样本
+系列。
+
+最后一次的解决方案如图~\ref{ftut1:fig:reactionsystem:solution}所示。 我们
+清楚地看到物种$A$和$B$的平流和形成
+的$C$
+沿着$A$和$B$相遇的频道中心。
+
+%\begin{figure}[!ht]  % ftut1:fig:reactionsystem:solution
+%  \centerline{\includegraphics[width=0.95\linewidth]{fig/reaction_system.png}}
+%  \caption{
+%  Plot of the concentrations of the three species $A$, $B$, and $C$ (from top to bottom) at final time. \label{ftut1:fig:reactionsystem:solution}
+%  }
+%\end{figure}
+
+完整的代码如下。
+
+\begin{python}
+from fenics import *
+
+T = 5.0            # final time
+num_steps = 500    # number of time steps
+dt = T / num_steps # time step size
+eps = 0.01         # diffusion coefficient
+K = 10.0           # reaction rate
+
+# Read mesh from file
+mesh = Mesh('navier_stokes_cylinder/cylinder.xml.gz')
+
+# Define function space for velocity
+W = VectorFunctionSpace(mesh, 'P', 2)
+
+# Define function space for system of concentrations
+P1 = FiniteElement('P', triangle, 1)
+element = MixedElement([P1, P1, P1])
+V = FunctionSpace(mesh, element)
+
+# Define test functions
+v_1, v_2, v_3 = TestFunctions(V)
+
+# Define functions for velocity and concentrations
+w = Function(W)
+u = Function(V)
+u_n = Function(V)
+
+# Split system functions to access components
+u_1, u_2, u_3 = split(u)
+u_n1, u_n2, u_n3 = split(u_n)
+
+# Define source terms
+f_1 = Expression('pow(x[0]-0.1,2)+pow(x[1]-0.1,2)<0.05*0.05 ? 0.1 : 0',
+                 degree=1)
+f_2 = Expression('pow(x[0]-0.1,2)+pow(x[1]-0.3,2)<0.05*0.05 ? 0.1 : 0',
+                 degree=1)
+f_3 = Constant(0)
+
+# Define expressions used in variational forms
+k = Constant(dt)
+K = Constant(K)
+eps = Constant(eps)
+
+# Define variational problem
+F = ((u_1 - u_n1) / k)*v_1*dx + dot(w, grad(u_1))*v_1*dx \
+  + eps*dot(grad(u_1), grad(v_1))*dx + K*u_1*u_2*v_1*dx  \
+  + ((u_2 - u_n2) / k)*v_2*dx + dot(w, grad(u_2))*v_2*dx \
+  + eps*dot(grad(u_2), grad(v_2))*dx + K*u_1*u_2*v_2*dx  \
+  + ((u_3 - u_n3) / k)*v_3*dx + dot(w, grad(u_3))*v_3*dx \
+  + eps*dot(grad(u_3), grad(v_3))*dx - K*u_1*u_2*v_3*dx + K*u_3*v_3*dx \
+  - f_1*v_1*dx - f_2*v_2*dx - f_3*v_3*dx
+
+# Create time series for reading velocity data
+timeseries_w = TimeSeries('navier_stokes_cylinder/velocity_series')
+
+# Create VTK files for visualization output
+vtkfile_u_1 = File('reaction_system/u_1.pvd')
+vtkfile_u_2 = File('reaction_system/u_2.pvd')
+vtkfile_u_3 = File('reaction_system/u_3.pvd')
+
+# Create progress bar
+progress = Progress('Time-stepping')
+set_log_level(PROGRESS)
+
+# Time-stepping
+t = 0
+for n in range(num_steps):
+
+    # Update current time
+    t += dt
+
+    # Read velocity from file
+    timeseries_w.retrieve(w.vector(), t)
+
+    # Solve variational problem for time step
+    solve(F == 0, u)
+
+    # Save solution to file (VTK)
+    _u_1, _u_2, _u_3 = u.split()
+    vtkfile_u_1 << (_u_1, t)
+    vtkfile_u_2 << (_u_2, t)
+    vtkfile_u_3 << (_u_3, t)
+
+    # Update previous solution
+    u_n.assign(u)
+
+    # Update progress bar
+    progress.update(t / T)
+
+# Hold plot
+interactive()
+\end{python}
+该示例程序可以在文件\url{https://fenicsproject.org/pub/tutorial/python/vol1/ft09_reaction_system.py} {\nolinkurl{ft09_reaction_system.py}}中找到。
+
+\index{ft09\_reaction\_system.py@{\rm\texttt{ft09\_reaction\_system.py}}}
+
+最后，我们评论三种非常有用的重要技术
+当使用PDE系统时:设置初始条件，设置
+边界条件，并提取系统的组件
+绘图或后处理。
+
+\paragraph{设置混合系统的初始条件。}
+\index{initial condition}
+
+在我们的示例中，我们不需要担心设置初始化
+条件，因为我们从$u_1 = u_2 = u_3 = 0$开始。 这发生了
+自动在代码中设置\verb!u_n = Function(V)! 这个
+为整个系统和所有自由度创建一个\texttt{Function}
+设置为零。
+
+如果我们要为系统的组件设置初始条件
+单独地，最简单的解决方案是定义初始条件
+作为矢量值\texttt{Expression}，然后进行项目(或内插)
+代表整个系统的\texttt{Function}。 例如，
+
+\begin{python}
+u_0 = Expression(('sin(x[0])', 'cos(x[0]*x[1])', 'exp(x[1])'), degree=1)
+u_n = project(u_0, V)
+\end{python}
+这将定义$u_1$，$u_2$和$u_2$作为预测
+$\sin x$，$\cos (xy)$和$\exp(y)$。
+
+\paragraph{设定混合系统的边界条件。}
+在我们的例子中，我们也不用担心设置边界
+条件，因为我们使用了一个天然的Neumann条件。 如果我们想设置
+Dirichlet条件对于系统的各个组件，这可以
+像x \texttt{DirichletBC}一样照常执行，但是我们必须指定
+哪个子系统设定边界条件。 例如，指定
+$u_2$应该等于$xy$在边界定义
+\texttt{boundary}，我们做
+
+\begin{python}
+u_D = Expression('x[0]*x[1]', degree=1)
+bc = DirichletBC(V.sub(1), u_D, boundary)
+\end{python}
+对象\texttt{bc}或包含不同的这些对象的列表
+边界条件，可以像往常一样传递给\texttt{solve}函数。
+请注意，在FEniCS中，编号从$0$开始，因此子空间
+对应于$u_2$是\texttt{V.sub(1)}。
