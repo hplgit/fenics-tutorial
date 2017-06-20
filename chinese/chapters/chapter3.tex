@@ -1159,3 +1159,207 @@ $\sigma(u,p)$表示应力张量，对于Newtonian流体
 两个附加条款$\varrho(\partial u/ \partial t + u \cdot \ nabla u)$和不同的
 表达式为应力张量。 两个额外的术语表达
 加速平衡的力量$F = \nabla\cdot\sigma + f$每单位体积在Newton第二运动定律。
+
+\subsection{变化公式}
+\label{ftut1:NS:varform}
+
+Navier--Stokes方程不同
+我们需要解决一个系统的时间依赖热方程
+方程式和这个系统是一种特殊的类型。 如果我们应用相同的
+技术为热方程; 那就是更换时间
+导数具有简单的差商，我们得到一个非线性
+方程组。 这在
+本身对于FEniCS来说不是一个问题，我们在第~\ref{ftut1:gallery:nonlinearpoisson}部分中看到，但系统有一个所谓的
+\emph{saddle point structure}，需要特殊技术
+(特殊预处理器和迭代方法)有效解决。
+
+\index{splitting method}
+\index{Chorin's method}
+\index{incremental pressure correction scheme}
+
+相反，我们将应用一种更为简单和经常非常有效的方法，
+称为\emph{splitting method}。 这个想法是
+考虑两个方程(\ref{ftut1:ns:momentum})和
+(\ref{ftut1:ns:continuity})。 存在许多分裂
+不可压缩Navier--Stokes方程的策略。 其中一个
+最古老的是由Chorin \cite{Chorin1968}提出的方法
+Temam \cite{Temam1969}，通常称为\emph{Chorin的方法}。 我们会
+使用修改版本的Chorin的方法，即所谓的增量式
+压力校正计划(IPCS)由于\cite{Goda1979}给出
+与原来的方案相比，提高了准确度
+成本。
+
+IPCS方案涉及三个步骤。 首先，我们计算一个暂定的
+速度$u^{\star}$通过推进动量方程
+(\ref{ftut1:ns:momentum})通过中点有限差分方案
+时间，但是使用压力$p^{n}$
+以前的时间间隔。 我们还将线性化非线性对流
+通过使用已知速度$u^{n}$从上一个时间步长:
+$u^{n}\cdot\nabla u^{n}$。
+第一步的变分问题是
+
+\begin{align}
+\label{ftut1:ipcs1}
+      & \langle {\varrho(u^{\star} - u^{n}) / \dt},{v} \rangle
+      + \langle {\varrho u^{n} \cdot \nabla u^{n}},{v} \rangle
+      + \nonumber
+        \langle {\sigma(u^{n+\frac{1}{2}}, p^{n})},{\epsilon(v)} \rangle \\
+      &\quad\quad\quad\quad\quad
+      + \langle {p^{n} n},{v} \rangle_{\partial\Omega}
+      - \langle {\mu\nabla u^{n+\frac{1}{2}}\cdot n},{v} \rangle_{\partial\Omega}
+      = \langle {f^{n+1}},{v} \rangle.
+\end{align}
+这种符号，适用于变化中许多术语的问题
+配方，需要一些解释。 首先我们用短手
+符号
+
+\[
+  \inner{v}{w} = \int_{\Omega} vw \dx, \quad
+  \inner{v}{w}_{\partial\Omega} = \int_{\partial\Omega} vw \ds.
+\]
+这使我们能够更加紧凑地表达变分问题
+办法。 其次，我们使用符号$u^{n +\frac{1}{2}}$。 这个符号
+通常指的是间隔中点的$u$的值
+近似于算术平均值:
+
+\[
+  u^{n+\frac{1}{2}} \approx (u^n + u^{n+1}) / 2.
+\]
+第三，我们注意到变分问题(\ref{ftut1:ipcs1})
+源于该术语的部分整合
+$\inner{-\nabla\cdot\sigma}{v}$。 就像弹性问题一样
+段~\ref{ftut:elast}，我们得到
+
+\[
+  \inner{-\nabla\cdot\sigma}{v}
+  = \inner{\sigma}{\epsilon(v)}
+  - \inner{T}{v}_{\partial\Omega},
+\]
+其中$T = \sigma\cdot n$是边界牵引力。如果我们解决了
+有一个自由边界的问题，我们可以取$T = 0$
+边界。但是，如果我们计算通过通道或管道的流量
+并想要将持续进入“虚拟通道”的流模型化
+外流，我们需要小心对待这个词。假设
+那么我们就是制造出速度的方向导数
+的通道在流出时为零，对应于流量
+“完全发达”或者不显着下降
+外流。这样做，流出的剩余边界就变成了
+$pn - \mu\nabla u \cdot n$，这个术语出现在
+变数问题(\ref{ftut1:ipcs1})。注意这个论点和
+实现取决于$\nabla u$的确切定义
+组件$\partial u_i / \partial x_j$或
+$\partial u_j / \partial x_i$。我们这里选择后者，$\partial
+u_j / \partial x_i$，这意味着我们必须使用FEniCS运算符
+\verb!nabla_grad!为执行。如果我们使用\texttt{grad}运算符和
+定义$\partial u_i / \partial x_j$，我们必须保留
+条款$pn - \mu(\nabla u)^{\top} \cdot n$!
+
+\index{grad@{\rm\texttt{grad}}}
+\index{nabla\_grad@{\rm\texttt{nabla\_grad}}}
+
+\begin{notice}%[\texttt{grad(u)} vs. \protect\verb!nabla\_grad(u)!]
+对于标量函数，$\nabla u$具有清晰的含义作为向量
+
+\[ \nabla u =\left(\frac{\partial u}{\partial x}, \frac{\partial u}{\partial y},
+\frac{\partial u}{\partial z}\right)\tp\]
+然而，如果$u$是向量值，则意义不太清楚。
+一些源定义$\nabla u$作为具有元素的矩阵
+$\partial u_j / \partial x_i$，而其他来源则喜欢
+$\partial u_i / \partial x_j$。 在FEniCS中，\texttt{grad(u)}被定义为
+矩阵与元素$\partial u_i / \partial x_j$，这是
+$\nabla u$的自然定义，如果我们将其视为渐变或
+$u$的衍生。 这样，可以应用矩阵$\nabla u$
+一个差额$\dx$给出增量$\mathrm{d}u = \nabla u \,
+\dx$。 因为$\nabla u$作为矩阵的替代解释
+与元素$\partial u_j / \partial x_i$是非常常见的，in
+特别在连续力学，FEniCS
+提供操作员\verb!nabla_grad! 以此目的。
+对于Navier-Stokes方程，重要的是考虑
+术语$u \cdot \nabla u $应该被解释为向量
+$w$与元素
+$w_i = \sum_j \left(u_j \frac{\partial}{\partial x_j}\right) u_i
+= \sum_j u_j \frac{\partial u_i}{\partial x_j}$。
+这个术语可以在FEniCS中实现
+\texttt{grad(u)*u}，因为这是表达式
+$\sum_j \partial u_i / \partial x_j u_j$，或as
+\verb!dot(u,nabla_grad(u))! 因为这个表达式变成了
+$\sum_i u_i \partial u_j / \partial x_i$。 我们将使用符号
+\verb!dot(u,nabla_grad(u))! 以下，因为它更紧密地对应
+到标准符号$u \cdot \nabla u$。
+
+更准确地说，PDE有三种不同的符号
+涉及梯度，发散和卷曲算子。一个雇用
+$\mathrm{grad}\, u$，$\mathrm{div}\, u$和$\mathrm{curl}\, u$
+运营商。另一个雇用$\nabla u$作为同义词
+$\mathrm{grad}\, u$，$\nabla\cdot u$表示$\mathrm{div}\, u$和
+$\nabla\times u$是$\mathrm{curl}\, u$的名称。第三
+使用$\nabla u$，$\nabla\cdot u$和$\nabla\times u$
+其中$\nabla$是\emph{vector}，例如$\nabla u$是一个二进制
+表达式:$(\nabla u)_{i,j} = \partial u_j/\partial x_i =
+(\mathrm{grad}\,u)^{\top}$。后一个符号，以$\nabla$为一
+向量运算符，在连续统计中得出方程时通常很方便
+力学，如果这个解释$\nabla$是基础
+你的PDE，你必须使用\verb!nabla_grad!, \verb!nabla_div!,和\verb!nabla_curl!在
+FEniCS代码作为这些运算符兼容二进制
+计算。从Navier--Stokes方程，我们可以很容易地看到
+什么$\nabla$表示:如果对流术语的形式为$u \cdot
+\nabla u$，实际上意思是$(u \cdot\nabla)u$，那么$\nabla$是
+矢量和实现变成\verb!dot(u,nabla_grad(u))!在
+FEniCS，但是如果我们看到$\nabla u\cdot u$或$(\mathrm{grad}u)\cdot u$，
+相应的FEniCS表达式为\texttt{dot(grad(u),u)}。
+
+类似地，张量场的发散如应力张量
+$\sigma$也可以以两种不同的方式表达，或者
+\texttt{div(sigma)}或\verb!nabla_div(sigma)! 第一种情况对应于
+组件$\partial \sigma_ {ij}/{\partial x_j}$和第二个
+$\partial \sigma_ {ij}/{\partial x_i}$。 一般来说，这些表达式
+将会有所不同，但当压力测量是对称的时候
+表达式具有相同的值。
+\end{notice}
+
+我们现在进入我们分裂计划的第二步
+不可压缩的Navier--Stokes方程。 在第一步，我们计算
+基于压力的初步速度$u^{\star}$
+以前的时间步。 我们现在可以使用计算的暂定速度
+计算新压力$p^n$:
+
+\begin{equation}
+\label{ftut1:ipcs2}
+  \langle \nabla p^{n+1}, \nabla q \rangle
+  = \langle {\nabla p^{n}},{\nabla q} \rangle
+  - \dt^{-1} \langle{\nabla \cdot u^{\star}},{q} \rangle.
+\end{equation}
+请注意，$q$是压力的标量值测试函数
+空间，而测试函数$v$在(\ref{ftut1:ipcs1})是一个
+来自速度空间的向量值测试函数。
+
+考虑这一步的一个方法是减去Navier--Stokes
+动量方程(\ref{ftut1:ns:momentum})表示为
+暂定速度$u^{\star}$和压力$p^n$来自
+以速度$u^{n+1}$表示的动量方程
+压力$p^{n+1}$。 这导致等式
+
+\begin{equation} \label{ftut1:ipcs:step}
+  (u^{n+1} - u^{\star}) / \dt + \nabla p^{n+1} - \nabla p^n = 0.
+\end{equation}
+采取分歧，并要求$\nabla \cdot u^{n+1} = 0$由
+Navier--Stokes连续性方程(\ref{ftut1:ns:continuity})，我们
+获得方程$-\nabla\cdot u^{\star} / \dt + \nabla^2 p^{n+1} -
+\nabla^2 p^n = 0$，这是一个Poisson问题的压力$p^{n+1}$
+导致变量问题(\ref{ftut1:ipcs2})。
+
+最后，我们从公式计算出校正的速度$u^{n+1}$
+(\ref{ftut1:ipcs:step})。 将该方程乘以测试函数
+$v$，我们获得
+
+\begin{equation}
+\label{ftut1:ipcs3}
+  \langle {u^{n+1}},{v} \rangle
+  =
+  \langle {u^{\star}},{v} \rangle
+  - \dt \langle {\nabla(p^{n+1}-p^{n})},{v} \rangle.
+\end{equation}
+
+总而言之，我们可以解决不可压缩的Navier--Stokes
+通过求解三个线性变分的序列有效地计算方程
+每个时间步的问题。
