@@ -1455,3 +1455,248 @@ Navier--Stokes求解器。 但是，人们可以争辩说
 往往是模拟的目的。通常，缩放的问题是
 通过将一些输入参数的尺寸设置为固定来运行
 价值观(通常统一)。
+
+\paragraph{FEniCS实现。}
+我们以前的例子都是从创建网格开始的
+然后在网格上定义一个\texttt{FunctionSpace}。 为了
+Navier--Stokes分裂方案我们将需要定义两个函数
+空间，一个为速度和一个为压力:
+
+\begin{python}
+V = VectorFunctionSpace(mesh, 'P', 2)
+Q = FunctionSpace(mesh, 'P', 1)
+\end{python}
+第一个空格\texttt{V}是速度的向量值函数空间
+而第二个空格\texttt{Q}是一个标量值的函数空间
+压力。 我们使用分段二次元素作为速度
+分段线性元件用于压力。 创建时
+\texttt{VectorFunctionSpace}在FEniCS中，值维(的长度
+向量)将被设置为等于该几何尺寸
+有限元网格。 可以轻松创建向量值函数
+通过添加关键字参数，FEniCS中的其他维度的空格
+\texttt{dim}:
+
+\index{VectorFunctionSpace@{\rm\texttt{VectorFunctionSpace}}}
+
+\begin{python}
+V = VectorFunctionSpace(mesh, 'P', 2, dim=10)
+\end{python}
+
+\begin{notice}[Navier--Stokes方程的稳定有限元空间]
+众所周知，某些有限元空间不稳定
+对于Navier--Stokes方程，或者甚至用于更简单的Stokes
+方程。 有限元不稳定对的典型例子
+空间是为了使用第一度连续分段多项式
+速度和压力。 使用一个
+不稳定的空间对通常会产生一个解决方案
+虚假(想要的，非物理的)振荡的压力
+解。 简单的补救办法是连续使用
+速度和连续分段线性的二次元素
+元素为压力。 这些元素一起形成所谓的
+\emph{Taylor-Hood}元素。 杂散振荡也可能发生
+如果使用不稳定的元素对，则可以使用拆分方法。
+\end{notice}
+
+由于我们有两个不同的函数空间，我们需要创建两个集合
+的试用和测试功能:
+
+\begin{python}
+u = TrialFunction(V)
+v = TestFunction(V)
+p = TrialFunction(Q)
+q = TestFunction(Q)
+\end{python}
+
+\index{near@{\rm\texttt{near}}}
+
+正如我们在前面的例子中所看到的，边界可能被定义在
+FEniCS通过定义返回\texttt{True}或\texttt{False}的Python函数
+取决于一个点是否应该被视为一部分
+边界
+
+\begin{python}
+def boundary(x, on_boundary):
+    return near(x[0], 0)
+\end{python}
+该函数定义了所有点的边界
+$x$- 坐标等于接近零。 \texttt{near}函数来自
+FEniCS并执行公差测试:\texttt{abs(x[0] - 0) < 3E-16}所以我们
+不要遇到烦恼。 或者，我们可以给
+边界定义作为一个字符串的C++代码，很像我们有
+先前定义的表达式，如
+\verb!u_D = Expression('1 + x[0]*x[0] + 2*x[1]*x[1]',degree=2)!。
+上述边界的定义Python函数的术语可能由简单的C ++代替串:
+
+\begin{python}
+boundary = 'near(x[0], 0)'
+\end{python}
+这具有移动哪些节点的计算的优点
+属于从Python到C++的边界，这提高了效率
+的程序。
+
+对于当前的例子，我们将设置三个不同的边界
+条件。 首先，我们将在通道的墙壁设置$u = 0$;
+也就是说，在$y = 0$和$y = 1$。 其次，我们将设置$p = 8$
+流入($x = 0$)，最后流出$p = 0$ ($x = 1$)。 这个
+将导致压力梯度，从而加速流动
+零速度的初始状态。 这些边界条件可能是
+定义如下:
+
+\begin{python}
+# Define boundaries
+inflow   = 'near(x[0], 0)'
+outflow  = 'near(x[0], 1)'
+walls    = 'near(x[1], 0) || near(x[1], 1)'
+
+# Define boundary conditions
+bcu_noslip  = DirichletBC(V, Constant((0, 0)), walls)
+bcp_inflow  = DirichletBC(Q, Constant(8), inflow)
+bcp_outflow = DirichletBC(Q, Constant(0), outflow)
+bcu = [bcu_noslip]
+bcp = [bcp_inflow, bcp_outflow]
+\end{python}
+
+最后，我们收集速度的边界条件
+Python列表中的压力，所以我们可以轻松访问它们
+以下计算。
+
+我们现在转向变分形式的定义。 有
+要定义三个变量问题，一个为每个步骤
+IPCS方案。 我们来看一下第一个变分的定义
+问题。 我们从一些常数开始:
+
+\begin{python}
+U   = 0.5*(u_n + u)
+n   = FacetNormal(mesh)
+f   = Constant((0, 0))
+k   = Constant(dt)
+mu  = Constant(mu)
+rho = Constant(rho)
+\end{python}
+
+下一步是设置第一步的变分形式
+(\ref{ftut1:ipcs1})。 由于变异
+问题包含已知和未知数量的混合，我们将使用
+以下命名约定:\texttt{u}是未知数(数学上
+$u^{n+1}$)作为变体形式的试用函数，\verb!u_! 是个
+最近计算的近似值($u^{n+1}$可用作为
+\texttt{Function}对象)，\verb!u_n! 是$u^n$，同样的约定
+\texttt{p}，\verb!p_! ($p^{n+1}$)和\verb!p_n!($P^N$)。
+
+\begin{python}
+# Define strain-rate tensor
+def epsilon(u):
+    return sym(nabla_grad(u))
+
+# Define stress tensor
+def sigma(u, p):
+    return 2*mu*epsilon(u) - p*Identity(len(u))
+
+# Define variational problem for step 1
+F1 = rho*dot((u - u_n) / k, v)*dx + \
+     rho*dot(dot(u_n, nabla_grad(u_n)), v)*dx \
+   + inner(sigma(U, p_n), epsilon(v))*dx \
+   + dot(p_n*n, v)*ds - dot(mu*nabla_grad(U)*n, v)*ds \
+   - dot(f, v)*dx
+a1 = lhs(F1)
+L1 = rhs(F1)
+\end{python}
+
+请注意，我们利用Python编程语言
+定义我们自己的运算符\texttt{sigma}和\texttt{epsilon}。 以这种方式使用Python
+可以轻松扩展FEniCS的数学语言
+特殊经营者和组织法。
+
+还要注意，FEniCS可以整理双线性形式$a(u,v)$和
+线性形式$L(v)$形式由\texttt{lhs}
+和\texttt{rhs}函数。 这在更长的时间里是特别方便的
+更复杂的变化形式。
+
+分裂方案需要解决三个序列
+变化问题在每个时间步。 我们以前用过了
+内置的FEniCS函数\texttt{solve}来解决变分问题。 下
+引擎盖，当用户调用\texttt{solve(a == L,u,bc)}时，FEniCS会
+执行以下步骤:
+
+\begin{python}
+A = assemble(A)
+b = assemble(L)
+bc.apply(A, b)
+solve(A, u.vector(), b)
+\end{python}
+在最后一步中，FEniCS使用重载的\texttt{solve}函数来解决
+线性系统\texttt{AU = b}其中\texttt{U}是度的向量
+函数的自由$u(x) = \sum_{j=1} U_j \phi_j(x)$。
+
+\index{linear system}
+
+在执行分裂计划时，我们将利用
+这些低级命令首先组装然后调用解决。 这个
+具有我们可以控制何时组装和我们的优势
+解决线性系统。 特别是，由于矩阵为
+三个变数问题都是时间无关的，这是有道理的
+在时间循环之外组合它们一次:
+
+\index{assemble@{\rm\texttt{assemble}}}
+
+\begin{python}
+A1 = assemble(a1)
+A2 = assemble(a2)
+A3 = assemble(a3)
+\end{python}
+在时间步进循环中，我们然后可以组装
+右侧向量，应用边界条件，并调用求解
+功能如下这三个步骤中的第一步:
+
+\begin{python}
+# Time-stepping
+t = 0
+for n in range(num_steps):
+
+    # Update current time
+    t += dt
+
+    # Step 1: Tentative velocity step
+    b1 = assemble(L1)
+    [bc.apply(b1) for bc in bcu]
+    solve(A1, u_.vector(), b1)
+\end{python}
+注意在bcu中的bc的Python \emph{list comprehension} \texttt{[bc.apply(b1)]}
+它遍历列表\texttt{bcu}中的所有\texttt{bc}。 这是一个方便
+和紧凑的方式来构建一个适用的循环
+所有边界条件在一条线上。 此外，代码工作如果
+我们在未来添加更多的Dirichlet边界条件。 注意
+边界条件只需要应用于右边
+向量，因为它们已经被应用于矩阵（未示出）。
+
+最后，我们来看一下我们如何使用参数的重要细节
+例如我们变分的定义中的时间步长\texttt{dt}
+问题。 因为我们以后可能想改变这些，例如，如果我们
+想要尝试更小或更大的时间步骤，我们包装这些
+使用FEniCS \texttt{Constant}:
+
+\begin{python}
+k = Constant(dt)
+\end{python}
+
+FEniCS中的矩阵和向量的汇编基于代码
+代。 这意味着每当我们改变一个变数问题时，
+FENiCS将必须生成新的代码，这可能需要一点时间
+时间。 新的代码也将生成和编译时的浮点值
+因为时间的改变。 通过使用此参数包装
+\texttt{Constant}，FEniCS将把该参数视为通用常量
+不是一个特定的数值，它可以防止重复的代码
+代。 在时间步长的情况下，我们选择一个新的名字\texttt{k}
+而不是\texttt{dt}为\texttt{Constant}，因为我们也想使用
+变量\texttt{dt}作为Python float作为时间步长的一部分。
+
+用于使用FEniCS模拟2D通道流的完整代码
+可以在文件中找到
+\begin{center}
+  \url{https://fenicsproject.org/pub/tutorial/python/vol1/ft07_navier_stokes_channel.py}
+\end{center}
+\begin{center}
+  \nolinkurl{ft07_navier_stokes_channel.py}。
+\end{center}
+
+\index{ft07\_navier\_stokes\_channel.py@{\rm\texttt{ft07\_navier\_stokes\_channel.py}}}
