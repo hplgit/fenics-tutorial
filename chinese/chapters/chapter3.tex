@@ -1700,3 +1700,90 @@ FENiCS将必须生成新的代码，这可能需要一点时间
 \end{center}
 
 \index{ft07\_navier\_stokes\_channel.py@{\rm\texttt{ft07\_navier\_stokes\_channel.py}}}
+
+\paragraph{验证。}
+\index{verification}
+
+我们计算节点上的错误，就像我们之前做过的那样来验证
+我们的实施是正确的。 我们的Navier--Stokes求解器计算
+解决时间依赖的不可压缩Navier--Stokes
+方程式，从初始条件$u =(0, 0)$开始。 我们有
+没有在我们的求解器中明确指定初始条件
+意味着FEniCS将初始化所有变量，特别是
+以前的和当前的速度\verb!u_n! 和\verb!u_!，为零。 自从
+精确解是二次的，我们期望解决方案是准确的
+在无限时间的节点处的机器精度。 对于我们
+实现时，错误快速接近零，大约为零
+$10^{-6}$在时间$T = 10$。
+
+%\begin{figure}[!ht]  % ftut1:fig:navier_stokes_channel
+%  \centerline{\includegraphics[width=0.95\linewidth]{fig/navier_stokes_channel.png}}
+%  \caption{
+%  Plot of the velocity profile at the final time for the Navier--Stokes channel flow example. \label{ftut1:fig:navier_stokes_channel}
+%  }
+%\end{figure}
+
+\paragraph{测试问题2：流过气瓶。}
+\index{cylinder flow}
+
+现在我们把注意力转向一个更具挑战性的问题:流程
+经过一个圆柱体。 几何和参数取自
+问题DFG 2D-2在\url{http://www.featflow.de/en/benchmarks/cfdbenchmarking/flow/dfg_benchmark2_re100.html}{FEATFLOW/1995-DFG benchmark suite}\footnote{\texttt{http：//www.featflow.de/en/benchmarks/cfdbenchmarking/flow/dfg\_benchmark2\_re100.html}}
+并且如图~\ref{ftut1:navier_stokes_cylinder:geometry}所示。 运动粘度为
+由$\nu = 0.001 = \mu/\varrho$给出，流入速度分布为
+指定为
+
+\[
+  u(x, y, t) = \left(1.5 \cdot \frac{4y(0.41 - y)}{0.41^2}, 0\right),
+\]
+其最大幅度为$1.5$，$y = 0.41/2$。 我们不
+使用任何缩放来解决这个问题，因为所有的精确参数都是已知的。
+
+%\begin{figure}[!ht]  % ftut1:navier_stokes_cylinder:geometry
+%  \centerline{\includegraphics[width=0.95\linewidth]{fig/navier_stokes_cylinder_geometry.pdf}}
+%  \caption{
+%  Geometry for the flow past a cylinder test problem. Notice the slightly perturbed and unsymmetric geometry. \label{ftut1:navier_stokes_cylinder:geometry}
+%  }
+%\end{figure}
+
+\paragraph{FEniCS实现。}
+到目前为止，我们所有的领域都是简单的形状，如单位面积或
+一个矩形盒子。 可以创建许多这样简单的网格
+在FEniCS中使用内置的网格类
+(\texttt{UnitIntervalMesh},
+\texttt{UnitSquareMesh},
+\texttt{UnitCubeMesh},
+\texttt{IntervalMesh},
+\texttt{RectangleMesh},
+\texttt{BoxMesh})。
+FEniCS支持通过技术创建更复杂的网格
+称为\emph{constructive solid geometry}(CSG)，这使我们可以定义
+几何形状简单的形状（基元）和设置操作：
+联合，交集和设置差异。 设置操作是
+使用运算符\texttt{+}(联盟)，\texttt{*}(交集)在FEniCS中编码，
+和\texttt{-}(设置差异)。 要访问FEniCS中的CSG功能，
+必须导入提供的FEniCS模块\texttt{mshr}
+FEniCS的扩展网格划分功能。
+
+\index{mshr}
+\index{CSG}
+\index{constructive solid geometry}
+
+气缸流量测试问题的几何可以很容易地定义
+通过首先定义矩形通道，然后减去
+圈:
+
+\begin{python}
+channel = Rectangle(Point(0, 0), Point(2.2, 0.41))
+cylinder = Circle(Point(0.2, 0.2), 0.05)
+domain = channel - cylinder
+\end{python}
+然后我们可以通过调用函数\verb!generate_mesh!创建网格:
+
+\begin{python}
+mesh = generate_mesh(domain, 64)
+\end{python}
+这里的参数\texttt{64}表示我们要解决几何
+其直径为64个(通道长度)。
+
+\index{generate\_mesh@{\rm\texttt{generate\_mesh}}}
