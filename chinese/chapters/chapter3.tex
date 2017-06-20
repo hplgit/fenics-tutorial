@@ -1787,3 +1787,432 @@ mesh = generate_mesh(domain, 64)
 其直径为64个(通道长度)。
 
 \index{generate\_mesh@{\rm\texttt{generate\_mesh}}}
+
+为了解决缸体测试问题，我们只需要做一些次要的
+更改我们为通道流测试编写的代码
+案件。 除了定义新的网格，我们需要做出的唯一的改变
+是修改边界条件和时间步长。该
+边界规定如下:
+
+\begin{python}
+inflow   = 'near(x[0], 0)'
+outflow  = 'near(x[0], 2.2)'
+walls    = 'near(x[1], 0) || near(x[1], 0.41)'
+cylinder = 'on_boundary && x[0]>0.1 && x[0]<0.3 && x[1]>0.1 && x[1]<0.3'
+\end{python}
+最后一行可能看起来似乎是隐秘的，然后才能抓住这个想法：我们想选择
+出现也位于x2D内的所有边界点(\verb!on_boundary!)
+域$[0.1,0.3]\times [0.1,0.3]$，参见图~\ref{ftut1:navier_stokes_cylinder:geometry}。
+唯一可能的点就是这些点
+循环边界！
+
+\index{set\_log\_level@{\rm\texttt{set\_log\_level}}}
+\index{DEBUG@{\rm\texttt{DEBUG}} log level}
+\index{PROGRESS@{\rm\texttt{PROGRESS}} log level}
+
+除了这些重要的变化，我们还会做一些小的
+改变我们的解决方案。 首先，因为我们需要选择一个
+相对较小的时间步长来计算解决方案(一个时间步长
+太大会使解决方案爆炸)我们添加了一个进度条
+我们可以跟随我们的计算进度。 这可以做到
+如下:
+
+\index{Progress@{\rm\texttt{Progress}}}
+
+\begin{python}
+progress = Progress('Time-stepping')
+set_log_level(PROGRESS)
+
+# Time-stepping
+t = 0.0
+for n in range(num_steps):
+
+    # Update current time
+    t += dt
+
+    # Place computation here
+
+    # Update progress bar
+    progress.update(t / T)
+\end{python}
+
+\begin{notice}[日志级别和FEniCS中的打印]
+注意调用\verb!set_log_level(PROGRESS)! 这是至关重要的
+使FEniCS实际显示进度条。 FEniCS其实是
+相当丰富的信息，在计算过程中发生了什么
+打印到屏幕的信息量取决于当前日志
+水平。 只有优先级高于或等于的消息
+将显示当前日志级别。 预定义的日志级别
+FEniCS是
+\texttt{DBG}，
+\texttt{TRACE}，
+\texttt{PROGRESS}，
+\texttt{INFO}，
+\texttt{WARNING}，
+\texttt{ERROR}，和
+\texttt{CRITICAL}。默认情况下，日志级别设置为\texttt{INFO}
+级别为\texttt{DBG}，\texttt{TRACE}和\texttt{PROGRESS}的邮件不会
+打印。 用户可以使用FEniCS功能\texttt{info}打印消息，
+\texttt{warning}和\texttt{error}，它将在明显的日志中打印消息
+级别(在\texttt{error}的情况下也会抛出异常
+出口)。 也可以使用呼叫 \texttt{log(level,message)}来打印
+消息在特定日志级别。
+\end{notice}
+
+由于线性方程组的系统明显大于
+对于简单的通道流量测试问题，我们选择使用
+迭代方法而不是使用的默认直接(稀疏)求解器
+调用\texttt{solve}时的FEniCS。 线性系统的有效解决方案
+由PDEs的离散化产生的，需要选择a
+良好的迭代(Krylov子空间)方法和良好的
+预条件。 对于这个问题，我们将简单地使用双共轭
+梯度稳定法(BiCGSTAB)和共轭梯度法。 这可以通过添加来完成
+在\texttt{solve}的调用中，关键字\texttt{bicgstab}或\texttt{cg}。 我们也指定
+适当的预处理器来加速计算:
+
+\index{Krylov solver}
+\index{preconditioner}
+
+\begin{python}
+solve(A1, u1.vector(), b1, 'bicgstab', 'hypre_amg')
+solve(A2, p1.vector(), b2, 'bicgstab', 'hypre_amg')
+solve(A3, u1.vector(), b3, 'cg', 'sor')
+\end{python}
+
+最后，为了能够在ParaView中对计算出的解决方案进行后处理，
+我们将解决方案存储在每个时间步长中的文件中。 我们以前
+为此，使用后缀\texttt{.pvd}创建文件。 在例子中
+程序
+\url{https://fenicsproject.org/pub/tutorial/python/vol1/ft04_heat_gaussian.py}{\nolinkurl{ft04_heat_gaussian.py}}，
+我们首先创建一个名为\verb!heat_gaussian/solution.pvd!的文件 接着
+在每个时间步骤中保存解决方案
+\begin{python}
+vtkfile << (u, t)
+\end{python}
+
+对于本示例，我们将选择保存解决方案
+到XDMF格式。 此文件格式与\texttt{.pvd}文件类似
+我们以前看过但有几个优点。 首先，存储是
+在速度和文件大小方面都更有效率。 第二，
+\texttt{.xdmf}文件可以并行工作，无论是写作还是阅读
+(后期处理)。 很像\texttt{.pvd}文件，实际数据将不会
+存储在\texttt{.xdmf}文件本身，而是存储在一个
+(单个)单独的数据文件与后缀\texttt{.hdf5}是一个
+专为高性能计算设计的高级文件格式。
+我们创建XDMF文件如下:
+
+\begin{python}
+xdmffile_u = XDMFFile('navier_stokes_cylinder/velocity.xdmf')
+xdmffile_p = XDMFFile('navier_stokes_cylinder/pressure.xdmf')
+\end{python}
+在每个时间步骤中，我们可以存储速度和压力
+\begin{python}[language=Python,style=graycolor]
+xdmffile_u.write(u, t)
+xdmffile_p.write(p, t)
+\end{python}
+
+\index{TimeSeries@{\rm\texttt{TimeSeries}}}
+\index{HDF5 format}
+\index{XDMF format}
+\index{.hdf5@{\rm\texttt{.hdf5}} file}
+\index{.xdmf@{\rm\texttt{.xdmf}} file}
+
+我们还使用FEniCS \texttt{TimeSeries}存储解决方案。 这让我们
+存储解决方案不是为了可视化，而是为了稍后重用
+计算，我们将在下一节中看到。 使用\texttt{TimeSeries}
+从某些方面阅读解决方案是很容易和有效的
+模拟期间的时间。 \texttt{TimeSeries}类也使用HDF5
+用于高效存储和访问数据的文件格式。
+
+图~\ref{ftut1:fig:navier_stokes_cylinder:velocity}和~\ref{ftut1:fig:navier_stokes_cylinder:pressure}显示速度和
+最终时间的压力在ParaView中可视化。 对于可视化
+的速度，我们使用\textbf{Glyph}过滤器来可视化
+矢量速度场。 为了可视化的压力，我们有
+使用\textbf{Warp By Scalar}过滤器。
+
+%\begin{figure}[!ht]  % ftut1:fig:navier_stokes_cylinder:velocity
+%  \centerline{\includegraphics[width=0.95\linewidth]{fig/navier_stokes_cylinder_velocity.png}}
+%  \caption{
+%  Plot of the velocity for the cylinder test problem at final time. \label{ftut1:fig:navier_stokes_cylinder:velocity}
+%  }
+%\end{figure}
+
+%\begin{figure}[!ht]  % ftut1:fig:navier_stokes_cylinder:pressure
+%  \centerline{\includegraphics[width=0.95\linewidth]{fig/navier_stokes_cylinder_pressure.png}}
+%  \caption{
+%  Plot of the pressure for the cylinder test problem at final time. \label{ftut1:fig:navier_stokes_cylinder:pressure}
+%  }
+%\end{figure}
+
+气缸测试问题的完整代码看起来像
+如下:
+
+\begin{python}
+from fenics import *
+from mshr import *
+import numpy as np
+
+T = 5.0            # final time
+num_steps = 5000   # number of time steps
+dt = T / num_steps # time step size
+mu = 0.001         # dynamic viscosity
+rho = 1            # density
+
+# Create mesh
+channel = Rectangle(Point(0, 0), Point(2.2, 0.41))
+cylinder = Circle(Point(0.2, 0.2), 0.05)
+domain = channel - cylinder
+mesh = generate_mesh(domain, 64)
+
+# Define function spaces
+V = VectorFunctionSpace(mesh, 'P', 2)
+Q = FunctionSpace(mesh, 'P', 1)
+
+# Define boundaries
+inflow   = 'near(x[0], 0)'
+outflow  = 'near(x[0], 2.2)'
+walls    = 'near(x[1], 0) || near(x[1], 0.41)'
+cylinder = 'on_boundary && x[0]>0.1 && x[0]<0.3 && x[1]>0.1 && x[1]<0.3'
+
+# Define inflow profile
+inflow_profile = ('4.0*1.5*x[1]*(0.41 - x[1]) / pow(0.41, 2)', '0')
+
+# Define boundary conditions
+bcu_inflow = DirichletBC(V, Expression(inflow_profile, degree=2), inflow)
+bcu_walls = DirichletBC(V, Constant((0, 0)), walls)
+bcu_cylinder = DirichletBC(V, Constant((0, 0)), cylinder)
+bcp_outflow = DirichletBC(Q, Constant(0), outflow)
+bcu = [bcu_inflow, bcu_walls, bcu_cylinder]
+bcp = [bcp_outflow]
+
+# Define trial and test functions
+u = TrialFunction(V)
+v = TestFunction(V)
+p = TrialFunction(Q)
+q = TestFunction(Q)
+
+# Define functions for solutions at previous and current time steps
+u_n = Function(V)
+u_  = Function(V)
+p_n = Function(Q)
+p_  = Function(Q)
+
+# Define expressions used in variational forms
+U  = 0.5*(u_n + u)
+n  = FacetNormal(mesh)
+f  = Constant((0, 0))
+k  = Constant(dt)
+mu = Constant(mu)
+rho = Constant(rho)
+
+# Define symmetric gradient
+def epsilon(u):
+    return sym(nabla_grad(u))
+
+# Define stress tensor
+def sigma(u, p):
+    return 2*mu*epsilon(u) - p*Identity(len(u))
+
+# Define variational problem for step 1
+F1 = rho*dot((u - u_n) / k, v)*dx \
+   + rho*dot(dot(u_n, nabla_grad(u_n)), v)*dx \
+   + inner(sigma(U, p_n), epsilon(v))*dx \
+   + dot(p_n*n, v)*ds - dot(mu*nabla_grad(U)*n, v)*ds \
+   - dot(f, v)*dx
+a1 = lhs(F1)
+L1 = rhs(F1)
+
+# Define variational problem for step 2
+a2 = dot(nabla_grad(p), nabla_grad(q))*dx
+L2 = dot(nabla_grad(p_n), nabla_grad(q))*dx - (1/k)*div(u_)*q*dx
+
+# Define variational problem for step 3
+a3 = dot(u, v)*dx
+L3 = dot(u_, v)*dx - k*dot(nabla_grad(p_ - p_n), v)*dx
+
+# Assemble matrices
+A1 = assemble(a1)
+A2 = assemble(a2)
+A3 = assemble(a3)
+
+# Apply boundary conditions to matrices
+[bc.apply(A1) for bc in bcu]
+[bc.apply(A2) for bc in bcp]
+
+# Create XDMF files for visualization output
+xdmffile_u = XDMFFile('navier_stokes_cylinder/velocity.xdmf')
+xdmffile_p = XDMFFile('navier_stokes_cylinder/pressure.xdmf')
+
+# Create time series (for use in reaction_system.py)
+timeseries_u = TimeSeries('navier_stokes_cylinder/velocity_series')
+timeseries_p = TimeSeries('navier_stokes_cylinder/pressure_series')
+
+# Save mesh to file (for use in reaction_system.py)
+File('navier_stokes_cylinder/cylinder.xml.gz') << mesh
+
+# Create progress bar
+progress = Progress('Time-stepping')
+set_log_level(PROGRESS)
+
+# Time-stepping
+t = 0
+for n in range(num_steps):
+
+    # Update current time
+    t += dt
+
+    # Step 1: Tentative velocity step
+    b1 = assemble(L1)
+    [bc.apply(b1) for bc in bcu]
+    solve(A1, u_.vector(), b1, 'bicgstab', 'hypre_amg')
+
+    # Step 2: Pressure correction step
+    b2 = assemble(L2)
+    [bc.apply(b2) for bc in bcp]
+    solve(A2, p_.vector(), b2, 'bicgstab', 'hypre_amg')
+
+    # Step 3: Velocity correction step
+    b3 = assemble(L3)
+    solve(A3, u_.vector(), b3, 'cg', 'sor')
+
+    # Plot solution
+    plot(u_, title='Velocity')
+    plot(p_, title='Pressure')
+
+    # Save solution to file (XDMF/HDF5)
+    xdmffile_u.write(u_, t)
+    xdmffile_p.write(p_, t)
+
+    # Save nodal values to file
+    timeseries_u.store(u_.vector(), t)
+    timeseries_p.store(p_.vector(), t)
+
+    # Update previous solution
+    u_n.assign(u_)
+    p_n.assign(p_)
+
+    # Update progress bar
+    progress.update(t / T)
+    print('u max:', u_.vector().array().max())
+
+# Hold plot
+interactive()
+\end{python}
+该程序可以在文件\url{https://fenicsproject.org/pub/tutorial/python/vol1/ft08_navier_stokes_cylinder.py}{\nolinkurl{ft08_navier_stokes_cylinder.py}}中找到。
+应该告诉读者，这个例子程序很大
+比我们以前的例子在CPU时间和要求更高
+记忆，但应该可以合理地运行程序
+现代笔记本电脑。
+
+\index{ft08\_navier\_stokes\_cylinder.py@{\rm\texttt{ft08\_navier\_stokes\_cylinder.py}}}
+
+\section{平流--扩散--反应方程组}
+\label{ftut1:reactionsystem}
+
+\index{advection--diffusion--reaction}
+\index{chemical reactions}
+\index{reaction system}
+
+到目前为止我们遇到的问题 - 有显着的例外
+的Navier--Stokes方程 - 都有一个共同的特征:它们都是
+涉及由单个标量或向量PDE表达的模型。 在很多
+情况下，模型被表示为PDE系统，
+描述可能由(非常)不同的管理的不同数量
+物理。 正如我们所看到的Navier-Stokes方程式，一种解决方法
+FEniCS中的PDE系统是使用我们解决的分割方法
+一个方程，并将解从一个方程提供给
+下一个。 然而，FEniCS的优势之一是轻松
+哪一个可以代替几个相互联系的变分问题
+PDE成为一个复合系统。 在本节中，我们将介绍如何使用
+FEniCS为这种耦合PDE系统写出求解器。
+目标是展示实现完全隐含的容易程度，
+在FEniCS中也称为单片，求解器。
+
+\index{coupled systems}
+
+\subsection{PDE问题}
+
+我们的模型问题是以下系统
+平流--扩散--反应方程:
+
+\begin{align}
+  \label{ftut1:reactionsystem:system:1}
+  \frac{\partial u_1}{\partial t} +
+  w \cdot \nabla u_1 - \nabla\cdot(\epsilon\nabla u_1)
+    &= f_1 -K u_1 u_2, \\
+  \label{ftut1:reactionsystem:system:2}
+  \frac{\partial u_2}{\partial t} +
+  w \cdot \nabla u_2 - \nabla\cdot(\epsilon\nabla u_2)
+    &= f_2 -K u_1 u_2, \\
+  \label{ftut1:reactionsystem:system:3}
+  \frac{\partial u_3}{\partial t} +
+  w \cdot \nabla u_3 - \nabla\cdot(\epsilon\nabla u_3)
+    &= f_3 + K u_1 u_2 - K u_3.
+\end{align}
+
+该系统模拟两种物质之间的化学反应$A$和
+$B$在某些域$\Omega$:
+
+\[
+  A + B \rightarrow C.
+\]
+
+我们假设反应是\emph{first-order}，意思是
+反应速率与浓度$[A]$和$[B]$成正比
+两种物品$A$和$B$:
+
+\[
+  \frac{\mathrm{d}}{\mathrm{d}t} [C] = K [A] [B].
+\]
+我们还假设形成的物种$C$自发衰减
+速率与浓度成比例$[C]$。 在PDE系统中
+(\ref{ftut1:reactionsystem:system:1})--(\ref{ftut1:reactionsystem:system:3})，
+我们使用变量$u_1$，$u_2$和$u_3$来表示
+三种物种的浓度:
+
+\[
+  u_1 = [A], \quad u_2 = [B], \quad u_3 = [C].
+\]
+我们看到化学反应是在
+PDE系统的右侧(\ref{ftut1:reactionsystem:system:1})--(\ref{ftut1:reactionsystem:system:3})。
+
+化学反应参与域中的每个点
+$\Omega$。 此外，我们假设物种$A$，$B$和$C$
+在整个域扩散扩散性$\epsilon$(术语
+$-\nabla\cdot(\epsilon\nabla u_i)$)，并以速度平缓
+$w$(术语$w\cdot\nabla u_i$)。
+
+为了使事物的视觉和身体感兴趣，我们将让它
+化学反应发生在从中计算出的速度场
+解决不可压缩的Navier--Stokes方程
+圆柱体从上一节。 总而言之，我们将会是
+求解以下非线性PDE耦合系统:
+
+\begin{align}
+  \label{ftut1:reactionsystem:full}
+  \varrho\left(\frac{\partial w}{\partial t} +
+  w \cdot \nabla w\right) &= \nabla\cdot\sigma(w, p) + f, \\
+  \nabla \cdot w &= 0, \\
+  \frac{\partial u_1}{\partial t} +
+  w \cdot \nabla u_1 - \nabla\cdot(\epsilon\nabla u_1)
+    &= f_1 - K u_1 u_2, \\
+  \frac{\partial u_2}{\partial t} +
+  w \cdot \nabla u_2 - \nabla\cdot(\epsilon\nabla u_2)
+    &= f_2 - K u_1 u_2, \\
+  \frac{\partial u_3}{\partial t} +
+  w \cdot \nabla u_3 - \nabla\cdot(\epsilon\nabla u_3)
+    &= f_3 + K u_1 u_2 - K u_3.
+\end{align}
+我们假设$u_1 = u_2 = u_3 = 0$ at $t = 0$并注入物种
+$A$和$B$通过指定非零源术语$f_1$到系统中
+和$f_2$接近流入的角落，并取$f_3 = 0$。该
+结果将是$A$和$B$对流对流
+在整个渠道扩散，当他们混合物种$C$时
+将形成。
+
+由于系统是从Navier--Stokes子系统单向耦合的
+对于平流--扩散--反应子系统，我们不需要
+重新计算Navier--Stokes方程的解，但只能
+读回以前计算的速度场$w$并将其输入
+我们的方程式 但是我们需要学习如何读写
+时间依赖PDE问题的解决方案。
