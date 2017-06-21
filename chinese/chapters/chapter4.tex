@@ -486,3 +486,75 @@ kappa = K(materials, k_0, k_1, degree=0)
 \index{CompiledSubDomain@{\rm\texttt{CompiledSubDomain}}}
 
 \subsection{使用C ++代码片段来定义子域}
+
+\texttt{SubDomain}和\texttt{Expression} Python类非常方便，
+但是它们的使用导致每个节点从C++到Python的函数调用
+在网格中。 由于这涉及到巨大的成本，我们需要做出
+如果性能是一个问题，使用C ++代码。
+
+而不是在Python中编写\texttt{SubDomain}子类，我们可以改为使用
+在FEniCS中使用\texttt{CompiledSubDomain}工具来指定C++中的子域
+代码，从而加快我们的代码。 考虑
+类的定义\verb!Omega_0! 和\verb!Omega_1! 以上在Python。该
+定义这些子域的关键字符串可以用C++语法表示
+并作为参数给出\texttt{CompiledSubDomain}，如下所示:
+
+\begin{python}
+tol = 1E-14
+subdomain_0 = CompiledSubDomain('x[1] <= 0.5 + tol', tol=tol)
+subdomain_1 = CompiledSubDomain('x[1] >= 0.5 - tol', tol=tol)
+\end{python}
+如所见，可以使用关键字参数指定参数。
+产生的对象，\verb!subdomain_0! 和\verb!subdomain_1!，可以使用
+作为普通的\texttt{SubDomain}对象。
+
+可以应用编译的子域字符串来指定边界
+好:
+
+\begin{python}
+boundary_R = CompiledSubDomain('on_boundary && near(x[0], 1, tol)',
+                               tol=1E-14)
+\end{python}
+
+也可以提供C++字符串(不带参数)
+直接作为\texttt{DirichletBC}的第三个参数
+构造一个\texttt{CompiledSubDomain}对象:
+
+\begin{python}
+bc1 = DirichletBC(V, value, 'on_boundary && near(x[0], 1, tol)')
+\end{python}
+
+Python \texttt{Expression}类也可以使用C ++重新定义更多
+高效的代码。 再次考虑上面的class \texttt{K}的定义
+对于变量系数$\kappa = \kappa(x)$。 这可以使用a重新定义
+C++代码片段和关键字\texttt{cppcode}到常规FEniCS
+\texttt{Expression}类:
+
+\begin{python}
+cppcode = """
+class K : public Expression
+{
+public:
+
+  void eval(Array<double>& values,
+            const Array<double>& x,
+            const ufc::cell& cell) const
+  {
+    if ((*materials)[cell.index] == 0)
+      values[0] = k_0;
+    else
+      values[0] = k_1;
+  }
+
+  std::shared_ptr<MeshFunction<std::size_t>> materials;
+  double k_0;
+  double k_1;
+
+};
+"""
+
+kappa = Expression(cppcode=cppcode, degree=0)
+kappa.materials = materials
+kappa.k_0 = k_0
+kappa.k_1 = k_1
+\end{python}
