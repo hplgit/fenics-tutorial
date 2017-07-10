@@ -558,3 +558,595 @@ kappa.materials = materials
 kappa.k_0 = k_0
 kappa.k_1 = k_1
 \end{python}
+
+\section{设置多个Dirichlet，Neumann和Robin条件}
+\label{ch:poisson0:multi:bc}
+\index{Dirichlet boundary condition}
+\index{Neumann boundary condition}
+\index{Robin boundary condition}
+\index{boundary conditions}
+
+再次考虑可变系数Poisson问题
+从部分~\ref{ftut:possion:2D:2mat:impl}。 我们现在讨论一下
+如何实现边界条件的一般组合
+Dirichlet，Neumann和Robin类型的这个模型问题。
+
+\subsection{三种边界条件}
+
+我们将我们的边界条件扩展到三种类型:
+Dirichlet，Neumann和Robin。 Dirichlet条件适用于某些
+部分$\GD^0, \GD^1,\ldots$，的边界:
+
+\[ u = \ub^0\hbox{ on }\GD^0,\quad
+u = \ub^1\hbox{ on }\GD^1, \quad \ldots,\]
+其中$\ub^i$是规定的函数，$i=0,1, \ldots$。
+在其他部分，$\GN^0, \GN^1, \ldots$，我们有
+Neumann条件:
+
+\[ -\kappa{\partial u\over\partial n} = g_{0}\hbox{ on }\GN^0,\quad
+-\kappa{\partial u\over\partial n} = g_{1}\hbox{ on }\GN^1,\quad \ldots,
+\]
+最后，我们有\emph{Robin条件}:
+
+\begin{equation*}
+-\kappa{\partial u\over\partial n} = r(u-s),
+\label{ch:poisson0:multi:bc:Robin}
+\end{equation*}
+其中$r$和$s$是指定的函数。 Robin条件是
+最常用于将热量传递给周围环境并产生
+自然是从Newton的冷静法。 在这种情况下，$r$是一个热量
+传递系数，$s$是温度
+环境。 两者都可以是空间和时间依赖的。
+Robin条件适用
+在某些部分$\GR^0, \GR^1, \ldots$，的边界:
+
+\[ -\kappa{\partial u\over\partial n} = r_0(u-s_0)\hbox{ on }\GR^0,\quad
+-\kappa{\partial u\over\partial n} = r_1(u-s_1)\hbox{ on }\GR^1,\quad \ldots
+\]
+
+\subsection{PDE问题}
+
+用上面的符号，模型问题要用多个解决
+Dirichlet，Neumann和Robin条件可以表达如下:
+
+\begin{alignat}{2}
+-\nabla\cdot(\kappa\nabla u) &= f \quad&&\mbox{in } \Omega, \label{ch:poisson0:2D:DN3}\\
+u &= \ub^i &&\mbox{on } \GD^i,\quad i=0,1,\ldots
+\label{ch:poisson0:2D:DN3:bcD}\\
+-\kappa{\partial u\over\partial n} &= g_i &&\mbox{on } \GN^i,\quad
+i=0,1,\ldots
+\label{ch:poisson0:2D:DN3:bcN}\\
+-\kappa{\partial u\over\partial n} &= r_i(u-s_i) \quad&&\mbox{on } \GR^i,\quad
+i=0,1,\ldots
+\label{ch:poisson0:2D:DN3:bcR}
+\end{alignat}
+
+\subsection{变化公式}
+
+像往常一样，我们乘以一个测试函数$v$并按部分进行集成:
+
+\begin{equation*}
+ -\int_\Omega \nabla\cdot(\kappa\nabla u) v \dx
+= \int_\Omega \kappa\nabla u\cdot \nabla v \dx -
+\int_{\partial\Omega}\kappa\frac{\partial u}{\partial n}v \ds\tp
+\end{equation*}
+在边界的Dirichlet部分($\GD^i$)，边界积分
+$v = 0$以后消失。 在边界的剩余部分，我们
+将边界积分分解为Neumann部分的贡献
+($\GN^i$)和Robin部分($\GR^i$)。 插入边界条件，
+我们获得
+
+\begin{align*}
+-\int_{\partial\Omega} \kappa\frac{\partial u}{\partial n}v \ds
+&=
+-\sum_i\int_{\GN^i} \kappa\frac{\partial u}{\partial n} \ds
+-\sum_i\int_{\GR^i} \kappa\frac{\partial u}{\partial n} \ds\\
+&=
+\sum_i\int_{\GN^i}g_i \ds +
+\sum_i\int_{\GR^i}r_i(u-s_i) \ds\tp
+\end{align*}
+因此，我们得到以下变分问题:
+
+\begin{equation}
+F = \int_{\Omega} \kappa\nabla u\cdot \nabla v \dx +
+\sum_i\int_{\GN^i} g_iv \ds +
+\sum_i\int_{\GR^i}r_i(u-s_i)v \ds
+- \int_{\Omega} fv \dx =0\tp
+\label{ch:poisson0:multi:bc:varform}
+\end{equation}
+
+我们已经习惯了在这个写作中写出这种变异形式
+标准符号$a(u,v)= L(v)$，这要求我们识别所有
+积分取决于试验功能$u$，并收集这些
+$a(u,v)$，而剩余的积分则为$L(v)$。 积分
+由于Robin条件必须分为两部分:
+
+\begin{equation*}
+\int_{\GR^i}r_i(u-s_i)v \ds
+= \int_{\GR^i} r_iuv \ds - \int_{\GR^i}r_is_iv \ds\tp
+\end{equation*}
+我们有
+
+\begin{align}
+a(u, v) &= \int_{\Omega} \kappa\nabla u\cdot \nabla v \dx
++ \sum_i\int_{\GR^i}r_iuv \ds,
+\label{ch:poisson0:2D:DN3:var:a}\\
+L(v) &= \int_{\Omega} fv \dx -
+\sum_i\int_{\GN^i} g_i v \ds + \sum_i\int_{\GR^i}r_is_iv \ds\tp
+\label{ch:poisson0:2D:DN3:var:L}
+\end{align}
+或者，我们可以保留配方
+(\ref{ch:poisson0:multi:bc:varform})，并解决变分
+作为FEniCS中的非线性问题(\texttt{F == 0})或使用FEniCS
+函数\texttt{lhs}和\texttt{rhs}来提取双线性和线性部分
+\texttt{F}:
+
+\begin{python}
+a = lhs(F)
+L = rhs(F)
+\end{python}
+请注意，如果我们选择将该线性问题解决为非线性问题
+问题，Newton迭代将在单次迭代中收敛。
+
+\subsection{FEniCS实现}
+
+让我们来看看如何扩展我们的Poisson求解器来处理一般
+Dirichlet，Neumann和Robin边界条件的组合。
+与以前的代码相比，我们必须考虑以下几点
+扩展:
+
+\begin{itemize}
+  \item 定义边界不同部分的标记。
+
+  \item 使用标记将边界积分成部分。
+\end{itemize}
+
+\noindent
+第一个任务的一般方法是标记所需的每个
+标记0,1,2等的边界部分。 在这里我们瞄准了
+单位正方形的四边，标有0($x = 0$)，1($x = 1$)，2
+($y = 0$)和3($y = 1$)。 标记将使用a定义
+\texttt{MeshFunction}，但与第~\ref{ftut:possion:2D:2mat:impl}相反，这不是单元格的一个功能，而是
+一个超过网格面的功能。 我们使用\texttt{FacetFunction}
+这个目的:
+
+\begin{python}
+boundary_markers = FacetFunction('size_t', mesh)
+\end{python}
+如在~\ref{ftut:possion:2D:2mat:impl}中，我们使用一个子类
+\texttt{SubDomain}来标识网格的各个部分
+功能。 可能设置更复杂几何域的域的问题
+用于将边界标记为网格的一部分的网格功能
+代。 在我们的例子中，可以标记边界$x = 0$
+如下:
+
+\begin{python}
+class BoundaryX0(SubDomain):
+    tol = 1E-14
+    def inside(self, x, on_boundary):
+        return on_boundary and near(x[0], 0, tol)
+
+bx0 = BoundaryX0()
+bx0.mark(boundary_markers, 0)
+\end{python}
+类似地，我们创建类\texttt{BoundaryX1}($x = 1$)，\texttt{BoundaryY0}
+($y = 0$)和\texttt{BoundaryY1}($y = 1$)边界，并将其标记为
+子域1,2和3。
+
+为了实现的一般性，我们让用户指定
+什么样的边界条件适用于四个中的每一个
+边界。 为此，我们设置了一个Python字典
+键作为子域号，值作为字典指定
+关键的条件和作为其价值的功能。
+例如，
+
+\begin{python}
+boundary_conditions = {0: {'Dirichlet': u_D},
+                       1: {'Robin':     (r, s)},
+                       2: {'Neumann':   g},
+                       3: {'Neumann',   0}}
+\end{python}
+指定
+
+\begin{itemize}
+ \item 一个Dirichlet条件 $u = \ub$ 对于 $x = 0$;
+
+ \item 一个Robin条件 $-\kappa\partial_n u = r(u-s)$ 对于 $x = 1$;
+
+ \item 一个Neumann条件 $-\kappa\partial_n u = g$ 对于 $y = 0$;
+
+ \item 一个Neumann条件 $-\kappa\partial_n u = 0$ 对于 $y = 1$.
+\end{itemize}
+
+\noindent
+如在~\ref{ch:poisson0:multiple:Dirichlet}中所述的多个
+Dirichlet条件必须收集在\texttt{DirichletBC}的列表中
+对象。 基于\verb!boundary_conditions! 数据结构如上，我们
+可以通过以下代码片段构建此列表:
+
+\begin{python}
+bcs = []
+for i in boundary_conditions:
+    if 'Dirichlet' in boundary_conditions[i]:
+        bc = DirichletBC(V, boundary_conditions[i]['Dirichlet'],
+                         boundary_markers, i)
+        bcs.append(bc)
+\end{python}
+
+变分问题的一个新方面是两个不同的
+边界积分超过$\GN^i$和$\GR^i$。
+在外部细胞方面有一个网格功能(我们的
+\verb!boundary_markers! 对象)，子域(边界部分)
+编号为$0,1,2,\ldots$，特殊符号\texttt{ds(0)}
+意味着在子域(部分)0，\texttt{ds(1)}表示的集成
+整合子域(部分)1，依此类推。
+多个\texttt{ds}类型对象的想法概括为卷
+积分:\texttt{dx(0)}，\texttt{dx(1)}等，用于
+在$\Omega$内的子域0，1等集成。
+
+为了使用\texttt{ds(i)}在边界部分表达积分，我们必须
+首先根据边界标记重新定义度量\texttt{ds}:
+
+\begin{python}
+ds = Measure('ds', domain=mesh, subdomain_data=boundary_markers)
+\end{python}
+同样，如果我们想要在域的不同部分进行集成，
+我们将\texttt{dx}重新定义为
+
+\begin{python}
+dx = Measure('dx', domain=mesh, subdomain_data=domain_markers)
+\end{python}
+\verb!domain_markers! 是\texttt{CellFunction}定义$\Omega$中的子域名。
+
+假设我们在子域上具有值为\texttt{r}和\texttt{s}的Robin条件
+\texttt{R}，在子域\texttt{N}上的值为\texttt{g}的Neumann条件。该
+然后可以写出变化形式
+
+\begin{python}
+a = kappa*dot(grad(u), grad(v))*dx + r*u*v*ds(R)
+L = f*v*dx - g*v*ds(N) + r*s*v*ds(R)
+\end{python}
+
+在我们的情况下，事情变得复杂了一些
+关于Neumann和Robin条件的积分的信息
+在\verb!boundary_conditions! 数据结构。 我们可以收集
+所有Neumann条件由以下代码片段:
+
+\begin{python}
+integrals_N = []
+for i in boundary_conditions:
+    if 'Neumann' in boundary_conditions[i]:
+        if boundary_conditions[i]['Neumann'] != 0:
+            g = boundary_conditions[i]['Neumann']
+            integrals_N.append(g*v*ds(i))
+\end{python}
+应用\verb!sum(integrals_N)! 将\texttt{+}运算符应用到
+变体形式在\verb!integrals_N! 列表和结果
+在积分中，我们需要右边的\texttt{L}
+变化形式。
+
+Robin条件的积分可以同样收集
+列表中:
+
+\begin{python}
+integrals_R_a = []
+integrals_R_L = []
+for i in boundary_conditions:
+    if 'Robin' in boundary_conditions[i]:
+        r, s = boundary_conditions[i]['Robin']
+        integrals_R_a.append(r*u*v*ds(i))
+        integrals_R_L.append(r*s*v*ds(i))
+\end{python}
+
+我们现在可以定义\texttt{a}和\texttt{L}表达式
+在变分公式中:
+
+\begin{python}
+a = kappa*dot(grad(u), grad(v))*dx + sum(integrals_R_a)
+L = f*v*dx - sum(integrals_N) + sum(integrals_R_L)
+\end{python}
+
+\index{lhs@{\rm\texttt{lhs}}}
+\index{rhs@{\rm\texttt{rhs}}}
+
+或者，我们可以使用FEniCS函数\texttt{lhs}和\texttt{rhs}作为
+以简化Robin的术语提取
+积分:
+
+\begin{python}
+integrals_R = []
+for i in boundary_conditions:
+    if 'Robin' in boundary_conditions[i]:
+        r, s = boundary_conditions[i]['Robin']
+        integrals_R.append(r*(u - s)*v*ds(i))
+
+F = kappa*dot(grad(u), grad(v))*dx + \
+    sum(integrals_R) - f*v*dx + sum(integrals_N)
+a, L = lhs(F), rhs(F)
+\end{python}
+这一次，我们可以更自然地定义积分
+Robin条件为\texttt{r*(u - s)*v*ds(i)}。
+
+完整的代码可以在函数中找到
+\verb!solver_bcs! 在程序中
+\url{{https://fenicsproject.org/pub/tutorial/python/vol1/ft10_poisson_extended.py}}{\nolinkurl{ft10_poisson_extended.py}}。
+
+\index{ft10\_poisson\_extended.py@{\rm\texttt{ft10\_poisson\_extended.py}}}
+
+\subsection{测试问题}
+
+我们将使用相同的确切解决方案$\uex = 1 + x^2 + 2y^2$，如“~\ref{ch:fundamentals}”所示，因此需要$\kappa = 1$和$f = -6$。 我们的域名
+是单位平方，我们将Dirichlet条件分配给$x = 0$和
+$x = 1$，$y = 0$的Robin条件，以及Neumann条件
+$y =1$。 给定的确切解决方案$\uex$，我们意识到
+$y = 1$的Neumann条件是
+$-\partial u / \partial n = -\partial u /\partial y = 4y = 4$，
+而可以选择$y = 0$的Robin条件
+很多方法。 由于$-\partial u/\partial n=\partial u/\partial y = 0$ at
+$y = 0$，我们可以选择$s = \uex$并指定$r \neq 0$
+Robin条件。 我们将设置$r = 1000$和$s = \uex$。
+
+因此边界部分$\GD^0$: $x=0$, $\GD^1$: $x=1$,
+$\GR^0$: $y=0$, 和 $\GN^0$: $y=1$。
+
+在实施这个测试问题时，尤其是其他测试
+使用更复杂的表达式的问题，有利于使用
+符号计算。 下面我们将确切的解决方案定义为\texttt{sympy}
+表达并从他们的数学派生其他功能
+定义。 然后我们将这些表达式转换成C/C++代码，
+然后可以用来定义\texttt{Expression}对象。
+
+\begin{python}
+# Define manufactured solution in sympy and derive f, g, etc.
+import sympy as sym
+x, y = sym.symbols('x[0], x[1]')            # needed by UFL
+u = 1 + x**2 + 2*y**2                       # exact solution
+u_e = u                                     # exact solution
+u_00 = u.subs(x, 0)                         # restrict to x = 0
+u_01 = u.subs(x, 1)                         # restrict to x = 1
+f = -sym.diff(u, x, 2) - sym.diff(u, y, 2)  # -Laplace(u)
+f = sym.simplify(f)                         # simplify f
+g = -sym.diff(u, y).subs(y, 1)              # compute g = -du/dn
+r = 1000                                    # Robin data, arbitrary
+s = u                                       # Robin data, u = s
+
+# Collect variables
+variables = [u_e, u_00, u_01, f, g, r, s]
+
+# Turn into C/C++ code strings
+variables = [sym.printing.ccode(var) for var in variables]
+
+# Turn into FEniCS Expressions
+variables = [Expression(var, degree=2) for var in variables]
+
+# Extract variables
+u_e, u_00, u_01, f, g, r, s = variables
+
+# Define boundary conditions
+boundary_conditions = {0: {'Dirichlet': u_00},   # x = 0
+                       1: {'Dirichlet': u_01},   # x = 1
+                       2: {'Robin':     (r, s)}, # y = 0
+                       3: {'Neumann':   g}}      # y = 1
+\end{python}
+
+完整的代码可以在函数中找到
+\verb!demo_bcs! 在程序中
+\url{{https://fenicsproject.org/pub/tutorial/python/vol1/ft10_poisson_extended.py}}{\nolinkurl{ft10_poisson_extended.py}}。
+
+\subsection{调试边界条件}
+
+在执行许多问题时很容易犯错误
+不同类型的边界条件，如本案。 一
+调试边界条件的方法是遍历所有顶点
+协调并检查\texttt{SubDomain.inside}方法是否标记
+顶点在边界上。 另一个有用的方法是列出哪个
+受Dirichlet条件影响的自由度
+一级Lagrange($\mathsf{P} _1 $)元素，打印
+对应的顶点坐标如下图所示
+代码段:
+
+\begin{python}
+if debug1:
+
+    # Print all vertices that belong to the boundary parts
+    for x in mesh.coordinates():
+        if bx0.inside(x, True): print('%s is on x = 0' % x)
+        if bx1.inside(x, True): print('%s is on x = 1' % x)
+        if by0.inside(x, True): print('%s is on y = 0' % x)
+        if by1.inside(x, True): print('%s is on y = 1' % x)
+
+    # Print the Dirichlet conditions
+    print('Number of Dirichlet conditions:', len(bcs))
+    if V.ufl_element().degree() == 1:  # P1 elements
+        d2v = dof_to_vertex_map(V)
+        coor = mesh.coordinates()
+        for i, bc in enumerate(bcs):
+            print('Dirichlet condition %d' % i)
+            boundary_values = bc.get_boundary_values()
+            for dof in boundary_values:
+                print('   dof %2d: u = %g' % (dof, boundary_values[dof]))
+                if V.ufl_element().degree() == 1:
+                    print('    at point %s' %
+                          (str(tuple(coor[d2v[dof]].tolist()))))
+\end{python}
+
+\begin{notice}[调用\texttt{inside}方法]
+在上面的代码片段中，我们称之为每个的inside方法
+网格的坐标。 我们也可以打印输出
+\texttt{inside}方法。 那么这个方法就是令人惊讶的
+不仅要求与自由度相关的要点。
+对于$\mathsf{P}_1$元素，也为每个元素调用该方法
+细胞每一面的中点。 这是因为Dirichlet
+默认情况下，只有整个方面可以说是设置的
+在限定边界的条件下。
+\end{notice}
+
+\section{用子域生成网格}
+
+到目前为止，我们的工作主要是简单的网格(单位面积)和
+根据简单的几何测试定义边界和子域
+像$x = 0$或$y \leq 0.5$。 对于更复杂的几何，它不是
+以这种方式指定边界和子域的现实。 代替，
+边界和子域必须定义为网格的一部分
+生成过程。 现在我们来看一下如何使用FEniCS网格
+生成工具\texttt{mshr}以生成网格并定义子域。
+
+\subsection{PDE问题}
+
+\index{magnetostatics}
+\index{Maxwell's equations}
+
+我们将再次解决Poisson方程，但这次为a
+不同的应用。 考虑一个带铜线的铁缸
+如图~\ref{ftut1:fig:magnetostatics:geometry}围绕圆筒缠绕。 通过铜线a
+静态电流$J = 1\,\mathrm{A}$正在流动，我们要计算
+铁芯中的磁场$B$，铜线，和
+周围的真空。
+
+%\begin{figure}[!ht]  % ftut1:fig:magnetostatics:geometry
+%  \centerline{\includegraphics[width=0.5\linewidth]{fig/magnetostatics_geometry.pdf}}
+%  \caption{
+%  Cross-section of an iron cylinder with copper wires wound around the cylinder, here with $n = 8$ windings. The inner circles are cross-sections of the copper wire coming up (`\protect `north'') and the outer circles are cross-sections of the copper wire going down into the plane (``south''). \label{ftut1:fig:magnetostatics:geometry}
+%  }
+%\end{figure}
+
+首先，我们将问题简化为2D问题。 我们可以这样做
+假设圆柱体沿着$z$ -axis和a延伸很远
+后果是该领域几乎独立于
+$Z$ - 协调。 接下来，我们考虑Maxwell的方程式得出a
+磁场的Poisson方程(或其电位):
+
+\begin{align}
+  \nabla\cdot  D &= \varrho, \\
+  \nabla\cdot  B &= 0, \\
+  \nabla\times E &= -\frac{\partial B}{\partial t}, \\
+  \nabla\times H &= \frac{\partial D}{\partial t} + J.
+\end{align}
+这里，$D$是位移场，$B$是磁性的
+场，$E$是电场，$H$是磁场。 在
+除了Maxwell方程之外，我们还需要一个本构关系
+在$B$和$H$之间，
+
+\begin{equation}
+  B = \mu H,
+\end{equation}
+其适用于各向同性线性磁介质。 这里，$\mu$是
+材料的磁导率。 现在，因为$B$是螺线管的
+(不分散)根据Maxwell方程，我们知道$B$
+必须是一些矢量字段$A$的卷曲。 这个字段叫做
+磁矢量电位。 由于问题是静态的，因此
+$\partial D/\partial t = 0$，就是这样
+
+\begin{equation}
+  J = \nabla \times H
+    = \nabla \times (\mu^{-1} B)
+    = \nabla \times (\mu^{-1} \nabla \times A)
+    = -\nabla \cdot (\mu^{-1} \nabla A).
+\end{equation}
+在最后一步中，我们扩大了二次衍生品并使用了
+量纲自由$A$简化方程式简单
+磁矢量势的向量值Poisson问题; 如果
+$B = \nabla \times A$，然后$B = \nabla \times (A + \nabla \psi)$
+标量场$\psi$(量表功能)。 对于目前的问题，我们
+因此需要解决以下2D Poisson问题
+$z$-组件$A_z$的磁矢量电位:
+
+\begin{align}
+  - \nabla \cdot (\mu^{-1} \nabla A_z) &= J_z \quad \text{in } \Real^2, \\
+  \lim_{|(x, y)| \rightarrow \infty} A_z &= 0.
+\end{align}
+由于我们无法在无限的域上解决这个问题，所以我们会
+使用大型磁盘截断域，并设置$A_z = 0$
+边界。 当前的$J_z$设置为$+1\,\mathrm{A}$在内部
+一组圈(铜线横截面)和$-1\,\mathrm{A}$
+图中的外部圆圈~\ref{ftut1:fig:magnetostatics:geometry}。
+
+\index{infinite domain}
+
+一旦计算了磁矢量电位，我们就可以
+计算磁场$B = B(x,y)$
+
+\begin{align}
+  B(x, y) =
+  \left(\frac{\partial A_z}{\partial y},
+       -\frac{\partial A_z}{\partial x}\right).
+\end{align}
+
+\subsection{变化公式}
+
+变分问题是通过乘以PDE得到的
+具有$v$的测试函数，并以部件集成。 自边界
+由于Dirichlet条件，积分消失，我们得到
+
+\begin{equation}
+  \int_{\Omega} \mu^{-1} \nabla A_z \cdot \nabla v \dx
+  = \int_{\Omega} J_z v \dx,
+\end{equation}
+或者换句话说，$a(A_z,v) = L(v)$同
+
+\begin{align}
+  a(A_z, v) &= \int_{\Omega} \mu^{-1} \nabla A_z \cdot \nabla v \dx, \\
+  L(v) &= \int_{\Omega} J_z v \dx.
+\end{align}
+
+\subsection{FEniCS实现}
+
+第一步是为几何描述生成一个网格
+图~\ref{ftut1:fig:magnetostatics:geometry}。 我们让$a$和$b$成为
+铁缸的内外半径，让$c_1$和$c_2$
+是铜线的两个同心分布的半径
+交叉区域。 此外，我们让$r$是铜的半径
+线，$R$是我们域的半径，$n$是数
+绕组(总共$2n$铜线截面)。 这个
+几何可以很容易的用\texttt{mshr}和一点点描述
+Python编程:
+
+\index{mshr}
+\index{Circle@{\rm\texttt{Circle}}}
+\index{generate\_mesh@{\rm\texttt{generate\_mesh}}}
+\index{mesh generation}
+
+\begin{python}
+# Define geometry for background
+domain = Circle(Point(0, 0), R)
+
+# Define geometry for iron cylinder
+cylinder = Circle(Point(0, 0), b) - Circle(Point(0, 0), a)
+
+# Define geometry for wires (N = North (up), S = South (down))
+angles_N = [i*2*pi/n for i in range(n)]
+angles_S = [(i + 0.5)*2*pi/n for i in range(n)]
+wires_N = [Circle(Point(c_1*cos(v), c_1*sin(v)), r) for v in angles_N]
+wires_S = [Circle(Point(c_2*cos(v), c_2*sin(v)), r) for v in angles_S]
+\end{python}
+
+我们生成的网格将是整个磁盘的网格
+半径$R$，但我们需要网格生成来尊重内部
+由铁缸和铜线限定的边界。 我们也
+想要\texttt{mshr}标记子域，以便我们可以轻松指定
+材料参数($\mu$)和电流。 为此，我们使用
+\texttt{mshr}功能\verb!set_subdomain! 如下:
+
+\begin{python}
+# Set subdomain for iron cylinder
+domain.set_subdomain(1, cylinder)
+
+# Set subdomains for wires
+for (i, wire) in enumerate(wires_N):
+    domain.set_subdomain(2 + i, wire)
+for (i, wire) in enumerate(wires_S):
+    domain.set_subdomain(2 + n + i, wire)
+\end{python}
+一旦子域被创建，我们可以生成网格:
+
+\begin{python}
+mesh = generate_mesh(domain, 32)
+\end{python}
+网格的细节如图~\ref{ftut1:fig:magnetostatics:mesh}所示。
+
+%\begin{figure}[!ht]  % ftut1:fig:magnetostatics:mesh
+%  \centerline{\includegraphics[width=0.95\linewidth]{fig/magnetostatics_mesh.png}}
+%  \caption{
+%  Plot of (part of) the mesh generated for the magnetostatics test problem. The subdomains for the iron cylinder and copper wires are clearly visible \label{ftut1:fig:magnetostatics:mesh}
+%  }
+%\end{figure}
