@@ -1150,3 +1150,188 @@ mesh = generate_mesh(domain, 32)
 %  Plot of (part of) the mesh generated for the magnetostatics test problem. The subdomains for the iron cylinder and copper wires are clearly visible \label{ftut1:fig:magnetostatics:mesh}
 %  }
 %\end{figure}
+
+使用\texttt{mshr}生成的网格将包含有关的信息
+我们定义的子域。 在定义中使用这些信息
+我们的变分问题和子域依赖参数，我们将需要
+创建一个标记子域的\texttt{MeshFunction}。 这可以很容易
+通过调用成员函数\texttt{mesh.domains}创建的
+\texttt{mshr}生成的子域数据:
+
+\begin{python}
+markers = MeshFunction('size_t', mesh, 2, mesh.domains())
+\end{python}
+该行用无符号整数值创建一个\texttt{MeshFunction}
+子域号，其尺寸为2，其为单元格维度
+这个2D问题。
+
+我们现在可以像以前那样使用标记来重新定义
+整合度量\texttt{dx}:
+
+\index{Measure@{\rm\texttt{Measure}}}
+
+\begin{python}
+dx = Measure('dx', domain=mesh, subdomain_data=markers)
+\end{python}
+然后可以通过\texttt{dx(0)}，\texttt{dx(1)}来表示子域上的积分，
+等等。 我们用它来定义当前的$J_z = \pm 1\,\mathrm{A}$
+在铜线上:
+
+\begin{python}
+J_N = Constant(1.0)
+J_S = Constant(-1.0)
+A_z = TrialFunction(V)
+v = TestFunction(V)
+a = (1 / mu)*dot(grad(A_z), grad(v))*dx
+L_N = sum(J_N*v*dx(i) for i in range(2, 2 + n))
+L_S = sum(J_S*v*dx(i) for i in range(2 + n, 2 + 2*n))
+L = L_N + L_S
+\end{python}
+
+Permeability被定义为取决于该文件的\texttt{Expression}
+子域号:
+\begin{python}
+class Permeability(Expression):
+    def __init__(self, mesh, **kwargs):
+        self.markers = markers
+    def eval_cell(self, values, x, ufc_cell):
+        if markers[ufc_cell.index] == 0:
+            values[0] = 4*pi*1e-7 # vacuum
+        elif markers[ufc_cell.index] == 1:
+            values[0] = 1e-5      # iron (should really be 2.5e-1)
+        else:
+            values[0] = -6.4e-6   # copper (yes, it's negative!)
+
+mu = Permeability(mesh, degree=1)
+\end{python}
+从这段代码片段可以看出，我们使用的是一个稍微不那么的极端
+铁的磁导率值。 这是做的
+解决方案有点有趣。 否则将是完全的
+以铁缸为主。
+
+最后，当计算$A_z$时，我们可以计算磁性
+领域:
+
+\begin{python}
+W = VectorFunctionSpace(mesh, 'P', 1)
+B = project(as_vector((A_z.dx(1), -A_z.dx(0))), W)
+\end{python}
+我们使用\verb!as_vector! 解释
+\verb!(A_z.dx(1),-A_z.dx(0))! 作为UFL意义上的向量
+形式语言，而不是Python元组。 所得的地块
+磁矢量电位和磁场如图~\ref{ftut1:fig:magnetostatics:potential}
+和~\ref{ftut1:fig:magnetostatics:field}所示。
+
+%\begin{figure}[!ht]  % ftut1:fig:magnetostatics:potential
+%  \centerline{\includegraphics[width=0.95\linewidth]{fig/magnetostatics_potential.png}}
+%  \caption{
+%  Plot of the $z$-component $A_z$ of the magnetic vector potential. \label{ftut1:fig:magnetostatics:potential}
+%  }
+%\end{figure}
+
+%\begin{figure}[!ht]  % ftut1:fig:magnetostatics:field
+%  \centerline{\includegraphics[width=0.75\linewidth]{fig/magnetostatics_field.png}}
+%  \caption{
+%  Plot of the magnetic field $B$ in the $xy$-plane. \label{ftut1:fig:magnetostatics:field}
+%  }
+%\end{figure}
+
+计算磁场的完整代码如下。
+
+\begin{python}
+from fenics import *
+from mshr import *
+from math import sin, cos, pi
+
+a = 1.0   # inner radius of iron cylinder
+b = 1.2   # outer radius of iron cylinder
+c_1 = 0.8 # radius for inner circle of copper wires
+c_2 = 1.4 # radius for outer circle of copper wires
+r = 0.1   # radius of copper wires
+R = 5.0   # radius of domain
+n = 10    # number of windings
+
+# Define geometry for background
+domain = Circle(Point(0, 0), R)
+
+# Define geometry for iron cylinder
+cylinder = Circle(Point(0, 0), b) - Circle(Point(0, 0), a)
+
+# Define geometry for wires (N = North (up), S = South (down))
+angles_N = [i*2*pi/n for i in range(n)]
+angles_S = [(i + 0.5)*2*pi/n for i in range(n)]
+wires_N = [Circle(Point(c_1*cos(v), c_1*sin(v)), r) for v in angles_N]
+wires_S = [Circle(Point(c_2*cos(v), c_2*sin(v)), r) for v in angles_S]
+
+# Set subdomain for iron cylinder
+domain.set_subdomain(1, cylinder)
+
+# Set subdomains for wires
+for (i, wire) in enumerate(wires_N):
+    domain.set_subdomain(2 + i, wire)
+for (i, wire) in enumerate(wires_S):
+    domain.set_subdomain(2 + n + i, wire)
+
+# Create mesh
+mesh = generate_mesh(domain, 32)
+
+# Define function space
+V = FunctionSpace(mesh, 'P', 1)
+
+# Define boundary condition
+bc = DirichletBC(V, Constant(0), 'on_boundary')
+
+# Define subdomain markers and integration measure
+markers = MeshFunction('size_t', mesh, 2, mesh.domains())
+dx = Measure('dx', domain=mesh, subdomain_data=markers)
+
+# Define current densities
+J_N = Constant(1.0)
+J_S = Constant(-1.0)
+
+# Define magnetic permeability
+class Permeability(Expression):
+    def __init__(self, mesh, **kwargs):
+        self.markers = markers
+    def eval_cell(self, values, x, cell):
+        if markers[cell.index] == 0:
+            values[0] = 4*pi*1e-7 # vacuum
+        elif markers[cell.index] == 1:
+            values[0] = 1e-5      # iron (should really be 2.5e-1)
+        else:
+            values[0] = -6.4e-6   # copper (yes, it's negative!)
+
+mu = Permeability(mesh, degree=1)
+
+# Define variational problem
+A_z = TrialFunction(V)
+v = TestFunction(V)
+a = (1 / mu)*dot(grad(A_z), grad(v))*dx
+L_N = sum(J_N*v*dx(i) for i in range(2, 2 + n))
+L_S = sum(J_S*v*dx(i) for i in range(2 + n, 2 + 2*n))
+L = L_N + L_S
+
+# Solve variational problem
+A_z = Function(V)
+solve(a == L, A_z, bc)
+
+# Compute magnetic field (B = curl A)
+W = VectorFunctionSpace(mesh, 'P', 1)
+B = project(as_vector((A_z.dx(1), -A_z.dx(0))), W)
+
+# Plot solution
+plot(A_z)
+plot(B)
+
+# Save solution to file
+vtkfile_A_z = File('magnetostatics/potential.pvd')
+vtkfile_B = File('magnetostatics/field.pvd')
+vtkfile_A_z << A_z
+vtkfile_B << B
+
+# Hold plot
+interactive()
+\end{python}
+该示例程序可以在文件中找到\url{{https://fenicsproject.org/pub/tutorial/python/vol1/ft11_magnetostatics.py}}{\nolinkurl{ft11_magnetostatics.py}}。
+
+\index{ft11\_magnetostatics.py@{\rm\texttt{ft11\_magnetostatics.py}}}
