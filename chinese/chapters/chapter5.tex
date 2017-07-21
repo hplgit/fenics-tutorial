@@ -981,3 +981,106 @@ for cell in cells(mesh):
     print(element.tabulate_dof_coordinates(cell))
     print(dofmap.cell_dofs(cell.index()))
 \end{python}
+
+\subsection{设定自由度}
+
+我们已经看到了如何在\texttt{numpy}数组中提取节点值。
+如果需要，我们也可以调整节点值。 说我们想要
+规范化解决方案，使$\max_j |U_j| = 1$。 然后我们
+必须划分所有$U_j$值
+由$\max_j |U_j|$。 以下功能执行任务:
+
+\begin{python}
+def normalize_solution(u):
+    "Normalize u: return u divided by max(u)"
+    u_array = u.vector().array()
+    u_max = np.max(np.abs(u_array))
+    u_array /= u_max
+    u.vector()[:] = u_array
+    #u.vector().set_local(u_array)  # alternative
+    return u
+\end{python}
+当使用Lagrange元素时，这个(大约)确保了
+函数$u$的最大值为$1$。
+
+\texttt{/ =}运算符意味着
+在左边的对象的就地修改：全部
+数组元素\verb!nodal_values! 按值\verb!u_max!划分。
+或者，我们可以做\verb!nodal_values = nodal_values / u_max!,其中
+意味着在右边创建一个新的数组并分配这个
+数组命名为\verb!nodal_values!。
+
+\begin{notice}[操纵自由度时要小心]
+一个像\texttt{u.vector()。array()}的调用返回一个数据的副本
+\texttt{u.vector()}。 因此，必须永远不要执行任务
+\texttt{u.vector.array()[:] = ...}，而是提取\texttt{numpy}数组
+(即复制)，操作它，并用\texttt{u.vector()[:] = }插入，
+或使用\verb!u.set_local(...)!。
+\end{notice}
+
+\subsection{功能评估}
+
+\index{function evaluation}
+
+FEniCS \texttt{Function}对象在内部是唯一定义的
+的有限元网格的每个单元格。 对于连续(Lagrange)
+函数空间，函数值也是唯一定义的
+细胞界限 可以简单地对\texttt{Function}对象\texttt{u}进行评估
+调用
+
+\begin{python}
+u(x)
+\end{python}
+\texttt{x}是\texttt{Point}或正确空间的Python元组
+尺寸。 当\texttt{Function}被评估时，FEniCS必须首先查找
+包含给定点（如果有）的网格的单元格，以及
+然后评估给定的基函数的线性组合
+指向有问题的单元格内。 FEniCS使用高效数据
+结构（边界框树）快速找到点，但是
+建造树是一个相对昂贵的操作，所以成本
+在单点评估\texttt{Function}是很昂贵的。 重复
+评估将重用计算的数据结构，从而
+相对较便宜。
+
+\begin{notice}[廉价vs昂贵的功能评估]
+一个\texttt{Function}对象
+\texttt{u}可以以各种方式进行评估:
+
+\begin{enumerate}
+\item \texttt{u(x)}为任意点\texttt{x}
+
+\item \texttt{u.vector().array()[i]}自由度数\texttt{i}
+
+\item \verb!u.compute_vertex_values()[i]! 在顶点编号\texttt{i}
+\end{enumerate}
+
+\noindent
+第一种方法虽然非常灵活，但通常是昂贵的
+而另外两个是非常有效的(但限于某些点)。
+\end{notice} 
+
+为了演示使用\texttt{Function}对象的点评估，我们
+打印计算有限元解的值\texttt{u}
+Poisson问题在域的中心点，并与之进行比较
+确切的解决方案:
+
+\begin{python}
+center = (0.5, 0.5)
+error = u_D(center) - u(center)
+print('Error at %s: %g' % (center, error))
+\end{python}
+一个$2\times(3\times 3)$
+网格，输出
+以前的片段变成了
+
+\begin{python}
+Error at (0.5, 0.5): -0.0833333
+\end{python}
+差异是由于中心点不是节点
+在这个特定的网格中，而是细胞内部的一个点
+\texttt{u}在\verb!u_D!的细胞上线性变化！ 是一个二次方
+功能。 当中心点是一个节点时，如$2\times(2\times
+2)$或$2\times(4\times 4)$
+网格，错误是顺序的
+$10 ^{ - 15}$。
+
