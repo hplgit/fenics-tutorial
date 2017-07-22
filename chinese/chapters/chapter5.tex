@@ -1084,3 +1084,178 @@ Error at (0.5, 0.5): -0.0833333
 网格，错误是顺序的
 $10 ^{ - 15}$。
 
+\section{后处理计算}
+\label{ftut:possion:2D:varcoeff}
+
+\index{postprocessing}
+\index{ft10\_poisson\_extended.py@{\rm\texttt{ft10\_poisson\_extended.py}}}
+
+作为本章的最后一个主题，我们将看看如何
+后处理计算; 那就是如何计算各种派生的
+来自PDE的计算溶液的量。 解决方案$u$
+本身可能是可视化的一般特征的兴趣
+解决方案，但有时一个人对计算解决方案感兴趣
+用于计算从解决方案中导出的特定数量的PDE，
+例如，通量，点值或某些平均值
+解。
+
+\subsection{测试问题}
+
+作为测试问题，我们再次考虑可变系数Poisson
+单个Dirichlet边界条件的问题:
+
+\begin{alignat}{2}
+    - \nabla\cdot(\kappa\nabla u) &= f \quad &&\mbox{in } \Omega,
+\label{ch:poisson0:2D:varcoeff} \\
+    u &= \ub \quad &&\mbox{on}\  \partial\Omega\tp
+\end{alignat}
+让我们继续使用我们最喜欢的解决方案$u(x,y)=1+x^2+2y^2$和
+然后开出$\kappa(x,y)=x+y$。 它遵循
+$\ub(x,y)=1+x^2+2y^2$和$f(x,y)=-8x-10y$。
+
+像以前一样，这个模型问题的变分公式
+可以在FEniCS中指定为
+
+\begin{python}
+a = kappa*dot(grad(u), grad(v))*dx
+L = f*v*dx
+\end{python}
+系数为$\kappa$，右边为$f$
+
+\begin{python}
+kappa = Expression('x[0] + x[1]', degree=1)
+f = Expression('-8*x[0] - 10*x[1]', degree=1)
+\end{python}
+
+\subsection{通量计算}
+\label{ch:poisson0:gradu}
+
+计算通量$Q=-\kappa\nabla u$通常是有意义的。
+由于$u=\sum_{j=1}^N U_j \phi_j$，因此
+
+\begin{equation*}
+Q = -\kappa\sum_{j=1}^N U_j \nabla \phi_j\tp
+\end{equation*}
+我们注意到分段连续有限元标量的梯度
+因为基函数是一个不连续的矢量场
+$\{\phi_j\}$在边界处有不连续的派生词
+细胞。 例如，使用1级的Lagrange元素，$u$是线性的
+在每个细胞上，梯度变成分段
+恒定矢量场。 相反，确切的梯度是
+连续。 为了可视化和数据分析的目的，我们经常
+希望计算的梯度是一个连续的矢量场。通常情况下，
+我们想要$\nabla u$的每个组件
+以相同的方式表示
+作为$u$本身。 为此，我们可以投影组件
+$\nabla u$与我们用于$u$的功能空间相同。 这意味着
+我们解决$w=\nabla u$
+大约通过有限元法，
+对于$w$的组件使用相同的元素，就像我们所使用的那样
+$u$。 这个过程称为\emph{projection}。
+
+\index{project@{\rm\texttt{project}}}
+
+Projection是有限元分析中的常用操作，
+我们已经看过，FEniCS
+具有轻松执行projection的功能：
+\texttt{project(expression, W)}，它返回一些projection
+表达进空格\texttt{W}。
+
+在我们的情况下，通量$Q=-\kappa\nabla u$
+是向量值的，我们需要选择\texttt{W}作为向量值函数
+与\texttt{u}所在的空格\texttt{V}相同程度的空间:
+
+\begin{python}
+V = u.function_space()
+mesh = V.mesh()
+degree = V.ufl_element().degree()
+W = VectorFunctionSpace(mesh, 'P', degree)
+
+grad_u = project(grad(u), W)
+flux_u = project(-k*grad(u), W)
+\end{python}
+
+投影的应用很多，包括不连续的转动
+梯度场变为连续的，比较高阶和低阶
+函数近似，并转换高阶有限元
+解决了一个分段线性场，这是许多需要的
+可视化包。
+
+绘制通量矢量场自然就像绘图一样简单
+还要别的吗:
+
+\begin{python}
+plot(flux_u, title='flux field')
+
+flux_x, flux_y = flux_u.split(deepcopy=True)  # extract components
+plot(flux_x, title='x-component of flux (-kappa*grad(u))')
+plot(flux_y, title='y-component of flux (-kappa*grad(u))')
+\end{python}
+\texttt{deepcopy=True}参数表示\emph{deep copy}，它是
+计算机科学的一般术语意味着数据的副本是
+回。 (相反的，\texttt{deepcopy=False}，
+意思是\emph{shallow copy}，其中
+返回的对象只是指向原始数据的指针。)
+
+\index{degrees of freedom}
+\index{nodal values}
+
+对于通量场的节点值的数据分析，我们可以
+抓取底层的\texttt{numpy}数组(需要一个\texttt{deepcopy=True}
+在\texttt{flux}的分割中):
+
+\begin{python}
+flux_x_nodal_values = flux_x.vector().dofs()
+flux_y_nodal_values = flux_y.vector().dofs()
+\end{python}
+自由度\verb!flux_u! 矢量场也可以
+达到了
+
+\begin{python}
+flux_u_nodal_values = flux_u.vector().array()
+\end{python}
+但是，这是一个包含度数的\texttt{numpy}数组
+自由的$x$和$y$组件的通量和
+FEniCS可以将组件的顺序混合起来
+提高计算效率。
+
+功能\verb!demo_flux! 在程序中
+\url{https://fenicsproject.org/pub/tutorial/python/vol1/ft10_poisson_extended.py} {\nolinkurl{ft10_poisson_extended.py}}
+演示了上述计算。
+
+\begin{notice}[手动投影。]
+虽然您将始终使用\texttt{project}来投影有限元素
+功能，看看如何制定它可以是有启发性的
+在数学上投影并在FEniCS中手动执行其步骤。
+
+假设我们有一个表达式$g = g(u)$，我们想要项目
+进入一些空间$W$。 ($L^2$)的数学公式
+投影$w = P_W g$成$W$是变分问题
+
+\begin{equation}
+  \int_{\Omega} w v \dx = \int_{\Omega} g v \dx
+\end{equation}
+对于所有测试函数$v\in W$。 换句话说，我们有一个
+标准变量问题$a(w, v) = L(v)$现在
+
+\begin{align}
+a(w, v) &= \int_\Omega w v \dx,\\
+L(v) &= \int_\Omega g v \dx\tp
+\end{align}
+注意，当$W$中的函数是向量值的时候，就像这样
+当我们投影渐变$g(u) = \nabla u$时，我们必须替换
+以上产品由$w\cdot v$和$g\cdot v$。
+
+变异问题在FEniCS中很容易定义。
+\begin{python}
+w = TrialFunction(W)
+v = TestFunction(W)
+
+a = w*v*dx  # or dot(w, v)*dx when w is vector-valued
+L = g*v*dx  # or dot(g, v)*dx when g is vector-valued
+w = Function(W)
+solve(a == L, w)
+\end{python}
+\ texttt {solve}的边界条件参数被丢弃
+这个问题没有必要的边界条件。
+\end{notice}
