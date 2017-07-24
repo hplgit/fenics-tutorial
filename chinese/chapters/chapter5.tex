@@ -1259,3 +1259,183 @@ solve(a == L, w)
 \ texttt {solve}的边界条件参数被丢弃
 这个问题没有必要的边界条件。
 \end{notice}
+
+\subsection{计算功能}
+\label{ch:poisson0:functionals}
+\index{functionals}
+
+在计算了PDE的解决方案$u$之后，我们偶尔想要计算
+$u$的功能，例如，
+
+\begin{equation}
+{1\over2}||\nabla u||^2 = {1\over2}\int_\Omega \nabla u\cdot \nabla u \dx,
+\label{ch:poisson0:functionals:energy}
+\end{equation}
+这通常反映了一些能量。
+另一个经常出现的功能是错误
+
+\begin{equation}
+||\uex-u|| = \left(\int_\Omega (\uex-u)^2 \dx\right)^{1/2},
+\label{ch:poisson0:functionals:error}
+\end{equation}
+其中$\uex$是确切的解决方案。 这个错误是特别的
+研究有限元收敛性时的兴趣
+方法。 其他时候，我们可能会对计算感兴趣
+通过一部分流出
+$\Gamma$的边界$\partial\Omega$，
+
+\begin{equation}
+F = -\int_\Gamma \kappa\nabla u\cdot n \ds,
+\label{ch:poisson0:functionals:flux}
+\end{equation}
+其中$n$是$\Gamma$上的向外指向单元。
+
+所有这些功能都很容易用FEniCS进行计算，我们将看到
+在下面的例子中。
+
+\index{energy functional}
+
+\paragraph{能量功能。}
+能量函数的被积函数
+(\ref{ch:poisson0:functionals:energy})在UFL中描述
+语言与我们描述的形式相同:
+
+\begin{python}
+energy = 0.5*dot(grad(u), grad(u))*dx
+E = assemble(energy)
+\end{python}
+通过调用\texttt{assemble}来评估函数\texttt{energy}
+我们以前用来组装矩阵的函数
+向量。 FEniCS将会认识到该表单具有“0级”(因为它)
+不包含试用和测试功能），并返回结果
+标量值。
+
+\index{error functional}
+
+\paragraph{错误功能。}
+功能(\ref{ch:poisson0:functionals:error})可以
+计算如下:
+
+\begin{python}
+error = (u_e - u)**2*dx
+E = sqrt(abs(assemble(error)))
+\end{python}
+确切的解决方案$\uex$在这里由\texttt{Function}或
+\texttt{Expression}对象
+\verb!u_e!,而\texttt{u}是有限元
+近似(因此也是一个\texttt{Function})。 有时，非常小
+错误值，\texttt{assemble(error)}的结果可以是(非常小的)
+负数，所以我们在\texttt{E}的表达式中使用了\texttt{abs}
+以确保\texttt{sqrt}函数的正值。
+
+\index{errornorm@{\rm\texttt{errornorm}}}
+
+正如在~\ref{ch:poisson0:convrates}部分中所解释和演示的，\verb!(u_e - u)**2*dx!可能导致太乐观的收敛速度，除非有一个小心点
+差异\verb!u_e - u! 被评估。 一般建议
+为了可靠的错误计算是使用\texttt{errornorm}函数:
+
+\begin{python}
+E = errornorm(u_e, u)
+\end{python}
+
+\index{flux functional}
+
+\paragraph{助焊剂功能。}
+计算通量积分，如$F = -\int_\Gamma \kappa\nabla
+u\cdot n \ds$，我们需要定义$n$
+向量，在FEniCS中称为\emph{facet normal}。 如果是表面域
+$\Gamma$中的通量积分是完整的边界，我们可以执行
+通量计算
+
+\begin{python}
+n = FacetNormal(mesh)
+flux = -k*dot(grad(u), n)*ds
+total_flux = assemble(flux)
+\end{python}
+虽然\texttt{grad(u)}和\verb!nabla_grad(u)! 在上述可互换
+当\texttt{u}是一个标量函数时，我们选择写入
+\texttt{grad(u)}，因为如果我们概括一下，这是正确的表达式
+向量PDE的基本方程。 用\verb!nabla_grad(u)! 我们
+在这种情况下必须写\verb!dot(n，nabla_grad(u))!
+
+可以将整合限制到边界的一部分
+通过使用网格函数来标记相关部分，如下所述
+第~\ref{ch:poisson0:multi:bc}。 假设该部分对应
+到子域号\texttt{i}，变体的相关语法
+通量的公式为\texttt{-k*dot(grad(u), n)*ds(i)}。
+
+
+\begin{notice}[关于整合准确性的说明]
+如前所述，FEniCS \texttt{Expressions}必须使用定义
+一个特殊的程度 该学位告诉FEniCS到哪个地方
+有限元空间的表达式应该是内插的
+执行本地计算（集成）。 作为说明，
+考虑积分的计算$\int_0^1 \cos x \dx = \sin
+1$。 这可以在FEniCS中计算
+\begin{python}
+mesh = UnitIntervalMesh(1)
+I = assemble(Expression('cos(x[0])', degree=degree)*dx(domain=mesh))
+\end{python}
+请注意，我们必须在这里指定参数\texttt{domain = mesh}
+测量\texttt{dx}。 在定义表单时通常不是必需的
+在FEniCS中，但是由于\texttt{cos(x[0])}未关联，所以必需
+与任何域（如我们集成\texttt{Function}
+来自某些\texttt{Mesh}上定义的\texttt{FunctionSpace}）。
+
+0和5之间的变化值，$|\sin(1) - I|$的值
+\texttt{0.036},
+\texttt{0.071},
+\texttt{0.00030},
+\texttt{0.00013},
+\texttt{4.5E-07}, and
+\texttt{2.5E-07}.
+
+FEniCS还允许表达式直接表达为一部分
+表单。 这需要创建一个\texttt{SpatialCoordinate}。
+在这种情况下，精度由准确度决定
+集成，可以由\texttt{degree}参数控制
+整合度量\texttt{dx}。 \texttt{degree}参数指定
+对于该程度的多项式，积分应该是精确的。
+
+以下代码片段显示
+如何使用这种方法计算积分$\int_0^1 \cos x \dx$:
+\begin{python}
+mesh = UnitIntervalMesh(1)
+x = SpatialCoordinate(mesh)
+I = assemble(cos(x[0])*dx(degree=degree))
+\end{python}
+0和5之间的变化值，$|\sin(1) - I|$的值
+\texttt{0.036},
+\texttt{0.036},
+\texttt{0.00020},
+\texttt{0.00020},
+\texttt{4.3E-07},
+\texttt{4.3E-07}.
+请注意，正交程度仅适用于
+奇数，以便$0$的程度将使用相同的正交
+规则为$1$，
+学位$2$将给出相同的正交规则为度$3$等等。
+\end{notice}
+
+\subsection{计算收敛速度}
+\label{ch:poisson0:convrates}
+
+\index{convergence rate}
+
+任何数值方法的核心问题是它的\emph{convergence rate}:
+当分辨率为零时，误差逼近为零
+增加？ 对于有限元方法，这通常对应于
+从理论上或经验证明，错误$e = \uex - u$
+被网格大小$h$限制到某些权力$r$; 也就是$\|e\|
+\leq C h^r$为一些常数$C$。 数字$r$被称为
+\emph{convergence rate}的方法。 注意不同的规范，像
+$L^2$-规范$\|e\|$或$H^1_0$-标准$\|\nabla e\|$通常有
+收敛速度不同。
+
+为了说明如何在FEniCS中计算误差和收敛速度，
+我们已经包含了函数\verb!compute_convergence_rates! 在里面
+教程课程
+\url{https://fenicsproject.org/pub/tutorial/python/vol1/ft10_poisson_extended.py}{\nolinkurl{ft10_poisson_extended.py}}。
+这是一种在验证有限元代码时非常方便的工具
+因此将在此详细解释。
+
