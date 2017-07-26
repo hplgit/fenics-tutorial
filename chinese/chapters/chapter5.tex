@@ -1439,3 +1439,368 @@ $L^2$-规范$\|e\|$或$H^1_0$-标准$\|\nabla e\|$通常有
 这是一种在验证有限元代码时非常方便的工具
 因此将在此详细解释。
 
+\paragraph{计算错误规范。}
+\index{error}
+\index{norm}
+
+正如我们已经看到的，$L^2$-错误的规范$\uex - u$
+能够在FEniCS中实施
+
+\begin{python}
+error = (u_e - u)**2*dx
+E = sqrt(abs(assemble(error)))
+\end{python}
+如上所述，我们在\texttt{E}的表达式中使用了\texttt{abs}来确保
+\texttt{sqrt}函数的正值。
+
+了解FEniCS计算错误是非常重要的
+上面的代码，因为我们可能会在使用时遇到微妙的问题
+计算收敛速度的价值。 第一个微妙的问题是
+如果\verb!u_e! 不是一个有限元素的函数(一个创建的对象)
+使用\texttt{Function(V)}），如果\verb!u_e! 被定义为
+\texttt{Expression}，FEniCS必须插入\verb!u_e! 变成一些局部有限的
+网格的每个元素上的元素空间。 用于的程度
+插值是由强制关键字参数决定的
+\texttt{Expression}类，例如:
+
+\begin{python}
+u_e = Expression('sin(x[0])', degree=1)
+\end{python}
+这意味着计算出的误差将不等于实际值
+错误$\|\uex - u\|$而是有限的差异
+元素解决方案$u$和分段线性插值
+$\uex$。 这可能会产生太乐观(太小)的价值
+错误。 通过内插精确度可以获得更好的价值
+解决方案进入高阶函数空间，这可以通过
+简单地增加学位:
+
+\begin{python}
+u_e = Expression('sin(x[0])', degree=3)
+\end{python}
+
+第二个微妙的问题是当FEniCS评估表达式时
+\verb!(u_e - u)** 2!,这将被扩展为\verb!u_e**2 + u**2 - 2*u_e*u! 如果错误很小(解决方案本身就是
+中等大小)，这个计算将对应于减法
+两个正数(\verb!u_e**2 + u**2! $\sim 1$ and \verb!2*u_e*u! $\sim
+1$)产生少量。 这样的计算很容易
+四舍五入的错误，这可能再次导致不可靠的价值
+错误。 为了使这种情况更糟，FEniCS可能会扩大这一点
+计算大量的术语，特别是较高的
+订单元素，使计算非常不稳定。
+
+为了帮助解决这些问题，FEniCS提供了内置的功能
+\texttt{errornorm}，它以更智能的方式计算错误规范
+办法。 首先，两个\verb!u_e! 和\texttt{u}被插入到高阶
+功能空间。 然后，\verb!u_e!的自由度 和\texttt{u}是
+减去在高阶函数中产生新的函数
+空间。 最后，FEniCS整合了平方的差异
+函数，然后取平方根来获取错误的值
+规范。 使用\texttt{errornorm}功能很简单:
+
+\begin{python}
+E = errornorm(u_e, u, normtype='L2')
+\end{python}
+这是一个简短的实现\texttt{errornorm}的说明:
+
+\begin{python}
+def errornorm(u_e, u):
+    V = u.function_space()
+    mesh = V.mesh()
+    degree = V.ufl_element().degree()
+    W = FunctionSpace(mesh, 'P', degree + 3)
+    u_e_W = interpolate(u_e, W)
+    u_W = interpolate(u, W)
+    e_W = Function(W)
+    e_W.vector()[:] = u_e_W.vector().array() - u_W.vector().array()
+    error = e_W**2*dx
+    return sqrt(abs(assemble(error)))
+\end{python}
+
+有时候计算错误是有意义的
+渐变字段:$||\nabla(\uex-u)||$，
+通常被称为$H^1_0$或$H^1$
+错误的seminorm。
+这可以用上面的表达式来代替
+\texttt{error} 通过\verb!error = dot(grad(e_W), grad(e_W))*dx!,或通过调用
+在FEniCS中的\texttt{errornorm}:
+
+\begin{python}
+E = errornorm(u_e, u, norm_type='H10')
+\end{python}
+有关可用的更多信息，请在Python中键入\texttt{help(errornorm)}
+规范类型。
+
+函数\verb!compute_errors! 在
+\url{https://fenicsproject.org/pub/tutorial/python/vol1/ft10_poisson_extended.py} {\nolinkurl{ft10_poisson_extended.py}}
+说明了FEniCS中各种误差规范的计算。
+
+\paragraph{计算收敛速度。}
+我们来研究如何在FEniCS中计算收敛速度。
+\texttt{solver}函数
+\url{https://fenicsproject.org/pub/tutorial/python/vol1/ft10_poisson_extended.py} {\nolinkurl{ft10_poisson_extended.py}}
+使我们能够轻松地为更精细和更细的网格计算解决方案
+使我们能够研究收敛速度。 定义元素大小
+$h=1/n$，其中$n$是$x$和$y$中的单元格分隔数
+方向(\texttt{n = Nx = Ny})。 我们进行实验
+$h_0>h_1>h_2>\cdots$并计算相应的错误$E_0, E_1,
+E_2$等等。 假设$E_i=Ch_i^r$为未知常数$C$和
+$r$，我们可以比较两个连续的实验，$E_{i-1}=Ch_{i-1}^r$
+和$E_i=Ch_i^r$，并解决$r$:
+
+\begin{equation*}
+r = {\ln(E_i/E_{i-1})\over\ln (h_i/h_{i-1})}\tp
+\end{equation*}
+$r$值应接近预期收敛速度
+(通常为$L^2$的多项式度+1)
+错误）为$i$
+增加。
+
+以上过程可以很容易地转化为Python代码。 这里
+我们通过元素度量列表($\mathsf{P}_1$，
+$\mathsf{P}_2$和$\mathsf{P}_3$)，
+对一系列细化的网格进行实验
+每个实验报告由\verb!compute_errors!返回的六个错误类型。
+
+\paragraph{测试问题。}
+为了说明收敛速度的计算，我们选择一个
+精确的解决方案$\uex$，这个时间比一点更有趣
+对于~\ref{ch:fundamentals}中的测试问题:
+
+\begin{equation*}
+\uex(x,y) = \sin(\omega\pi x)\sin(\omega\pi y).
+\end{equation*}
+这个选择意味着$f(x,y)=2\omega^2\pi^2 u(x,y)$。
+将$\omega$限制为整数，
+因此边界值由$\ub=0$给出。
+
+我们需要定义适当的边界条件，确切的
+解决方案和代码中的$f$函数:
+
+\begin{python}
+def boundary(x, on_boundary):
+    return on_boundary
+
+bc = DirichletBC(V, Constant(0), boundary)
+
+omega = 1.0
+u_e = Expression('sin(omega*pi*x[0])*sin(omega*pi*x[1])',
+                 degree=6, omega=omega)
+
+f = 2*pi**2*omega**2*u_e
+\end{python}
+
+\paragraph{实验。}
+可以实现收敛速度的计算
+在函数\verb!demo_convergence_rates!中找到 在演示程序中
+\url{https://fenicsproject.org/pub/tutorial/python/vol1/ft10_poisson_extended.py} {\nolinkurl{ft10_poisson_extended.py}}。
+我们取得一些有趣的结果。
+使用无限度的自由度差异规范，
+我们获得下表:
+
+{\small
+
+\vspace{4mm}
+
+\begin{tabular}{lrrrr}
+\hline\noalign{\smallskip}
+\multicolumn{1}{c}{ element } & \multicolumn{1}{c}{ $n=8\ $ } & \multicolumn{1}{c}{ $n=16\ $ } & \multicolumn{1}{c}{ $n=32\ $ } & \multicolumn{1}{c}{ $n=64\ $ } \\
+\noalign{\smallskip}\hline\noalign{\smallskip}
+$\mathsf{P}_1$ & 1.99    & 2.00     & 2.00     & 2.00     \\
+$\mathsf{P}_2$ & 3.99    & 4.00     & 4.00     & 4.01     \\
+$\mathsf{P}_3$ & 3.95    & 3.99     & 3.99     & 3.92     \\
+\noalign{\smallskip}\hline\noalign{\smallskip}
+\end{tabular}
+
+\vspace{4mm}
+
+}
+
+\noindent
+$n=32$和$\mathsf{P}_3$的条目如3.99表示我们
+通过比较两个网格，分辨率来估计3.99的比率
+$n=32$和$n=16$，使用$\mathsf{P}_3$元素。 注意
+节点上$\mathsf{P}_2$的超会聚。 最好的估计
+的价格出现在最右边的列，因为这些费率是
+基于最好的决议，因此最深入
+渐近的制度（直到我们达到了四舍五入的错误和
+线性系统的不精确解决方案开始起作用）。
+
+$L^2$-使用FEniCS计算的范数误差
+\texttt{errornorm}功能显示
+$u$的预期$h^{d+1}$率:
+
+{\small
+
+\vspace{4mm}
+
+\begin{tabular}{lrrrr}
+\hline\noalign{\smallskip}
+\multicolumn{1}{c}{ element } & \multicolumn{1}{c}{ $n=8\ $ } & \multicolumn{1}{c}{ $n=16\ $ } & \multicolumn{1}{c}{ $n=32\ $ } & \multicolumn{1}{c}{ $n=64\ $ } \\
+\noalign{\smallskip}\hline\noalign{\smallskip}
+$\mathsf{P}_1$ & 1.97    & 1.99     & 2.00     & 2.00     \\
+$\mathsf{P}_2$ & 3.00    & 3.00     & 3.00     & 3.00     \\
+$\mathsf{P}_3$ & 4.04    & 4.02     & 4.01     & 4.00     \\
+\noalign{\smallskip}\hline\noalign{\smallskip}
+\end{tabular}
+
+\vspace{4mm}
+
+}
+
+\noindent
+但是，使用\verb!(u_e - u)**2! 对于误差计算，用相同的
+\verb!u_e!插值的程度 对于\texttt{u}，给出奇怪的
+结果:
+
+{\small   % for Springer style: small table font and more vspace
+
+\vspace{4mm}
+
+\begin{tabular}{lrrrr}
+\hline\noalign{\smallskip}
+\multicolumn{1}{c}{ element } & \multicolumn{1}{c}{ $n=8\ $ } & \multicolumn{1}{c}{ $n=16\ $ } & \multicolumn{1}{c}{ $n=32\ $ } & \multicolumn{1}{c}{ $n=64\ $ } \\
+\noalign{\smallskip}\hline\noalign{\smallskip}
+$\mathsf{P}_1$ & 1.97    & 1.99     & 2.00     & 2.00     \\
+$\mathsf{P}_2$ & 3.00    & 3.00     & 3.00     & 3.01     \\
+$\mathsf{P}_3$ & 4.04    & 4.07     & 1.91     & 0.00     \\
+\noalign{\smallskip}\hline\noalign{\smallskip}
+\end{tabular}
+
+\vspace{4mm}
+
+}
+
+\noindent
+这是一个例子，重要的是插入\verb!u_e! 到一个
+高阶空间(3阶多项式在这里就足够了)。 这个
+通过使用\texttt{errornorm}函数自动处理。
+
+检查收敛速度是验证PDE的极好方法
+码。
+
+\subsection{利用结构化网格数据}
+\label{ftut:structviz}
+\index{structured mesh}
+\index{visualization, structured mesh}
+\index{scitools@{\rm\texttt{scitools}}}
+
+许多读者在可视化和数据方面有丰富的经验
+分析1D，2D和3D标量和矢量场均匀，
+结构化网格，而FEniCS解决方案专门工作
+非结构化网格 由于它可以很多次实践
+使用结构化数据，我们在本节中讨论如何
+提取用于计算的有限元解的结构化数据
+FENICS。
+
+\index{BoxField@{\rm\texttt{BoxField}}}
+
+必要的第一步是将我们的\texttt{Mesh}对象转换为对象
+表示具有同样形状的矩形(或3D框)
+矩形细胞。 第二步是转变
+节点值的一维数组为二维数组
+将值保存在结构化的单元格的角落
+目。 我们要通过$i$和$j$索引$i$来访问一个值
+计数$x$方向的单元格，$j$计数$y$中的单元格
+方向。 但这种转变原则上是直截了当的
+它经常导致模糊的索引错误，所以使用软件
+减轻工作的工具是有利的。
+
+在本书附带的示例程序目录中，我们有
+包括Python模块
+\url{https://fenicsproject.org/pub/tutorial/python/vol1/boxfield.py} 
+{\nolinkurl{boxfield}}
+它提供了用于处理结构化网格数据的实用程序
+FENICS。 给定有限元函数\texttt{u}，以下函数
+在结构化网格上返回表示\texttt{u}的\texttt{BoxField}对象:
+
+\begin{python}
+from boxfield import *
+u_box = FEniCSBoxField(u, (nx, ny))
+\end{python}
+
+\verb!u_box! 对象包含几个有用的数据结构:
+
+\begin{itemize}
+ \item \verb!u_box.grid!: 对象为结构化网格
+
+ \item \verb!u_box.grid.coor[X]!: \texttt{X=0}方向的网格坐标
+
+ \item \verb!u_box.grid.coor[Y]!: \texttt{Y=1}方向的网格坐标
+
+ \item \verb!u_box.grid.coor[Z]!: \texttt{Z=2}方向的网格坐标
+
+ \item \verb!u_box.grid.coorv[X]!: \verb!u_box.grid.coor[X]!的矢量化版本
+
+ \item \verb!u_box.grid.coorv[Y]!: \verb!u_box.grid.coor[Y]!的矢量化版本
+
+ \item \verb!u_box.grid.coorv[Z]!: \verb!u_box.grid.coor[Z]!的矢量化版本
+
+ \item \verb!u_box.values!: \texttt{numpy}数组，保存\texttt{u}值;
+   \verb!u_box.values[I，J]! 在网格点保持\texttt{u}，坐标为\\
+    \verb!(u_box.grid.coor[X][i], u_box.grid.coor[Y][j])!
+\end{itemize}
+
+\noindent
+\paragraph{迭代点数和值。}
+现在让我们使用\texttt{solver}函数
+\url{https://fenicsproject.org/pub/tutorial/python/vol1/ft10_poisson_extended.py} {\nolinkurl{ft10_poisson_extended.py}}
+代码来计算\texttt{u}，将其映射到一个\texttt{BoxField}对象上的结构化
+网格表示，并打印坐标和函数值
+在所有网格点:
+
+\begin{python}
+u = solver(p, f, u_b, nx, ny, 1, linear_solver='direct')
+u_box = structured_mesh(u, (nx, ny))
+u_ = u_box.values
+
+# Iterate over 2D mesh points (i, j)
+for j in range(u_.shape[1]):
+    for i in range(u_.shape[0]):
+        print('u[%d, %d] = u(%g, %g) = %g' %
+              (i, j,
+               u_box.grid.coor[X][i], u_box.grid.coor[Y][j],
+               u_[i, j]))
+\end{python}
+
+\paragraph{计算有限差分近似。}
+使用多维数组\verb!u_ = u_box.values!, 我们可以轻松地
+表示衍生物的有限差分近似:
+
+\begin{python}
+x = u_box.grid.coor[X]
+dx = x[1] - x[0]
+u_xx = (u_[i - 1, j] - 2*u_[i, j] + u_[i + 1, j]) / dx**2
+\end{python}
+
+\index{surface plot (structured mesh)}
+
+\paragraph{制作曲面图。}
+作为结构化数据访问有限元字段的能力
+在许多情况下很方便，例如用于可视化和数据分析。
+使用Matplotlib，我们可以创建一个曲面图，如图所示
+图~\ref{ftut:structviz:fig1}(左上):
+
+\begin{python}
+import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D  # necessary for 3D plotting
+from matplotlib import cm
+fig = plt.figure()
+ax = fig.gca(projection='3d')
+cv = u_box.grid.coorv  # vectorized mesh coordinates
+ax.plot_surface(cv[X], cv[Y], u_, cmap=cm.coolwarm,
+                rstride=1, cstride=1)
+plt.title('Surface plot of solution')
+\end{python}
+关键问题是知道曲面所需的坐标
+情节在\verb!u_box.grid.coorv! 并且值在\verb!u_!中。
+
+%\begin{figure}[!ht]  % ftut:structviz:fig1
+ % \centerline{\includegraphics[width=0.95\linewidth]{fig/poisson_extended.pdf}}
+ % \caption{
+ % Various plots of the solution on a structured mesh. \label{ftut:structviz:fig1}
+ % }
+%\end{figure}
+
+\index{contour plot}
+
+
