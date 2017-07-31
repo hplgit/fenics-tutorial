@@ -1857,3 +1857,128 @@ $y\approx 0.41$(从$y=0.4$中扣除)由以下代码制成:
     plt.xlabel('x');  plt.ylabel('u')
 \end{python}
 对于所得曲线图，请参见图~\ref{ftut:structviz:fig1}(左下)。
+
+\paragraph{制作通量的曲线图。}
+我们还可以比较数值和
+精确通量$-\kappa\partial u/\partial x$与上述相同:
+
+\begin{python}
+    # Plot the numerical and exact flux along the same line
+    flux_u = flux(u, kappa)
+    flux_u_x, flux_u_y = flux_u.split(deepcopy=True)
+    flux2_x = flux_u_x if flux_u_x.ufl_element().degree() == 1 \
+              else interpolate(flux_x,
+                   FunctionSpace(u.function_space().mesh(), 'P', 1))
+    flux_u_x_box = FEniCSBoxField(flux_u_x, (nx,ny))
+    x, flux_u_val, y_fixed, snapped = \
+       flux_u_x_box.gridline(start, direction=X)
+    y = y_fixed
+    plt.figure()
+    plt.plot(x, flux_u_val, 'r-')
+    plt.plot(x, flux_u_x_exact(x, y_fixed), 'bo')
+    plt.legend(['P1 elements', 'exact'], loc='best')
+    plt.title('Flux along line y=%g' % y_fixed)
+    plt.xlabel('x');  plt.ylabel('u')
+\end{python}
+
+在代码片段开头调用的函数\texttt{flux}是
+在示例程序中定义
+\url{https://fenicsproject.org/pub/tutorial/python/vol1/ft10_poisson_extended.py}{\nolinkurl{ft10_poisson_extended.py}}
+并将通量内插到功能空间中。
+
+请注意，Matplotlib是绘图包的选择。 随着
+统一的界面在\url{https://github.com/hplgit/scitools} {SciTools package}
+\footnote{\texttt{https://github.com/hplgit/scitools}}
+中可以访问Matplotlib，
+Gnuplot，MATLAB，OpenDX，VisIt等绘图引擎通过
+相同的API。
+
+\index{sympy@{\rm\texttt{sympy}}}
+
+\paragraph{测试问题。}
+图中引用的图形~\ref{ftut:structviz:fig1}对应于
+规定解的一个测试问题$\uex = H(x)H(y)$，其中
+
+\[ H(x) = e^{-16(x-\frac{1}{2})^2}\sin(3\pi x)\tp\]
+相应的右侧$f$是通过插入确切的获得的
+解决方案进入PDE并像以前一样进行区分。
+虽然很容易进行
+用手分解$f$并对结果表达式进行硬编码
+在\texttt{Expression}对象中，更可靠的习惯是使用Python
+符号计算引擎，SymPy，执行数学和
+自动将公式转换为\texttt{Expression}对象的C ++语法。
+简要介绍了
+第~\ref{ftut:nonlinear:Newton:auto}。
+
+我们从\texttt{sympy}中定义确切的解决方案开始:
+
+\begin{python}
+from sympy import exp, sin, pi  # for use in math formulas
+import sympy as sym
+
+H = lambda x: exp(-16*(x-0.5)**2)*sin(3*pi*x)
+x, y = sym.symbols('x[0], x[1]')
+u = H(x)*H(y)
+\end{python}
+将\texttt{u}的表达式转换为\texttt{Expression}对象的C或C ++语法
+需要两个步骤。 首先我们要求表达式的C代码:
+
+\begin{python}
+u_code = sym.printing.ccode(u)
+\end{python}
+打印\verb!u_code! 给出(这里的输出手动分为两部分
+线):
+
+\begin{python}
+-exp(-16*pow(x[0] - 0.5, 2) - 16*pow(x[1] - 0.5, 2))*
+sin(3*M_PI*x[0])*sin(3*M_PI*x[1])
+\end{python}
+必要的语法调整正在替换
+符号\verb!M_PI! 对于\texttt{pi}(或\verb!DOLFIN_PI!)的C/C++中的$\pi$:
+
+\begin{python}
+u_code = u_code.replace('M_PI', 'pi')
+u_b = Expression(u_code, degree=1)
+\end{python}
+此后，我们可以随着计算进展
+$f = -\nabla\cdot(\kappa\nabla u)$:
+
+\begin{python}
+kappa = 1
+f = sym.diff(-kappa*sym.diff(u, x), x) + \
+    sym.diff(-kappa*sym.diff(u, y), y)
+f = sym.simplify(f)
+f_code = sym.printing.ccode(f)
+f_code = f_code.replace('M_PI', 'pi')
+f = Expression(f_code, degree=1)
+\end{python}
+我们还需要一个Python函数来确定通量
+$-\kappa\partial u/\partial x$:
+
+\begin{python}
+flux_u_x_exact = sym.lambdify([x, y], -kappa*sym.diff(u, x),
+                              modules='numpy')
+\end{python}
+在调用之前，还要定义\texttt{kappa = Constant(1)}并设置\texttt{nx}和
+\texttt{ny}
+\texttt{solver}来计算这个问题的有限元解。
+
+\section{下一步}
+
+如果你来了这么远，你就学会了如何写简单
+一系列PDE的脚本式求解器，以及如何构造Python
+求解器使用功能和单元测试。 解决更复杂的PDE
+并且编写一个更全功能的PDE求解器并不难
+第一步通常是写一个解析器进行剥离测试
+作为一个简单的Python脚本。 随着脚本的成熟和变得越来越多
+复杂，现在是考虑设计的时候，特别是如何
+将代码模块化，并将其组织成可重复使用的部分
+用于构建灵活可扩展的求解器。
+
+在FEniCS网站上，您将找到更多的文档，
+更多示例程序，以及高级解算器和应用程序的链接
+写在FEniCS之上。 获得灵感并开发自己的求职者
+为您最喜欢的应用程序，发布您的代码并分享您的
+知识与FEniCS社区和世界!
+
+PS：\emph{请关注FEniCS教程第2卷!}
