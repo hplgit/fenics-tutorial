@@ -61,17 +61,17 @@ J_S = Constant(-1.0)
 
 # Define magnetic permeability
 class Permeability(Expression):
-    def __init__(self, mesh, **kwargs):
+    def __init__(self, markers, **kwargs):
         self.markers = markers
     def eval_cell(self, values, x, cell):
-        if markers[cell.index] == 0:
+        if self.markers[cell.index] == 0:
             values[0] = 4*pi*1e-7 # vacuum
-        elif markers[cell.index] == 1:
+        elif self.markers[cell.index] == 1:
             values[0] = 1e-5      # iron (should really be 6.3e-3)
         else:
             values[0] = 1.26e-6   # copper
 
-mu = Permeability(mesh, degree=1)
+mu = Permeability(markers, degree=1)
 
 # Define variational problem
 A_z = TrialFunction(V)
