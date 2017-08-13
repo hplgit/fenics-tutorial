@@ -21,7 +21,8 @@
 %\RequirePackage[swedish]{babel}
 %\RequirePackage[utf8]{inputenc}
 
-\RequirePackage[UTF8]{ctex}
+%\RequirePackage[UTF8]{ctex}
+\usepackage{xeCJK}
 
 % Geometry
 %--------------------------------------------------------------------------
@@ -185,21 +186,21 @@ contents={\includegraphics[width=\paperwidth,height=\paperheight]{cover}}}
 \BgThispage
 \begin{center}
   \null
-  \smallskip
+  %\smallskip
 
-  \color{white}
-  \sffamily
+  %\color{white}
+  %\sffamily
 
-  \Huge
-  \textsc{\@tstitle}
+  %\Huge
+  %\textsc{\@tstitle}
 
-  \bigskip
-  \smallskip
+  %\bigskip
+  %\smallskip
 
-  \LARGE
-  \textsf{\@tsauthor} \\[1em]
-  \LARGE
-  \textsc{\@tspublished}
+  %\LARGE
+  %\textsf{\@tsauthor} \\[1em]
+  %\LARGE
+  %\textsc{\@tspublished}
 \end{center}
 
 \pagebreak
