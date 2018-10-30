@@ -11,6 +11,7 @@ Test problem is chosen to give an exact solution at all nodes of the mesh.
 
 from __future__ import print_function
 from fenics import *
+import matplotlib.pyplot as plt
 
 # Create mesh and define function space
 mesh = UnitSquareMesh(8, 8)
@@ -57,4 +58,4 @@ print('error_L2  =', error_L2)
 print('error_max =', error_max)
 
 # Hold plot
-interactive()
+plt.show()
