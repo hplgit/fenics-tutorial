@@ -9,6 +9,7 @@ its left end and deformed under its own weight.
 
 from __future__ import print_function
 from fenics import *
+from ufl import nabla_div
 
 # Scaled variables
 L = 1; W = 0.2
