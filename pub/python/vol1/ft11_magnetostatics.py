@@ -60,7 +60,7 @@ J_N = Constant(1.0)
 J_S = Constant(-1.0)
 
 # Define magnetic permeability
-class Permeability(Expression):
+class Permeability(UserExpression):
     def __init__(self, markers, **kwargs):
         self.markers = markers
     def eval_cell(self, values, x, cell):
