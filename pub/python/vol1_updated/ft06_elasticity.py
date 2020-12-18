@@ -5,10 +5,17 @@ FEniCS tutorial demo program: Linear elastic problem.
 
 The model is used to simulate an elastic beam clamped at
 its left end and deformed under its own weight.
+
+Due to sinter-module incompatibility, 3-D plotting is unavailable for fenics.
+This is Dolfin problem, and fixed by
+https://bitbucket.org/fenics-project/dolfin/commits/5e86e7e3409a8d9ec4b1f40aa2b361d5de84d2a0.
+However this change does not seem to be released yet.
 """
 
 from __future__ import print_function
 from fenics import *
+from ufl import nabla_div
+import matplotlib.pyplot as plt
 
 # Scaled variables
 L = 1; W = 0.2
@@ -55,27 +62,27 @@ u = Function(V)
 solve(a == L, u, bc)
 
 # Plot solution
-plot(u, title='Displacement', mode='displacement')
+# plot(u, title='Displacement', mode='displacement')
+# plt.show()
 
 # Plot stress
 s = sigma(u) - (1./3)*tr(sigma(u))*Identity(d)  # deviatoric stress
 von_Mises = sqrt(3./2*inner(s, s))
 V = FunctionSpace(mesh, 'P', 1)
 von_Mises = project(von_Mises, V)
-plot(von_Mises, title='Stress intensity')
+# plot(von_Mises, title='Stress intensity')
+# plt.show()
 
 # Compute magnitude of displacement
 u_magnitude = sqrt(dot(u, u))
 u_magnitude = project(u_magnitude, V)
-plot(u_magnitude, 'Displacement magnitude')
+# plot(u_magnitude, 'Displacement magnitude')
+# plt.show()
 print('min/max u:',
-      u_magnitude.vector().array().min(),
-      u_magnitude.vector().array().max())
+      u_magnitude.vector().min(),
+      u_magnitude.vector().max())
 
 # Save solution to file in VTK format
 File('elasticity/displacement.pvd') << u
 File('elasticity/von_mises.pvd') << von_Mises
 File('elasticity/magnitude.pvd') << u_magnitude
-
-# Hold plot
-interactive()
