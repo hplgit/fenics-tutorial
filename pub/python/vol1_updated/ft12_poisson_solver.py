@@ -93,4 +93,3 @@ def test_solver():
 
 if __name__ == '__main__':
     run_solver()
-    interactive()
