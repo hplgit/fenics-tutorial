@@ -13,6 +13,7 @@ Test problem is chosen to give an exact solution at all nodes of the mesh.
 from __future__ import print_function
 from fenics import *
 import numpy as np
+import matplotlib.pyplot as plt
 
 T = 2.0            # final time
 num_steps = 10     # number of time steps
@@ -60,14 +61,12 @@ for n in range(num_steps):
 
     # Plot solution
     plot(u)
+    plt.show()
 
     # Compute error at vertices
     u_e = interpolate(u_D, V)
-    error = np.abs(u_e.vector().array() - u.vector().array()).max()
+    error = np.abs(u_e.vector() - u.vector()).max()
     print('t = %.2f: error = %.3g' % (t, error))
 
     # Update previous solution
     u_n.assign(u)
-
-# Hold plot
-interactive()
