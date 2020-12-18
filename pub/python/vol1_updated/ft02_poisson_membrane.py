@@ -11,6 +11,7 @@ from __future__ import print_function
 from fenics import *
 from mshr import *
 import numpy as np
+import matplotlib.pyplot as plt
 
 # Create mesh and define function space
 domain = Circle(Point(0, 0), 1)
@@ -44,7 +45,9 @@ solve(a == L, w, bc)
 # Plot solution
 p = interpolate(p, V)
 plot(w, title='Deflection')
+plt.show()
 plot(p, title='Load')
+plt.show()
 
 # Save solution to file in VTK format
 vtkfile_w = File('poisson_membrane/deflection.pvd')
@@ -53,8 +56,6 @@ vtkfile_p = File('poisson_membrane/load.pvd')
 vtkfile_p << p
 
 # Curve plot along x = 0 comparing p and w
-import numpy as np
-import matplotlib.pyplot as plt
 tol = 0.001  # avoid hitting points outside the domain
 y = np.linspace(-1 + tol, 1 - tol, 101)
 points = [(0, y_) for y_ in y]  # 2D points
@@ -67,7 +68,4 @@ plt.xlabel('$y$')
 plt.legend(['Deflection ($\\times 50$)', 'Load'], loc='upper left')
 plt.savefig('poisson_membrane/curves.pdf')
 plt.savefig('poisson_membrane/curves.png')
-
-# Hold plots
-interactive()
 plt.show()
