@@ -11,6 +11,7 @@ from __future__ import print_function
 from fenics import *
 from mshr import *
 import numpy as np
+import matplotlib.pyplot as plt
 
 T = 5.0            # final time
 num_steps = 5000   # number of time steps
@@ -110,10 +111,6 @@ timeseries_p = TimeSeries('navier_stokes_cylinder/pressure_series')
 # Save mesh to file (for use in reaction_system.py)
 File('navier_stokes_cylinder/cylinder.xml.gz') << mesh
 
-# Create progress bar
-progress = Progress('Time-stepping')
-set_log_level(PROGRESS)
-
 # Time-stepping
 t = 0
 for n in range(num_steps):
@@ -137,7 +134,9 @@ for n in range(num_steps):
 
     # Plot solution
     plot(u_, title='Velocity')
+    plt.show()
     plot(p_, title='Pressure')
+    plt.show()
 
     # Save solution to file (XDMF/HDF5)
     xdmffile_u.write(u_, t)
@@ -151,9 +150,4 @@ for n in range(num_steps):
     u_n.assign(u_)
     p_n.assign(p_)
 
-    # Update progress bar
-    progress.update(t / T)
-    print('u max:', u_.vector().array().max())
-
-# Hold plot
-interactive()
+    print('u max:', u_.vector().max())
