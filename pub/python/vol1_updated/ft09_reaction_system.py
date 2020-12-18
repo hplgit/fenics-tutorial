@@ -71,10 +71,6 @@ vtkfile_u_1 = File('reaction_system/u_1.pvd')
 vtkfile_u_2 = File('reaction_system/u_2.pvd')
 vtkfile_u_3 = File('reaction_system/u_3.pvd')
 
-# Create progress bar
-progress = Progress('Time-stepping')
-set_log_level(PROGRESS)
-
 # Time-stepping
 t = 0
 for n in range(num_steps):
@@ -96,9 +92,3 @@ for n in range(num_steps):
 
     # Update previous solution
     u_n.assign(u)
-
-    # Update progress bar
-    progress.update(t / T)
-
-# Hold plot
-interactive()
