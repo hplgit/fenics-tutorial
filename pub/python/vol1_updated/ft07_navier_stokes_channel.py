@@ -10,6 +10,7 @@ Incremental Pressure Correction Scheme (IPCS).
 from __future__ import print_function
 from fenics import *
 import numpy as np
+import matplotlib.pyplot as plt
 
 T = 10.0           # final time
 num_steps = 500    # number of time steps
@@ -111,17 +112,15 @@ for n in range(num_steps):
 
     # Plot solution
     plot(u_)
+    plt.show()
 
     # Compute error
     u_e = Expression(('4*x[1]*(1.0 - x[1])', '0'), degree=2)
     u_e = interpolate(u_e, V)
-    error = np.abs(u_e.vector().array() - u_.vector().array()).max()
+    error = np.abs(u_e.vector() - u_.vector()).max()
     print('t = %.2f: error = %.3g' % (t, error))
-    print('max u:', u_.vector().array().max())
+    print('max u:', u_.vector().max())
 
     # Update previous solution
     u_n.assign(u_)
     p_n.assign(p_)
-
-# Hold plot
-interactive()
