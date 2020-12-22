@@ -60,8 +60,9 @@ J_N = Constant(1.0)
 J_S = Constant(-1.0)
 
 # Define magnetic permeability
-class Permeability(Expression):
+class Permeability(UserExpression):
     def __init__(self, markers, **kwargs):
+        super().__init__(**kwargs)
         self.markers = markers
     def eval_cell(self, values, x, cell):
         if self.markers[cell.index] == 0:
@@ -98,6 +99,3 @@ vtkfile_A_z = File('magnetostatics/potential.pvd')
 vtkfile_B = File('magnetostatics/field.pvd')
 vtkfile_A_z << A_z
 vtkfile_B << B
-
-# Hold plot
-interactive()
