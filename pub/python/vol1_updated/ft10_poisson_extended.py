@@ -16,7 +16,7 @@ This program illustrates a number of different topics:
 - How to represent solutions as structured fields
 """
 
-from __future__ import print_function
+
 
 from fenics import *
 from boxfield import *
@@ -56,13 +56,13 @@ def solver(kappa, f, u_D, Nx, Ny,
     # Set linear solver parameters
     prm = LinearVariationalSolver.default_parameters()
     if linear_solver == 'Krylov':
-        prm.linear_solver = 'gmres'
-        prm.preconditioner = 'ilu'
-        prm.krylov_solver.absolute_tolerance = abs_tol
-        prm.krylov_solver.relative_tolerance = rel_tol
-        prm.krylov_solver.maximum_iterations = max_iter
+        prm["linear_solver"] = 'gmres'
+        prm["preconditioner"] = 'ilu'
+        prm["krylov_solver"]["absolute_tolerance"] = abs_tol
+        prm["krylov_solver"]["relative_tolerance"] = rel_tol
+        prm["krylov_solver"]["maximum_iterations"] = max_iter
     else:
-        prm.linear_solver = 'lu'
+        prm["linear_solver"] = 'lu'
 
     # Compute solution
     u = Function(V)
@@ -221,7 +221,7 @@ def solver_bcs(kappa, f, boundary_conditions, Nx, Ny,
             return on_boundary and near(x[1], 1, tol)
 
     # Mark boundaries
-    boundary_markers = FacetFunction('size_t', mesh)
+    boundary_markers = MeshFunction('size_t', mesh, mesh.topology().dim()-1, 0)
     boundary_markers.set_all(9999)
     bx0 = BoundaryX0()
     bx1 = BoundaryX1()
@@ -307,13 +307,13 @@ def solver_bcs(kappa, f, boundary_conditions, Nx, Ny,
     # Set linear solver parameters
     prm = LinearVariationalSolver.default_parameters()
     if linear_solver == 'Krylov':
-        prm.linear_solver = 'gmres'
-        prm.preconditioner = 'ilu'
-        prm.krylov_solver.absolute_tolerance = abs_tol
-        prm.krylov_solver.relative_tolerance = rel_tol
-        prm.krylov_solver.maximum_iterations = max_iter
+        prm["linear_solver"] = 'gmres'
+        prm["preconditioner"] = 'ilu'
+        prm["krylov_solver"]["absolute_tolerance"] = abs_tol
+        prm["krylov_solver"]["relative_tolerance"] = rel_tol
+        prm["krylov_solver"]["maximum_iterations"] = max_iter
     else:
-        prm.linear_solver = 'lu'
+        prm["linear_solver"] = 'lu'
 
     # Compute solution
     u = Function(V)
@@ -350,7 +350,7 @@ def compute_errors(u_e, u):
 
     # Infinity norm based on nodal values
     u_e_ = interpolate(u_e, V)
-    E4 = abs(u_e_.vector().array() - u.vector().array()).max()
+    E4 = abs(u_e_.vector().get_local() - u.vector().get_local()).max()
 
     # L2 norm
     E5 = errornorm(u_e, u, norm_type='L2', degree_rise=3)
@@ -376,7 +376,7 @@ def compute_convergence_rates(u_e, f, u_D, kappa,
     E = {}  # error measure(s): E[degree][level][error_type]
 
     # Iterate over degrees and mesh refinement levels
-    degrees = range(1, max_degree + 1)
+    degrees = list(range(1, max_degree + 1))
     for degree in degrees:
         n = 8  # coarsest mesh division
         h[degree] = []
@@ -417,7 +417,7 @@ def flux(u, kappa):
 
 def normalize_solution(u):
     "Normalize u: return u divided by max(u)"
-    u_array = u.vector().array()
+    u_array = u.vector().get_local()
     u_max = np.max(np.abs(u_array))
     u_array /= u_max
     u.vector()[:] = u_array
@@ -452,8 +452,8 @@ def test_solvers():
                                         rel_tol=0.1*tol[linear_solver][degree])
                     V = u.function_space()
                     u_D_Function = interpolate(u_D, V)
-                    u_D_array = u_D_Function.vector().array()
-                    error_max = (u_D_array - u.vector().array()).max()
+                    u_D_array = u_D_Function.vector().get_local()
+                    error_max = (u_D_array - u.vector().get_local()).max()
                     msg = 'max error: %g for 2 x (%d x %d) mesh, ' \
                           'degree = %d, %s solver, %s' % \
                           (error_max, Nx, Ny, degree, linear_solver,
@@ -466,7 +466,7 @@ def test_normalize_solution():
     f = Constant(-6.0)
     u = solver(f, u_D, 4, 2, 1, linear_solver='direct')
     u = normalize_solution(u)
-    computed = u.vector().array().max()
+    computed = u.vector().get_local().max()
     expected = 1.0
     assert abs(expected - computed) < 1E-15
 
@@ -496,10 +496,10 @@ def demo_flux(Nx=8, Ny=8):
     # Compute and plot flux
     flux_u = flux(u, kappa)
     flux_u_x, flux_u_y = flux_u.split(deepcopy=True)
-    plot(u, title=u.label())
-    plot(flux_u, title=flux_u.label())
-    plot(flux_u_x, title=flux_u_x.label())
-    plot(flux_u_y, title=flux_u_y.label())
+    plot(u, title=u.name())
+    plot(flux_u, title=flux_u.name())
+    plot(flux_u_x, title=flux_u_x.name())
+    plot(flux_u_y, title=flux_u_y.name())
 
     # Exact flux expressions
     u_e = lambda x, y: 1 + x**2 + 2*y**2
@@ -535,6 +535,8 @@ def demo_convergence_rates():
 
 def demo_structured_mesh():
     "Use structured mesh data to create plots with Matplotlib"
+
+    raise NotImplementedError("This function is outdated beyond repair.")
 
     # Define exact solution (Mexican hat) and coefficients
     from sympy import exp, sin, pi
@@ -617,7 +619,7 @@ def demo_structured_mesh():
     flux_u = flux(u, kappa)
     flux_u_x, flux_u_y = flux_u.split(deepcopy=True)
     flux2_x = flux_u_x if flux_u_x.ufl_element().degree() == 1 \
-              else interpolate(flux_x,
+              else interpolate(flux_u_x,
                    FunctionSpace(u.function_space().mesh(), 'P', 1))
     flux_u_x_box = FEniCSBoxField(flux_u_x, (nx,ny))
     x, flux_u_val, y_fixed, snapped = \
@@ -753,10 +755,11 @@ if __name__ == '__main__':
     for nr in range(len(demos)):
         print('%d: %s (%s)' % (nr, demos[nr].__doc__, demos[nr].__name__))
     print('')
-    nr = input('Pick a demo: ')
+    nr = eval(input('Pick a demo: '))
 
     # Run demo
     demos[nr]()
 
     # Hold plot
-    interactive()
+    import matplotlib.pyplot as plt
+    plt.savefig("figure.png")
