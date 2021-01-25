@@ -9,7 +9,7 @@ from numpy import zeros, array, transpose, ndarray, linspace, meshgrid
 import fenics
 
 __all__ = ['BoxField', 'BoxGrid', 'UniformBoxGrid', 'X', 'Y', 'Z',
-           'fenics_function2BoxField', 'update_from_fenics_array']
+           'FEniCSBoxField', 'update_from_fenics_array']
 
 # constants for indexing the space directions:
 X = X1 = 0
@@ -1004,54 +1004,52 @@ def fenics_mesh2BoxGrid(fenics_mesh, division=None):
             return BoxGrid(coor)
 
 
-def fenics_function2BoxField(fenics_function, fenics_mesh,
-                             division=None, uniform_mesh=True):
+def FEniCSBoxField(fenics_function, division=None, uniform_mesh=True):
     """
     Turn a DOLFIN P1 finite element field over a structured mesh into
     a BoxField object.
     Standard DOLFIN numbering numbers the nodes along the x[0] axis,
     then x[1] axis, and so on.
 
-    If the DOLFIN function employs elements of degree > 1, one should
-    project or interpolate the field onto a field with elements of
-    degree=1.
+    If the DOLFIN function employs elements of degree > 1, the function
+    is automatically interpolated to elements of degree 1.
     """
-    if fenics_function.ufl_element().degree() != 1:
-        raise TypeError("""\
-The fenics_function2BoxField function works with degree=1 elements
-only. The DOLFIN function (fenics_function) has finite elements of type
-%s
-i.e., the degree=%d != 1. Project or interpolate this function
-onto a space of P1 elements, i.e.,
 
-V2 = FunctionSpace(mesh, 'CG', 1)
-u2 = project(u, V2)
-# or
-u2 = interpolate(u, V2)
+    # Get mesh
+    fenics_mesh = fenics_function.function_space().mesh()
 
-""" % (str(fenics_function.ufl_element()), fenics_function.ufl_element().degree()))
+    # Interpolate if necessary
+    element = fenics_function.ufl_element()
+    if element.degree() != 1:
+        if element.value_size() == 1:
+            fenics_function \
+              = interpolate(u, FunctionSpace(fenics_mesh, 'P', 1))
+        else:
+            fenics_function \
+              = interpolate(u, VectorFunctionSpace(fenics_mesh, 'P', 1,
+                                                   element.value_size()))
 
     import dolfin
     if dolfin.__version__[:3] == "1.0":
-        nodal_values = fenics_function.vector().copy()
+        nodal_values = fenics_function.vector().array().copy()
     else:
-        #map = fenics_function.function_space().dofmap().vertex_to_dof_map(fenics_mesh)
         d2v = fenics.dof_to_vertex_map(fenics_function.function_space())
-        nodal_values = fenics_function.vector().copy()
-        nodal_values[d2v] = fenics_function.vector().copy()
+        import numpy as np
+        nodal_values = np.array(fenics_function.vector(),copy=True)
+        nodal_values[d2v] = np.array(fenics_function.vector(),copy=True)
 
     if uniform_mesh:
         grid = fenics_mesh2UniformBoxGrid(fenics_mesh, division)
     else:
         grid = fenics_mesh2BoxGrid(fenics_mesh, division)
 
-    if nodal_values.size() > grid.npoints:
+    if nodal_values.size > grid.npoints:
         # vector field, treat each component separately
-        ncomponents = int(nodal_values.size()/grid.npoints)
+        ncomponents = int(nodal_values.size/grid.npoints)
         try:
             nodal_values.shape = (ncomponents, grid.npoints)
         except ValueError as e:
-            raise ValueError('Vector field (nodal_values) has length %d, there are %d grid points, and this does not match with %d components' % (nodal_values.size(), grid.npoints, ncomponents))
+            raise ValueError('Vector field (nodal_values) has length %d, there are %d grid points, and this does not match with %d components' % (nodal_values.size, grid.npoints, ncomponents))
         vector_field = [_rank12rankd_mesh(nodal_values[i,:].copy(),
                                           grid.shape) \
                         for i in range(ncomponents)]
@@ -1062,7 +1060,7 @@ u2 = interpolate(u, V2)
         try:
             nodal_values = _rank12rankd_mesh(nodal_values, grid.shape)
         except ValueError as e:
-            raise ValueError('DOLFIN function has vector of size %s while the provided mesh has %d points and shape %s' % (nodal_values.size(), grid.npoints, grid.shape))
+            raise ValueError('DOLFIN function has vector of size %s while the provided mesh has %d points and shape %s' % (nodal_values.size, grid.npoints, grid.shape))
         bf = BoxField(grid, name=fenics_function.name(),
                       vector=0, values=nodal_values)
     return bf
@@ -1084,7 +1082,7 @@ def update_from_fenics_array(fenics_array, box_field):
         raise ValueError(
             'DOLFIN function has vector of size %s while '
             'the provided mesh demands %s' %
-            (nodal_values.size(), grid.shape))
+            (nodal_values.size, grid.shape))
     box_field.set_values(nodal_values)
     return box_field
 
@@ -1254,13 +1252,12 @@ def _test_field(g):
         y_center = (u.grid.max_coor[1] + u.grid.min_coor[1])/2.0
         xc, yc, uc, fixed_coor, snapped = \
             u.gridplane(value=y_center, constant_coor=1)
-        print('Plane y=%g:' % fixed_coor,)
+        print('Plane y=%g:' % fixed_coor, end=' ')
         if snapped: print(' (snapped from y=%g)' % y_center)
-        else: print
+        else: print()
         print(xc)
         print(yc)
         print(uc)
-
 
 def _test4():
     g1 = UniformBoxGrid(min=0, max=1, division=4)
