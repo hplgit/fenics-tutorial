@@ -6,10 +6,10 @@ FEniCS tutorial demo program: Linear elastic problem.
 The model is used to simulate an elastic beam clamped at
 its left end and deformed under its own weight.
 
-Due to sinter-module incompatibility, 3-D plotting is unavailable for fenics.
+Due to the incompatibility with matplotlib, 3-D plotting is unavailable for fenics.
 This is Dolfin problem, and fixed by
 https://bitbucket.org/fenics-project/dolfin/commits/5e86e7e3409a8d9ec4b1f40aa2b361d5de84d2a0.
-However this change does not seem to be released yet.
+After this changed is released to fenics, plotting may be enabled.
 """
 
 from __future__ import print_function
@@ -62,6 +62,7 @@ u = Function(V)
 solve(a == L, u, bc)
 
 # Plot solution
+# Disabled for now. See docstring of this file.
 # plot(u, title='Displacement', mode='displacement')
 # plt.show()
 
