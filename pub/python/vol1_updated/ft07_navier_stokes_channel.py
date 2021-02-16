@@ -74,11 +74,11 @@ L1 = rhs(F1)
 
 # Define variational problem for step 2
 a2 = dot(nabla_grad(p), nabla_grad(q))*dx
-L2 = dot(nabla_grad(p_n), nabla_grad(q))*dx - (1/k)*div(u_)*q*dx
+L2 = dot(nabla_grad(p_n), nabla_grad(q))*dx - (rho/k)*div(u_)*q*dx
 
 # Define variational problem for step 3
 a3 = dot(u, v)*dx
-L3 = dot(u_, v)*dx - k*dot(nabla_grad(p_ - p_n), v)*dx
+L3 = dot(u_, v)*dx - (k/rho)*dot(nabla_grad(p_ - p_n), v)*dx
 
 # Assemble matrices
 A1 = assemble(a1)
